@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes - Thomas</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="layout">
+            <aside class="sidebar">
+                <h1>Notes</h1>
+                <div class="nav-menu">
+                    <a href="https://thomasrribeiro.github.io">&lt; back home</a>
+                </div>
+                <div class="bio">
+                    Spaced repetition flashcards for various topics.
+                </div>
+            </aside>
+
+            <main class="main-content">
+                <h2 class="section-title">Topics</h2>
+                <div id="topics-grid" class="projects-grid">
+                    <!-- Topics will be loaded dynamically -->
+                    <div class="loading">Loading topics...</div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+</body>
+</html>

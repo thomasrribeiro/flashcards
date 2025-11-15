@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Session - Notes</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <div class="study-container">
+        <header class="study-header">
+            <a href="index.html" class="back-link">&lt; back to topics</a>
+            <div class="study-stats">
+                <span id="cards-due">0 due</span>
+                <span class="separator">|</span>
+                <span id="cards-reviewed">0 reviewed</span>
+            </div>
+        </header>
+
+        <div id="study-area" class="study-area">
+            <!-- Card will be displayed here -->
+            <div class="card-container">
+                <div id="card-front" class="card-content"></div>
+                <div id="card-back" class="card-content hidden"></div>
+            </div>
+
+            <div id="reveal-prompt" class="action-prompt">
+                Press <kbd>Space</kbd> to reveal answer
+            </div>
+
+            <div id="grade-buttons" class="grade-buttons hidden">
+                <button class="grade-btn grade-again" data-grade="1">
+                    <kbd>1</kbd>
+                    <span>Again</span>
+                </button>
+                <button class="grade-btn grade-hard" data-grade="2">
+                    <kbd>2</kbd>
+                    <span>Hard</span>
+                </button>
+                <button class="grade-btn grade-good" data-grade="3">
+                    <kbd>3</kbd>
+                    <span>Good</span>
+                </button>
+                <button class="grade-btn grade-easy" data-grade="4">
+                    <kbd>4</kbd>
+                    <span>Easy</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="session-complete" class="session-complete hidden">
+            <h2>Session Complete!</h2>
+            <p>Great work! All cards have been reviewed.</p>
+            <a href="index.html" class="btn-primary">Return to Topics</a>
+        </div>
+    </div>
+
+    <script type="module" src="./src/app.js"></script>
+</body>
+</html>
