@@ -29,8 +29,6 @@ desire: this is also vanity and vexation of spirit.
 Q: What is Euler's identity?
 A: $$e^{i\pi} + 1 = 0$$
 
-C: Hello [somthing].
-
 Q: What is the quadratic formula?
 A: For $ax^2 + bx + c = 0$, the solutions are:
 $$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$

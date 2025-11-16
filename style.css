@@ -32,6 +32,102 @@ body {
     padding: 20px 30px;
 }
 
+/* Auth Header */
+.auth-header {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.btn-github-login {
+    padding: 10px 20px;
+    background: var(--black);
+    color: var(--white);
+    border: none;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-github-login:hover {
+    opacity: 0.8;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: var(--white);
+    padding: 8px 15px;
+    border: 1px solid var(--black);
+}
+
+.user-info span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+}
+
+.btn-logout {
+    padding: 5px 10px;
+    background: var(--white);
+    color: var(--black);
+    border: 1px solid var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.btn-logout:hover {
+    background: var(--black);
+    color: var(--white);
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Sidebar content */
+.sidebar-content {
+    margin-top: 30px;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.sidebar-content h3 {
+    font-size: 16px;
+    margin-top: 25px;
+    margin-bottom: 12px;
+    font-weight: 700;
+}
+
+.sidebar-content p {
+    margin-bottom: 15px;
+}
+
+.sidebar-content ul {
+    margin: 0 0 15px 0;
+    padding-left: 20px;
+}
+
+.sidebar-content ol {
+    margin: 0 0 15px 0;
+    padding-left: 25px;
+}
+
+.sidebar-content li {
+    margin-bottom: 8px;
+}
+
+.sidebar-content .tip {
+    margin-top: 20px;
+    padding: 12px;
+    background: rgba(245, 200, 66, 0.1);
+    border-left: 3px solid var(--gold);
+    font-size: 13px;
+}
+
 /* Sidebar */
 .sidebar {
     background: transparent;
@@ -76,9 +172,57 @@ body {
     min-width: 0;
 }
 
+/* Repository Management */
+.repos-header {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 30px;
+    margin-top: 10px;
+}
+
+.add-repo-container {
+    display: flex;
+    gap: 10px;
+}
+
+.repo-input {
+    padding: 8px 12px;
+    border: 1px solid var(--black);
+    background: var(--white);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    width: 250px;
+}
+
+.repo-input:focus {
+    outline: none;
+    border-color: var(--gold);
+}
+
+.add-repo-btn {
+    width: 40px;
+    height: 40px;
+    background: var(--black);
+    color: var(--white);
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.add-repo-btn:hover {
+    opacity: 0.8;
+}
+
+.add-repo-btn:active {
+    transform: translateY(1px);
+}
+
 .section-title {
     font-size: 16px;
-    margin-bottom: 30px;
+    margin-bottom: 0;
     margin-top: 10px;
     color: var(--black);
     text-transform: uppercase;
@@ -343,6 +487,16 @@ kbd {
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+    .projects-grid {
+        grid-template-columns: repeat(auto-fit, 320px);
+    }
+
+    .layout {
+        gap: 120px;
+    }
+}
+
 @media (max-width: 900px) {
     .layout {
         flex-direction: column;
@@ -351,17 +505,34 @@ kbd {
 
     .sidebar {
         position: static;
+        width: 320px;
+        flex-shrink: 0;
+    }
+
+    .main-content {
         width: 100%;
     }
 
     .projects-grid {
         grid-template-columns: repeat(auto-fit, 320px);
     }
+
+    .section-title {
+        margin-top: 0;
+    }
 }
 
 @media (max-width: 480px) {
     .layout {
         padding: 15px;
+    }
+
+    .sidebar .title {
+        font-size: 14px;
+    }
+
+    .project-card {
+        margin-bottom: 20px;
     }
 
     .study-container {

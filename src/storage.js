@@ -3,12 +3,13 @@
  */
 
 const DB_NAME = 'flashcards-db';
-const DB_VERSION = 1;
+const DB_VERSION = 3; // Increment version to force upgrade
 
 const STORES = {
     CARDS: 'cards',           // Card metadata and content
     REVIEWS: 'reviews',       // FSRS review state per card
-    SESSIONS: 'sessions'      // Session history
+    SESSIONS: 'sessions',     // Session history
+    METADATA: 'metadata'      // Repository metadata
 };
 
 let db = null;
@@ -46,6 +47,11 @@ export async function initDB() {
             // Sessions store: review session history
             if (!db.objectStoreNames.contains(STORES.SESSIONS)) {
                 db.createObjectStore(STORES.SESSIONS, { keyPath: 'id', autoIncrement: true });
+            }
+
+            // Metadata store: repository and app metadata
+            if (!db.objectStoreNames.contains(STORES.METADATA)) {
+                db.createObjectStore(STORES.METADATA, { keyPath: 'key' });
             }
         };
     });
@@ -277,3 +283,65 @@ export async function getStats() {
         newCards: newCards.length
     };
 }
+
+/**
+ * Save repository metadata
+ */
+export async function saveRepoMetadata(repo) {
+    if (!db) await initDB();
+
+    // Get existing repos
+    const repos = await getAllRepos();
+
+    // Add or update repo
+    const existingIndex = repos.findIndex(r => r.id === repo.id);
+    if (existingIndex >= 0) {
+        repos[existingIndex] = repo;
+    } else {
+        repos.push(repo);
+    }
+
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORES.METADATA], 'readwrite');
+        const store = transaction.objectStore(STORES.METADATA);
+        const request = store.put({ key: 'repos', value: repos });
+
+        request.onsuccess = () => resolve(repos);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+/**
+ * Get repository metadata by ID
+ */
+export async function getRepoMetadata(repoId) {
+    const repos = await getAllRepos();
+    return repos.find(r => r.id === repoId);
+}
+
+/**
+ * Get all repositories
+ */
+export async function getAllRepos() {
+    if (!db) await initDB();
+
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORES.METADATA], 'readonly');
+        const store = transaction.objectStore(STORES.METADATA);
+        const request = store.get('repos');
+
+        request.onsuccess = () => resolve(request.result?.value || []);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+/**
+ * Export dbPromise for repo-manager
+ */
+export async function getDBPromise() {
+    if (!db) await initDB();
+    return db;
+}
+
+// Make db accessible for repo-manager
+window.dbPromise = getDBPromise();

@@ -12,7 +12,8 @@ import { createCard } from './fsrs-client.js';
  */
 async function loadCardIndex() {
     try {
-        const response = await fetch('/data/cards.json');
+        // Add timestamp to prevent caching
+        const response = await fetch(`/data/cards.json?t=${Date.now()}`);
         if (!response.ok) {
             throw new Error('Card index not found. Run npm run build first.');
         }
@@ -27,7 +28,8 @@ async function loadCardIndex() {
  * Load markdown file content
  */
 async function loadMarkdownFile(relativePath) {
-    const response = await fetch(`/topics/${relativePath}`);
+    // Add timestamp to prevent caching
+    const response = await fetch(`/topics/${relativePath}?t=${Date.now()}`);
     if (!response.ok) {
         throw new Error(`Failed to load ${relativePath}`);
     }

@@ -2,8 +2,8 @@
  * Study session application
  */
 
-import { initDB, getCard, getAllReviews, saveReview } from './storage.js';
-import { reviewCard, createCard, Rating, GradeKeys, getDueCards as filterDueCards } from './fsrs-client.js';
+import { initDB, getCard, getAllCards, getAllReviews, saveReview } from './storage.js';
+import { reviewCard, createCard, Rating, GradeKeys, getDueCards as filterDueCards, State } from './fsrs-client.js';
 import { renderCardFront, renderCardBack } from './markdown.js';
 
 // Session state
@@ -49,38 +49,39 @@ async function init() {
  * Load due cards for the current topic
  */
 async function loadDueCards() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const topic = urlParams.get('topic');
+
+    // Get ALL cards for this topic
+    const allCards = await getAllCards();
+    const topicCards = allCards.filter(card => card.deckName === topic);
+
+    // Get all reviews
     const allReviews = await getAllReviews();
+    const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
 
-    // Get cards with FSRS state
-    const cardsWithState = await Promise.all(
-        allReviews.map(async (review) => {
-            const card = await getCard(review.cardHash);
-            return {
-                card,
-                fsrsCard: review.fsrsCard,
-                cardHash: review.cardHash
-            };
-        })
-    );
+    // Build list of cards to study
+    const cardsToStudy = [];
 
-    // Filter for due cards
-    dueCards = filterDueCards(
-        cardsWithState.map(({ cardHash, fsrsCard }) => ({ cardHash, fsrsCard })),
-        new Date()
-    );
+    for (const card of topicCards) {
+        const review = reviewMap.get(card.hash);
 
-    // Load full card data for due cards
-    dueCards = await Promise.all(
-        dueCards.map(async ({ cardHash, fsrsCard }) => {
-            const card = await getCard(cardHash);
-            return { card, fsrsCard, cardHash };
-        })
-    );
+        if (review) {
+            // Card has been reviewed - check if due
+            const fsrsCard = review.fsrsCard;
+            if (new Date(fsrsCard.due) <= new Date()) {
+                cardsToStudy.push({ card, fsrsCard, cardHash: card.hash });
+            }
+        } else {
+            // New card - never reviewed
+            const fsrsCard = createCard();
+            // Save initial FSRS state
+            await saveReview(card.hash, fsrsCard);
+            cardsToStudy.push({ card, fsrsCard, cardHash: card.hash });
+        }
+    }
 
-    // Also include new cards (cards without review state)
-    const reviewedHashes = new Set(allReviews.map(r => r.cardHash));
-    // For now, we'll just use due cards. New card loading will be added when we implement the build script
-
+    dueCards = cardsToStudy;
     updateStats();
 }
 

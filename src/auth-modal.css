@@ -1,0 +1,350 @@
+/**
+ * Authentication modal styles
+ */
+
+/* Modal container */
+.auth-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.auth-modal.hidden {
+    display: none;
+}
+
+.auth-modal.show {
+    opacity: 1;
+}
+
+/* Modal overlay */
+.modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(3px);
+}
+
+/* Modal content */
+.modal-content {
+    position: relative;
+    background: var(--white);
+    border: 2px solid var(--black);
+    padding: 0;
+    width: 450px;
+    max-width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    transform: translateY(20px);
+    transition: transform 0.3s ease;
+}
+
+.auth-modal.show .modal-content {
+    transform: translateY(0);
+}
+
+/* Close button */
+.modal-close {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 32px;
+    height: 32px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--black);
+    opacity: 0.5;
+    transition: opacity 0.2s;
+    z-index: 1;
+}
+
+.modal-close:hover {
+    opacity: 1;
+}
+
+/* Modal body */
+.modal-body {
+    padding: 40px;
+}
+
+/* Auth form */
+.auth-form h2 {
+    font-size: 28px;
+    margin-bottom: 8px;
+    color: var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.auth-subtitle {
+    color: var(--black);
+    opacity: 0.7;
+    margin-bottom: 30px;
+    font-size: 14px;
+}
+
+/* Form groups */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--black);
+}
+
+.form-group input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--black);
+    background: var(--white);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 2px rgba(245, 200, 66, 0.2);
+}
+
+.form-group input::placeholder {
+    opacity: 0.4;
+}
+
+.form-help {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+/* Form actions */
+.form-actions {
+    margin-top: 25px;
+}
+
+/* Buttons */
+.btn-primary {
+    width: 100%;
+    padding: 12px 24px;
+    background: var(--black);
+    color: var(--white);
+    border: none;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.btn-primary:hover {
+    background: #333;
+}
+
+.btn-primary:active {
+    transform: translateY(1px);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-danger {
+    padding: 10px 20px;
+    background: #d32f2f;
+    color: white;
+    border: none;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-danger:hover {
+    background: #c62828;
+}
+
+/* Form links */
+.form-links {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.form-links a {
+    color: var(--gold);
+    text-decoration: none;
+    transition: opacity 0.2s;
+}
+
+.form-links a:hover {
+    opacity: 0.7;
+}
+
+.form-links .separator {
+    margin: 0 8px;
+    opacity: 0.3;
+}
+
+/* Messages */
+.auth-error,
+.auth-success {
+    margin-top: 15px;
+    padding: 10px;
+    font-size: 14px;
+    border-radius: 4px;
+}
+
+.auth-error {
+    background: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef5350;
+}
+
+.auth-success {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #66bb6a;
+}
+
+.auth-error.hidden,
+.auth-success.hidden {
+    display: none;
+}
+
+/* Success message */
+.success-message {
+    text-align: center;
+    padding: 20px 0;
+}
+
+.success-icon {
+    margin-bottom: 15px;
+}
+
+/* Danger zone */
+.danger-zone {
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 1px solid #ddd;
+}
+
+.danger-zone h3 {
+    font-size: 16px;
+    margin-bottom: 15px;
+    color: #d32f2f;
+}
+
+/* Auth buttons in header */
+.auth-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+.auth-buttons button {
+    padding: 8px 16px;
+    background: var(--white);
+    color: var(--black);
+    border: 1px solid var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.auth-buttons button:hover {
+    background: var(--black);
+    color: var(--white);
+}
+
+.auth-buttons .btn-signup {
+    background: var(--gold);
+    border-color: var(--gold);
+}
+
+.auth-buttons .btn-signup:hover {
+    background: var(--black);
+    border-color: var(--black);
+    color: var(--white);
+}
+
+/* User menu */
+.user-menu {
+    position: relative;
+}
+
+.user-menu-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--white);
+    border: 1px solid var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.user-menu-button span:first-child {
+    font-size: 10px;
+    opacity: 0.6;
+}
+
+.user-menu-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background: var(--white);
+    border: 1px solid var(--black);
+    min-width: 200px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.user-menu-dropdown.hidden {
+    display: none;
+}
+
+.user-menu-dropdown a {
+    display: block;
+    padding: 10px 15px;
+    color: var(--black);
+    text-decoration: none;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.user-menu-dropdown a:hover {
+    background: var(--light-gray);
+}
+
+.user-menu-dropdown .divider {
+    border-top: 1px solid #ddd;
+    margin: 5px 0;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .modal-content {
+        width: 100%;
+        height: 100%;
+        max-height: 100vh;
+        border: none;
+    }
+
+    .modal-body {
+        padding: 30px 20px;
+    }
+}

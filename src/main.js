@@ -2,8 +2,8 @@
  * Main entry point for topic listing page
  */
 
-import { initDB, getAllCards, getAllReviews, getStats } from './storage.js';
-import { loadAllCards } from './loader.js';
+import { initDB, getAllCards, getAllReviews, getStats, getAllRepos } from './storage.js';
+import { loadRepository, loadDefaultRepo, removeRepository } from './repo-manager.js';
 
 /**
  * Initialize the application
@@ -11,95 +11,104 @@ import { loadAllCards } from './loader.js';
 async function init() {
     await initDB();
 
-    // Check if we need to load cards
-    const cards = await getAllCards();
-    if (cards.length === 0) {
-        // First time load
-        const grid = document.getElementById('topics-grid');
-        grid.innerHTML = '<div class="loading">Loading flashcards...</div>';
+    const grid = document.getElementById('topics-grid');
+    grid.innerHTML = '<div class="loading">Loading repositories...</div>';
 
-        try {
-            await loadAllCards();
-        } catch (error) {
-            console.error('Error loading cards:', error);
-        }
+    // Check if we have any repos, if not load default examples
+    const repos = await getAllRepos();
+    if (repos.length === 0) {
+        await loadDefaultRepo();
     }
 
-    await loadTopics();
+    await loadRepositories();
+    setupEventListeners();
 }
 
 /**
- * Load and display topics
+ * Load and display repositories
  */
-async function loadTopics() {
+async function loadRepositories() {
     const grid = document.getElementById('topics-grid');
 
     try {
-        // Get all cards and group by deck
+        // Get all repos and cards
+        const repos = await getAllRepos();
         const allCards = await getAllCards();
         const allReviews = await getAllReviews();
-
-        // Group cards by deck name
-        const deckMap = new Map();
-
-        allCards.forEach(card => {
-            if (!deckMap.has(card.deckName)) {
-                deckMap.set(card.deckName, {
-                    name: card.deckName,
-                    cards: [],
-                    reviews: new Map()
-                });
-            }
-            deckMap.get(card.deckName).cards.push(card);
-        });
-
-        // Add review data
-        allReviews.forEach(review => {
-            const card = allCards.find(c => c.hash === review.cardHash);
-            if (card && deckMap.has(card.deckName)) {
-                deckMap.get(card.deckName).reviews.set(review.cardHash, review);
-            }
-        });
 
         // Clear loading message
         grid.innerHTML = '';
 
-        // Create cards for each topic
-        if (deckMap.size === 0) {
-            grid.innerHTML = `
-                <div class="loading">
-                    No topics loaded yet. Add flashcard files to the topics/ directory and run the build script.
-                </div>
-            `;
-            return;
+        // Show example cards if no repos
+        if (repos.length === 0 && allCards.length > 0) {
+            // Show default example cards
+            const exampleDeck = {
+                id: 'basics',
+                name: 'basics',
+                description: 'Try out the flashcard system',
+                cards: allCards.filter(c => c.deckName === 'basics' || c.deckName === 'examples'),
+                reviews: new Map()
+            };
+
+            // Add review data for example cards
+            allReviews.forEach(review => {
+                const card = exampleDeck.cards.find(c => c.hash === review.cardHash);
+                if (card) {
+                    exampleDeck.reviews.set(review.cardHash, review);
+                }
+            });
+
+            const card = createRepoCard(exampleDeck);
+            grid.appendChild(card);
         }
 
-        deckMap.forEach((deck, deckName) => {
-            const card = createTopicCard(deck);
+        // Create cards for each repository
+        for (const repo of repos) {
+            // Get cards for this repo
+            const repoCards = allCards.filter(c =>
+                c.source?.repo === repo.id || c.deckName === repo.id
+            );
+
+            // Get reviews for these cards
+            const repoReviews = new Map();
+            allReviews.forEach(review => {
+                const card = repoCards.find(c => c.hash === review.cardHash);
+                if (card) {
+                    repoReviews.set(review.cardHash, review);
+                }
+            });
+
+            const repoData = {
+                ...repo,
+                cards: repoCards,
+                reviews: repoReviews
+            };
+
+            const card = createRepoCard(repoData);
             grid.appendChild(card);
-        });
+        }
 
     } catch (error) {
-        console.error('Error loading topics:', error);
+        console.error('Error loading repositories:', error);
         grid.innerHTML = `
             <div class="loading">
-                Error loading topics. Please check the console for details.
+                Error loading repositories. Please check the console for details.
             </div>
         `;
     }
 }
 
 /**
- * Create a topic card element
+ * Create a repository card element
  */
-function createTopicCard(deck) {
-    const totalCards = deck.cards.length;
-    const reviewedCards = deck.reviews.size;
+function createRepoCard(repo) {
+    const totalCards = repo.cards.length;
+    const reviewedCards = repo.reviews.size;
 
     // Count due cards
     const now = new Date();
     let dueCards = 0;
-    deck.reviews.forEach(review => {
+    repo.reviews.forEach(review => {
         if (new Date(review.fsrsCard.due) <= now) {
             dueCards++;
         }
@@ -109,23 +118,81 @@ function createTopicCard(deck) {
     const newCards = totalCards - reviewedCards;
 
     const card = document.createElement('a');
-    card.href = `app.html?topic=${encodeURIComponent(deck.name)}`;
+    card.href = `app.html?topic=${encodeURIComponent(repo.id || repo.name)}`;
     card.className = 'project-card';
+
+    const isExample = repo.id === 'examples';
+    const displayName = isExample ? repo.name : repo.id;
+    const description = repo.description || `${totalCards} card${totalCards !== 1 ? 's' : ''}`;
 
     card.innerHTML = `
         <div class="project-content">
-            <h3 class="project-title">${escapeHtml(deck.name)}</h3>
+            <h3 class="project-title">${escapeHtml(displayName)}</h3>
             <p class="project-description">
-                ${totalCards} card${totalCards !== 1 ? 's' : ''}
+                ${escapeHtml(description)}
             </p>
             <div class="project-stats">
                 ${dueCards > 0 ? `<strong>${dueCards} due</strong>` : 'No cards due'}
                 ${newCards > 0 ? ` | ${newCards} new` : ''}
+                ${repo.stars ? ` | ⭐ ${repo.stars}` : ''}
             </div>
         </div>
     `;
 
     return card;
+}
+
+/**
+ * Set up event listeners
+ */
+function setupEventListeners() {
+    const addBtn = document.getElementById('add-repo-btn');
+    const repoInput = document.getElementById('repo-input');
+
+    if (addBtn && repoInput) {
+        addBtn.addEventListener('click', handleAddRepository);
+        repoInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleAddRepository();
+            }
+        });
+    }
+}
+
+/**
+ * Handle adding a new repository
+ */
+async function handleAddRepository() {
+    const input = document.getElementById('repo-input');
+    const repoString = input.value.trim();
+
+    if (!repoString) {
+        alert('Please enter a repository in the format: owner/repository');
+        return;
+    }
+
+    const addBtn = document.getElementById('add-repo-btn');
+    const originalText = addBtn.textContent;
+    addBtn.textContent = '...';
+    addBtn.disabled = true;
+
+    try {
+        const result = await loadRepository(repoString);
+        console.log(`Loaded ${result.cards.length} cards from ${repoString}`);
+
+        // Clear input
+        input.value = '';
+
+        // Reload the display
+        await loadRepositories();
+
+    } catch (error) {
+        console.error('Error loading repository:', error);
+        alert(`Failed to load repository: ${error.message}`);
+    } finally {
+        addBtn.textContent = originalText;
+        addBtn.disabled = false;
+    }
 }
 
 /**
