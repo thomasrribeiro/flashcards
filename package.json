@@ -1,5 +1,5 @@
 {
-  "name": "my-flashcards",
+  "name": "flashcards",
   "version": "1.0.0",
   "description": "Browser-based spaced repetition flashcards with ts-fsrs",
   "type": "module",

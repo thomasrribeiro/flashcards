@@ -1,26 +1,61 @@
 /**
- * Simple GitHub authentication
+ * GitHub OAuth authentication
  */
 
-// For now, we'll use localStorage to track login state
-// In production, this will redirect to GitHub OAuth
+const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID;
+const WORKER_URL = import.meta.env.VITE_WORKER_URL;
 
 class GitHubAuth {
     constructor() {
         this.user = null;
+        this.token = null;
         this.init();
     }
 
     init() {
-        // Check if user is logged in
+        // Check if we're returning from OAuth callback
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('token')) {
+            this.handleCallback(urlParams);
+            return;
+        }
+
+        // Check if user is already logged in
         const storedUser = localStorage.getItem('github_user');
-        if (storedUser) {
+        const storedToken = localStorage.getItem('github_token');
+        if (storedUser && storedToken) {
             this.user = JSON.parse(storedUser);
+            this.token = storedToken;
             this.updateUI(true);
         }
 
         // Set up event listeners
         this.attachListeners();
+    }
+
+    handleCallback(urlParams) {
+        const token = urlParams.get('token');
+        const username = urlParams.get('user');
+        const name = urlParams.get('name');
+        const avatar = urlParams.get('avatar');
+
+        if (token && username) {
+            const user = {
+                username,
+                name: name || username,
+                avatar
+            };
+
+            localStorage.setItem('github_user', JSON.stringify(user));
+            localStorage.setItem('github_token', token);
+
+            this.user = user;
+            this.token = token;
+            this.updateUI(true);
+
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
     }
 
     attachListeners() {
@@ -37,28 +72,22 @@ class GitHubAuth {
     }
 
     login() {
-        // For MVP, we'll just store a mock user
-        // In production, this will redirect to:
-        // https://github.com/login/oauth/authorize?client_id=YOUR_CLIENT_ID&scope=repo
+        if (!GITHUB_CLIENT_ID) {
+            console.error('VITE_GITHUB_CLIENT_ID not configured');
+            alert('GitHub OAuth not configured. Please set VITE_GITHUB_CLIENT_ID in .env');
+            return;
+        }
 
-        // Mock login for now
-        const mockUser = {
-            username: 'guest',
-            name: 'Guest User',
-            avatar: null
-        };
-
-        localStorage.setItem('github_user', JSON.stringify(mockUser));
-        this.user = mockUser;
-        this.updateUI(true);
-
-        // In production:
-        // window.location.href = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&scope=repo`;
+        // Redirect to GitHub OAuth
+        const redirectUri = `${WORKER_URL}/auth/github/callback`;
+        window.location.href = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=repo&redirect_uri=${encodeURIComponent(redirectUri)}`;
     }
 
     logout() {
         localStorage.removeItem('github_user');
+        localStorage.removeItem('github_token');
         this.user = null;
+        this.token = null;
         this.updateUI(false);
     }
 
@@ -78,11 +107,88 @@ class GitHubAuth {
     }
 
     isAuthenticated() {
-        return !!this.user;
+        return !!(this.user && this.token);
     }
 
     getUser() {
         return this.user;
+    }
+
+    getToken() {
+        return this.token;
+    }
+
+    /**
+     * Make an authenticated request to the worker API
+     */
+    async apiRequest(endpoint, options = {}) {
+        if (!this.token) {
+            throw new Error('Not authenticated');
+        }
+
+        const url = `${WORKER_URL}${endpoint}`;
+        const headers = {
+            'Authorization': `Bearer ${this.token}`,
+            'Content-Type': 'application/json',
+            ...options.headers
+        };
+
+        const response = await fetch(url, {
+            ...options,
+            headers
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                // Token expired, log out
+                this.logout();
+                throw new Error('Session expired. Please log in again.');
+            }
+            throw new Error(`API request failed: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    /**
+     * Sync review data to the worker
+     */
+    async syncReviews(reviews) {
+        if (!this.isAuthenticated()) {
+            console.log('Not authenticated, skipping sync');
+            return;
+        }
+
+        try {
+            const result = await this.apiRequest('/sync', {
+                method: 'POST',
+                body: JSON.stringify({ reviews })
+            });
+            console.log('Synced reviews:', result);
+            return result;
+        } catch (error) {
+            console.error('Failed to sync reviews:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get review data from the worker
+     */
+    async getReviews() {
+        if (!this.isAuthenticated()) {
+            return { reviews: [] };
+        }
+
+        try {
+            const result = await this.apiRequest('/data', {
+                method: 'GET'
+            });
+            return result;
+        } catch (error) {
+            console.error('Failed to get reviews:', error);
+            throw error;
+        }
     }
 }
 

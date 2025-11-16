@@ -62,9 +62,9 @@ git submodule update --init --recursive           # Initialize submodules after 
    - `sessions` store: Review history
 
 2. **Cloudflare Worker** (optional sync):
-   - Separate repository: `/Users/thomasribeiro/code/my-flashcards-worker`
+   - Separate repository: `/Users/thomasribeiro/code/flashcards-worker`
    - Connected via `VITE_WORKER_URL` environment variable
-   - Handles authentication (magic links) and KV storage
+   - Handles GitHub OAuth authentication and KV storage
 
 ## Card Format Specifications
 
@@ -130,4 +130,4 @@ When deploying:
 
 - **hashcards**: Original Rust implementation this parser replicates
 - **ts-fsrs**: FSRS algorithm implementation
-- **my-flashcards-worker**: Separate worker repository for auth/sync
+- **flashcards-worker**: Separate worker repository for GitHub OAuth and sync

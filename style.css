@@ -251,6 +251,7 @@ body {
     height: var(--project-card-height);
     text-decoration: none;
     color: inherit;
+    position: relative;
 }
 
 .project-card:hover {
@@ -284,6 +285,33 @@ body {
     color: var(--black);
     margin-top: auto;
     padding-top: 10px;
+}
+
+.card-reset-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 32px;
+    height: 32px;
+    padding: 6px;
+    background: var(--white);
+    border: 1px solid var(--black);
+    cursor: pointer;
+    z-index: 10;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-reset-btn:hover {
+    background: var(--light-gray);
+}
+
+.card-reset-btn img {
+    width: 16px;
+    height: 16px;
+    display: block;
 }
 
 .loading {

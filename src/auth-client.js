@@ -3,7 +3,7 @@
  *
  * The worker URL should be configured based on your deployment:
  * - Development: http://localhost:8787
- * - Production: https://my-flashcards-worker.your-subdomain.workers.dev
+ * - Production: https://flashcards-worker.your-subdomain.workers.dev
  */
 
 // Configure your worker URL here

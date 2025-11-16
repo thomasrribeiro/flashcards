@@ -336,6 +336,39 @@ export async function getAllRepos() {
 }
 
 /**
+ * Clear all reviews for a specific deck
+ */
+export async function clearReviewsByDeck(deckName) {
+    if (!db) await initDB();
+
+    // Get all reviews
+    const allReviews = await getAllReviews();
+
+    // Get all cards to find which belong to this deck
+    const allCards = await getAllCards();
+    const deckCardHashes = new Set(
+        allCards
+            .filter(card => card.deckName === deckName || card.source?.repo === deckName)
+            .map(card => card.hash)
+    );
+
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORES.REVIEWS], 'readwrite');
+        const store = transaction.objectStore(STORES.REVIEWS);
+
+        // Delete reviews for cards in this deck
+        allReviews.forEach(review => {
+            if (deckCardHashes.has(review.cardHash)) {
+                store.delete(review.cardHash);
+            }
+        });
+
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+    });
+}
+
+/**
  * Export dbPromise for repo-manager
  */
 export async function getDBPromise() {
