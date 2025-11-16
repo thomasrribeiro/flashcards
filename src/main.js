@@ -45,7 +45,7 @@ async function loadRepositories() {
             const exampleDeck = {
                 id: 'basics',
                 name: 'basics',
-                description: 'Try out the flashcard system',
+                description: 'Sample deck.',
                 cards: allCards.filter(c => c.deckName === 'basics' || c.deckName === 'examples'),
                 reviews: new Map()
             };

@@ -34,10 +34,9 @@ body {
 
 /* Auth Header */
 .auth-header {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 20px;
 }
 
 .btn-github-login {
@@ -49,6 +48,8 @@ body {
     font-size: 14px;
     cursor: pointer;
     transition: opacity 0.2s;
+    width: auto;
+    line-height: 1;
 }
 
 .btn-github-login:hover {
@@ -58,9 +59,9 @@ body {
 .user-info {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 10px;
     background: var(--white);
-    padding: 8px 15px;
+    padding: 8px 12px;
     border: 1px solid var(--black);
 }
 
@@ -176,14 +177,10 @@ body {
 .repos-header {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    margin-bottom: 30px;
-    margin-top: 10px;
-}
-
-.add-repo-container {
-    display: flex;
     gap: 10px;
+    margin-bottom: 30px;
+    margin-top: 20px;
+    align-items: flex-start;
 }
 
 .repo-input {
@@ -552,7 +549,7 @@ kbd {
 
 @media (max-width: 480px) {
     .layout {
-        padding: 15px;
+        padding: 15px 30px;
     }
 
     .sidebar .title {

@@ -99,7 +99,12 @@ class GitHubAuth {
         if (isLoggedIn && this.user) {
             if (loginBtn) loginBtn.classList.add('hidden');
             if (userInfo) userInfo.classList.remove('hidden');
-            if (userName) userName.textContent = this.user.name || this.user.username;
+            if (userName) {
+                // Show only first name
+                const fullName = this.user.name || this.user.username;
+                const firstName = fullName.split(' ')[0];
+                userName.textContent = firstName;
+            }
         } else {
             if (loginBtn) loginBtn.classList.remove('hidden');
             if (userInfo) userInfo.classList.add('hidden');

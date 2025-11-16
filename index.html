@@ -10,22 +10,13 @@
 </head>
 <body>
     <div class="container">
-        <div class="auth-header">
-            <button class="btn-github-login" id="btn-github-login">
-                Login with GitHub
-            </button>
-            <div class="user-info hidden" id="user-info">
-                <span id="user-name"></span>
-                <button class="btn-logout" id="btn-logout">Logout</button>
-            </div>
-        </div>
-
         <div class="layout">
             <aside class="sidebar">
                 <h1>Notes</h1>
                 <div class="nav-menu">
                     <a href="https://thomasrribeiro.github.io">&lt; back home</a>
                 </div>
+
                 <div class="bio">
                     A spaced-repetition system built to work with plain markdown files synced to your GitHub account. Store what matters and never forget it.
                 </div>
@@ -54,16 +45,18 @@
             </aside>
 
             <main class="main-content">
-                <div class="repos-header">
-                    <h2 class="section-title">Cards</h2>
-                    <div class="add-repo-container">
-                        <input type="text"
-                               id="repo-input"
-                               class="repo-input"
-                               placeholder="owner/repository"
-                               title="Enter GitHub repository (e.g. facebook/react)">
-                        <button id="add-repo-btn" class="add-repo-btn" title="Add repository">+</button>
+                <div class="auth-header">
+                    <button class="btn-github-login" id="btn-github-login">
+                        Login with GitHub
+                    </button>
+                    <div class="user-info hidden" id="user-info">
+                        <span id="user-name"></span>
+                        <button class="btn-logout" id="btn-logout">Logout</button>
                     </div>
+                </div>
+                <h2 class="section-title">Cards</h2>
+                <div class="repos-header">
+                    <button id="add-repo-btn" class="add-repo-btn" title="Add repository">+</button>
                 </div>
                 <div id="topics-grid" class="projects-grid">
                     <!-- Topics will be loaded dynamically -->
