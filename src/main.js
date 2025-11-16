@@ -125,7 +125,25 @@ function createRepoCard(repo) {
     const displayName = isExample ? repo.name : repo.id;
     const description = repo.description || `${totalCards} card${totalCards !== 1 ? 's' : ''}`;
 
-    // Add reset button (top right)
+    // Add button container (top right)
+    const btnContainer = document.createElement('div');
+    btnContainer.className = 'card-buttons';
+
+    // Add delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'card-delete-btn';
+    deleteBtn.title = 'Delete this deck';
+    deleteBtn.innerHTML = '×';
+    deleteBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm(`Delete deck "${displayName}"? This cannot be undone.`)) {
+            await removeRepository(repo.id);
+            await loadRepositories();
+        }
+    };
+
+    // Add reset button
     const resetBtn = document.createElement('button');
     resetBtn.className = 'card-reset-btn';
     resetBtn.title = 'Reset all cards in this deck';
@@ -138,6 +156,9 @@ function createRepoCard(repo) {
             await loadRepositories();
         }
     };
+
+    btnContainer.appendChild(resetBtn);
+    btnContainer.appendChild(deleteBtn);
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'project-content';
@@ -153,7 +174,7 @@ function createRepoCard(repo) {
         </div>
     `;
 
-    card.appendChild(resetBtn);
+    card.appendChild(btnContainer);
     card.appendChild(contentDiv);
     return card;
 }

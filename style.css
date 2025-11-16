@@ -198,15 +198,19 @@ body {
 }
 
 .add-repo-btn {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     background: var(--black);
     color: var(--white);
     border: none;
-    font-size: 24px;
+    font-size: 20px;
     cursor: pointer;
     transition: opacity 0.2s;
     font-family: 'IBM Plex Mono', monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
 }
 
 .add-repo-btn:hover {
@@ -218,7 +222,7 @@ body {
 }
 
 .section-title {
-    font-size: 16px;
+    font-size: 24px;
     margin-bottom: 0;
     margin-top: 10px;
     color: var(--black);
@@ -257,6 +261,7 @@ body {
 
 .project-content {
     padding: 20px;
+    padding-top: 50px;
     background: var(--white);
     flex: 1;
     display: flex;
@@ -269,12 +274,19 @@ body {
     margin-bottom: 12px;
     color: var(--black);
     text-decoration: underline;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .project-description {
     font-size: 14px;
     color: var(--black);
     line-height: 1.7;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
 }
 
 .project-stats {
@@ -284,25 +296,33 @@ body {
     padding-top: 10px;
 }
 
-.card-reset-btn {
+.card-buttons {
     position: absolute;
     top: 10px;
     right: 10px;
+    display: flex;
+    gap: 5px;
+    z-index: 10;
+}
+
+.card-delete-btn,
+.card-reset-btn {
     width: 32px;
     height: 32px;
     padding: 6px;
     background: var(--white);
     border: 1px solid var(--black);
     cursor: pointer;
-    z-index: 10;
-    transition: all 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
 }
 
-.card-reset-btn:hover {
-    background: var(--light-gray);
+.card-delete-btn {
+    font-size: 24px;
+    line-height: 1;
+    padding: 0;
 }
 
 .card-reset-btn img {
