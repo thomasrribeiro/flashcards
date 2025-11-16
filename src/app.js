@@ -2,9 +2,11 @@
  * Study session application
  */
 
-import { initDB, getCard, getAllCards, getAllReviews, saveReview } from './storage.js';
+import { initDB, getCard, getAllCards, getAllReviews, saveReview, saveCards } from './storage.js';
 import { reviewCard, createCard, Rating, GradeKeys, getDueCards as filterDueCards, State } from './fsrs-client.js';
 import { renderCardFront, renderCardBack } from './markdown.js';
+import { parseDeck } from './parser.js';
+import { hashCard } from './hasher.js';
 
 // Session state
 let currentCardIndex = 0;
@@ -25,6 +27,35 @@ const studyArea = document.getElementById('study-area');
 const sessionComplete = document.getElementById('session-complete');
 
 /**
+ * Ensure cards are loaded for the topic
+ */
+async function ensureCardsLoaded(topic) {
+    const allCards = await getAllCards();
+    const topicCards = allCards.filter(card => card.deckName === topic);
+
+    // If cards already loaded, we're done
+    if (topicCards.length > 0) {
+        return;
+    }
+
+    // Load basics deck from local markdown
+    if (topic === 'basics') {
+        const response = await fetch('/topics/example/basics.md');
+        const markdown = await response.text();
+        const cards = parseDeck(markdown, 'basics.md');
+
+        const cardsWithMeta = cards.map(card => ({
+            ...card,
+            hash: hashCard(card),
+            deckName: 'basics',
+            source: { repo: 'local', file: 'topics/example/basics.md' }
+        }));
+
+        await saveCards(cardsWithMeta);
+    }
+}
+
+/**
  * Initialize the study session
  */
 async function init() {
@@ -39,6 +70,9 @@ async function init() {
         window.location.href = 'index.html';
         return;
     }
+
+    // Load cards if needed (in-memory storage may be empty on page load)
+    await ensureCardsLoaded(topic);
 
     await loadDueCards();
     setupEventListeners();
@@ -73,10 +107,8 @@ async function loadDueCards() {
                 cardsToStudy.push({ card, fsrsCard, cardHash: card.hash });
             }
         } else {
-            // New card - never reviewed
+            // New card - never reviewed, always include in study session
             const fsrsCard = createCard();
-            // Save initial FSRS state
-            await saveReview(card.hash, fsrsCard);
             cardsToStudy.push({ card, fsrsCard, cardHash: card.hash });
         }
     }

@@ -1,380 +1,332 @@
 /**
- * IndexedDB storage for cards and review state
+ * Dual-mode storage for cards and review state
+ * - When logged out: Uses IndexedDB for demo purposes
+ * - When logged in: Uses Cloudflare Worker KV via GitHub auth
  */
 
+import { openDB } from 'idb';
+
 const DB_NAME = 'flashcards-db';
-const DB_VERSION = 3; // Increment version to force upgrade
+const DB_VERSION = 4;
 
-const STORES = {
-    CARDS: 'cards',           // Card metadata and content
-    REVIEWS: 'reviews',       // FSRS review state per card
-    SESSIONS: 'sessions',     // Session history
-    METADATA: 'metadata'      // Repository metadata
-};
+// In-memory stores (always used for cards, loaded from markdown)
+let cardsCache = [];
+let reposCache = [];
 
+// IndexedDB instance (lazy-initialized)
 let db = null;
 
 /**
- * Initialize IndexedDB
+ * Check if user is logged in
+ */
+function isLoggedIn() {
+    return !!localStorage.getItem('github_token');
+}
+
+/**
+ * Initialize storage
  */
 export async function initDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-            db = request.result;
-            resolve(db);
-        };
-
-        request.onupgradeneeded = (event) => {
-            const db = event.target.result;
-
-            // Cards store: full card data with hash as key
-            if (!db.objectStoreNames.contains(STORES.CARDS)) {
-                const cardsStore = db.createObjectStore(STORES.CARDS, { keyPath: 'hash' });
-                cardsStore.createIndex('deckName', 'deckName', { unique: false });
-                cardsStore.createIndex('filePath', 'filePath', { unique: false });
+    // Only init IndexedDB if not logged in
+    if (!isLoggedIn() && !db) {
+        db = await openDB(DB_NAME, DB_VERSION, {
+            upgrade(db) {
+                // Reviews store
+                if (!db.objectStoreNames.contains('reviews')) {
+                    db.createObjectStore('reviews', { keyPath: 'cardHash' });
+                }
             }
-
-            // Reviews store: FSRS state per card
-            if (!db.objectStoreNames.contains(STORES.REVIEWS)) {
-                const reviewsStore = db.createObjectStore(STORES.REVIEWS, { keyPath: 'cardHash' });
-                reviewsStore.createIndex('due', 'fsrsCard.due', { unique: false });
-                reviewsStore.createIndex('state', 'fsrsCard.state', { unique: false });
-            }
-
-            // Sessions store: review session history
-            if (!db.objectStoreNames.contains(STORES.SESSIONS)) {
-                db.createObjectStore(STORES.SESSIONS, { keyPath: 'id', autoIncrement: true });
-            }
-
-            // Metadata store: repository and app metadata
-            if (!db.objectStoreNames.contains(STORES.METADATA)) {
-                db.createObjectStore(STORES.METADATA, { keyPath: 'key' });
-            }
-        };
-    });
+        });
+    }
+    return Promise.resolve();
 }
 
 /**
- * Save a card to the database
+ * Clear all IndexedDB data (called when user logs in)
  */
-export async function saveCard(card) {
-    if (!db) await initDB();
-
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.CARDS], 'readwrite');
-        const store = transaction.objectStore(STORES.CARDS);
-        const request = store.put(card);
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
+export async function clearLocalStorage() {
+    await initDB();
+    if (db) {
+        const tx = db.transaction(['reviews'], 'readwrite');
+        await tx.objectStore('reviews').clear();
+        await tx.done;
+    }
 }
 
 /**
- * Save multiple cards
+ * Save cards to memory (replaces existing cards with same hash)
  */
 export async function saveCards(cards) {
-    if (!db) await initDB();
-
-    const promises = cards.map(card => saveCard(card));
-    return Promise.all(promises);
-}
-
-/**
- * Get a card by hash
- */
-export async function getCard(hash) {
-    if (!db) await initDB();
-
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.CARDS], 'readonly');
-        const store = transaction.objectStore(STORES.CARDS);
-        const request = store.get(hash);
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
+    const newHashes = new Set(cards.map(c => c.hash));
+    cardsCache = cardsCache.filter(c => !newHashes.has(c.hash));
+    cardsCache.push(...cards);
+    return Promise.resolve();
 }
 
 /**
  * Get all cards
  */
 export async function getAllCards() {
-    if (!db) await initDB();
-
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.CARDS], 'readonly');
-        const store = transaction.objectStore(STORES.CARDS);
-        const request = store.getAll();
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
+    return Promise.resolve([...cardsCache]);
 }
 
 /**
- * Get cards by deck name
+ * Get a single card by hash
  */
-export async function getCardsByDeck(deckName) {
-    if (!db) await initDB();
-
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.CARDS], 'readonly');
-        const store = transaction.objectStore(STORES.CARDS);
-        const index = store.index('deckName');
-        const request = index.getAll(deckName);
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
+export async function getCard(hash) {
+    return Promise.resolve(cardsCache.find(c => c.hash === hash));
 }
 
 /**
- * Save review state for a card
+ * Save a review (FSRS state)
  */
 export async function saveReview(cardHash, fsrsCard) {
-    if (!db) await initDB();
+    const review = {
+        cardHash,
+        fsrsCard,
+        lastReviewed: new Date().toISOString()
+    };
 
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.REVIEWS], 'readwrite');
-        const store = transaction.objectStore(STORES.REVIEWS);
-        const request = store.put({
-            cardHash,
-            fsrsCard,
-            lastReviewed: new Date()
-        });
+    if (isLoggedIn()) {
+        // Save to worker KV
+        await syncReviewToCloud(review);
+    } else {
+        // Save to IndexedDB
+        await initDB();
+        if (db) {
+            const tx = db.transaction(['reviews'], 'readwrite');
+            await tx.objectStore('reviews').put(review);
+            await tx.done;
+        }
+    }
 
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
+    return Promise.resolve();
 }
 
 /**
- * Get review state for a card
- */
-export async function getReview(cardHash) {
-    if (!db) await initDB();
-
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.REVIEWS], 'readonly');
-        const store = transaction.objectStore(STORES.REVIEWS);
-        const request = store.get(cardHash);
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-/**
- * Get all review states
+ * Get all reviews
  */
 export async function getAllReviews() {
-    if (!db) await initDB();
-
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.REVIEWS], 'readonly');
-        const store = transaction.objectStore(STORES.REVIEWS);
-        const request = store.getAll();
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
+    if (isLoggedIn()) {
+        // Load from worker KV
+        return await loadReviewsFromCloud();
+    } else {
+        // Load from IndexedDB
+        await initDB();
+        if (!db) {
+            return [];
+        }
+        return await db.getAll('reviews');
+    }
 }
 
 /**
- * Get due cards (cards that need review)
+ * Get review for a specific card
  */
-export async function getDueCards() {
-    if (!db) await initDB();
+export async function getReview(cardHash) {
+    if (isLoggedIn()) {
+        const allReviews = await loadReviewsFromCloud();
+        return allReviews.find(r => r.cardHash === cardHash);
+    } else {
+        await initDB();
+        if (!db) {
+            return null;
+        }
+        return await db.get('reviews', cardHash);
+    }
+}
 
-    const now = new Date();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.REVIEWS], 'readonly');
-        const store = transaction.objectStore(STORES.REVIEWS);
-        const index = store.index('due');
-        const request = index.openCursor(IDBKeyRange.upperBound(now));
+/**
+ * Clear reviews for a specific deck
+ */
+export async function clearReviewsByDeck(deckId) {
+    const cardsInDeck = cardsCache.filter(c => c.deckName === deckId || c.id === deckId);
+    const cardHashes = cardsInDeck.map(c => c.hash);
 
-        const results = [];
-        request.onsuccess = (event) => {
-            const cursor = event.target.result;
-            if (cursor) {
-                results.push(cursor.value);
-                cursor.continue();
-            } else {
-                resolve(results);
+    if (isLoggedIn()) {
+        // Delete from worker KV
+        for (const hash of cardHashes) {
+            await deleteReviewFromCloud(hash);
+        }
+    } else {
+        // Delete from IndexedDB
+        await initDB();
+        if (db) {
+            const tx = db.transaction(['reviews'], 'readwrite');
+            for (const hash of cardHashes) {
+                await tx.objectStore('reviews').delete(hash);
             }
-        };
-        request.onerror = () => reject(request.error);
-    });
-}
+            await tx.done;
+        }
+    }
 
-/**
- * Save a review session
- */
-export async function saveSession(session) {
-    if (!db) await initDB();
-
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.SESSIONS], 'readwrite');
-        const store = transaction.objectStore(STORES.SESSIONS);
-        const request = store.add(session);
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-/**
- * Get all sessions
- */
-export async function getAllSessions() {
-    if (!db) await initDB();
-
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.SESSIONS], 'readonly');
-        const store = transaction.objectStore(STORES.SESSIONS);
-        const request = store.getAll();
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-/**
- * Clear all data (for testing/reset)
- */
-export async function clearAllData() {
-    if (!db) await initDB();
-
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.CARDS, STORES.REVIEWS, STORES.SESSIONS], 'readwrite');
-
-        transaction.objectStore(STORES.CARDS).clear();
-        transaction.objectStore(STORES.REVIEWS).clear();
-        transaction.objectStore(STORES.SESSIONS).clear();
-
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-    });
-}
-
-/**
- * Get statistics
- */
-export async function getStats() {
-    if (!db) await initDB();
-
-    const [allReviews, allCards] = await Promise.all([
-        getAllReviews(),
-        getAllCards()
-    ]);
-
-    const now = new Date();
-    const dueReviews = allReviews.filter(r => new Date(r.fsrsCard.due) <= now);
-    const newCards = allReviews.filter(r => r.fsrsCard.state === 0); // State.New
-
-    return {
-        totalCards: allCards.length,
-        reviewedCards: allReviews.length,
-        dueCards: dueReviews.length,
-        newCards: newCards.length
-    };
+    return Promise.resolve();
 }
 
 /**
  * Save repository metadata
  */
 export async function saveRepoMetadata(repo) {
-    if (!db) await initDB();
-
-    // Get existing repos
-    const repos = await getAllRepos();
-
-    // Add or update repo
-    const existingIndex = repos.findIndex(r => r.id === repo.id);
+    const existingIndex = reposCache.findIndex(r => r.id === repo.id);
     if (existingIndex >= 0) {
-        repos[existingIndex] = repo;
+        reposCache[existingIndex] = repo;
     } else {
-        repos.push(repo);
+        reposCache.push(repo);
     }
-
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.METADATA], 'readwrite');
-        const store = transaction.objectStore(STORES.METADATA);
-        const request = store.put({ key: 'repos', value: repos });
-
-        request.onsuccess = () => resolve(repos);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-/**
- * Get repository metadata by ID
- */
-export async function getRepoMetadata(repoId) {
-    const repos = await getAllRepos();
-    return repos.find(r => r.id === repoId);
+    return Promise.resolve();
 }
 
 /**
  * Get all repositories
  */
 export async function getAllRepos() {
-    if (!db) await initDB();
+    return Promise.resolve([...reposCache]);
+}
 
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.METADATA], 'readonly');
-        const store = transaction.objectStore(STORES.METADATA);
-        const request = store.get('repos');
+/**
+ * Get repository metadata
+ */
+export async function getRepoMetadata(repoId) {
+    return Promise.resolve(reposCache.find(r => r.id === repoId));
+}
 
-        request.onsuccess = () => resolve(request.result?.value || []);
-        request.onerror = () => reject(request.error);
+/**
+ * Remove repository
+ */
+export async function removeRepo(repoId) {
+    reposCache = reposCache.filter(r => r.id !== repoId);
+
+    const cardsToRemove = cardsCache.filter(c =>
+        c.source?.repo === repoId || c.deckName === repoId
+    );
+    cardsCache = cardsCache.filter(c =>
+        c.source?.repo !== repoId && c.deckName !== repoId
+    );
+
+    // Remove reviews
+    if (isLoggedIn()) {
+        for (const card of cardsToRemove) {
+            await deleteReviewFromCloud(card.hash);
+        }
+    } else {
+        await initDB();
+        if (db) {
+            const tx = db.transaction(['reviews'], 'readwrite');
+            for (const card of cardsToRemove) {
+                await tx.objectStore('reviews').delete(card.hash);
+            }
+            await tx.done;
+        }
+    }
+
+    return Promise.resolve();
+}
+
+/**
+ * Get statistics
+ */
+export async function getStats() {
+    const now = new Date();
+    const allReviews = await getAllReviews();
+
+    const dueReviews = allReviews.filter(r => new Date(r.fsrsCard.due) <= now);
+    const newCards = allReviews.filter(r => r.fsrsCard.state === 0);
+
+    return Promise.resolve({
+        totalCards: cardsCache.length,
+        reviewedCards: allReviews.length,
+        dueCards: dueReviews.length,
+        newCards: newCards.length
     });
 }
 
 /**
- * Clear all reviews for a specific deck
+ * Sync single review to Cloudflare Worker KV
  */
-export async function clearReviewsByDeck(deckName) {
-    if (!db) await initDB();
+async function syncReviewToCloud(review) {
+    const token = localStorage.getItem('github_token');
+    const workerUrl = import.meta.env.VITE_WORKER_URL;
 
-    // Get all reviews
-    const allReviews = await getAllReviews();
+    if (!token || !workerUrl) {
+        console.error('Cannot sync: missing token or worker URL');
+        return;
+    }
 
-    // Get all cards to find which belong to this deck
-    const allCards = await getAllCards();
-    const deckCardHashes = new Set(
-        allCards
-            .filter(card => card.deckName === deckName || card.source?.repo === deckName)
-            .map(card => card.hash)
-    );
+    try {
+        const response = await fetch(`${workerUrl}/reviews/${review.cardHash}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(review)
+        });
 
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORES.REVIEWS], 'readwrite');
-        const store = transaction.objectStore(STORES.REVIEWS);
+        if (!response.ok) {
+            throw new Error(`Failed to sync review: ${response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error syncing review to cloud:', error);
+        throw error;
+    }
+}
 
-        // Delete reviews for cards in this deck
-        allReviews.forEach(review => {
-            if (deckCardHashes.has(review.cardHash)) {
-                store.delete(review.cardHash);
+/**
+ * Load all reviews from Cloudflare Worker KV
+ */
+async function loadReviewsFromCloud() {
+    const token = localStorage.getItem('github_token');
+    const workerUrl = import.meta.env.VITE_WORKER_URL;
+
+    if (!token || !workerUrl) {
+        console.error('Cannot load: missing token or worker URL');
+        return [];
+    }
+
+    try {
+        const response = await fetch(`${workerUrl}/reviews`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
             }
         });
 
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-    });
+        if (!response.ok) {
+            throw new Error(`Failed to load reviews: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data.reviews || [];
+    } catch (error) {
+        console.error('Error loading reviews from cloud:', error);
+        return [];
+    }
 }
 
 /**
- * Export dbPromise for repo-manager
+ * Delete review from Cloudflare Worker KV
  */
-export async function getDBPromise() {
-    if (!db) await initDB();
-    return db;
-}
+async function deleteReviewFromCloud(cardHash) {
+    const token = localStorage.getItem('github_token');
+    const workerUrl = import.meta.env.VITE_WORKER_URL;
 
-// Make db accessible for repo-manager
-window.dbPromise = getDBPromise();
+    if (!token || !workerUrl) {
+        console.error('Cannot delete: missing token or worker URL');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${workerUrl}/reviews/${cardHash}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to delete review: ${response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error deleting review from cloud:', error);
+        throw error;
+    }
+}

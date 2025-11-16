@@ -2,6 +2,8 @@
  * GitHub OAuth authentication
  */
 
+import { clearLocalStorage } from './storage.js';
+
 const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID;
 const WORKER_URL = import.meta.env.VITE_WORKER_URL;
 
@@ -33,7 +35,7 @@ class GitHubAuth {
         this.attachListeners();
     }
 
-    handleCallback(urlParams) {
+    async handleCallback(urlParams) {
         const token = urlParams.get('token');
         const username = urlParams.get('user');
         const name = urlParams.get('name');
@@ -51,10 +53,12 @@ class GitHubAuth {
 
             this.user = user;
             this.token = token;
-            this.updateUI(true);
 
-            // Clean up URL
-            window.history.replaceState({}, document.title, window.location.pathname);
+            // Clear IndexedDB now that user is logged in
+            await clearLocalStorage();
+
+            // Redirect to clean URL and reload page
+            window.location.href = window.location.pathname;
         }
     }
 
@@ -88,7 +92,9 @@ class GitHubAuth {
         localStorage.removeItem('github_token');
         this.user = null;
         this.token = null;
-        this.updateUI(false);
+
+        // Reload page to reset UI state
+        window.location.reload();
     }
 
     updateUI(isLoggedIn) {

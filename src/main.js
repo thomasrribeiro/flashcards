@@ -2,26 +2,42 @@
  * Main entry point for topic listing page
  */
 
-import { initDB, getAllCards, getAllReviews, getStats, getAllRepos, clearReviewsByDeck } from './storage.js';
-import { loadRepository, loadDefaultRepo, removeRepository } from './repo-manager.js';
+import { initDB, getAllCards, getAllReviews, getStats, getAllRepos, clearReviewsByDeck, saveCards } from './storage.js';
+import { loadRepository, removeRepository } from './repo-manager.js';
+import { parseDeck } from './parser.js';
+import { hashCard } from './hasher.js';
 
 /**
  * Initialize the application
  */
 async function init() {
-    await initDB();
+    console.log('=== INIT START ===');
+    try {
+        await initDB();
+        console.log('DB initialized');
 
-    const grid = document.getElementById('topics-grid');
-    grid.innerHTML = '<div class="loading">Loading repositories...</div>';
+        const grid = document.getElementById('topics-grid');
+        grid.innerHTML = '<div class="loading">Loading repositories...</div>';
 
-    // Check if we have any repos, if not load default examples
-    const repos = await getAllRepos();
-    if (repos.length === 0) {
-        await loadDefaultRepo();
+        // Load example markdown only when logged out
+        const isLoggedIn = !!localStorage.getItem('github_token');
+        if (!isLoggedIn) {
+            console.log('About to load example markdown...');
+            await loadExampleMarkdown();
+            console.log('Example markdown loaded');
+        } else {
+            console.log('Logged in, skipping example markdown');
+        }
+
+        console.log('About to load repositories...');
+        await loadRepositories();
+        console.log('Repositories loaded');
+
+        setupEventListeners();
+        console.log('=== INIT COMPLETE ===');
+    } catch (error) {
+        console.error('=== INIT ERROR ===', error);
     }
-
-    await loadRepositories();
-    setupEventListeners();
 }
 
 /**
@@ -32,21 +48,25 @@ async function loadRepositories() {
 
     try {
         // Get all repos and cards
+        console.log('Loading repositories...');
         const repos = await getAllRepos();
+        console.log('Repos:', repos.length);
         const allCards = await getAllCards();
+        console.log('All cards:', allCards.length);
         const allReviews = await getAllReviews();
+        console.log('All reviews:', allReviews.length);
 
         // Clear loading message
         grid.innerHTML = '';
 
-        // Show example cards if no repos
+        // Show example deck if no repos
         if (repos.length === 0 && allCards.length > 0) {
-            // Show default example cards
+            console.log('Showing example deck');
             const exampleDeck = {
                 id: 'basics',
                 name: 'basics',
                 description: 'Sample deck.',
-                cards: allCards.filter(c => c.deckName === 'basics' || c.deckName === 'examples'),
+                cards: allCards.filter(c => c.deckName === 'basics'),
                 reviews: new Map()
             };
 
@@ -60,6 +80,13 @@ async function loadRepositories() {
 
             const card = createRepoCard(exampleDeck);
             grid.appendChild(card);
+            return;
+        }
+
+        // Show message if no repos and no example cards
+        if (repos.length === 0) {
+            grid.innerHTML = '<div class="loading">No repositories added. Click + to add a GitHub repository.</div>';
+            return;
         }
 
         // Create cards for each repository
@@ -105,43 +132,33 @@ function createRepoCard(repo) {
     const totalCards = repo.cards.length;
     const reviewedCards = repo.reviews.size;
 
-    // Count due cards
+    // Count new cards (never reviewed) - these are always due
+    const newCards = totalCards - reviewedCards;
+
+    // Count due cards (reviewed cards that are due now)
     const now = new Date();
-    let dueCards = 0;
+    let dueReviewedCards = 0;
     repo.reviews.forEach(review => {
         if (new Date(review.fsrsCard.due) <= now) {
-            dueCards++;
+            dueReviewedCards++;
         }
     });
 
-    // Count new cards (never reviewed)
-    const newCards = totalCards - reviewedCards;
+    // Total due = new cards + reviewed cards that are due
+    const dueCards = newCards + dueReviewedCards;
 
     const card = document.createElement('a');
     card.href = `app.html?topic=${encodeURIComponent(repo.id || repo.name)}`;
     card.className = 'project-card';
 
-    const isExample = repo.id === 'examples';
-    const displayName = isExample ? repo.name : repo.id;
+    const isBasicsDeck = repo.id === 'basics';
+    const isLoggedIn = !!localStorage.getItem('github_token');
+    const displayName = repo.name || repo.id;
     const description = repo.description || `${totalCards} card${totalCards !== 1 ? 's' : ''}`;
 
-    // Add button container (top right)
+    // Add button container (top right) - only show buttons if logged in or not basics deck
     const btnContainer = document.createElement('div');
     btnContainer.className = 'card-buttons';
-
-    // Add delete button
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'card-delete-btn';
-    deleteBtn.title = 'Delete this deck';
-    deleteBtn.innerHTML = '×';
-    deleteBtn.onclick = async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (confirm(`Delete deck "${displayName}"? This cannot be undone.`)) {
-            await removeRepository(repo.id);
-            await loadRepositories();
-        }
-    };
 
     // Add reset button
     const resetBtn = document.createElement('button');
@@ -156,9 +173,24 @@ function createRepoCard(repo) {
             await loadRepositories();
         }
     };
-
     btnContainer.appendChild(resetBtn);
-    btnContainer.appendChild(deleteBtn);
+
+    // Only show delete button if: logged in OR not the basics deck
+    if (isLoggedIn || !isBasicsDeck) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'card-delete-btn';
+        deleteBtn.title = 'Delete this deck';
+        deleteBtn.innerHTML = '×';
+        deleteBtn.onclick = async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (confirm(`Delete deck "${displayName}"? This cannot be undone.`)) {
+                await removeRepository(repo.id);
+                await loadRepositories();
+            }
+        };
+        btnContainer.appendChild(deleteBtn);
+    }
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'project-content';
@@ -168,8 +200,7 @@ function createRepoCard(repo) {
             ${escapeHtml(description)}
         </p>
         <div class="project-stats">
-            ${dueCards > 0 ? `<strong>${dueCards} due</strong>` : 'No cards due'}
-            ${newCards > 0 ? ` | ${newCards} new` : ''}
+            ${dueCards > 0 ? `<strong>${dueCards} due</strong>` : 'All done!'}
             ${repo.stars ? ` | ⭐ ${repo.stars}` : ''}
         </div>
     `;
@@ -247,6 +278,45 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/**
+ * Load example markdown from local file
+ */
+async function loadExampleMarkdown() {
+    try {
+        console.log('Loading example markdown...');
+        const response = await fetch('/topics/example/basics.md');
+        if (!response.ok) {
+            throw new Error(`Failed to fetch: ${response.status}`);
+        }
+        const markdown = await response.text();
+        console.log('Fetched markdown, length:', markdown.length);
+
+        // Parse the markdown into cards
+        const cards = parseDeck(markdown, 'basics.md');
+        console.log('Parsed cards:', cards.length);
+
+        // Add hash and metadata to each card
+        const cardsWithMeta = cards.map(card => {
+            const hash = hashCard(card);
+            return {
+                ...card,
+                hash,
+                deckName: 'basics',
+                source: {
+                    repo: 'local',
+                    file: 'topics/example/basics.md'
+                }
+            };
+        });
+
+        // Always save the basics cards (in-memory storage)
+        await saveCards(cardsWithMeta);
+        console.log(`Loaded ${cardsWithMeta.length} example cards from basics.md`);
+    } catch (error) {
+        console.error('Failed to load example markdown:', error);
+    }
 }
 
 // Initialize on load

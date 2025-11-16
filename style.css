@@ -146,6 +146,7 @@ body {
     color: var(--black);
     font-weight: 700;
     letter-spacing: -0.5px;
+    font-family: 'IBM Plex Mono', monospace;
 }
 
 .nav-menu {
@@ -156,8 +157,8 @@ body {
 
 .nav-menu a {
     color: var(--gold);
-    text-decoration: underline;
-    font-size: 18px;
+    text-decoration: none;
+    font-size: 14px;
 }
 
 .bio {
@@ -166,6 +167,7 @@ body {
     color: var(--black);
     margin-top: 0;
     margin-bottom: 20px;
+    font-weight: 400;
 }
 
 /* Main Content */
@@ -349,7 +351,7 @@ body {
 
 .back-link {
     color: var(--gold);
-    text-decoration: underline;
+    text-decoration: none;
     font-size: 14px;
 }
 
