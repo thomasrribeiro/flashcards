@@ -934,6 +934,7 @@ function createSubdeckCard(subdeck) {
 
     const card = document.createElement('div');
     card.className = 'project-card file-card';
+    card.style.cursor = 'default'; // File cards are not clickable (only buttons are)
 
     // Extract just the filename from the path
     const displayName = subdeck.fileName.split('/').pop().replace('.md', '');
