@@ -3,7 +3,7 @@
  * Auth state persisted in localStorage
  */
 
-import { clearLocalStorage } from './storage.js';
+import { clearLocalStorage, setCurrentUser, initDB } from './storage.js';
 
 const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID;
 const WORKER_URL = import.meta.env.VITE_WORKER_URL;
@@ -15,11 +15,11 @@ class GitHubAuth {
         this.init();
     }
 
-    init() {
+    async init() {
         // Check if we're returning from OAuth callback
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('github_token')) {
-            this.handleCallback(urlParams);
+            await this.handleCallback(urlParams);
             return;
         }
 
@@ -29,6 +29,10 @@ class GitHubAuth {
         if (storedUser && storedToken) {
             this.user = JSON.parse(storedUser);
             this.token = storedToken;
+
+            // Set user in storage and initialize D1
+            setCurrentUser(this.user);
+            await initDB();
         }
 
         // Set up event listeners
@@ -48,7 +52,8 @@ class GitHubAuth {
             const user = {
                 username,
                 name: name || username,
-                avatar
+                avatar,
+                id: username // Use username as ID for D1
             };
 
             this.user = user;
@@ -59,6 +64,10 @@ class GitHubAuth {
             localStorage.setItem('github_token', githubToken);
 
             console.log('[GitHub Auth] Authenticated with GitHub token');
+
+            // Set user in storage and initialize D1
+            setCurrentUser(user);
+            await initDB();
 
             // Clear in-memory storage
             await clearLocalStorage();

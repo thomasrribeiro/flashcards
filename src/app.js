@@ -91,6 +91,13 @@ async function ensureCardsLoaded(deckId) {
  * Initialize the study session
  */
 async function init() {
+    // Restore user from localStorage if exists
+    const storedUser = localStorage.getItem('github_user');
+    if (storedUser) {
+        const { setCurrentUser } = await import('./storage.js');
+        setCurrentUser(JSON.parse(storedUser));
+    }
+
     await initDB();
 
     // Get deck from URL parameter (supports both 'deck' and legacy 'topic')

@@ -483,11 +483,12 @@ async function handleAddRepository() {
 }
 
 /**
- * Reset all cards in a deck
+ * Reset all cards in a deck - marks all as due for review
  */
 async function resetDeck(deckId) {
-    await clearReviewsByDeck(deckId);
-    console.log(`Reset all cards in deck: ${deckId}`);
+    const { refreshDeck } = await import('./storage.js');
+    await refreshDeck(deckId);
+    console.log(`Refreshed all cards in deck: ${deckId}`);
 }
 
 /**
@@ -849,11 +850,11 @@ function createFolderCard(folderName, folderContent, allReviews) {
     resetBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (confirm(`Reset all cards in "${folderName}"? This will mark all cards as new.`)) {
-            // Reset all cards in this folder
-            for (const card of allCardsInFolder) {
-                await clearReviewsByDeck(card.hash);
-            }
+        if (confirm(`Reset all cards in "${folderName}"? This will mark all cards as due for review.`)) {
+            // Build folder path
+            const folderPath = [...currentPath, folderName].join('/');
+            const { refreshDeck } = await import('./storage.js');
+            await refreshDeck(currentDeck.id, folderPath);
             const allReviewsUpdated = await getAllReviews();
             await updateModalContent(allReviewsUpdated);
         }
@@ -874,24 +875,7 @@ function createFolderCard(folderName, folderContent, allReviews) {
     };
     btnContainer.appendChild(reviewBtn);
 
-    // Add delete button
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'card-delete-btn';
-    deleteBtn.title = 'Delete this folder';
-    deleteBtn.innerHTML = '×';
-    deleteBtn.onclick = async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (confirm(`Delete folder "${folderName}" and all its contents? This cannot be undone.`)) {
-            // Remove all cards from this folder
-            const { removeCards } = await import('./storage.js');
-            const cardHashes = allCardsInFolder.map(c => c.hash);
-            await removeCards(cardHashes);
-            closeSubdeckModal();
-            await loadRepositories();
-        }
-    };
-    btnContainer.appendChild(deleteBtn);
+    // No delete button for folders - managed via git
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'project-content';
@@ -952,11 +936,10 @@ function createSubdeckCard(subdeck) {
     resetBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (confirm(`Reset all cards in "${displayName}"? This will mark all cards as new.`)) {
-            // Reset cards by hash
-            for (const card of subdeck.cards) {
-                await clearReviewsByDeck(card.hash);
-            }
+        if (confirm(`Reset all cards in "${displayName}"? This will mark all cards as due for review.`)) {
+            // Use file path for filtering
+            const { refreshDeck } = await import('./storage.js');
+            await refreshDeck(subdeck.deckId, subdeck.fullPath);
             closeSubdeckModal();
             await loadRepositories();
         }
@@ -976,24 +959,7 @@ function createSubdeckCard(subdeck) {
     };
     btnContainer.appendChild(reviewBtn);
 
-    // Add delete button
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'card-delete-btn';
-    deleteBtn.title = 'Delete this subdeck';
-    deleteBtn.innerHTML = '×';
-    deleteBtn.onclick = async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (confirm(`Delete subdeck "${displayName}"? This cannot be undone.`)) {
-            // Remove cards from this file
-            const { removeCards } = await import('./storage.js');
-            const cardHashes = subdeck.cards.map(c => c.hash);
-            await removeCards(cardHashes);
-            closeSubdeckModal();
-            await loadRepositories();
-        }
-    };
-    btnContainer.appendChild(deleteBtn);
+    // No delete button for files - managed via git
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'project-content';
