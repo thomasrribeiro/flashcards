@@ -7,6 +7,7 @@ import { loadRepository, removeRepository } from './repo-manager.js';
 import { parseDeck } from './parser.js';
 import { hashCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories } from './github-client.js';
+import { githubAuth } from './github-auth.js';
 
 /**
  * Initialize the application
@@ -20,8 +21,8 @@ async function init() {
         const grid = document.getElementById('topics-grid');
         grid.innerHTML = '<div class="loading">Loading repositories...</div>';
 
-        // Always load example markdown (no persistent login state)
-        if (true) {
+        // Only load example markdown when not logged in
+        if (!githubAuth.isAuthenticated()) {
             console.log('About to load example markdown...');
             await loadExampleMarkdown();
             console.log('Example markdown loaded');
@@ -58,8 +59,11 @@ async function loadRepositories() {
         // Clear loading message
         grid.innerHTML = '';
 
-        // Show example deck if no decks (logged out state)
-        if (allDecks.length === 0 && allCards.length > 0) {
+        // Check login status
+        const isLoggedIn = githubAuth.isAuthenticated();
+
+        // Show example deck only if logged out
+        if (!isLoggedIn && allDecks.length === 0 && allCards.length > 0) {
             console.log('Showing example deck');
             controlsBar.classList.add('hidden');
             const exampleDeck = {
@@ -83,7 +87,7 @@ async function loadRepositories() {
             return;
         }
 
-        // Show message if no decks and no example cards
+        // Show message if no decks
         if (allDecks.length === 0) {
             controlsBar.classList.add('hidden');
             grid.innerHTML = '<div class="loading">No repositories added. Click + to add a GitHub repository.</div>';

@@ -1,7 +1,6 @@
 /**
- * GitHub OAuth authentication (in-memory only)
- * Auth state is lost on page refresh
- * (Will be replaced with Cloudflare D1 for persistence)
+ * GitHub OAuth authentication
+ * Auth state persisted in localStorage
  */
 
 import { clearLocalStorage } from './storage.js';
@@ -19,13 +18,24 @@ class GitHubAuth {
     init() {
         // Check if we're returning from OAuth callback
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('token')) {
+        if (urlParams.has('github_token')) {
             this.handleCallback(urlParams);
             return;
         }
 
+        // Restore auth from localStorage
+        const storedUser = localStorage.getItem('github_user');
+        const storedToken = localStorage.getItem('github_token');
+        if (storedUser && storedToken) {
+            this.user = JSON.parse(storedUser);
+            this.token = storedToken;
+        }
+
         // Set up event listeners
         this.attachListeners();
+
+        // Update UI if already authenticated
+        this.updateUI(this.isAuthenticated());
     }
 
     async handleCallback(urlParams) {
@@ -44,12 +54,17 @@ class GitHubAuth {
             this.user = user;
             this.token = githubToken;
 
+            // Store in localStorage (persists across sessions)
+            localStorage.setItem('github_user', JSON.stringify(user));
+            localStorage.setItem('github_token', githubToken);
+
             console.log('[GitHub Auth] Authenticated with GitHub token');
 
             // Clear in-memory storage
             await clearLocalStorage();
 
-            // Redirect to clean URL and reload page
+            // Reload page to refresh UI and content
+            // Clean URL by redirecting to root
             window.location.href = window.location.pathname;
         }
     }
@@ -82,6 +97,10 @@ class GitHubAuth {
     logout() {
         this.user = null;
         this.token = null;
+
+        // Clear localStorage
+        localStorage.removeItem('github_user');
+        localStorage.removeItem('github_token');
 
         // Reload page to reset UI state
         window.location.reload();
