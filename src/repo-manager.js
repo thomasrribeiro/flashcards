@@ -37,11 +37,8 @@ export async function loadRepository(repoString) {
     const deckId = `${owner}/${repo}`;
     console.log(`[RepoManager] Creating single deck for repository: ${deckId}`);
 
-    // Aggregate metadata from first file with frontmatter, or use repo name
+    // Aggregate metadata from files
     let deckMetadata = {
-        name: null,
-        subject: null,
-        topic: null,
         order: null,
         tags: []
     };
@@ -59,15 +56,12 @@ export async function loadRepository(repoString) {
             const { cards, metadata } = parseDeck(content, file.path);
             console.log(`[RepoManager] Parsed ${cards.length} cards from ${file.path}`);
 
-            // Use metadata from first file that has it
-            if (totalFiles === 0 || metadata.name || metadata.subject || metadata.topic) {
-                deckMetadata = {
-                    name: metadata.name || deckMetadata.name,
-                    subject: metadata.subject || deckMetadata.subject,
-                    topic: metadata.topic || deckMetadata.topic,
-                    order: metadata.order !== null ? metadata.order : deckMetadata.order,
-                    tags: metadata.tags?.length > 0 ? metadata.tags : deckMetadata.tags
-                };
+            // Aggregate metadata: use order from first file, merge all tags
+            if (totalFiles === 0 && metadata.order !== null) {
+                deckMetadata.order = metadata.order;
+            }
+            if (metadata.tags?.length > 0) {
+                deckMetadata.tags = [...new Set([...deckMetadata.tags, ...metadata.tags])];
             }
 
             // Add repository source and metadata to each card
@@ -109,9 +103,7 @@ export async function loadRepository(repoString) {
     console.log('[RepoManager] Saving deck metadata...');
     const deck = {
         id: deckId,
-        name: deckMetadata.name || repoInfo.name,
-        subject: deckMetadata.subject,
-        topic: deckMetadata.topic,
+        name: repoInfo.name,
         order: deckMetadata.order,
         tags: deckMetadata.tags,
         repo: `${owner}/${repo}`,

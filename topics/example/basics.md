@@ -61,11 +61,12 @@ A: Key features include:
 
 ## With TOML Frontmatter
 
-You can also use TOML frontmatter to override the deck name:
+You can also use TOML frontmatter for ordering and tags:
 
 ```markdown
 ---
-name = "Custom Deck Name"
+order = 1
+tags = ["example", "basics"]
 ---
 
 Q: Your question here

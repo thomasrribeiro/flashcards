@@ -106,8 +106,10 @@ async function loadRepositories() {
         // Apply search filter
         const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
         let filteredDecks = allDecks.filter(deck => {
-            const name = (deck.name || deck.id || '').toLowerCase();
-            return name.includes(searchTerm);
+            // Search by the displayed repo name (last part of owner/repo)
+            const isBasicsDeck = deck.id === 'basics';
+            const displayName = isBasicsDeck ? deck.id : deck.id.split('/').pop();
+            return displayName.toLowerCase().includes(searchTerm);
         });
 
         // Display decks directly (no grouping, no headers)
@@ -450,6 +452,24 @@ async function handleAddRepository() {
     input.disabled = true;
 
     try {
+        // Import hasFlashcardContent to validate the repo
+        const { hasFlashcardContent } = await import('./github-client.js');
+        const [owner, repo] = repoString.split('/');
+
+        // Check if repository contains flashcard content
+        console.log(`[Main] Validating ${repoString} for flashcard content...`);
+        const hasFlashcards = await hasFlashcardContent(owner, repo);
+
+        if (!hasFlashcards) {
+            alert(`Repository "${repoString}" does not contain any markdown files with Q:/A:/C: format flashcards. Please check the repository and try again.`);
+            addBtn.textContent = originalText;
+            addBtn.disabled = false;
+            input.disabled = false;
+            return;
+        }
+
+        console.log(`[Main] ${repoString} validated successfully`);
+
         const result = await loadRepository(repoString);
         console.log(`Loaded deck with ${result.cards.length} total cards from ${repoString}`);
 

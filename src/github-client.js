@@ -142,6 +142,49 @@ export async function getAuthenticatedUser() {
 }
 
 /**
+ * Check if a repository contains valid flashcard markdown files
+ * Returns true if repo has at least one .md file with Q:/A:/C: format
+ */
+export async function hasFlashcardContent(owner, repo) {
+    try {
+        // Get markdown files from the repo
+        const markdownFiles = await getMarkdownFiles(owner, repo);
+
+        if (markdownFiles.length === 0) {
+            console.log(`[GitHub Client] ${owner}/${repo}: No markdown files found`);
+            return false;
+        }
+
+        console.log(`[GitHub Client] ${owner}/${repo}: Found ${markdownFiles.length} markdown files`);
+
+        // Check each markdown file for Q:/A:/C: format
+        // We check all files (not just the first) to be more thorough
+        for (const file of markdownFiles) {
+            try {
+                const content = await getFileContent(owner, repo, file.path);
+
+                // Simple regex check for Q:, A:, or C: patterns
+                const hasFlashcardFormat = /^[QAC]:\s/m.test(content);
+
+                if (hasFlashcardFormat) {
+                    console.log(`[GitHub Client] ${owner}/${repo}: Found flashcard format in ${file.path}`);
+                    return true;
+                }
+            } catch (fileError) {
+                console.warn(`[GitHub Client] Could not read ${file.path}:`, fileError.message);
+                continue;
+            }
+        }
+
+        console.log(`[GitHub Client] ${owner}/${repo}: No flashcard format found in any markdown files`);
+        return false;
+    } catch (error) {
+        console.warn(`[GitHub Client] Could not check ${owner}/${repo}:`, error.message);
+        return false;
+    }
+}
+
+/**
  * Get repositories for the authenticated user
  */
 export async function getUserRepositories(page = 1, perPage = 100) {

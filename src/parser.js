@@ -35,7 +35,7 @@ function extractFrontmatter(text) {
 
     // Check if file starts with frontmatter delimiter
     if (lines.length === 0 || lines[0].trim() !== '---') {
-        return [{ name: null }, text];
+        return [{ order: null, tags: [] }, text];
     }
 
     // Find closing delimiter
@@ -56,31 +56,10 @@ function extractFrontmatter(text) {
 
     // Parse TOML (simple key=value format)
     const metadata = {
-        name: null,
-        subject: null,
-        topic: null,
         order: null,
         tags: []
     };
     const frontmatterStr = frontmatterLines.join('\n');
-
-    // Parse name
-    const nameMatch = frontmatterStr.match(/name\s*=\s*"([^"]+)"/);
-    if (nameMatch) {
-        metadata.name = nameMatch[1];
-    }
-
-    // Parse subject
-    const subjectMatch = frontmatterStr.match(/subject\s*=\s*"([^"]+)"/);
-    if (subjectMatch) {
-        metadata.subject = subjectMatch[1];
-    }
-
-    // Parse topic
-    const topicMatch = frontmatterStr.match(/topic\s*=\s*"([^"]+)"/);
-    if (topicMatch) {
-        metadata.topic = topicMatch[1];
-    }
 
     // Parse order (numeric)
     const orderMatch = frontmatterStr.match(/order\s*=\s*(\d+)/);

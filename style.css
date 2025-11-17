@@ -940,8 +940,8 @@ kbd {
     border: 1px solid var(--black);
     max-width: 90%;
     max-height: 90%;
-    overflow-y: auto;
-    padding: 30px;
+    display: flex;
+    flex-direction: column;
     z-index: 1001;
 }
 
@@ -949,9 +949,10 @@ kbd {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
+    padding: 30px 30px 15px 30px;
     border-bottom: 1px solid var(--black);
+    background: var(--white);
+    flex-shrink: 0;
 }
 
 .modal-header h2 {
@@ -979,9 +980,12 @@ kbd {
 }
 
 #subdeck-grid {
-    margin-top: 20px;
+    padding: 30px;
+    overflow-y: auto;
+    flex: 1;
     display: grid;
     grid-template-columns: repeat(auto-fit, 320px);
     gap: 30px;
     justify-content: center;
+    align-content: start;
 }
