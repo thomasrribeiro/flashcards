@@ -52,6 +52,16 @@
                     </button>
                     <div class="user-info hidden" id="user-info">
                         <span id="user-name"></span>
+                        <div class="repo-input-inline">
+                            <input
+                                type="text"
+                                id="github-repo-input"
+                                class="repo-input-field"
+                                placeholder="owner/repository"
+                                autocomplete="off"
+                            />
+                            <div id="repo-suggestions" class="repo-suggestions hidden"></div>
+                        </div>
                         <button id="add-repo-btn" class="add-repo-btn" title="Add repository">+</button>
                         <button class="btn-logout" id="btn-logout">Logout</button>
                     </div>
@@ -85,32 +95,6 @@
         </div>
     </div>
 
-    <!-- Add Repository Modal -->
-    <div id="add-repo-modal" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add Repository</h3>
-                <button class="modal-close" id="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <label for="github-repo-input">GitHub Repository</label>
-                <div class="repo-input-wrapper">
-                    <input
-                        type="text"
-                        id="github-repo-input"
-                        placeholder="owner/repository"
-                        autocomplete="off"
-                    />
-                    <div id="repo-suggestions" class="repo-suggestions hidden"></div>
-                </div>
-                <p class="modal-hint">Enter a GitHub repository in the format: owner/repository</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-cancel" id="modal-cancel">Cancel</button>
-                <button class="btn-primary" id="modal-add">Add Repository</button>
-            </div>
-        </div>
-    </div>
 
     <script type="module" src="./src/main.js"></script>
     <script type="module" src="./src/github-auth.js"></script>

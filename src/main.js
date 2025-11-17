@@ -33,6 +33,12 @@ async function init() {
         console.log('Repositories loaded');
 
         setupEventListeners();
+
+        // Setup repo input if authenticated
+        if (githubAuth.isAuthenticated()) {
+            await setupRepoInput();
+        }
+
         console.log('=== INIT COMPLETE ===');
     } catch (error) {
         console.error('=== INIT ERROR ===', error);
@@ -90,7 +96,7 @@ async function loadRepositories() {
         // Show message if no decks
         if (allDecks.length === 0) {
             controlsBar.classList.add('hidden');
-            grid.innerHTML = '<div class="loading">No repositories added. Click + to add a GitHub repository.</div>';
+            grid.innerHTML = '<div class="loading">Search for a GitHub repository and click + to add it.</div>';
             return;
         }
 
@@ -374,52 +380,15 @@ function createDeckCard(deck) {
  */
 function setupEventListeners() {
     const addBtn = document.getElementById('add-repo-btn');
-    const modal = document.getElementById('add-repo-modal');
-    const modalClose = document.getElementById('modal-close');
-    const modalCancel = document.getElementById('modal-cancel');
-    const modalAdd = document.getElementById('modal-add');
     const repoInput = document.getElementById('github-repo-input');
 
-    // Open modal when + button is clicked
+    // Add repository when + button is clicked
     if (addBtn) {
-        addBtn.addEventListener('click', async () => {
-            modal.classList.remove('hidden');
-
-            // Set default username and load repos
-            if (false) { // Disabled - no persistent auth
-                console.log('[Main] Loading user repos for dropdown');
-                await setupRepoDropdown();
-            }
-
-            repoInput.focus();
-        });
+        addBtn.addEventListener('click', () => handleAddRepository());
     }
 
-    // Close modal handlers
-    if (modalClose) {
-        modalClose.addEventListener('click', () => {
-            modal.classList.add('hidden');
-        });
-    }
-
-    if (modalCancel) {
-        modalCancel.addEventListener('click', () => {
-            modal.classList.add('hidden');
-        });
-    }
-
-    // Close on backdrop click
-    if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.classList.add('hidden');
-            }
-        });
-    }
-
-    // Add repository handler
-    if (modalAdd && repoInput) {
-        modalAdd.addEventListener('click', () => handleAddRepository());
+    // Add repository when Enter is pressed in input
+    if (repoInput) {
         repoInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 handleAddRepository();
@@ -445,9 +414,9 @@ function setupEventListeners() {
 }
 
 /**
- * Setup repository dropdown with user's repos
+ * Setup repository input with user's repos dropdown
  */
-async function setupRepoDropdown() {
+async function setupRepoInput() {
     const repoInput = document.getElementById('github-repo-input');
     const suggestions = document.getElementById('repo-suggestions');
 
@@ -457,19 +426,14 @@ async function setupRepoDropdown() {
     try {
         // Get authenticated user
         const user = await getAuthenticatedUser();
-        console.log(`[Main] Setting input default to ${user.login}/`);
-        repoInput.value = `${user.login}/`;
-        repoInput.placeholder = `${user.login}/repository`;
+        console.log(`[Main] Loading repos for ${user.login}`);
+        // Don't pre-fill, just set placeholder
+        repoInput.value = '';
+        repoInput.placeholder = 'owner/repository';
 
-        // Load user repositories
-        suggestions.innerHTML = '<div class="repo-loading">Loading repositories...</div>';
-        suggestions.classList.remove('hidden');
-
+        // Load user repositories (but don't show dropdown yet)
         userRepos = await getUserRepositories();
         console.log(`[Main] Loaded ${userRepos.length} repositories`);
-
-        // Display repositories
-        updateDropdownDisplay(userRepos, repoInput.value, suggestions);
 
     } catch (error) {
         console.error('[Main] Failed to setup repo dropdown:', error);
@@ -586,8 +550,7 @@ function updateSelectedItem(items, index) {
  */
 async function handleAddRepository() {
     const input = document.getElementById('github-repo-input');
-    const modal = document.getElementById('add-repo-modal');
-    const modalAdd = document.getElementById('modal-add');
+    const addBtn = document.getElementById('add-repo-btn');
     const repoString = input.value.trim();
 
     if (!repoString) {
@@ -601,16 +564,16 @@ async function handleAddRepository() {
         return;
     }
 
-    const originalText = modalAdd.textContent;
-    modalAdd.textContent = 'Loading...';
-    modalAdd.disabled = true;
+    const originalText = addBtn.textContent;
+    addBtn.textContent = '...';
+    addBtn.disabled = true;
+    input.disabled = true;
 
     try {
         const result = await loadRepository(repoString);
         console.log(`Loaded deck with ${result.cards.length} total cards from ${repoString}`);
 
-        // Close modal
-        modal.classList.add('hidden');
+        // Clear input
         input.value = '';
 
         // Reload the display
@@ -620,8 +583,9 @@ async function handleAddRepository() {
         console.error('Error loading repository:', error);
         alert(`Failed to load repository: ${error.message}`);
     } finally {
-        modalAdd.textContent = originalText;
-        modalAdd.disabled = false;
+        addBtn.textContent = originalText;
+        addBtn.disabled = false;
+        input.disabled = false;
     }
 }
 

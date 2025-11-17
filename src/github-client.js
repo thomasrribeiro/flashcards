@@ -8,11 +8,17 @@ const GITHUB_API = 'https://api.github.com';
  * Get authentication headers for GitHub API
  */
 function getAuthHeaders() {
-    // No persistent token - always use unauthenticated API
-    // For public repos, GitHub API allows 60 requests/hour without auth
-    return {
+    const headers = {
         'Accept': 'application/vnd.github.v3+json'
     };
+
+    // Try to get token from localStorage
+    const token = localStorage.getItem('github_token');
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return headers;
 }
 
 /**

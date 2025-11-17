@@ -59,7 +59,7 @@ body {
 .user-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 0;
     background: var(--white);
     padding: 8px 12px;
     border: 1px solid var(--black);
@@ -68,6 +68,33 @@ body {
 .user-info span {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 14px;
+    margin-right: 10px;
+}
+
+.repo-input-inline {
+    position: relative;
+    display: inline-block;
+}
+
+.repo-input-field {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 5px 8px;
+    border: 1px solid var(--black);
+    border-right: none;
+    background: var(--white);
+    min-width: 200px;
+    line-height: 1;
+    height: 28px;
+}
+
+.repo-input-field::placeholder {
+    font-size: 12px;
+}
+
+.repo-input-field:focus {
+    outline: none;
+    background: var(--light-gray);
 }
 
 .btn-logout {
@@ -79,6 +106,7 @@ body {
     font-size: 12px;
     cursor: pointer;
     line-height: 1;
+    height: 28px;
 }
 
 .btn-logout:hover {
@@ -196,24 +224,31 @@ body {
 }
 
 .add-repo-btn {
-    /* padding: 2px; */
+    padding: 0 12px;
     background: var(--white);
     color: var(--black);
     border: 1px solid var(--black);
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 14px;
     cursor: pointer;
-    font-family: 'IBM Plex Mono', monospace;
+    line-height: 28px;
+    font-weight: 400;
+    transition: background 0.2s, color 0.2s;
+    margin-right: 10px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
-    width: 24px;
-    height: 24px;
 }
 
 .add-repo-btn:hover {
     background: var(--black);
     color: var(--white);
+}
+
+.add-repo-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 
@@ -630,11 +665,11 @@ kbd {
     position: absolute;
     top: 100%;
     left: 0;
-    right: 0;
+    right: -1px;
     max-height: 300px;
     overflow-y: auto;
     background: var(--white);
-    border: 2px solid var(--black);
+    border: 1px solid var(--black);
     border-top: none;
     z-index: 1001;
 }
@@ -644,7 +679,7 @@ kbd {
 }
 
 .repo-suggestion-item {
-    padding: 12px 16px;
+    padding: 8px 12px;
     cursor: pointer;
     transition: background-color 0.2s;
     border-bottom: 1px solid #e0e0e0;
@@ -662,10 +697,11 @@ kbd {
 .repo-suggestion-name {
     font-weight: 500;
     color: var(--black);
+    font-size: 11px;
 }
 
 .repo-suggestion-desc {
-    font-size: 0.9em;
+    font-size: 10px;
     color: #666;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -674,17 +710,22 @@ kbd {
 }
 
 .repo-suggestion-meta {
-    font-size: 0.85em;
+    font-size: 9px;
     color: #999;
     display: flex;
-    gap: 12px;
+    gap: 8px;
     margin-top: 4px;
 }
 
+.repo-suggestion-meta span {
+    font-size: 9px;
+}
+
 .repo-loading {
-    padding: 20px;
+    padding: 8px 12px;
     text-align: center;
     color: #666;
+    font-size: 11px;
 }
 
 /* Modal Styles */
