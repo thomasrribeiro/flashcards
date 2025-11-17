@@ -112,20 +112,89 @@ async function loadDueCards() {
     const urlParams = new URLSearchParams(window.location.search);
     const deckId = urlParams.get('deck') || urlParams.get('topic');
     const fileFilter = urlParams.get('file'); // Optional: filter by specific file
+    const folderFilter = urlParams.get('folder'); // Optional: filter by folder
 
     // Get ALL cards for this deck
     const allCards = await getAllCards();
     let deckCards = allCards.filter(card => card.deckName === deckId);
 
+    console.log(`[App] Total cards in deck ${deckId}: ${deckCards.length}`);
+
     // Filter by file if specified
     if (fileFilter) {
-        deckCards = deckCards.filter(card => card.source?.file === fileFilter);
+        // The fileFilter might be missing the "flashcards/" prefix
+        // Try both with and without prefix
+        deckCards = deckCards.filter(card => {
+            if (!card.source?.file) return false;
+            const cardPath = card.source.file;
+
+            // Try exact match
+            if (cardPath === fileFilter) return true;
+
+            // Try with flashcards/ prefix
+            if (cardPath === `flashcards/${fileFilter}`) return true;
+
+            // Try without flashcards/ prefix
+            if (cardPath.startsWith('flashcards/') && cardPath.substring(11) === fileFilter) return true;
+
+            return false;
+        });
         console.log(`[App] Filtered to ${deckCards.length} cards from file ${fileFilter}`);
+        if (deckCards.length > 0) {
+            console.log(`[App] Sample card path: ${deckCards[0].source?.file}`);
+        }
+    }
+
+    // Filter by folder if specified (cards whose source.file starts with folder path)
+    if (folderFilter) {
+        // Normalize folder path (remove flashcards/ prefix if present)
+        let normalizedFolder = folderFilter;
+        if (normalizedFolder.startsWith('flashcards/')) {
+            normalizedFolder = normalizedFolder.substring(11);
+        }
+
+        deckCards = deckCards.filter(card => {
+            if (!card.source?.file) return false;
+
+            // Normalize card file path
+            let cardPath = card.source.file;
+            if (cardPath.startsWith('flashcards/')) {
+                cardPath = cardPath.substring(11);
+            }
+
+            // Check if card's file path starts with the folder path
+            return cardPath.startsWith(normalizedFolder + '/') || cardPath.startsWith(normalizedFolder);
+        });
+        console.log(`[App] Filtered to ${deckCards.length} cards from folder ${folderFilter}`);
     }
 
     // Get all reviews
     const allReviews = await getAllReviews();
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
+
+    // Sort cards by order metadata (if present) and then by file path
+    deckCards.sort((a, b) => {
+        // First sort by order (if both have order metadata)
+        const orderA = a.deckMetadata?.order;
+        const orderB = b.deckMetadata?.order;
+
+        if (orderA !== null && orderA !== undefined && orderB !== null && orderB !== undefined) {
+            if (orderA !== orderB) {
+                return orderA - orderB;
+            }
+        } else if (orderA !== null && orderA !== undefined) {
+            return -1; // Cards with order come first
+        } else if (orderB !== null && orderB !== undefined) {
+            return 1; // Cards with order come first
+        }
+
+        // Then sort by file path
+        const pathA = a.source?.file || '';
+        const pathB = b.source?.file || '';
+        return pathA.localeCompare(pathB);
+    });
+
+    console.log(`[App] Sorted ${deckCards.length} cards by order and file path`);
 
     // Build list of cards to study
     const cardsToStudy = [];
@@ -147,6 +216,7 @@ async function loadDueCards() {
     }
 
     dueCards = cardsToStudy;
+    console.log(`[App] Found ${dueCards.length} cards to study`);
     updateStats();
 }
 

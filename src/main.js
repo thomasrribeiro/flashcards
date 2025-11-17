@@ -546,16 +546,77 @@ async function loadExampleMarkdown() {
     }
 }
 
+// Modal navigation state
+let currentDeck = null;
+let currentPath = [];
+let folderHierarchy = null;
+
 /**
- * Open modal to show subdecks (individual markdown files)
+ * Build folder hierarchy from file paths
+ * Returns a tree structure: { folders: {}, files: {} }
+ * Skips the "flashcards/" prefix if all files start with it
  */
-async function openSubdeckModal(deck) {
+function buildFolderHierarchy(fileGroups) {
+    const root = { folders: {}, files: {} };
+
+    // Check if all files start with "flashcards/"
+    const allPaths = Object.keys(fileGroups);
+    const allStartWithFlashcards = allPaths.every(path => path.startsWith('flashcards/'));
+
+    for (const [filePath, cards] of Object.entries(fileGroups)) {
+        // Remove "flashcards/" prefix if all files have it
+        let normalizedPath = filePath;
+        if (allStartWithFlashcards && filePath.startsWith('flashcards/')) {
+            normalizedPath = filePath.substring(11); // Remove "flashcards/"
+        }
+
+        const parts = normalizedPath.split('/');
+        let current = root;
+
+        // Navigate through folders
+        for (let i = 0; i < parts.length - 1; i++) {
+            const folderName = parts[i];
+            if (!current.folders[folderName]) {
+                current.folders[folderName] = { folders: {}, files: {} };
+            }
+            current = current.folders[folderName];
+        }
+
+        // Add file at the end
+        const fileName = parts[parts.length - 1];
+        current.files[fileName] = cards;
+    }
+
+    return root;
+}
+
+/**
+ * Get content at a specific path in the hierarchy
+ */
+function getContentAtPath(hierarchy, path) {
+    let current = hierarchy;
+    for (const segment of path) {
+        if (current.folders[segment]) {
+            current = current.folders[segment];
+        } else {
+            return null;
+        }
+    }
+    return current;
+}
+
+/**
+ * Open modal to show subdecks with hierarchical navigation
+ */
+async function openSubdeckModal(deck, path = []) {
+    currentDeck = deck;
+    currentPath = path;
+
     const modal = document.getElementById('subdeck-modal');
     const modalDeckName = document.getElementById('modal-deck-name');
+    const breadcrumb = document.getElementById('modal-breadcrumb');
+    const backBtn = document.getElementById('modal-back-btn');
     const subdeckGrid = document.getElementById('subdeck-grid');
-
-    // Set deck name
-    modalDeckName.textContent = deck.id.split('/').pop();
 
     // Get all cards for this deck and group by file
     const allCards = await getAllCards();
@@ -572,23 +633,84 @@ async function openSubdeckModal(deck) {
         fileGroups[fileName].push(card);
     });
 
+    // Build folder hierarchy
+    folderHierarchy = buildFolderHierarchy(fileGroups);
+
+    // Update modal content based on current path
+    await updateModalContent(allReviews);
+
+    // Show modal
+    modal.classList.remove('hidden');
+}
+
+/**
+ * Update modal content based on current navigation path
+ */
+async function updateModalContent(allReviews) {
+    const breadcrumb = document.getElementById('modal-breadcrumb');
+    const subdeckGrid = document.getElementById('subdeck-grid');
+
+    // Update breadcrumb with clickable segments
+    const repoName = currentDeck.id.split('/').pop();
+    breadcrumb.innerHTML = '';
+
+    // Add repo name (clickable to go to root)
+    const repoSpan = document.createElement('span');
+    repoSpan.className = 'breadcrumb-segment breadcrumb-clickable';
+    repoSpan.textContent = repoName;
+    repoSpan.onclick = () => navigateToPath([]);
+    breadcrumb.appendChild(repoSpan);
+
+    // Add each folder in the path
+    for (let i = 0; i < currentPath.length; i++) {
+        // Add separator
+        const separator = document.createElement('span');
+        separator.className = 'breadcrumb-separator';
+        separator.textContent = ' / ';
+        breadcrumb.appendChild(separator);
+
+        // Add folder segment (clickable to navigate to that level)
+        const folderSpan = document.createElement('span');
+        folderSpan.className = 'breadcrumb-segment breadcrumb-clickable';
+        folderSpan.textContent = currentPath[i];
+        const targetPath = currentPath.slice(0, i + 1);
+        folderSpan.onclick = () => navigateToPath(targetPath);
+        breadcrumb.appendChild(folderSpan);
+    }
+
+    // Get content at current path
+    const content = getContentAtPath(folderHierarchy, currentPath);
+    if (!content) {
+        console.error('Invalid path:', currentPath);
+        return;
+    }
+
     // Clear and populate subdeck grid
     subdeckGrid.innerHTML = '';
 
-    // Sort files by name
-    const sortedFiles = Object.keys(fileGroups).sort();
+    // Show folders first
+    const sortedFolders = Object.keys(content.folders).sort();
+    for (const folderName of sortedFolders) {
+        const folderCard = createFolderCard(folderName, content.folders[folderName], allReviews);
+        subdeckGrid.appendChild(folderCard);
+    }
 
+    // Then show files
+    const sortedFiles = Object.keys(content.files).sort();
     for (const fileName of sortedFiles) {
-        const cards = fileGroups[fileName];
+        const cards = content.files[fileName];
         const fileReviews = allReviews.filter(r => {
             const card = cards.find(c => c.hash === r.cardHash);
             return !!card;
         });
 
+        // Build full file path for subdeck
+        const fullPath = [...currentPath, fileName].join('/');
         const subdeckData = {
-            id: `${deck.id}/${fileName}`,
+            id: `${currentDeck.id}/${fullPath}`,
             fileName: fileName,
-            deckId: deck.id,
+            fullPath: fullPath,
+            deckId: currentDeck.id,
             cards: cards,
             reviews: new Map(fileReviews.map(r => [r.cardHash, r]))
         };
@@ -596,9 +718,35 @@ async function openSubdeckModal(deck) {
         const subdeckCard = createSubdeckCard(subdeckData);
         subdeckGrid.appendChild(subdeckCard);
     }
+}
 
-    // Show modal
-    modal.classList.remove('hidden');
+/**
+ * Navigate to a folder
+ */
+async function navigateToFolder(folderName) {
+    currentPath.push(folderName);
+    const allReviews = await getAllReviews();
+    await updateModalContent(allReviews);
+}
+
+/**
+ * Navigate to a specific path (for breadcrumb clicks)
+ */
+async function navigateToPath(targetPath) {
+    currentPath = [...targetPath];
+    const allReviews = await getAllReviews();
+    await updateModalContent(allReviews);
+}
+
+/**
+ * Navigate back to parent folder
+ */
+async function navigateBack() {
+    if (currentPath.length > 0) {
+        currentPath.pop();
+        const allReviews = await getAllReviews();
+        await updateModalContent(allReviews);
+    }
 }
 
 /**
@@ -607,6 +755,161 @@ async function openSubdeckModal(deck) {
 function closeSubdeckModal() {
     const modal = document.getElementById('subdeck-modal');
     modal.classList.add('hidden');
+    // Reset navigation state
+    currentPath = [];
+    currentDeck = null;
+    folderHierarchy = null;
+}
+
+/**
+ * Create a folder card element
+ */
+function createFolderCard(folderName, folderContent, allReviews) {
+    // Recursively count all cards in this folder and subfolders
+    function countCardsInFolder(content) {
+        let total = 0;
+
+        // Count cards in files
+        for (const cards of Object.values(content.files)) {
+            total += cards.length;
+        }
+
+        // Count cards in subfolders
+        for (const subfolder of Object.values(content.folders)) {
+            total += countCardsInFolder(subfolder);
+        }
+
+        return total;
+    }
+
+    // Recursively get all cards in this folder and subfolders
+    function getAllCardsInFolder(content) {
+        let allCards = [];
+
+        // Get cards from files
+        for (const cards of Object.values(content.files)) {
+            allCards.push(...cards);
+        }
+
+        // Get cards from subfolders
+        for (const subfolder of Object.values(content.folders)) {
+            allCards.push(...getAllCardsInFolder(subfolder));
+        }
+
+        return allCards;
+    }
+
+    // Count due cards in this folder
+    function countDueCardsInFolder(content) {
+        let dueCount = 0;
+        const now = new Date();
+
+        // Helper to check if a card is due
+        function isCardDue(card) {
+            const review = allReviews.find(r => r.cardHash === card.hash);
+            if (!review) {
+                // New card - always due
+                return true;
+            }
+            // Reviewed card - check if due
+            return new Date(review.fsrsCard.due) <= now;
+        }
+
+        // Count due cards in files
+        for (const cards of Object.values(content.files)) {
+            dueCount += cards.filter(isCardDue).length;
+        }
+
+        // Count due cards in subfolders
+        for (const subfolder of Object.values(content.folders)) {
+            dueCount += countDueCardsInFolder(subfolder);
+        }
+
+        return dueCount;
+    }
+
+    const totalCards = countCardsInFolder(folderContent);
+    const dueCards = countDueCardsInFolder(folderContent);
+    const allCardsInFolder = getAllCardsInFolder(folderContent);
+
+    const card = document.createElement('div');
+    card.className = 'project-card folder-card';
+    card.style.cursor = 'pointer';
+    card.onclick = () => navigateToFolder(folderName);
+
+    const description = `${totalCards} card${totalCards !== 1 ? 's' : ''}`;
+
+    // Add button container (top right)
+    const btnContainer = document.createElement('div');
+    btnContainer.className = 'card-buttons';
+
+    // Add reset button
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'card-reset-btn';
+    resetBtn.title = 'Reset all cards in this folder';
+    resetBtn.innerHTML = '<img src="/icons/refresh.png" alt="Reset">';
+    resetBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm(`Reset all cards in "${folderName}"? This will mark all cards as new.`)) {
+            // Reset all cards in this folder
+            for (const card of allCardsInFolder) {
+                await clearReviewsByDeck(card.hash);
+            }
+            const allReviewsUpdated = await getAllReviews();
+            await updateModalContent(allReviewsUpdated);
+        }
+    };
+    btnContainer.appendChild(resetBtn);
+
+    // Add review button (gavel)
+    const reviewBtn = document.createElement('button');
+    reviewBtn.className = 'card-review-btn';
+    reviewBtn.title = 'Review this folder';
+    reviewBtn.innerHTML = '<img src="/icons/gavel.png" alt="Review">';
+    reviewBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Build folder path for filtering
+        const folderPath = [...currentPath, folderName].join('/');
+        window.location.href = `app.html?deck=${encodeURIComponent(currentDeck.id)}&folder=${encodeURIComponent(folderPath)}`;
+    };
+    btnContainer.appendChild(reviewBtn);
+
+    // Add delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'card-delete-btn';
+    deleteBtn.title = 'Delete this folder';
+    deleteBtn.innerHTML = '×';
+    deleteBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm(`Delete folder "${folderName}" and all its contents? This cannot be undone.`)) {
+            // Remove all cards from this folder
+            const { removeCards } = await import('./storage.js');
+            const cardHashes = allCardsInFolder.map(c => c.hash);
+            await removeCards(cardHashes);
+            closeSubdeckModal();
+            await loadRepositories();
+        }
+    };
+    btnContainer.appendChild(deleteBtn);
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'project-content';
+    contentDiv.innerHTML = `
+        <h3 class="project-title">${escapeHtml(folderName)}</h3>
+        <p class="project-description">
+            ${escapeHtml(description)}
+        </p>
+        <div class="project-stats">
+            ${dueCards > 0 ? `<strong>${dueCards} due</strong>` : 'All done!'}
+        </div>
+    `;
+
+    card.appendChild(btnContainer);
+    card.appendChild(contentDiv);
+    return card;
 }
 
 /**
@@ -632,7 +935,7 @@ function createSubdeckCard(subdeck) {
     const dueCards = newCards + dueReviewedCards;
 
     const card = document.createElement('div');
-    card.className = 'project-card';
+    card.className = 'project-card file-card';
 
     // Extract just the filename from the path
     const displayName = subdeck.fileName.split('/').pop().replace('.md', '');
@@ -669,8 +972,8 @@ function createSubdeckCard(subdeck) {
     reviewBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        // Navigate to app.html with file filter
-        window.location.href = `app.html?deck=${encodeURIComponent(subdeck.deckId)}&file=${encodeURIComponent(subdeck.fileName)}`;
+        // Navigate to app.html with file filter (use fullPath which includes folder structure)
+        window.location.href = `app.html?deck=${encodeURIComponent(subdeck.deckId)}&file=${encodeURIComponent(subdeck.fullPath)}`;
     };
     btnContainer.appendChild(reviewBtn);
 

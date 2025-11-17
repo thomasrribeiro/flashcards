@@ -955,6 +955,33 @@ kbd {
     flex-shrink: 0;
 }
 
+.modal-breadcrumb {
+    font-size: 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--black);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.breadcrumb-segment {
+    display: inline-block;
+}
+
+.breadcrumb-clickable {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: var(--gold);
+    text-underline-offset: 2px;
+    color: var(--gold);
+}
+
+.breadcrumb-separator {
+    margin: 0 4px;
+    color: var(--black);
+}
+
 .modal-header h2 {
     font-size: 24px;
     margin: 0;
@@ -973,10 +1000,7 @@ kbd {
     align-items: center;
     justify-content: center;
     color: var(--black);
-}
-
-.modal-close:hover {
-    color: var(--white);
+    flex-shrink: 0;
 }
 
 #subdeck-grid {
@@ -988,4 +1012,14 @@ kbd {
     gap: 30px;
     justify-content: center;
     align-content: start;
+}
+
+/* Folder Cards - styled the same as regular cards */
+.folder-card {
+    /* No special styling needed - inherits from .project-card */
+}
+
+/* File Cards - remove hover shadow to indicate they're not clickable */
+.file-card:hover {
+    box-shadow: none;
 }
