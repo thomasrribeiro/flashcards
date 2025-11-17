@@ -5,23 +5,52 @@
 const GITHUB_API = 'https://api.github.com';
 
 /**
+ * Get authentication headers for GitHub API
+ */
+function getAuthHeaders() {
+    // No persistent token - always use unauthenticated API
+    // For public repos, GitHub API allows 60 requests/hour without auth
+    return {
+        'Accept': 'application/vnd.github.v3+json'
+    };
+}
+
+/**
  * Fetch repository metadata
  */
 export async function getRepository(owner, repo) {
-    const response = await fetch(`${GITHUB_API}/repos/${owner}/${repo}`, {
-        headers: {
-            'Accept': 'application/vnd.github.v3+json',
-        }
-    });
+    const url = `${GITHUB_API}/repos/${owner}/${repo}`;
+    console.log(`[GitHub Client] Fetching repository: ${url}`);
+
+    const headers = getAuthHeaders();
+    const response = await fetch(url, { headers });
+
+    console.log(`[GitHub Client] Response status: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
+        // Log more details about the error
+        let errorMessage = `Failed to fetch repository: ${response.statusText}`;
+        try {
+            const errorData = await response.json();
+            console.error('[GitHub Client] Error details:', errorData);
+            errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+            console.error('[GitHub Client] Could not parse error response');
+        }
+
         if (response.status === 404) {
             throw new Error(`Repository ${owner}/${repo} not found`);
+        } else if (response.status === 401) {
+            throw new Error(`Authentication failed. Please log in with GitHub.`);
+        } else if (response.status === 403) {
+            throw new Error(`Access denied. Rate limit or permissions issue.`);
         }
-        throw new Error(`Failed to fetch repository: ${response.statusText}`);
+        throw new Error(errorMessage);
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log('[GitHub Client] Successfully fetched repository:', data.full_name);
+    return data;
 }
 
 /**
@@ -33,9 +62,7 @@ export async function getMarkdownFiles(owner, repo, path = '') {
         : `${GITHUB_API}/repos/${owner}/${repo}/contents`;
 
     const response = await fetch(url, {
-        headers: {
-            'Accept': 'application/vnd.github.v3+json',
-        }
+        headers: getAuthHeaders()
     });
 
     if (!response.ok) {
@@ -74,10 +101,11 @@ export async function getMarkdownFiles(owner, repo, path = '') {
  * Fetch the content of a file from GitHub
  */
 export async function getFileContent(owner, repo, path) {
+    const headers = getAuthHeaders();
+    headers['Accept'] = 'application/vnd.github.v3.raw'; // Override to get raw content
+
     const response = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/contents/${path}`, {
-        headers: {
-            'Accept': 'application/vnd.github.v3.raw',
-        }
+        headers
     });
 
     if (!response.ok) {
@@ -85,6 +113,46 @@ export async function getFileContent(owner, repo, path) {
     }
 
     return await response.text();
+}
+
+/**
+ * Get the authenticated user's info
+ */
+export async function getAuthenticatedUser() {
+    const url = `${GITHUB_API}/user`;
+    console.log('[GitHub Client] Fetching authenticated user');
+
+    const headers = getAuthHeaders();
+    const response = await fetch(url, { headers });
+
+    if (!response.ok) {
+        console.error(`[GitHub Client] Failed to get user: ${response.status}`);
+        throw new Error('Failed to get user info');
+    }
+
+    const user = await response.json();
+    console.log('[GitHub Client] Authenticated user:', user.login);
+    return user;
+}
+
+/**
+ * Get repositories for the authenticated user
+ */
+export async function getUserRepositories(page = 1, perPage = 100) {
+    const url = `${GITHUB_API}/user/repos?sort=pushed&per_page=${perPage}&page=${page}`;
+    console.log('[GitHub Client] Fetching user repositories');
+
+    const headers = getAuthHeaders();
+    const response = await fetch(url, { headers });
+
+    if (!response.ok) {
+        console.error(`[GitHub Client] Failed to get repositories: ${response.status}`);
+        throw new Error('Failed to get user repositories');
+    }
+
+    const repos = await response.json();
+    console.log(`[GitHub Client] Fetched ${repos.length} repositories`);
+    return repos;
 }
 
 /**

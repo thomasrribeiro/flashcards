@@ -1,5 +1,7 @@
 /**
- * GitHub OAuth authentication
+ * GitHub OAuth authentication (in-memory only)
+ * Auth state is lost on page refresh
+ * (Will be replaced with Cloudflare D1 for persistence)
  */
 
 import { clearLocalStorage } from './storage.js';
@@ -22,39 +24,29 @@ class GitHubAuth {
             return;
         }
 
-        // Check if user is already logged in
-        const storedUser = localStorage.getItem('github_user');
-        const storedToken = localStorage.getItem('github_token');
-        if (storedUser && storedToken) {
-            this.user = JSON.parse(storedUser);
-            this.token = storedToken;
-            this.updateUI(true);
-        }
-
         // Set up event listeners
         this.attachListeners();
     }
 
     async handleCallback(urlParams) {
-        const token = urlParams.get('token');
+        const githubToken = urlParams.get('github_token'); // GitHub access token
         const username = urlParams.get('user');
         const name = urlParams.get('name');
         const avatar = urlParams.get('avatar');
 
-        if (token && username) {
+        if (githubToken && username) {
             const user = {
                 username,
                 name: name || username,
                 avatar
             };
 
-            localStorage.setItem('github_user', JSON.stringify(user));
-            localStorage.setItem('github_token', token);
-
             this.user = user;
-            this.token = token;
+            this.token = githubToken;
 
-            // Clear IndexedDB now that user is logged in
+            console.log('[GitHub Auth] Authenticated with GitHub token');
+
+            // Clear in-memory storage
             await clearLocalStorage();
 
             // Redirect to clean URL and reload page
@@ -88,8 +80,6 @@ class GitHubAuth {
     }
 
     logout() {
-        localStorage.removeItem('github_user');
-        localStorage.removeItem('github_token');
         this.user = null;
         this.token = null;
 

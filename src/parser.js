@@ -55,11 +55,46 @@ function extractFrontmatter(text) {
     }
 
     // Parse TOML (simple key=value format)
-    const metadata = { name: null };
+    const metadata = {
+        name: null,
+        subject: null,
+        topic: null,
+        order: null,
+        tags: []
+    };
     const frontmatterStr = frontmatterLines.join('\n');
+
+    // Parse name
     const nameMatch = frontmatterStr.match(/name\s*=\s*"([^"]+)"/);
     if (nameMatch) {
         metadata.name = nameMatch[1];
+    }
+
+    // Parse subject
+    const subjectMatch = frontmatterStr.match(/subject\s*=\s*"([^"]+)"/);
+    if (subjectMatch) {
+        metadata.subject = subjectMatch[1];
+    }
+
+    // Parse topic
+    const topicMatch = frontmatterStr.match(/topic\s*=\s*"([^"]+)"/);
+    if (topicMatch) {
+        metadata.topic = topicMatch[1];
+    }
+
+    // Parse order (numeric)
+    const orderMatch = frontmatterStr.match(/order\s*=\s*(\d+)/);
+    if (orderMatch) {
+        metadata.order = parseInt(orderMatch[1], 10);
+    }
+
+    // Parse tags (array)
+    const tagsMatch = frontmatterStr.match(/tags\s*=\s*\[(.*?)\]/);
+    if (tagsMatch) {
+        metadata.tags = tagsMatch[1]
+            .split(',')
+            .map(t => t.trim().replace(/"/g, ''))
+            .filter(t => t.length > 0);
     }
 
     // Return content after frontmatter
@@ -487,10 +522,20 @@ export class Parser {
 
 /**
  * Parse a deck from markdown file content
+ * Returns { cards, metadata }
  */
 export function parseDeck(content, fileName) {
     const [metadata, text] = extractFrontmatter(content);
     const deckName = metadata.name || fileName.replace(/\.md$/, '');
     const parser = new Parser(deckName, fileName);
-    return parser.parse(text);
+    const cards = parser.parse(text);
+
+    return {
+        cards,
+        metadata: {
+            ...metadata,
+            deckName,
+            fileName
+        }
+    };
 }

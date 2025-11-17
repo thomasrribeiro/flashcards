@@ -27,31 +27,57 @@ const studyArea = document.getElementById('study-area');
 const sessionComplete = document.getElementById('session-complete');
 
 /**
- * Ensure cards are loaded for the topic
+ * Ensure cards are loaded for the deck
  */
-async function ensureCardsLoaded(topic) {
+async function ensureCardsLoaded(deckId) {
     const allCards = await getAllCards();
-    const topicCards = allCards.filter(card => card.deckName === topic);
+    const deckCards = allCards.filter(card => card.deckName === deckId);
 
     // If cards already loaded, we're done
-    if (topicCards.length > 0) {
+    if (deckCards.length > 0) {
+        console.log(`[App] Found ${deckCards.length} cards for deck ${deckId}`);
         return;
     }
 
+    console.log(`[App] No cards found for deck ${deckId}, attempting to load...`);
+
     // Load basics deck from local markdown
-    if (topic === 'basics') {
+    if (deckId === 'basics') {
         const response = await fetch('/topics/example/basics.md');
         const markdown = await response.text();
-        const cards = parseDeck(markdown, 'basics.md');
+        const { cards, metadata } = parseDeck(markdown, 'basics.md');
 
         const cardsWithMeta = cards.map(card => ({
             ...card,
             hash: hashCard(card),
             deckName: 'basics',
+            deckMetadata: metadata,
             source: { repo: 'local', file: 'topics/example/basics.md' }
         }));
 
         await saveCards(cardsWithMeta);
+        console.log(`[App] Loaded ${cardsWithMeta.length} cards for basics deck`);
+    } else if (deckId.includes('/')) {
+        // This is a GitHub repository deck
+        // Extract the base repository from the deck ID
+        const parts = deckId.split('/');
+        const repoId = parts.length === 3 ? `${parts[0]}/${parts[1]}` : deckId;
+
+        console.log(`[App] Loading repository ${repoId} for deck ${deckId}`);
+
+        // Try to load the repository
+        try {
+            const { loadRepository } = await import('./repo-manager.js');
+            await loadRepository(repoId);
+
+            // Check if cards are now loaded
+            const newCards = await getAllCards();
+            const newDeckCards = newCards.filter(card => card.deckName === deckId);
+            console.log(`[App] After loading repo, found ${newDeckCards.length} cards for deck ${deckId}`);
+        } catch (error) {
+            console.error(`[App] Failed to load repository ${repoId}:`, error);
+            alert(`Failed to load cards for deck: ${error.message}`);
+        }
     }
 }
 
@@ -61,18 +87,18 @@ async function ensureCardsLoaded(topic) {
 async function init() {
     await initDB();
 
-    // Get topic from URL parameter
+    // Get deck from URL parameter (supports both 'deck' and legacy 'topic')
     const urlParams = new URLSearchParams(window.location.search);
-    const topic = urlParams.get('topic');
+    const deckId = urlParams.get('deck') || urlParams.get('topic');
 
-    if (!topic) {
-        alert('No topic specified');
+    if (!deckId) {
+        alert('No deck specified');
         window.location.href = 'index.html';
         return;
     }
 
     // Load cards if needed (in-memory storage may be empty on page load)
-    await ensureCardsLoaded(topic);
+    await ensureCardsLoaded(deckId);
 
     await loadDueCards();
     setupEventListeners();
@@ -80,15 +106,15 @@ async function init() {
 }
 
 /**
- * Load due cards for the current topic
+ * Load due cards for the current deck
  */
 async function loadDueCards() {
     const urlParams = new URLSearchParams(window.location.search);
-    const topic = urlParams.get('topic');
+    const deckId = urlParams.get('deck') || urlParams.get('topic');
 
-    // Get ALL cards for this topic
+    // Get ALL cards for this deck
     const allCards = await getAllCards();
-    const topicCards = allCards.filter(card => card.deckName === topic);
+    const deckCards = allCards.filter(card => card.deckName === deckId);
 
     // Get all reviews
     const allReviews = await getAllReviews();
@@ -97,7 +123,7 @@ async function loadDueCards() {
     // Build list of cards to study
     const cardsToStudy = [];
 
-    for (const card of topicCards) {
+    for (const card of deckCards) {
         const review = reviewMap.get(card.hash);
 
         if (review) {

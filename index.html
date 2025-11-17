@@ -56,11 +56,59 @@
                         <button class="btn-logout" id="btn-logout">Logout</button>
                     </div>
                 </div>
+
+                <!-- Filter and Sort Controls -->
+                <div class="controls-bar hidden" id="controls-bar">
+                    <input
+                        type="text"
+                        id="search-input"
+                        class="search-input"
+                        placeholder="Search decks..."
+                        autocomplete="off"
+                    />
+                    <select id="sort-select" class="sort-select">
+                        <option value="" disabled selected>Look through my repos</option>
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="name-asc">Name (A-Z)</option>
+                        <option value="name-desc">Name (Z-A)</option>
+                        <option value="due-most">Most Due</option>
+                        <option value="due-least">Least Due</option>
+                    </select>
+                </div>
+
                 <div id="topics-grid" class="projects-grid">
                     <!-- Topics will be loaded dynamically -->
                     <div class="loading">Loading topics...</div>
                 </div>
             </main>
+        </div>
+    </div>
+
+    <!-- Add Repository Modal -->
+    <div id="add-repo-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Repository</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="github-repo-input">GitHub Repository</label>
+                <div class="repo-input-wrapper">
+                    <input
+                        type="text"
+                        id="github-repo-input"
+                        placeholder="owner/repository"
+                        autocomplete="off"
+                    />
+                    <div id="repo-suggestions" class="repo-suggestions hidden"></div>
+                </div>
+                <p class="modal-hint">Enter a GitHub repository in the format: owner/repository</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" id="modal-cancel">Cancel</button>
+                <button class="btn-primary" id="modal-add">Add Repository</button>
+            </div>
         </div>
     </div>
 

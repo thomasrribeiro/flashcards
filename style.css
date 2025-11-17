@@ -593,3 +593,276 @@ kbd {
         padding: 12px 15px;
     }
 }
+
+/* Topic Sections for Hierarchical Display */
+.topic-section {
+    margin-bottom: 40px;
+}
+
+.topic-header {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--black);
+}
+
+.topic-header h3 {
+    font-size: 18px;
+    font-weight: 400;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.decks-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, 320px);
+    gap: 30px;
+    justify-content: start;
+    margin-top: 20px;
+}
+
+/* Repository Input Dropdown */
+.repo-input-wrapper {
+    position: relative;
+}
+
+.repo-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 300px;
+    overflow-y: auto;
+    background: var(--white);
+    border: 2px solid var(--black);
+    border-top: none;
+    z-index: 1001;
+}
+
+.repo-suggestions.hidden {
+    display: none;
+}
+
+.repo-suggestion-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.repo-suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.repo-suggestion-item:hover,
+.repo-suggestion-item.selected {
+    background: var(--light-gray);
+}
+
+.repo-suggestion-name {
+    font-weight: 500;
+    color: var(--black);
+}
+
+.repo-suggestion-desc {
+    font-size: 0.9em;
+    color: #666;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 4px;
+}
+
+.repo-suggestion-meta {
+    font-size: 0.85em;
+    color: #999;
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.repo-loading {
+    padding: 20px;
+    text-align: center;
+    color: #666;
+}
+
+/* Modal Styles */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-content {
+    background: var(--white);
+    border: 2px solid var(--black);
+    width: 90%;
+    max-width: 500px;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--black);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--black);
+}
+
+.modal-close:hover {
+    background: var(--black);
+    color: var(--white);
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-body label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 400;
+}
+
+.modal-body input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.modal-body input:focus {
+    outline: none;
+    border-color: var(--black);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+}
+
+.modal-hint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #666;
+}
+
+.modal-footer {
+    padding: 20px;
+    border-top: 1px solid var(--black);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.btn-cancel {
+    padding: 10px 20px;
+    background: var(--white);
+    border: 1px solid var(--black);
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+}
+
+.btn-cancel:hover {
+    background: var(--black);
+    color: var(--white);
+}
+
+.btn-primary {
+    padding: 10px 20px;
+    background: var(--black);
+    color: var(--white);
+    border: 1px solid var(--black);
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+}
+
+.btn-primary:hover {
+    background: var(--white);
+    color: var(--black);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Filter and Sort Controls */
+.controls-bar {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 30px;
+    margin-top: 20px;
+}
+
+.controls-bar.hidden {
+    display: none;
+}
+
+.search-input {
+    flex: 1;
+    padding: 10px 15px;
+    border: 1px solid var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+}
+
+.search-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+}
+
+.sort-select {
+    padding: 10px 15px;
+    border: 1px solid var(--black);
+    background: var(--white);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    min-width: 150px;
+}
+
+.sort-select:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+}
+
+.sort-select:hover {
+    background: var(--black);
+    color: var(--white);
+}

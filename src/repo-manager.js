@@ -11,28 +11,66 @@ import { saveCards, getAllCards, saveRepoMetadata, getRepoMetadata, getAllRepos 
  * Load cards from a GitHub repository
  */
 export async function loadRepository(repoString) {
+    console.log(`\n=== [RepoManager] Loading repository: ${repoString} ===`);
     const { owner, repo } = githubClient.parseRepoString(repoString);
+    console.log(`[RepoManager] Parsed as owner="${owner}" repo="${repo}"`);
 
     // Fetch repository info
+    console.log('[RepoManager] Fetching repository info from GitHub...');
     const repoInfo = await githubClient.getRepository(owner, repo);
+    console.log(`[RepoManager] Repo info fetched: ${repoInfo.full_name}`);
 
     // Fetch all markdown files
+    console.log('[RepoManager] Fetching markdown files...');
     const markdownFiles = await githubClient.getMarkdownFiles(owner, repo);
+    console.log(`[RepoManager] Found ${markdownFiles.length} markdown files`);
 
     if (markdownFiles.length === 0) {
         throw new Error(`No markdown files found in ${owner}/${repo}`);
     }
 
-    // Parse cards from each file
+    // Parse cards from each file - ONE deck per repo
     const allCards = [];
     let totalFiles = 0;
 
-    for (const file of markdownFiles) {
-        try {
-            const content = await githubClient.getFileContent(owner, repo, file.path);
-            const cards = parseDeck(content, file.path);
+    // Single deck ID for the entire repository
+    const deckId = `${owner}/${repo}`;
+    console.log(`[RepoManager] Creating single deck for repository: ${deckId}`);
 
-            // Add repository source to each card
+    // Aggregate metadata from first file with frontmatter, or use repo name
+    let deckMetadata = {
+        name: null,
+        subject: null,
+        topic: null,
+        order: null,
+        tags: []
+    };
+
+    // Sort files by path (respects 01_, 02_ prefixes)
+    const sortedFiles = [...markdownFiles].sort((a, b) => a.path.localeCompare(b.path));
+    console.log('[RepoManager] File processing order:', sortedFiles.map(f => f.path));
+
+    for (const file of sortedFiles) {
+        try {
+            console.log(`[RepoManager] Processing file: ${file.path}`);
+            const content = await githubClient.getFileContent(owner, repo, file.path);
+            console.log(`[RepoManager] File content length: ${content.length} chars`);
+
+            const { cards, metadata } = parseDeck(content, file.path);
+            console.log(`[RepoManager] Parsed ${cards.length} cards from ${file.path}`);
+
+            // Use metadata from first file that has it
+            if (totalFiles === 0 || metadata.name || metadata.subject || metadata.topic) {
+                deckMetadata = {
+                    name: metadata.name || deckMetadata.name,
+                    subject: metadata.subject || deckMetadata.subject,
+                    topic: metadata.topic || deckMetadata.topic,
+                    order: metadata.order !== null ? metadata.order : deckMetadata.order,
+                    tags: metadata.tags?.length > 0 ? metadata.tags : deckMetadata.tags
+                };
+            }
+
+            // Add repository source and metadata to each card
             const cardsWithMeta = cards.map(card => {
                 const hash = hashCard(card);
                 return {
@@ -43,27 +81,57 @@ export async function loadRepository(repoString) {
                         file: file.path,
                         sha: file.sha
                     },
-                    deckName: `${owner}/${repo}`,
-                    id: `${owner}/${repo}/${file.path}#${hash}`
+                    deckName: deckId,
+                    deckMetadata: metadata,
+                    id: `${deckId}#${hash}`
                 };
             });
 
             allCards.push(...cardsWithMeta);
+            console.log(`[RepoManager] Total cards so far: ${allCards.length}`);
+
             totalFiles++;
         } catch (error) {
-            console.error(`Error parsing ${file.path}:`, error);
+            console.error(`[RepoManager] Error parsing ${file.path}:`, error);
         }
     }
 
+    console.log(`[RepoManager] Total parsed: ${allCards.length} cards from ${totalFiles} files`);
+    console.log(`[RepoManager] Single deck ID: ${deckId}`);
+
     // Save repository metadata
+    console.log('[RepoManager] Saving repository metadata...');
     const repoData = githubClient.createRepoData(repoInfo, markdownFiles);
     await saveRepoMetadata(repoData);
+    console.log('[RepoManager] Repository metadata saved:', repoData.id);
+
+    // Save single deck metadata for the entire repository
+    console.log('[RepoManager] Saving deck metadata...');
+    const deck = {
+        id: deckId,
+        name: deckMetadata.name || repoInfo.name,
+        subject: deckMetadata.subject,
+        topic: deckMetadata.topic,
+        order: deckMetadata.order,
+        tags: deckMetadata.tags,
+        repo: `${owner}/${repo}`,
+        cardCount: allCards.length,
+        fileCount: totalFiles,
+        createdAt: new Date().toISOString()
+    };
+    await saveRepoMetadata(deck);
+    console.log(`[RepoManager] Saved deck metadata for: ${deck.id}`);
 
     // Save cards to storage
+    console.log('[RepoManager] Saving cards to storage...');
     await saveCards(allCards);
+    console.log(`[RepoManager] ${allCards.length} cards saved to storage`);
+
+    console.log(`=== [RepoManager] Load complete for ${repoString} ===\n`);
 
     return {
         repository: repoData,
+        deck,
         cards: allCards,
         filesProcessed: totalFiles
     };
@@ -73,28 +141,23 @@ export async function loadRepository(repoString) {
  * Remove a repository and its cards
  */
 export async function removeRepository(repoId) {
-    // Get all cards
+    console.log(`[RepoManager] removeRepository called for: ${repoId}`);
+
+    // Use the removeRepo function from storage which handles everything
+    const { removeRepo, getAllRepos, getAllCards } = await import('./storage.js');
+
+    const beforeRepos = await getAllRepos();
+    console.log(`[RepoManager] Repos before removal:`, beforeRepos.map(r => r.id));
+
+    await removeRepo(repoId);
+
+    const afterRepos = await getAllRepos();
+    console.log(`[RepoManager] Repos after removal:`, afterRepos.map(r => r.id));
+
+    // Return remaining cards
     const allCards = await getAllCards();
-
-    // Filter out cards from this repository
-    const remainingCards = allCards.filter(card =>
-        card.source?.repo !== repoId && card.deckName !== repoId
-    );
-
-    // Save filtered cards
-    await saveCards(remainingCards);
-
-    // Remove repo metadata
-    const repos = await getAllRepos();
-    const filteredRepos = repos.filter(r => r.id !== repoId);
-
-    // Update repos in storage
-    const db = await window.dbPromise;
-    const tx = db.transaction('metadata', 'readwrite');
-    await tx.objectStore('metadata').put(filteredRepos, 'repos');
-    await tx.done;
-
-    return remainingCards;
+    console.log(`[RepoManager] Remaining cards:`, allCards.length);
+    return allCards;
 }
 
 /**
