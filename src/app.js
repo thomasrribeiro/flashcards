@@ -41,22 +41,28 @@ async function ensureCardsLoaded(deckId) {
 
     console.log(`[App] No cards found for deck ${deckId}, attempting to load...`);
 
-    // Load basics deck from local markdown
-    if (deckId === 'basics') {
-        const response = await fetch('/topics/example/basics.md');
+    // Load example deck
+    if (deckId === 'example') {
+        console.log(`[App] Loading example deck...`);
+        const response = await fetch('/example/basics.md');
+        if (!response.ok) {
+            console.error('[App] Failed to fetch example deck');
+            return;
+        }
+
         const markdown = await response.text();
         const { cards, metadata } = parseDeck(markdown, 'basics.md');
 
         const cardsWithMeta = cards.map(card => ({
             ...card,
             hash: hashCard(card),
-            deckName: 'basics',
+            deckName: 'example',
             deckMetadata: metadata,
-            source: { repo: 'local', file: 'topics/example/basics.md' }
+            source: { repo: 'local', file: 'basics.md' }
         }));
 
         await saveCards(cardsWithMeta);
-        console.log(`[App] Loaded ${cardsWithMeta.length} cards for basics deck`);
+        console.log(`[App] Loaded ${cardsWithMeta.length} cards for example deck`);
     } else if (deckId.includes('/')) {
         // This is a GitHub repository deck
         // Extract the base repository from the deck ID

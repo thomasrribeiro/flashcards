@@ -21,11 +21,11 @@ async function init() {
         const grid = document.getElementById('topics-grid');
         grid.innerHTML = '<div class="loading">Loading repositories...</div>';
 
-        // Only load example markdown when not logged in
+        // Load example deck when not logged in
         if (!githubAuth.isAuthenticated()) {
-            console.log('About to load example markdown...');
-            await loadExampleMarkdown();
-            console.log('Example markdown loaded');
+            console.log('About to load example deck...');
+            await loadExampleDeck();
+            console.log('Example deck loaded');
         }
 
         console.log('About to load repositories...');
@@ -68,35 +68,21 @@ async function loadRepositories() {
         // Check login status
         const isLoggedIn = githubAuth.isAuthenticated();
 
-        // Show example deck only if logged out
-        if (!isLoggedIn && allDecks.length === 0 && allCards.length > 0) {
-            console.log('Showing example deck');
-            controlsBar.classList.add('hidden');
-            const exampleDeck = {
-                id: 'basics',
-                name: 'basics',
-                description: 'Sample deck.',
-                cards: allCards.filter(c => c.deckName === 'basics'),
-                reviews: new Map()
-            };
-
-            // Add review data for example cards
-            allReviews.forEach(review => {
-                const card = exampleDeck.cards.find(c => c.hash === review.cardHash);
-                if (card) {
-                    exampleDeck.reviews.set(review.cardHash, review);
-                }
-            });
-
-            const card = createDeckCard(exampleDeck);
-            grid.appendChild(card);
-            return;
+        // Filter out example deck when logged in
+        let displayDecks = allDecks;
+        if (isLoggedIn) {
+            displayDecks = allDecks.filter(deck => deck.id !== 'example');
+            console.log(`[Main] Filtered out example deck. Showing ${displayDecks.length} GitHub decks`);
         }
 
         // Show message if no decks
-        if (allDecks.length === 0) {
+        if (displayDecks.length === 0) {
             controlsBar.classList.add('hidden');
-            grid.innerHTML = '<div class="loading">Search for a GitHub repository and click + to add it.</div>';
+            if (isLoggedIn) {
+                grid.innerHTML = '<div class="loading">Search for a GitHub repository and click + to add it.</div>';
+            } else {
+                grid.innerHTML = '<div class="loading">No example deck found.</div>';
+            }
             return;
         }
 
@@ -105,10 +91,9 @@ async function loadRepositories() {
 
         // Apply search filter
         const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
-        let filteredDecks = allDecks.filter(deck => {
-            // Search by the displayed repo name (last part of owner/repo)
-            const isBasicsDeck = deck.id === 'basics';
-            const displayName = isBasicsDeck ? deck.id : deck.id.split('/').pop();
+        let filteredDecks = displayDecks.filter(deck => {
+            // Search by the displayed repo name (last part of local/name or owner/repo)
+            const displayName = deck.id.split('/').pop();
             return displayName.toLowerCase().includes(searchTerm);
         });
 
@@ -164,17 +149,25 @@ function createDeckCard(deck) {
     const dueCards = newCards + dueReviewedCards;
 
     const card = document.createElement('div');
-    card.className = 'project-card';
-    card.style.cursor = 'pointer';
-    card.onclick = () => openSubdeckModal(deck);
 
-    const isBasicsDeck = deck.id === 'basics';
+    // Example deck is a leaf (no hierarchy), GitHub repos have hierarchy
+    const isExampleDeck = deck.id === 'example';
+    card.className = isExampleDeck ? 'project-card file-card' : 'project-card';
+
+    // Only make GitHub repos clickable for modal (not example deck)
+    if (!isExampleDeck) {
+        card.style.cursor = 'pointer';
+        card.onclick = () => openSubdeckModal(deck);
+    } else {
+        card.style.cursor = 'default';
+    }
+
     // Extract repo name from deck.id (e.g., "owner/repo" -> "repo")
-    const displayName = isBasicsDeck ? deck.id : deck.id.split('/').pop();
+    const displayName = isExampleDeck ? 'basics' : (deck.id.includes('/') ? deck.id.split('/').pop() : deck.id);
     // Show only card count in description (due count shown in stats below)
     const description = `${totalCards} card${totalCards !== 1 ? 's' : ''}`;
 
-    // Add button container (top right) - only show buttons if not basics deck
+    // Add button container (top right)
     const btnContainer = document.createElement('div');
     btnContainer.className = 'card-buttons';
 
@@ -205,8 +198,8 @@ function createDeckCard(deck) {
     };
     btnContainer.appendChild(reviewBtn);
 
-    // Only show delete button if not the basics deck
-    if (!isBasicsDeck) {
+    // Only show delete button if not the example deck (example deck is read-only)
+    if (!isExampleDeck) {
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'card-delete-btn';
         deleteBtn.title = 'Delete this deck';
@@ -507,42 +500,47 @@ function escapeHtml(text) {
 }
 
 /**
- * Load example markdown from local file
+ * Load example deck from public/example/basics.md
+ * Simple single-file deck for non-logged-in users
  */
-async function loadExampleMarkdown() {
+async function loadExampleDeck() {
     try {
-        console.log('Loading example markdown...');
-        const response = await fetch('/topics/example/basics.md');
+        console.log('[Main] Loading example deck...');
+        const response = await fetch('/example/basics.md');
         if (!response.ok) {
             throw new Error(`Failed to fetch: ${response.status}`);
         }
         const markdown = await response.text();
-        console.log('Fetched markdown, length:', markdown.length);
 
-        // Parse the markdown into cards
         const { cards, metadata } = parseDeck(markdown, 'basics.md');
-        console.log('Parsed cards:', cards.length);
 
-        // Add hash and metadata to each card
         const cardsWithMeta = cards.map(card => {
             const hash = hashCard(card);
             return {
                 ...card,
                 hash,
-                deckName: 'basics',
+                deckName: 'example',
                 deckMetadata: metadata,
                 source: {
                     repo: 'local',
-                    file: 'topics/example/basics.md'
+                    file: 'basics.md'
                 }
             };
         });
 
-        // Always save the basics cards (in-memory storage)
         await saveCards(cardsWithMeta);
-        console.log(`Loaded ${cardsWithMeta.length} example cards from basics.md`);
+        await saveRepoMetadata({
+            id: 'example',
+            name: 'Example Deck',
+            repo: 'local/example',
+            cardCount: cardsWithMeta.length,
+            fileCount: 1,
+            createdAt: new Date().toISOString()
+        });
+
+        console.log(`[Main] Loaded ${cardsWithMeta.length} cards from example deck`);
     } catch (error) {
-        console.error('Failed to load example markdown:', error);
+        console.error('[Main] Failed to load example deck:', error);
     }
 }
 

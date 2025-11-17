@@ -13,9 +13,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const ROOT_DIR = path.join(__dirname, '..');
-const TOPICS_DIR = path.join(ROOT_DIR, 'topics');
-const OUTPUT_DIR = path.join(ROOT_DIR, 'public', 'data');
-const OUTPUT_FILE = path.join(OUTPUT_DIR, 'cards.json');
+const COLLECTION_DIR = path.join(ROOT_DIR, 'public', 'collection');
+const OUTPUT_FILE = path.join(COLLECTION_DIR, 'index.json');
 
 /**
  * Recursively find all .md files in a directory
@@ -38,76 +37,88 @@ function findMarkdownFiles(dir, fileList = []) {
 }
 
 /**
- * Extract relative path from topics directory
+ * Scan collection directory for repos and their markdown files
  */
-function getRelativePath(filePath) {
-    return path.relative(TOPICS_DIR, filePath);
+function scanCollection() {
+    const repos = [];
+
+    // Read all directories in collection/
+    const entries = fs.readdirSync(COLLECTION_DIR, { withFileTypes: true });
+
+    for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+
+        const repoName = entry.name;
+        const repoPath = path.join(COLLECTION_DIR, repoName);
+
+        // Find all markdown files in this repo
+        const markdownFiles = findMarkdownFiles(repoPath);
+
+        // Convert to relative paths from repo root
+        const relativeFiles = markdownFiles.map(file => {
+            const rel = path.relative(repoPath, file);
+            // Normalize path separators to forward slashes for web
+            return rel.replace(/\\/g, '/');
+        });
+
+        if (relativeFiles.length > 0) {
+            repos.push({
+                name: repoName,
+                files: relativeFiles
+            });
+        }
+    }
+
+    return repos;
 }
 
 /**
  * Main build function
  */
 function build() {
-    console.log('Building flashcard index...');
+    console.log('Building collection index...');
 
-    // Create topics directory if it doesn't exist
-    if (!fs.existsSync(TOPICS_DIR)) {
-        fs.mkdirSync(TOPICS_DIR, { recursive: true });
-        console.log('Created topics/ directory');
-        console.log('Add git submodules to topics/ for your flashcard collections');
+    // Create collection directory if it doesn't exist
+    if (!fs.existsSync(COLLECTION_DIR)) {
+        fs.mkdirSync(COLLECTION_DIR, { recursive: true });
+        console.log('Created public/collection/ directory');
+        console.log('Add repo directories to public/collection/ for your flashcard collections');
         return;
     }
 
-    // Create output directory
-    if (!fs.existsSync(OUTPUT_DIR)) {
-        fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-    }
+    // Scan collection for repos
+    const repos = scanCollection();
 
-    // Find all markdown files
-    const markdownFiles = findMarkdownFiles(TOPICS_DIR);
-
-    if (markdownFiles.length === 0) {
-        console.log('No markdown files found in topics/');
-        console.log('Add git submodules with .md files to get started:');
-        console.log('  git submodule add <repo-url> topics/<topic-name>');
+    if (repos.length === 0) {
+        console.log('No repos found in public/collection/');
+        console.log('Add directories with .md files to get started:');
+        console.log('  mkdir -p public/collection/my-repo/flashcards');
+        console.log('  # or add git submodules');
 
         // Write empty index
-        fs.writeFileSync(OUTPUT_FILE, JSON.stringify({ files: [] }, null, 2));
+        fs.writeFileSync(OUTPUT_FILE, JSON.stringify({ repos: [] }, null, 2));
         return;
     }
 
-    // Create file index
-    const fileIndex = markdownFiles.map(filePath => ({
-        path: getRelativePath(filePath),
-        name: path.basename(filePath, '.md'),
-        fullPath: filePath
-    }));
+    // Write collection index
+    const totalFiles = repos.reduce((sum, repo) => sum + repo.files.length, 0);
 
-    console.log(`Found ${fileIndex.length} markdown files`);
-
-    // Write index
     const output = {
         generatedAt: new Date().toISOString(),
-        fileCount: fileIndex.length,
-        files: fileIndex
+        repoCount: repos.length,
+        fileCount: totalFiles,
+        repos: repos
     };
 
     fs.writeFileSync(OUTPUT_FILE, JSON.stringify(output, null, 2));
-    console.log(`Written card index to ${OUTPUT_FILE}`);
+    console.log(`Written collection index to ${OUTPUT_FILE}`);
 
-    // Print summary by topic
-    const topicMap = new Map();
-    fileIndex.forEach(file => {
-        const topic = file.path.split(path.sep)[0];
-        if (!topicMap.has(topic)) {
-            topicMap.set(topic, 0);
-        }
-        topicMap.set(topic, topicMap.get(topic) + 1);
-    });
-
-    console.log('\nTopics summary:');
-    topicMap.forEach((count, topic) => {
-        console.log(`  ${topic}: ${count} file(s)`);
+    // Print summary
+    console.log(`\nCollection Summary:`);
+    console.log(`  Total repos: ${repos.length}`);
+    console.log(`  Total files: ${totalFiles}`);
+    repos.forEach(repo => {
+        console.log(`  - ${repo.name}: ${repo.files.length} files`);
     });
 }
 
