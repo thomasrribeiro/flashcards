@@ -60,9 +60,37 @@ export async function initDB() {
         // Load all reviews from D1
         await loadReviewsFromD1();
 
+        // Load user's repos from D1
+        await loadReposFromD1();
+
         console.log('[Storage] D1 initialized successfully');
     } catch (error) {
         console.error('[Storage] Failed to initialize D1:', error);
+    }
+}
+
+/**
+ * Load all repos from D1 for current user
+ */
+export async function loadReposFromD1() {
+    if (!currentUser) return;
+
+    try {
+        const userId = currentUser.github_id || currentUser.id;
+        const response = await fetch(`${WORKER_URL}/api/repos/${userId}`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to load repos: ${response.statusText}`);
+        }
+
+        const { repos } = await response.json();
+        console.log(`[Storage] Loaded ${repos.length} repos from D1:`, repos.map(r => r.repo_id));
+
+        // Return repo IDs so they can be loaded by main.js
+        return repos.map(r => ({ id: r.repo_id, owner: r.owner, name: r.repo_name }));
+    } catch (error) {
+        console.error('[Storage] Failed to load repos from D1:', error);
+        return [];
     }
 }
 
@@ -272,10 +300,12 @@ export async function refreshDeck(deckId, folder = null) {
 }
 
 /**
- * Save repository metadata
+ * Save repository metadata - also syncs to D1
  */
 export async function saveRepoMetadata(repo) {
     console.log(`[Storage] saveRepoMetadata called for: ${repo.id}`);
+
+    // Update local cache
     const existingIndex = reposCache.findIndex(r => r.id === repo.id);
     if (existingIndex >= 0) {
         console.log(`[Storage] Updating existing repo at index ${existingIndex}`);
@@ -285,6 +315,41 @@ export async function saveRepoMetadata(repo) {
         reposCache.push(repo);
     }
     console.log(`[Storage] Repos cache now has ${reposCache.length} repos:`, reposCache.map(r => r.id));
+
+    // Sync to D1 if user is authenticated
+    if (currentUser && repo.id && repo.name) {
+        try {
+            const userId = currentUser.github_id || currentUser.id;
+            const [owner, repoName] = repo.id.includes('/') ? repo.id.split('/') : [userId, repo.id];
+
+            // Get cards for this repo to register their hashes
+            const repoCards = cardsCache
+                .filter(c => c.deckName === repo.id || c.source?.repo === repo.id)
+                .map(c => ({ hash: c.hash, contentType: c.type === 'cloze' ? 'cloze' : 'qa' }));
+
+            const response = await fetch(`${WORKER_URL}/api/repos/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId,
+                    repoId: repo.id,
+                    repoName: repoName || repo.name,
+                    owner,
+                    cards: repoCards
+                })
+            });
+
+            if (!response.ok) {
+                console.error('[Storage] Failed to sync repo to D1:', response.statusText);
+            } else {
+                const result = await response.json();
+                console.log(`[Storage] Repo synced to D1: ${result.cardsRegistered} cards registered`);
+            }
+        } catch (error) {
+            console.error('[Storage] Error syncing repo to D1:', error);
+        }
+    }
+
     return Promise.resolve();
 }
 
@@ -325,8 +390,38 @@ export async function removeCards(cardHashes) {
 export async function removeRepo(repoId) {
     console.log(`[Storage] removeRepo called for: ${repoId}`);
 
-    // Delete from D1
-    await clearReviewsByDeck(repoId);
+    // Delete from D1 (repos table and reviews)
+    if (currentUser) {
+        try {
+            const userId = currentUser.github_id || currentUser.id;
+
+            // Delete from repos table
+            const repoResponse = await fetch(`${WORKER_URL}/api/repos/${userId}/${encodeURIComponent(repoId)}`, {
+                method: 'DELETE'
+            });
+
+            if (!repoResponse.ok) {
+                const errorText = await repoResponse.text();
+                console.error('[Storage] Failed to delete repo from D1:', repoResponse.status, errorText);
+            } else {
+                const result = await repoResponse.json();
+                console.log('[Storage] Repo deleted from D1:', result);
+            }
+
+            // Delete reviews for this deck
+            const reviewResponse = await fetch(`${WORKER_URL}/api/deck/${userId}/${encodeURIComponent(repoId)}`, {
+                method: 'DELETE'
+            });
+
+            if (!reviewResponse.ok) {
+                console.error('[Storage] Failed to delete reviews from D1:', reviewResponse.statusText);
+            }
+
+            console.log('[Storage] Repo and reviews deleted from D1');
+        } catch (error) {
+            console.error('[Storage] Error deleting from D1:', error);
+        }
+    }
 
     // Remove from local caches
     reposCache = reposCache.filter(r => r.id !== repoId);

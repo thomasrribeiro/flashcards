@@ -26,6 +26,11 @@ async function init() {
             console.log('About to load example deck...');
             await loadExampleDeck();
             console.log('Example deck loaded');
+        } else {
+            // Load user's repos from D1
+            console.log('About to load user repos from D1...');
+            await loadUserRepos();
+            console.log('User repos loaded from D1');
         }
 
         console.log('About to load repositories...');
@@ -42,6 +47,31 @@ async function init() {
         console.log('=== INIT COMPLETE ===');
     } catch (error) {
         console.error('=== INIT ERROR ===', error);
+    }
+}
+
+/**
+ * Load user's repos from D1 and fetch their cards
+ */
+async function loadUserRepos() {
+    const { loadReposFromD1 } = await import('./storage.js');
+    const { loadRepository } = await import('./repo-manager.js');
+
+    const repos = await loadReposFromD1();
+    if (!repos || repos.length === 0) {
+        console.log('[Main] No repos found in D1');
+        return;
+    }
+
+    console.log(`[Main] Loading ${repos.length} repos from D1:`, repos.map(r => r.id));
+
+    for (const repo of repos) {
+        try {
+            await loadRepository(repo.id);
+            console.log(`[Main] Loaded repo: ${repo.id}`);
+        } catch (error) {
+            console.error(`[Main] Failed to load repo ${repo.id}:`, error);
+        }
     }
 }
 
@@ -228,9 +258,9 @@ function createDeckCard(deck) {
                         console.log('[Main] Verified: Deck successfully removed from local cache');
                     }
 
-                    // Reload the entire page to ensure UI is fresh
-                    console.log('[Main] Reloading page after deletion in 500ms...');
-                    setTimeout(() => window.location.reload(), 500);
+                    // Re-render the UI instead of reloading
+                    console.log('[Main] Re-rendering UI after deletion');
+                    await loadRepositories();
                 } catch (error) {
                     console.error('[Main] Error deleting deck:', error);
                     alert(`Failed to delete deck: ${error.message}`);
