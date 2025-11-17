@@ -337,7 +337,8 @@ body {
 }
 
 .card-delete-btn,
-.card-reset-btn {
+.card-reset-btn,
+.card-review-btn {
     width: 32px;
     height: 32px;
     padding: 6px;
@@ -356,7 +357,8 @@ body {
     padding: 0;
 }
 
-.card-reset-btn img {
+.card-reset-btn img,
+.card-review-btn img {
     width: 16px;
     height: 16px;
     display: block;
@@ -865,8 +867,7 @@ kbd {
 
 /* Filter and Sort Controls */
 .controls-bar {
-    display: flex;
-    gap: 15px;
+    display: inline-block;
     margin-bottom: 30px;
     margin-top: 20px;
 }
@@ -876,7 +877,6 @@ kbd {
 }
 
 .search-input {
-    flex: 1;
     padding: 10px 15px;
     border: 1px solid var(--black);
     font-family: 'IBM Plex Mono', monospace;
@@ -906,4 +906,82 @@ kbd {
 .sort-select:hover {
     background: var(--black);
     color: var(--white);
+}
+
+/* Modal Styles */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    position: relative;
+    background: var(--white);
+    border: 1px solid var(--black);
+    max-width: 90%;
+    max-height: 90%;
+    overflow-y: auto;
+    padding: 30px;
+    z-index: 1001;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--black);
+}
+
+.modal-header h2 {
+    font-size: 24px;
+    margin: 0;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 32px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--black);
+}
+
+.modal-close:hover {
+    color: var(--white);
+}
+
+#subdeck-grid {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, 320px);
+    gap: 30px;
+    justify-content: center;
 }

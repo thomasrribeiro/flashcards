@@ -103,27 +103,30 @@ async function loadRepositories() {
         // Show controls when there are decks
         controlsBar.classList.remove('hidden');
 
-        // Apply filters and sorting
-        const filteredDecks = applyFiltersAndSort(allDecks, allCards, allReviews);
-
-        // Group decks by topic
-        const decksByTopic = new Map();
-        filteredDecks.forEach(deck => {
-            const topic = deck.topic || 'Uncategorized';
-            if (!decksByTopic.has(topic)) {
-                decksByTopic.set(topic, []);
-            }
-            decksByTopic.get(topic).push(deck);
+        // Apply search filter
+        const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
+        let filteredDecks = allDecks.filter(deck => {
+            const name = (deck.name || deck.id || '').toLowerCase();
+            return name.includes(searchTerm);
         });
 
-        // Create topic groups
-        const sortedTopics = Array.from(decksByTopic.keys()).sort();
-        for (const topic of sortedTopics) {
-            const decks = decksByTopic.get(topic);
+        // Display decks directly (no grouping, no headers)
+        for (const deck of filteredDecks) {
+            const deckCards = allCards.filter(c => c.deckName === deck.id);
+            const deckReviews = allReviews.filter(r => {
+                const card = deckCards.find(c => c.hash === r.cardHash);
+                return !!card;
+            });
 
-            // Create topic section
-            const topicSection = createTopicSection(topic, decks, allCards, allReviews);
-            grid.appendChild(topicSection);
+            // Create deck card with review info
+            const deckWithReviews = {
+                ...deck,
+                cards: deckCards,
+                reviews: new Map(deckReviews.map(r => [r.cardHash, r]))
+            };
+
+            const card = createDeckCard(deckWithReviews);
+            grid.appendChild(card);
         }
 
     } catch (error) {
@@ -134,137 +137,6 @@ async function loadRepositories() {
             </div>
         `;
     }
-}
-
-/**
- * Apply search filter and sorting to decks
- */
-function applyFiltersAndSort(decks, allCards, allReviews) {
-    const searchInput = document.getElementById('search-input');
-    const sortSelect = document.getElementById('sort-select');
-
-    let filtered = [...decks];
-
-    // Apply search filter
-    const searchTerm = searchInput?.value.toLowerCase().trim() || '';
-    if (searchTerm) {
-        filtered = filtered.filter(deck => {
-            const name = deck.name?.toLowerCase() || '';
-            const topic = deck.topic?.toLowerCase() || '';
-            const subject = deck.subject?.toLowerCase() || '';
-            const tags = deck.tags?.join(' ').toLowerCase() || '';
-
-            return name.includes(searchTerm) ||
-                   topic.includes(searchTerm) ||
-                   subject.includes(searchTerm) ||
-                   tags.includes(searchTerm);
-        });
-    }
-
-    // Calculate stats for sorting
-    const decksWithStats = filtered.map(deck => {
-        const deckCards = allCards.filter(c => c.deckName === deck.id);
-        const deckReviews = allReviews.filter(r => {
-            const card = deckCards.find(c => c.hash === r.cardHash);
-            return !!card;
-        });
-
-        const now = new Date();
-        const dueCount = deckCards.length - deckReviews.length +
-                        deckReviews.filter(r => new Date(r.fsrsCard.due) <= now).length;
-
-        return {
-            ...deck,
-            _dueCount: dueCount,
-            _createdAt: deck.createdAt || new Date(0)
-        };
-    });
-
-    // Apply sorting
-    const sortOption = sortSelect?.value || '';
-
-    switch (sortOption) {
-        case 'newest':
-            decksWithStats.sort((a, b) => new Date(b._createdAt) - new Date(a._createdAt));
-            break;
-        case 'oldest':
-            decksWithStats.sort((a, b) => new Date(a._createdAt) - new Date(b._createdAt));
-            break;
-        case 'name-asc':
-            decksWithStats.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-            break;
-        case 'name-desc':
-            decksWithStats.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
-            break;
-        case 'due-most':
-            decksWithStats.sort((a, b) => b._dueCount - a._dueCount);
-            break;
-        case 'due-least':
-            decksWithStats.sort((a, b) => a._dueCount - b._dueCount);
-            break;
-        default:
-            // Default: sort by topic, then by order within topic
-            decksWithStats.sort((a, b) => {
-                // First sort by topic
-                const topicA = a.topic || 'Uncategorized';
-                const topicB = b.topic || 'Uncategorized';
-                if (topicA !== topicB) {
-                    return topicA.localeCompare(topicB);
-                }
-                // Then by order or name within topic
-                if (a.order !== null && b.order !== null) {
-                    return a.order - b.order;
-                }
-                return (a.name || '').localeCompare(b.name || '');
-            });
-    }
-
-    // Remove temporary stats properties
-    return decksWithStats.map(({ _dueCount, _createdAt, ...deck }) => deck);
-}
-
-/**
- * Create a topic section with collapsible decks
- */
-function createTopicSection(topic, decks, allCards, allReviews) {
-    const section = document.createElement('div');
-    section.className = 'topic-section';
-
-    // Topic header
-    const header = document.createElement('div');
-    header.className = 'topic-header';
-    header.innerHTML = `<h3>${escapeHtml(topic)}</h3>`;
-    section.appendChild(header);
-
-    // Decks container
-    const decksContainer = document.createElement('div');
-    decksContainer.className = 'decks-container';
-
-    for (const deck of decks) {
-        // Get cards for this deck
-        const deckCards = allCards.filter(c => c.deckName === deck.id);
-
-        // Get reviews for these cards
-        const deckReviews = new Map();
-        allReviews.forEach(review => {
-            const card = deckCards.find(c => c.hash === review.cardHash);
-            if (card) {
-                deckReviews.set(review.cardHash, review);
-            }
-        });
-
-        const deckData = {
-            ...deck,
-            cards: deckCards,
-            reviews: deckReviews
-        };
-
-        const deckCard = createDeckCard(deckData);
-        decksContainer.appendChild(deckCard);
-    }
-
-    section.appendChild(decksContainer);
-    return section;
 }
 
 /**
@@ -289,15 +161,18 @@ function createDeckCard(deck) {
     // Total due = new cards + reviewed cards that are due
     const dueCards = newCards + dueReviewedCards;
 
-    const card = document.createElement('a');
-    card.href = `app.html?deck=${encodeURIComponent(deck.id)}`;
+    const card = document.createElement('div');
     card.className = 'project-card';
+    card.style.cursor = 'pointer';
+    card.onclick = () => openSubdeckModal(deck);
 
     const isBasicsDeck = deck.id === 'basics';
-    const displayName = deck.name || deck.id;
+    // Extract repo name from deck.id (e.g., "owner/repo" -> "repo")
+    const displayName = isBasicsDeck ? deck.id : deck.id.split('/').pop();
+    // Show only card count in description (due count shown in stats below)
     const description = `${totalCards} card${totalCards !== 1 ? 's' : ''}`;
 
-    // Add button container (top right) - only show buttons if logged in or not basics deck
+    // Add button container (top right) - only show buttons if not basics deck
     const btnContainer = document.createElement('div');
     btnContainer.className = 'card-buttons';
 
@@ -315,6 +190,18 @@ function createDeckCard(deck) {
         }
     };
     btnContainer.appendChild(resetBtn);
+
+    // Add review button (gavel)
+    const reviewBtn = document.createElement('button');
+    reviewBtn.className = 'card-review-btn';
+    reviewBtn.title = 'Review this deck';
+    reviewBtn.innerHTML = '<img src="/icons/gavel.png" alt="Review">';
+    reviewBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = `app.html?deck=${encodeURIComponent(deck.id)}`;
+    };
+    btnContainer.appendChild(reviewBtn);
 
     // Only show delete button if not the basics deck
     if (!isBasicsDeck) {
@@ -396,18 +283,11 @@ function setupEventListeners() {
         });
     }
 
-    // Search and sort handlers
+    // Search handler
     const searchInput = document.getElementById('search-input');
-    const sortSelect = document.getElementById('sort-select');
 
     if (searchInput) {
         searchInput.addEventListener('input', () => {
-            loadRepositories();
-        });
-    }
-
-    if (sortSelect) {
-        sortSelect.addEventListener('change', () => {
             loadRepositories();
         });
     }
@@ -645,6 +525,191 @@ async function loadExampleMarkdown() {
         console.error('Failed to load example markdown:', error);
     }
 }
+
+/**
+ * Open modal to show subdecks (individual markdown files)
+ */
+async function openSubdeckModal(deck) {
+    const modal = document.getElementById('subdeck-modal');
+    const modalDeckName = document.getElementById('modal-deck-name');
+    const subdeckGrid = document.getElementById('subdeck-grid');
+
+    // Set deck name
+    modalDeckName.textContent = deck.id.split('/').pop();
+
+    // Get all cards for this deck and group by file
+    const allCards = await getAllCards();
+    const deckCards = allCards.filter(c => c.deckName === deck.id);
+    const allReviews = await getAllReviews();
+
+    // Group cards by file
+    const fileGroups = {};
+    deckCards.forEach(card => {
+        const fileName = card.source?.file || 'unknown';
+        if (!fileGroups[fileName]) {
+            fileGroups[fileName] = [];
+        }
+        fileGroups[fileName].push(card);
+    });
+
+    // Clear and populate subdeck grid
+    subdeckGrid.innerHTML = '';
+
+    // Sort files by name
+    const sortedFiles = Object.keys(fileGroups).sort();
+
+    for (const fileName of sortedFiles) {
+        const cards = fileGroups[fileName];
+        const fileReviews = allReviews.filter(r => {
+            const card = cards.find(c => c.hash === r.cardHash);
+            return !!card;
+        });
+
+        const subdeckData = {
+            id: `${deck.id}/${fileName}`,
+            fileName: fileName,
+            deckId: deck.id,
+            cards: cards,
+            reviews: new Map(fileReviews.map(r => [r.cardHash, r]))
+        };
+
+        const subdeckCard = createSubdeckCard(subdeckData);
+        subdeckGrid.appendChild(subdeckCard);
+    }
+
+    // Show modal
+    modal.classList.remove('hidden');
+}
+
+/**
+ * Close subdeck modal
+ */
+function closeSubdeckModal() {
+    const modal = document.getElementById('subdeck-modal');
+    modal.classList.add('hidden');
+}
+
+/**
+ * Create a subdeck card element (for individual markdown files)
+ */
+function createSubdeckCard(subdeck) {
+    const totalCards = subdeck.cards.length;
+    const reviewedCards = subdeck.reviews.size;
+
+    // Count new cards (never reviewed) - these are always due
+    const newCards = totalCards - reviewedCards;
+
+    // Count due cards (reviewed cards that are due now)
+    const now = new Date();
+    let dueReviewedCards = 0;
+    subdeck.reviews.forEach(review => {
+        if (new Date(review.fsrsCard.due) <= now) {
+            dueReviewedCards++;
+        }
+    });
+
+    // Total due = new cards + reviewed cards that are due
+    const dueCards = newCards + dueReviewedCards;
+
+    const card = document.createElement('div');
+    card.className = 'project-card';
+
+    // Extract just the filename from the path
+    const displayName = subdeck.fileName.split('/').pop().replace('.md', '');
+    const description = `${totalCards} card${totalCards !== 1 ? 's' : ''}`;
+
+    // Add button container (top right)
+    const btnContainer = document.createElement('div');
+    btnContainer.className = 'card-buttons';
+
+    // Add reset button
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'card-reset-btn';
+    resetBtn.title = 'Reset all cards in this subdeck';
+    resetBtn.innerHTML = '<img src="/icons/refresh.png" alt="Reset">';
+    resetBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm(`Reset all cards in "${displayName}"? This will mark all cards as new.`)) {
+            // Reset cards by hash
+            for (const card of subdeck.cards) {
+                await clearReviewsByDeck(card.hash);
+            }
+            closeSubdeckModal();
+            await loadRepositories();
+        }
+    };
+    btnContainer.appendChild(resetBtn);
+
+    // Add review button (gavel)
+    const reviewBtn = document.createElement('button');
+    reviewBtn.className = 'card-review-btn';
+    reviewBtn.title = 'Review this subdeck';
+    reviewBtn.innerHTML = '<img src="/icons/gavel.png" alt="Review">';
+    reviewBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Navigate to app.html with file filter
+        window.location.href = `app.html?deck=${encodeURIComponent(subdeck.deckId)}&file=${encodeURIComponent(subdeck.fileName)}`;
+    };
+    btnContainer.appendChild(reviewBtn);
+
+    // Add delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'card-delete-btn';
+    deleteBtn.title = 'Delete this subdeck';
+    deleteBtn.innerHTML = '×';
+    deleteBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm(`Delete subdeck "${displayName}"? This cannot be undone.`)) {
+            // Remove cards from this file
+            const { removeCards } = await import('./storage.js');
+            const cardHashes = subdeck.cards.map(c => c.hash);
+            await removeCards(cardHashes);
+            closeSubdeckModal();
+            await loadRepositories();
+        }
+    };
+    btnContainer.appendChild(deleteBtn);
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'project-content';
+    contentDiv.innerHTML = `
+        <h3 class="project-title">${escapeHtml(displayName)}</h3>
+        <p class="project-description">
+            ${escapeHtml(description)}
+        </p>
+        <div class="project-stats">
+            ${dueCards > 0 ? `<strong>${dueCards} due</strong>` : 'All done!'}
+        </div>
+    `;
+
+    card.appendChild(btnContainer);
+    card.appendChild(contentDiv);
+    return card;
+}
+
+// Setup modal close handlers
+document.addEventListener('DOMContentLoaded', () => {
+    const closeBtn = document.getElementById('close-modal');
+    const overlay = document.querySelector('.modal-overlay');
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeSubdeckModal);
+    }
+
+    if (overlay) {
+        overlay.addEventListener('click', closeSubdeckModal);
+    }
+
+    // Close on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeSubdeckModal();
+        }
+    });
+});
 
 // Initialize on load
 init();

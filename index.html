@@ -67,7 +67,7 @@
                     </div>
                 </div>
 
-                <!-- Filter and Sort Controls -->
+                <!-- Filter Controls -->
                 <div class="controls-bar hidden" id="controls-bar">
                     <input
                         type="text"
@@ -76,15 +76,6 @@
                         placeholder="Search decks..."
                         autocomplete="off"
                     />
-                    <select id="sort-select" class="sort-select">
-                        <option value="" disabled selected>Look through my repos</option>
-                        <option value="newest">Newest First</option>
-                        <option value="oldest">Oldest First</option>
-                        <option value="name-asc">Name (A-Z)</option>
-                        <option value="name-desc">Name (Z-A)</option>
-                        <option value="due-most">Most Due</option>
-                        <option value="due-least">Least Due</option>
-                    </select>
                 </div>
 
                 <div id="topics-grid" class="projects-grid">
@@ -95,6 +86,19 @@
         </div>
     </div>
 
+    <!-- Subdeck Modal -->
+    <div id="subdeck-modal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-deck-name"></h2>
+                <button class="modal-close" id="close-modal">×</button>
+            </div>
+            <div id="subdeck-grid" class="projects-grid">
+                <!-- Subdecks will be loaded dynamically -->
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="./src/main.js"></script>
     <script type="module" src="./src/github-auth.js"></script>

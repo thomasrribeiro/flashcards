@@ -138,6 +138,22 @@ export async function getRepoMetadata(repoId) {
 }
 
 /**
+ * Remove specific cards by hash
+ */
+export async function removeCards(cardHashes) {
+    console.log(`[Storage] removeCards called for ${cardHashes.length} hashes`);
+
+    // Remove cards
+    cardsCache = cardsCache.filter(c => !cardHashes.includes(c.hash));
+
+    // Remove associated reviews
+    reviewsCache = reviewsCache.filter(r => !cardHashes.includes(r.cardHash));
+
+    console.log(`[Storage] Cards cache after removal:`, cardsCache.length);
+    return Promise.resolve();
+}
+
+/**
  * Remove repository
  */
 export async function removeRepo(repoId) {

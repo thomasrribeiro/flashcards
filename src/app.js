@@ -111,10 +111,17 @@ async function init() {
 async function loadDueCards() {
     const urlParams = new URLSearchParams(window.location.search);
     const deckId = urlParams.get('deck') || urlParams.get('topic');
+    const fileFilter = urlParams.get('file'); // Optional: filter by specific file
 
     // Get ALL cards for this deck
     const allCards = await getAllCards();
-    const deckCards = allCards.filter(card => card.deckName === deckId);
+    let deckCards = allCards.filter(card => card.deckName === deckId);
+
+    // Filter by file if specified
+    if (fileFilter) {
+        deckCards = deckCards.filter(card => card.source?.file === fileFilter);
+        console.log(`[App] Filtered to ${deckCards.length} cards from file ${fileFilter}`);
+    }
 
     // Get all reviews
     const allReviews = await getAllReviews();
