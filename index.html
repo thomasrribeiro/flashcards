@@ -23,7 +23,7 @@
 
                 <div class="sidebar-content">
                     <h3>Creating Flashcards</h3>
-                    <p>Create a GitHub repository with markdown files in a <code>flashcards/</code> folder and use a Q/A or C format:</p>
+                    <p>Create a GitHub repository with markdown files in a <code>flashcards/</code> folder using a Q/A or C format:</p>
 
                     <pre>Q: What is the capital of France?
 A: Paris.</pre>
@@ -51,19 +51,23 @@ A: Paris.</pre>
                         Login with GitHub
                     </button>
                     <div class="user-info hidden" id="user-info">
-                        <span id="user-name"></span>
-                        <div class="repo-input-inline">
-                            <input
-                                type="text"
-                                id="github-repo-input"
-                                class="repo-input-field"
-                                placeholder="owner/repository"
-                                autocomplete="off"
-                            />
-                            <div id="repo-suggestions" class="repo-suggestions hidden"></div>
+                        <div class="user-info-row">
+                            <span id="user-name"></span>
+                            <button class="btn-logout" id="btn-logout">Logout</button>
                         </div>
-                        <button id="add-repo-btn" class="add-repo-btn" title="Add repository">+</button>
-                        <button class="btn-logout" id="btn-logout">Logout</button>
+                        <div class="user-info-row">
+                            <div class="repo-input-inline">
+                                <input
+                                    type="text"
+                                    id="github-repo-input"
+                                    class="repo-input-field"
+                                    placeholder="owner/repository"
+                                    autocomplete="off"
+                                />
+                                <div id="repo-suggestions" class="repo-suggestions hidden"></div>
+                            </div>
+                            <button id="add-repo-btn" class="add-repo-btn" title="Add repository">+</button>
+                        </div>
                     </div>
                 </div>
 

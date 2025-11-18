@@ -1,6 +1,10 @@
 # Flashcards
 
-Browser-based spaced repetition flashcard system using the FSRS algorithm.
+An in-browser spaced-repetition system that syncs to your GitHub account. 
+
+<img src="public/images/gui.png" alt="Flashcard interface" width="400">
+
+Review what's important to you and outsmart the forgetting curve.
 
 Parses markdown files in the hashcards Q:/A:/C: format and uses GitHub repositories as deck sources.
 

@@ -58,22 +58,43 @@ body {
 
 .user-info {
     display: flex;
-    align-items: center;
-    gap: 0;
+    flex-direction: column;
+    gap: 12px;
     background: var(--white);
     padding: 8px 12px;
     border: 1px solid var(--black);
+    width: 320px;
+    box-sizing: border-box;
+}
+
+.user-info-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+}
+
+.user-info-row:first-child {
+    justify-content: space-between;
+}
+
+.user-info-row:last-child {
+    flex: 1;
 }
 
 .user-info span {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 14px;
-    margin-right: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .repo-input-inline {
     position: relative;
-    display: inline-block;
+    display: flex;
+    flex: 1;
+    min-width: 0;
 }
 
 .repo-input-field {
@@ -83,7 +104,8 @@ body {
     border: 1px solid var(--black);
     border-right: none;
     background: var(--white);
-    min-width: 200px;
+    flex: 1;
+    min-width: 0;
     line-height: 1;
     height: 28px;
 }
@@ -234,11 +256,11 @@ body {
     line-height: 28px;
     font-weight: 400;
     transition: background 0.2s, color 0.2s;
-    margin-right: 10px;
     height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .add-repo-btn:hover {
@@ -667,7 +689,7 @@ kbd {
     position: absolute;
     top: 100%;
     left: 0;
-    right: -1px;
+    right: 0;
     max-height: 300px;
     overflow-y: auto;
     background: var(--white);
@@ -880,7 +902,8 @@ kbd {
     padding: 10px 15px;
     border: 1px solid var(--black);
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 14px;
+    font-size: 12px;
+    width: 320px;
 }
 
 .search-input:focus {
