@@ -120,14 +120,32 @@ async function loadReviewsFromD1() {
 
         const { reviews } = await response.json();
 
-        // Convert to local cache format
-        reviewsCache = reviews.map(r => ({
+        // Load any existing localStorage reviews first
+        const localReviews = [];
+        try {
+            const stored = localStorage.getItem('flashcards_reviews');
+            if (stored) {
+                localReviews.push(...JSON.parse(stored));
+                console.log(`[Storage] Found ${localReviews.length} reviews in localStorage to merge`);
+            }
+        } catch (error) {
+            console.error('[Storage] Failed to load localStorage reviews:', error);
+        }
+
+        // Convert D1 reviews to local cache format
+        const d1Reviews = reviews.map(r => ({
             cardHash: r.cardHash,
             fsrsCard: r.fsrsState,
             lastReviewed: r.lastReviewed
         }));
 
-        console.log(`[Storage] Loaded ${reviewsCache.length} reviews from D1`);
+        // Merge: D1 reviews + localStorage reviews (D1 takes precedence for duplicates)
+        const d1Hashes = new Set(d1Reviews.map(r => r.cardHash));
+        const uniqueLocalReviews = localReviews.filter(r => !d1Hashes.has(r.cardHash));
+
+        reviewsCache = [...d1Reviews, ...uniqueLocalReviews];
+
+        console.log(`[Storage] Loaded ${d1Reviews.length} reviews from D1, ${uniqueLocalReviews.length} from localStorage, total: ${reviewsCache.length}`);
     } catch (error) {
         console.error('[Storage] Failed to load reviews from D1:', error);
         reviewsCache = [];
@@ -195,7 +213,15 @@ export async function saveReview(cardHash, fsrsCard) {
         reviewsCache.push(review);
     }
 
-    // Sync to D1 if user is authenticated, otherwise use localStorage
+    // Always save to localStorage as backup
+    try {
+        localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+        console.log('[Storage] Review saved to localStorage');
+    } catch (error) {
+        console.error('[Storage] Failed to save to localStorage:', error);
+    }
+
+    // Also sync to D1 if user is authenticated
     if (currentUser) {
         try {
             // Find the card to get repo and filepath
@@ -229,14 +255,6 @@ export async function saveReview(cardHash, fsrsCard) {
             }
         } catch (error) {
             console.error('[Storage] Error syncing review to D1:', error);
-        }
-    } else {
-        // Use localStorage for local-only mode
-        try {
-            localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
-            console.log('[Storage] Review saved to localStorage');
-        } catch (error) {
-            console.error('[Storage] Failed to save to localStorage:', error);
         }
     }
 

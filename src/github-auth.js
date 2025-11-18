@@ -66,11 +66,9 @@ class GitHubAuth {
             console.log('[GitHub Auth] Authenticated with GitHub token');
 
             // Set user in storage and initialize D1
+            // localStorage reviews will be preserved and synced when cards are loaded
             setCurrentUser(user);
             await initDB();
-
-            // Clear in-memory storage
-            await clearLocalStorage();
 
             // Reload page to refresh UI and content
             // Clean URL by redirecting to root
