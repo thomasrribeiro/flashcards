@@ -106,8 +106,9 @@ export async function loadReposFromD1() {
 
 /**
  * Load all reviews from D1 for current user
+ * @param {boolean} mergeWithLocalStorage - If true, merge localStorage reviews with D1 reviews (for initial login). If false, use D1 as source of truth (for refresh).
  */
-async function loadReviewsFromD1() {
+async function loadReviewsFromD1(mergeWithLocalStorage = true) {
     if (!currentUser) return;
 
     try {
@@ -120,18 +121,6 @@ async function loadReviewsFromD1() {
 
         const { reviews } = await response.json();
 
-        // Load any existing localStorage reviews first
-        const localReviews = [];
-        try {
-            const stored = localStorage.getItem('flashcards_reviews');
-            if (stored) {
-                localReviews.push(...JSON.parse(stored));
-                console.log(`[Storage] Found ${localReviews.length} reviews in localStorage to merge`);
-            }
-        } catch (error) {
-            console.error('[Storage] Failed to load localStorage reviews:', error);
-        }
-
         // Convert D1 reviews to local cache format
         const d1Reviews = reviews.map(r => ({
             cardHash: r.cardHash,
@@ -139,13 +128,31 @@ async function loadReviewsFromD1() {
             lastReviewed: r.lastReviewed
         }));
 
-        // Merge: D1 reviews + localStorage reviews (D1 takes precedence for duplicates)
-        const d1Hashes = new Set(d1Reviews.map(r => r.cardHash));
-        const uniqueLocalReviews = localReviews.filter(r => !d1Hashes.has(r.cardHash));
+        if (mergeWithLocalStorage) {
+            // Load any existing localStorage reviews and merge (for initial login)
+            const localReviews = [];
+            try {
+                const stored = localStorage.getItem('flashcards_reviews');
+                if (stored) {
+                    localReviews.push(...JSON.parse(stored));
+                    console.log(`[Storage] Found ${localReviews.length} reviews in localStorage to merge`);
+                }
+            } catch (error) {
+                console.error('[Storage] Failed to load localStorage reviews:', error);
+            }
 
-        reviewsCache = [...d1Reviews, ...uniqueLocalReviews];
+            // Merge: D1 reviews + localStorage reviews (D1 takes precedence for duplicates)
+            const d1Hashes = new Set(d1Reviews.map(r => r.cardHash));
+            const uniqueLocalReviews = localReviews.filter(r => !d1Hashes.has(r.cardHash));
 
-        console.log(`[Storage] Loaded ${d1Reviews.length} reviews from D1, ${uniqueLocalReviews.length} from localStorage, total: ${reviewsCache.length}`);
+            reviewsCache = [...d1Reviews, ...uniqueLocalReviews];
+
+            console.log(`[Storage] Loaded ${d1Reviews.length} reviews from D1, ${uniqueLocalReviews.length} from localStorage, total: ${reviewsCache.length}`);
+        } else {
+            // Use D1 as source of truth (for refresh operations)
+            reviewsCache = d1Reviews;
+            console.log(`[Storage] Loaded ${d1Reviews.length} reviews from D1 (no merge)`);
+        }
     } catch (error) {
         console.error('[Storage] Failed to load reviews from D1:', error);
         reviewsCache = [];
@@ -344,8 +351,8 @@ export async function refreshDeck(deckId, folder = null) {
         const { deleted } = await response.json();
         console.log(`[Storage] Refreshed deck - deleted ${deleted} review(s)`);
 
-        // Reload reviews from D1
-        await loadReviewsFromD1();
+        // Reload reviews from D1 (don't merge with localStorage - use D1 as source of truth)
+        await loadReviewsFromD1(false);
 
         // Save updated reviews to localStorage
         try {
