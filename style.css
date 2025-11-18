@@ -140,6 +140,22 @@ body {
     display: none !important;
 }
 
+/* LocalStorage Warning */
+.localStorage-warning {
+    background: rgba(245, 200, 66, 0.15);
+    border-left: 3px solid var(--gold);
+    padding: 12px 15px;
+    margin-bottom: 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--black);
+}
+
+.localStorage-warning.hidden {
+    display: none;
+}
+
 /* Sidebar content */
 .sidebar-content {
     margin-top: 30px;

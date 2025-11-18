@@ -1,122 +1,90 @@
 # Flashcards
 
-An in-browser spaced-repetition system that syncs to your GitHub account. 
+An in-browser spaced-repetition system.
 
-<img src="public/images/gui.png" alt="Flashcard interface" width="400">
+<img src="public/screenshots/gui.png" alt="Flashcard interface" width="400">
 
 Review what's important to you and outsmart the forgetting curve.
 
-Parses markdown files in the hashcards Q:/A:/C: format and uses GitHub repositories as deck sources.
-
-## Getting Started (Local Development)
+## Getting started
 
 ### Prerequisites
 
 - Node.js (v14 or higher)
 - npm
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) (for local worker development)
+
+### Creating flashcards
+
+#### Card format
+Flashcards are written in markdown files using a Q:/A: or C: format.
+
+**Question/Answer Cards:**
+```markdown
+Q: What is the capital of France?
+A: Paris.
+```
+
+**Cloze Deletion Cards:**
+```markdown
+C: [Paris] is the capital of France.
+```
+
+Each `[text]` in a cloze card creates a separate card where that text is hidden.
+
+**Supported Features:**
+- **Multiline content** - Questions and answers can span multiple lines
+- **LaTeX math** - Use `$inline math$` or `$$display math$$` for equations
+- **Images** - Embed with `![alt text](image-url)`
+- **Audio** - Embed with `![audio](audio-file.mp3)`
+
+#### File Structure
+
+Organize your flashcards in `public/collection/` with the following structure:
+
+```
+public/collection/
+├── my-deck/
+│   └── flashcards/
+│       ├── topic1.md
+│       └── topic2.md
+└── another-deck/
+    └── flashcards/
+        └── cards.md
+```
+
+Each directory in `public/collection/` becomes a separate deck. Place your markdown files in the `flashcards/` subdirectory.
 
 ### Installation
 
-**1. Install frontend dependencies:**
+**1. Install dependencies:**
 ```bash
 npm install
 ```
 
-**2. Set up the Cloudflare Worker (for OAuth and D1 storage):**
+**2. Build the collection index:**
 ```bash
-cd /Users/thomasribeiro/code/flashcards-worker
-npm install
+npm run process-submodules
 ```
 
-Create `.dev.vars` file in the worker directory:
+This scans `public/collection/` and generates an index of all your flashcard decks.
+
+**3. Run the app:**
 ```bash
-GITHUB_CLIENT_ID=your_github_oauth_client_id
-GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
-ALLOWED_ORIGINS=http://localhost:3000
-FRONTEND_URL=http://localhost:3000
-```
-
-To get GitHub OAuth credentials:
-1. Go to https://github.com/settings/developers
-2. Create a new OAuth App
-3. Set **Authorization callback URL** to `http://localhost:8787/callback`
-4. Copy the Client ID and generate a Client Secret
-
-**3. Configure frontend environment:**
-```bash
-cd /Users/thomasribeiro/code/flashcards
-cp .env.example .env
-```
-
-Edit `.env`:
-```bash
-VITE_WORKER_URL=http://localhost:8787
-VITE_GITHUB_CLIENT_ID=your_github_oauth_client_id  # Same as worker
-```
-
-**4. Initialize D1 database (local):**
-```bash
-cd /Users/thomasribeiro/code/flashcards-worker
-npx wrangler d1 execute flashcards-db --local --file=migrations/0001_initial_schema.sql
-npx wrangler d1 execute flashcards-db --local --file=migrations/0002_add_repos_table.sql
-```
-
-### Running the App
-
-**Start both services in separate terminals:**
-
-Terminal 1 - Worker:
-```bash
-cd /Users/thomasribeiro/code/flashcards-worker
-npx wrangler dev
-```
-
-Terminal 2 - Frontend:
-```bash
-cd /Users/thomasribeiro/code/flashcards
 npm run dev
 ```
 
 Open your browser to http://localhost:3000.
 
-### Adding Flashcard Content
+### ⚠️ Important
 
-**Option 1: Local markdown files (offline/example content)**
+When running locally without GitHub authentication, your review progress is stored in **localStorage only**. This means:
 
-Create directories in `public/collection/` and add markdown files:
+- Progress is saved locally in your browser
+- Your Free Spaced Repitition Scheduler (FSRS) will be lost if you clear browser data
+- No cross-device sync
 
-```bash
-mkdir -p public/collection/my-deck
-```
+## Prior Work
+- [hashcards](https://github.com/eudoxia0/hashcards?tab=readme-ov-file)
 
-Add markdown files in hashcards format:
-```markdown
-Q: What is spaced repetition?
-A: A learning technique that presents information at gradually increasing intervals.
-
-C: The FSRS algorithm adapts to your [personal memory patterns].
-```
-
-Then rebuild the index:
-```bash
-npm run process-submodules
-```
-
-**Option 2: GitHub repositories (recommended)**
-
-1. Log in with GitHub (click "Login with GitHub" button)
-2. Enter a public repo like `username/my-flashcards`
-3. The app will load all markdown files from that repo
-4. Your progress syncs to D1 and persists across devices
-
-### Deploying
-
-Build for production:
-```bash
-npm run build
-```
-
-Deploy the `dist/` folder to your static hosting provider (e.g., GitHub Pages).
-
-For the OAuth worker, see `/Users/thomasribeiro/code/flashcards-worker`.
+## License
+© 2025 by [Thomas Ribeiro](https://thomasrribeiro.github.io/). Licensed under the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license.

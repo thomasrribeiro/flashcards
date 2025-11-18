@@ -31,11 +31,21 @@ export function getCurrentUser() {
 }
 
 /**
- * Initialize storage - ensure user exists in D1 and load reviews
+ * Initialize storage - load from D1 (if authenticated) or localStorage (if not)
  */
 export async function initDB() {
     if (!currentUser) {
-        console.log('[Storage] No user authenticated, skipping D1 init');
+        console.log('[Storage] No user authenticated, loading from localStorage');
+        // Load reviews from localStorage
+        try {
+            const stored = localStorage.getItem('flashcards_reviews');
+            if (stored) {
+                reviewsCache = JSON.parse(stored);
+                console.log(`[Storage] Loaded ${reviewsCache.length} reviews from localStorage`);
+            }
+        } catch (error) {
+            console.error('[Storage] Failed to load from localStorage:', error);
+        }
         return;
     }
 
@@ -168,7 +178,7 @@ export async function getCard(hash) {
 }
 
 /**
- * Save a review (FSRS state) - syncs to D1
+ * Save a review (FSRS state) - syncs to D1 or localStorage
  */
 export async function saveReview(cardHash, fsrsCard) {
     const review = {
@@ -185,7 +195,7 @@ export async function saveReview(cardHash, fsrsCard) {
         reviewsCache.push(review);
     }
 
-    // Sync to D1 if user is authenticated
+    // Sync to D1 if user is authenticated, otherwise use localStorage
     if (currentUser) {
         try {
             // Find the card to get repo and filepath
@@ -219,6 +229,14 @@ export async function saveReview(cardHash, fsrsCard) {
             }
         } catch (error) {
             console.error('[Storage] Error syncing review to D1:', error);
+        }
+    } else {
+        // Use localStorage for local-only mode
+        try {
+            localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+            console.log('[Storage] Review saved to localStorage');
+        } catch (error) {
+            console.error('[Storage] Failed to save to localStorage:', error);
         }
     }
 
