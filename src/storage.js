@@ -289,8 +289,8 @@ export async function refreshDeck(deckId, folder = null) {
             throw new Error(`Failed to refresh deck: ${response.statusText}`);
         }
 
-        const { updated } = await response.json();
-        console.log(`[Storage] Refreshed ${updated} cards`);
+        const { deleted } = await response.json();
+        console.log(`[Storage] Refreshed deck - deleted ${deleted} review(s)`);
 
         // Reload reviews from D1
         await loadReviewsFromD1();
@@ -519,4 +519,53 @@ export async function getAllSubjects() {
         if (c.deckMetadata?.subject) subjects.add(c.deckMetadata.subject);
     });
     return Promise.resolve(Array.from(subjects).sort());
+}
+
+/**
+ * Clean up orphaned reviews (reviews for cards that no longer exist)
+ * Returns count of orphaned reviews removed
+ */
+export async function cleanupOrphanedReviews() {
+    if (!currentUser) {
+        console.warn('[Storage] Cannot cleanup - no user authenticated');
+        return 0;
+    }
+
+    // Find reviews for hashes that don't exist in current cards
+    const cardHashes = new Set(cardsCache.map(c => c.hash));
+    const orphanedReviews = reviewsCache.filter(r => !cardHashes.has(r.cardHash));
+
+    if (orphanedReviews.length === 0) {
+        console.log('[Storage] No orphaned reviews found');
+        return 0;
+    }
+
+    console.log(`[Storage] Found ${orphanedReviews.length} orphaned reviews`);
+    console.log('[Storage] Orphaned hashes:', orphanedReviews.map(r => r.cardHash));
+
+    // Remove from local cache
+    reviewsCache = reviewsCache.filter(r => cardHashes.has(r.cardHash));
+
+    // Remove from D1
+    try {
+        const userId = currentUser.github_id || currentUser.id;
+        const orphanedHashes = orphanedReviews.map(r => r.cardHash);
+
+        const response = await fetch(`${WORKER_URL}/api/reviews/cleanup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, cardHashes: orphanedHashes })
+        });
+
+        if (!response.ok) {
+            console.error('[Storage] Failed to cleanup orphaned reviews in D1:', response.statusText);
+        } else {
+            const result = await response.json();
+            console.log(`[Storage] Cleaned up ${result.deleted} orphaned reviews from D1`);
+        }
+    } catch (error) {
+        console.error('[Storage] Error cleaning up orphaned reviews from D1:', error);
+    }
+
+    return orphanedReviews.length;
 }

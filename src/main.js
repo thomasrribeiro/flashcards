@@ -73,6 +73,13 @@ async function loadUserRepos() {
             console.error(`[Main] Failed to load repo ${repo.id}:`, error);
         }
     }
+
+    // Clean up orphaned reviews after loading all repos
+    const { cleanupOrphanedReviews } = await import('./storage.js');
+    const cleaned = await cleanupOrphanedReviews();
+    if (cleaned > 0) {
+        console.log(`[Main] Cleaned up ${cleaned} orphaned reviews`);
+    }
 }
 
 /**
@@ -519,6 +526,9 @@ async function resetDeck(deckId) {
     const { refreshDeck } = await import('./storage.js');
     await refreshDeck(deckId);
     console.log(`Refreshed all cards in deck: ${deckId}`);
+
+    // Reload repositories to update due counts
+    await loadRepositories();
 }
 
 /**
