@@ -44,7 +44,7 @@ async function ensureCardsLoaded(deckId) {
     // Load example deck
     if (deckId === 'example') {
         console.log(`[App] Loading example deck...`);
-        const response = await fetch('/example/basics.md');
+        const response = await fetch('/collection/basics.md');
         if (!response.ok) {
             console.error('[App] Failed to fetch example deck');
             return;

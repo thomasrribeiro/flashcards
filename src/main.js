@@ -541,13 +541,13 @@ function escapeHtml(text) {
 }
 
 /**
- * Load example deck from public/example/basics.md
+ * Load example deck from public/collection/basics.md
  * Simple single-file deck for non-logged-in users
  */
 async function loadExampleDeck() {
     try {
         console.log('[Main] Loading example deck...');
-        const response = await fetch('/example/basics.md');
+        const response = await fetch('/collection/basics.md');
         if (!response.ok) {
             throw new Error(`Failed to fetch: ${response.status}`);
         }
@@ -572,8 +572,8 @@ async function loadExampleDeck() {
         await saveCards(cardsWithMeta);
         await saveRepoMetadata({
             id: 'example',
-            name: 'Example Deck',
-            repo: 'local/example',
+            name: 'Collection Basics',
+            repo: 'local/collection',
             cardCount: cardsWithMeta.length,
             fileCount: 1,
             createdAt: new Date().toISOString()
