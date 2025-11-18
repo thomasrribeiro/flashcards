@@ -1132,5 +1132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Initialize on load
-init();
+// Initialize on load - only if topics-grid element exists (i.e., we're on index.html)
+if (document.getElementById('topics-grid')) {
+    init();
+}
