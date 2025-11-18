@@ -214,7 +214,7 @@ function createDeckCard(deck) {
     const resetBtn = document.createElement('button');
     resetBtn.className = 'card-reset-btn';
     resetBtn.title = 'Reset all cards in this deck';
-    resetBtn.innerHTML = '<img src="/icons/refresh.png" alt="Reset">';
+    resetBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset">`;
     resetBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -229,7 +229,7 @@ function createDeckCard(deck) {
     const reviewBtn = document.createElement('button');
     reviewBtn.className = 'card-review-btn';
     reviewBtn.title = 'Review this deck';
-    reviewBtn.innerHTML = '<img src="/icons/gavel.png" alt="Review">';
+    reviewBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review">`;
     reviewBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -553,7 +553,7 @@ export async function loadLocalCollectionRepos() {
 
         // First, try to load basics.md as a simple example deck
         try {
-            const basicsResponse = await fetch('/collection/basics.md');
+            const basicsResponse = await fetch(`${import.meta.env.BASE_URL}collection/basics.md`);
             if (basicsResponse.ok) {
                 const markdown = await basicsResponse.text();
                 const { cards, metadata } = parseDeck(markdown, 'basics.md');
@@ -589,7 +589,7 @@ export async function loadLocalCollectionRepos() {
         }
 
         // Load the collection index for other repos
-        const indexResponse = await fetch('/collection/index.json');
+        const indexResponse = await fetch(`${import.meta.env.BASE_URL}collection/index.json`);
         if (!indexResponse.ok) {
             console.log('[Main] No collection index found');
             return;
@@ -624,7 +624,7 @@ async function loadLocalRepo(repoInfo) {
 
         // Load each markdown file in the repo
         for (const file of repoInfo.files) {
-            const filePath = `/collection/${repoInfo.name}/${file}`;
+            const filePath = `${import.meta.env.BASE_URL}collection/${repoInfo.name}/${file}`;
             const response = await fetch(filePath);
 
             if (!response.ok) {
@@ -979,7 +979,7 @@ function createFolderCard(folderName, folderContent, allReviews) {
     const resetBtn = document.createElement('button');
     resetBtn.className = 'card-reset-btn';
     resetBtn.title = 'Reset all cards in this folder';
-    resetBtn.innerHTML = '<img src="/icons/refresh.png" alt="Reset">';
+    resetBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset">`;
     resetBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -998,7 +998,7 @@ function createFolderCard(folderName, folderContent, allReviews) {
     const reviewBtn = document.createElement('button');
     reviewBtn.className = 'card-review-btn';
     reviewBtn.title = 'Review this folder';
-    reviewBtn.innerHTML = '<img src="/icons/gavel.png" alt="Review">';
+    reviewBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review">`;
     reviewBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1065,7 +1065,7 @@ function createSubdeckCard(subdeck) {
     const resetBtn = document.createElement('button');
     resetBtn.className = 'card-reset-btn';
     resetBtn.title = 'Reset all cards in this subdeck';
-    resetBtn.innerHTML = '<img src="/icons/refresh.png" alt="Reset">';
+    resetBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset">`;
     resetBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1083,7 +1083,7 @@ function createSubdeckCard(subdeck) {
     const reviewBtn = document.createElement('button');
     reviewBtn.className = 'card-review-btn';
     reviewBtn.title = 'Review this subdeck';
-    reviewBtn.innerHTML = '<img src="/icons/gavel.png" alt="Review">';
+    reviewBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review">`;
     reviewBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
