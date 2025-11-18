@@ -2,9 +2,11 @@
 
 An in-browser spaced-repetition system.
 
+**Live Demo:** 
+
 <img src="public/screenshots/gui.png" alt="Flashcard interface" width="400">
 
-Review what's important to you and outsmart the forgetting curve.
+*Review what's important and outsmart the forgetting curve.*
 
 ## Getting started
 
@@ -20,13 +22,13 @@ Flashcards are written in markdown files using a Q:/A: or C: format.
 
 **Question/Answer Cards:**
 ```markdown
-Q: What is the capital of France?
-A: Paris.
+Q: What is the capital of Italy?
+A: Rome.
 ```
 
 **Cloze Deletion Cards:**
 ```markdown
-C: [Paris] is the capital of France.
+C: [Rome] is the capital of Italy.
 ```
 
 Each `[text]` in a cloze card creates a separate card where that text is hidden.
@@ -73,7 +75,7 @@ This scans `public/collection/` and generates an index of all your flashcard dec
 npm run dev
 ```
 
-Open your browser to http://localhost:3000.
+Open your browser to the URL shown in the terminal.
 
 ### ⚠️ Important
 

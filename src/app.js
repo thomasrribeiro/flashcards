@@ -41,29 +41,15 @@ async function ensureCardsLoaded(deckId) {
 
     console.log(`[App] No cards found for deck ${deckId}, attempting to load...`);
 
-    // Load example deck
-    if (deckId === 'example') {
-        console.log(`[App] Loading example deck...`);
-        const response = await fetch('/collection/basics.md');
-        if (!response.ok) {
-            console.error('[App] Failed to fetch example deck');
-            return;
-        }
+    // Skip loading for basics deck and local repos - they should already be loaded
+    if (deckId === 'basics' || deckId.startsWith('local/')) {
+        console.error(`[App] Local deck ${deckId} should already be loaded but cards not found`);
+        alert(`Failed to load cards for deck: Local deck not properly initialized. Try refreshing the page.`);
+        return;
+    }
 
-        const markdown = await response.text();
-        const { cards, metadata } = parseDeck(markdown, 'basics.md');
-
-        const cardsWithMeta = cards.map(card => ({
-            ...card,
-            hash: hashCard(card),
-            deckName: 'example',
-            deckMetadata: metadata,
-            source: { repo: 'local', file: 'basics.md' }
-        }));
-
-        await saveCards(cardsWithMeta);
-        console.log(`[App] Loaded ${cardsWithMeta.length} cards for example deck`);
-    } else if (deckId.includes('/')) {
+    // Load GitHub repos
+    if (deckId.includes('/')) {
         // This is a GitHub repository deck
         // Extract the base repository from the deck ID
         const parts = deckId.split('/');
@@ -108,6 +94,13 @@ async function init() {
         alert('No deck specified');
         window.location.href = 'index.html';
         return;
+    }
+
+    // If not authenticated, load local collection repos
+    if (!storedUser) {
+        console.log('[App] Not authenticated - loading local collection repos...');
+        const { loadLocalCollectionRepos } = await import('./main.js');
+        await loadLocalCollectionRepos();
     }
 
     // Load cards if needed (in-memory storage may be empty on page load)

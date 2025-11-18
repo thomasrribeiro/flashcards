@@ -202,7 +202,7 @@ function createDeckCard(deck) {
     }
 
     // Extract repo name from deck.id (e.g., "owner/repo" -> "repo", "local/my-deck" -> "my-deck")
-    const displayName = deck.id === 'basics' ? 'Basics' : (deck.id.includes('/') ? deck.id.split('/').pop() : deck.id);
+    const displayName = deck.id.includes('/') ? deck.id.split('/').pop() : deck.id;
     // Show only card count in description (due count shown in stats below)
     const description = `${totalCards} card${totalCards !== 1 ? 's' : ''}`;
 
@@ -237,8 +237,9 @@ function createDeckCard(deck) {
     };
     btnContainer.appendChild(reviewBtn);
 
-    // Only show delete button for GitHub repos (local repos and basics are read-only)
-    if (!isLocalRepo && !isBasicsDeck) {
+    // Only show delete button when authenticated (local repos must be manually removed from public/collection/)
+    const isAuthenticated = localStorage.getItem('github_user') !== null;
+    if (isAuthenticated) {
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'card-delete-btn';
         deleteBtn.title = 'Delete this deck';
@@ -546,7 +547,7 @@ function escapeHtml(text) {
  * Load all local collection repos from public/collection/
  * Special handling: basics.md is loaded as a simple leaf deck, others as full repos with hierarchy
  */
-async function loadLocalCollectionRepos() {
+export async function loadLocalCollectionRepos() {
     try {
         console.log('[Main] Loading local collection repos...');
 
@@ -574,7 +575,7 @@ async function loadLocalCollectionRepos() {
                 await saveCards(cardsWithMeta);
                 await saveRepoMetadata({
                     id: 'basics',
-                    name: 'Basics',
+                    name: 'basics',
                     repo: 'local/basics',
                     cardCount: cardsWithMeta.length,
                     fileCount: 1,

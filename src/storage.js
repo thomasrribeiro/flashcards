@@ -291,7 +291,23 @@ export async function clearReviewsByDeck(deckId) {
  */
 export async function refreshDeck(deckId, folder = null) {
     if (!currentUser) {
-        console.warn('[Storage] Cannot refresh deck - no user authenticated');
+        // For localStorage mode, just clear reviews for this deck
+        console.log('[Storage] Refreshing deck in localStorage mode');
+        const cardsInDeck = cardsCache.filter(c =>
+            c.deckName === deckId || c.source?.repo === deckId
+        );
+        const cardHashes = cardsInDeck.map(c => c.hash);
+        const beforeCount = reviewsCache.length;
+        reviewsCache = reviewsCache.filter(r => !cardHashes.includes(r.cardHash));
+        const deleted = beforeCount - reviewsCache.length;
+        console.log(`[Storage] Refreshed deck - deleted ${deleted} review(s) from localStorage`);
+
+        // Save to localStorage
+        try {
+            localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+        } catch (error) {
+            console.error('[Storage] Failed to save to localStorage:', error);
+        }
         return;
     }
 
@@ -456,6 +472,17 @@ export async function removeRepo(repoId) {
     reviewsCache = reviewsCache.filter(r => !cardHashes.includes(r.cardHash));
 
     console.log(`[Storage] Removed repo and ${cardsToRemove.length} cards`);
+
+    // Save to localStorage if not authenticated
+    if (!currentUser) {
+        try {
+            localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+            console.log('[Storage] Saved updated reviews to localStorage after deletion');
+        } catch (error) {
+            console.error('[Storage] Failed to save to localStorage:', error);
+        }
+    }
+
     return Promise.resolve();
 }
 

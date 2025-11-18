@@ -46,10 +46,25 @@ function scanCollection() {
     const entries = fs.readdirSync(COLLECTION_DIR, { withFileTypes: true });
 
     for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-
         const repoName = entry.name;
         const repoPath = path.join(COLLECTION_DIR, repoName);
+
+        // Skip files (like basics.md, index.json, etc.)
+        if (entry.isFile()) continue;
+
+        // Handle symlinks - check if they point to directories
+        if (entry.isSymbolicLink()) {
+            try {
+                const stats = fs.statSync(repoPath);
+                if (!stats.isDirectory()) continue;
+            } catch (error) {
+                console.warn(`Skipping broken symlink: ${repoName}`);
+                continue;
+            }
+        } else if (!entry.isDirectory()) {
+            // Skip anything that's not a directory or symlink
+            continue;
+        }
 
         // Find all markdown files in this repo
         const markdownFiles = findMarkdownFiles(repoPath);
