@@ -346,6 +346,14 @@ export async function refreshDeck(deckId, folder = null) {
 
         // Reload reviews from D1
         await loadReviewsFromD1();
+
+        // Save updated reviews to localStorage
+        try {
+            localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+            console.log('[Storage] Updated localStorage after refresh');
+        } catch (error) {
+            console.error('[Storage] Failed to update localStorage after refresh:', error);
+        }
     } catch (error) {
         console.error('[Storage] Error refreshing deck:', error);
     }
