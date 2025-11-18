@@ -63,14 +63,7 @@ Each directory in `public/collection/` becomes a separate deck. Place your markd
 npm install
 ```
 
-**2. Build the collection index:**
-```bash
-npm run process-submodules
-```
-
-This scans `public/collection/` and generates an index of all your flashcard decks.
-
-**3. Run the app:**
+**2. Run the app:**
 ```bash
 npm run dev
 ```

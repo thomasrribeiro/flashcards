@@ -140,6 +140,21 @@ function build() {
 // Run build
 try {
     build();
+
+    // Watch mode if --watch flag is passed
+    if (process.argv.includes('--watch')) {
+        console.log('\nWatching public/collection/ for changes...');
+        fs.watch(COLLECTION_DIR, { recursive: true }, (eventType, filename) => {
+            if (filename && filename.endsWith('.md')) {
+                console.log(`\nDetected change in ${filename}, rebuilding...`);
+                try {
+                    build();
+                } catch (error) {
+                    console.error('Build failed:', error);
+                }
+            }
+        });
+    }
 } catch (error) {
     console.error('Build failed:', error);
     process.exit(1);

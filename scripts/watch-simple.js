@@ -13,9 +13,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const ROOT_DIR = path.join(__dirname, '..');
-const TOPICS_DIR = path.join(ROOT_DIR, 'topics');
+const COLLECTION_DIR = path.join(ROOT_DIR, 'public', 'collection');
 
-console.log('🔍 Watching for changes in:', TOPICS_DIR);
+console.log('🔍 Watching for changes in:', COLLECTION_DIR);
 
 // Track file modification times
 const fileTimestamps = new Map();
@@ -45,7 +45,7 @@ function scanFiles(dir) {
                 const lastTime = fileTimestamps.get(filepath);
 
                 if (!lastTime || currentTime > lastTime) {
-                    changes.push(path.relative(TOPICS_DIR, filepath));
+                    changes.push(path.relative(COLLECTION_DIR, filepath));
                     fileTimestamps.set(filepath, currentTime);
                 }
             }
@@ -65,17 +65,17 @@ function rebuild() {
             return;
         }
 
-        // Extract file count from output
-        const match = stdout.match(/Found (\d+) markdown files/);
+        // Extract repo count from output
+        const match = stdout.match(/Total repos: (\d+)/);
         const count = match ? match[1] : '?';
 
-        console.log(`✅ Build complete! Processed ${count} file(s)`);
+        console.log(`✅ Build complete! Found ${count} repo(s)`);
         console.log('💡 Refresh your browser to see changes');
     });
 }
 
 // Initial scan
-scanFiles(TOPICS_DIR);
+scanFiles(COLLECTION_DIR);
 console.log(`📊 Tracking ${fileTimestamps.size} markdown files`);
 
 // Initial build
@@ -83,7 +83,7 @@ rebuild();
 
 // Poll for changes every second
 setInterval(() => {
-    const changes = scanFiles(TOPICS_DIR);
+    const changes = scanFiles(COLLECTION_DIR);
 
     if (changes.length > 0) {
         console.log('📝 Changes detected:', changes.join(', '));
