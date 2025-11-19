@@ -230,13 +230,13 @@ async function loadDueCards() {
  * Setup event listeners
  */
 function setupEventListeners() {
-    // Spacebar to reveal
-    document.addEventListener('keydown', (e) => {
-        if (e.code === 'Space' && !isRevealed) {
-            e.preventDefault();
+    // Reveal button click
+    const revealBtn = document.getElementById('reveal-btn');
+    if (revealBtn) {
+        revealBtn.addEventListener('click', () => {
             revealAnswer();
-        }
-    });
+        });
+    }
 
     // Number keys for grading
     document.addEventListener('keydown', (e) => {

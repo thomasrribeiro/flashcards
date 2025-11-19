@@ -621,6 +621,23 @@ kbd {
     opacity: 0.8;
 }
 
+.btn-reveal {
+    display: inline-block;
+    background: var(--black);
+    color: var(--white);
+    padding: 8px 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.btn-reveal:hover {
+    opacity: 0.8;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .projects-grid {
