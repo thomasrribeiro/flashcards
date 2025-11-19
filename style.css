@@ -215,6 +215,25 @@ body {
     font-family: 'IBM Plex Mono', monospace;
 }
 
+.github-link {
+    display: flex;
+    align-items: center;
+    padding: 0;
+    background: transparent;
+    color: #333;
+    opacity: 0.7;
+    text-decoration: none;
+    transition: opacity 0.2s ease;
+}
+
+.github-link:hover {
+    opacity: 1;
+}
+
+.github-link svg {
+    flex-shrink: 0;
+}
+
 .nav-menu {
     display: flex;
     gap: 20px;
@@ -292,12 +311,12 @@ body {
 
 .section-title {
     font-size: 16px;
-    margin-bottom: 20px;
+    margin-bottom: 30px;
     margin-top: 10px;
     color: var(--black);
     text-transform: uppercase;
     letter-spacing: 2px;
-    font-weight: 400;
+    font-weight: 700;
 }
 
 .projects-grid {

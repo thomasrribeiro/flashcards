@@ -2,7 +2,7 @@
 
 An in-browser spaced-repetition system.
 
-**Live Demo:** 
+**Live Demo:** https://thomasrribeiro.github.io/flashcards/ 
 
 <img src="public/screenshots/gui.png" alt="Flashcard interface" width="400">
 
