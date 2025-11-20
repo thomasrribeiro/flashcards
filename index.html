@@ -29,25 +29,33 @@
                 </div>
 
                 <div class="sidebar-content">
-                    <h3>Creating Flashcards</h3>
-                    <p>Create a git repository and add markdown files to a <code>flashcards/</code> folder using formats:</p>
-
-                    <pre>Q: What is the capital of Italy?
-A: Rome.</pre>
-<br>
-                    <pre>C: [Rome] is the capital of Italy.</pre>
-
-                    <h3>Getting Started</h3>
-                    <ol>
-                        <li>Login with GitHub and add the repo</li>
-                        <li>Click <img src="./icons/gavel.png" alt="gavel" style="height: 1em; vertical-align: middle;"> to start reviewing</li>
-                        <li>Rate your recall</li>
-                        <li>Come back daily to review scheduled cards</li>
-                    </ol>
+                    <h3 class="collapsible-header" data-section="getting-started">
+                        <span class="toggle-icon" style="transform: rotate(90deg);"></span>
+                        Getting Started
+                    </h3>
+                    <div class="collapsible-content" id="getting-started-content">
+                        <ol>
+                            <li>Click <img src="./icons/gavel.png" alt="gavel" style="height: 1em; vertical-align: middle;"> to start reviewing</li>
+                            <li>Rate your recall</li>
+                            <li>Come back daily to review scheduled cards</li>
+                        </ol>
+                    </div>
 
                     <p class="tip">
                         <strong>Pro tip:</strong> Consistency beats intensity. 10 minutes daily is better than 2 hours weekly.
                     </p>
+
+                    <h3 class="collapsible-header" data-section="saving-progress">
+                        <span class="toggle-icon"></span>
+                        Saving Progress
+                    </h3>
+                    <div class="collapsible-content hidden" id="saving-progress-content">
+                        <ol>
+                            <li>Create a <a href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a> account and login here</li>
+                            <li>Create or search for a valid repository with markdown files (c.f. <a href="https://github.com/thomasrribeiro/flashcards/blob/master/public/collection/basics.md" target="_blank" rel="noopener noreferrer">example</a>) stored in a <code>flashcards/</code> folder</li>
+                            <li>Add the repository and start learning!</li>
+                        </ol>
+                    </div>
                 </div>
             </aside>
 

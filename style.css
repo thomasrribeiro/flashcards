@@ -170,6 +170,37 @@ body {
     font-weight: 700;
 }
 
+.collapsible-header {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.collapsible-header .toggle-icon {
+    margin-right: 8px;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    display: inline-block;
+    transition: transform 0.2s;
+    border-width: 4px 0 4px 7px;
+    border-color: transparent transparent transparent var(--gold);
+}
+
+.collapsible-header[data-section] .toggle-icon {
+    transform-origin: center;
+}
+
+.collapsible-content {
+    overflow: hidden;
+    margin-left: 20px;
+}
+
+.collapsible-content.hidden {
+    display: none;
+}
+
 .sidebar-content p {
     margin-bottom: 15px;
 }

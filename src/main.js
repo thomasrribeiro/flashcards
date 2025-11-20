@@ -318,6 +318,23 @@ function setupEventListeners() {
         });
     }
 
+    // Collapsible sections
+    document.querySelectorAll('.collapsible-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const section = header.dataset.section;
+            const content = document.getElementById(`${section}-content`);
+            const icon = header.querySelector('.toggle-icon');
+
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.style.transform = 'rotate(90deg)';
+            } else {
+                content.classList.add('hidden');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        });
+    });
+
     // Search handler
     const searchInput = document.getElementById('search-input');
 
