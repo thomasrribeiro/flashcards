@@ -82,4 +82,4 @@ When running locally without GitHub authentication, your review progress is stor
 - [hashcards](https://github.com/eudoxia0/hashcards?tab=readme-ov-file)
 
 ## License
-© 2025 by [Thomas Ribeiro](https://thomasrribeiro.github.io/). Licensed under the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license.
+© 2025 by [Thomas Ribeiro](https://thomasrribeiro.com). Licensed under the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license.
