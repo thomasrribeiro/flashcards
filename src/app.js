@@ -286,8 +286,14 @@ function showNextCard() {
 function revealAnswer() {
     isRevealed = true;
 
-    // Show back
-    cardBack.classList.remove('hidden');
+    if (currentCard.type === 'cloze') {
+        // For cloze cards, replace the ... with the revealed answer inline
+        cardFront.innerHTML = renderCardBack(currentCard);
+    } else {
+        // For basic cards, show the back
+        cardBack.classList.remove('hidden');
+    }
+
     revealPrompt.classList.add('hidden');
     gradeButtons.classList.remove('hidden');
 }
