@@ -1,6 +1,8 @@
-# Effective Flashcard Writing Guide for Spaced Repetition
+# {SUBJECT_NAME} - Flashcard Writing Guide
 
-> **Purpose**: This document provides research-based guidelines for creating effective flashcards across all subjects. Subject-specific repositories should reference this document and add domain-specific guidance.
+> **Purpose**: This guide covers {SUBJECT_NAME}-specific strategies for creating effective spaced repetition flashcards, building on universal SRS principles.
+
+---
 
 ## Core Principles (Research-Based)
 
@@ -134,124 +136,241 @@ A: Speed is a scalar (magnitude only), while velocity is a vector (magnitude and
 
 ---
 
-### P:/S: Problem and Solution Roadmap (NEW)
+### P:/S: Problem and Solution Roadmap
 
-**Use for**: Multi-step problem-solving, calculations, quantitative reasoning
+**Use for**: Teaching problem-solving **methodology** and **approach**, not numerical computation
 
-**Framework**: **ISEE** (Identify, Set Up, Execute, Evaluate)
+**IMPORTANT**: P:/S: cards should use **variables only**, no specific numerical values. The goal is to learn the approach and reasoning steps, not to practice arithmetic.
 
-**Full syntax** (for complex problems):
+**Framework**: **ISAE** (Identify, Set Up, Approach, Evaluate)
+
+**Syntax**:
 ```markdown
-P: [Problem statement with specific values and clear question]
+P: [Problem statement using variables, not numbers]
 
 S:
 **IDENTIFY**: [Problem type and key concepts that apply]
 
 **SET UP**:
-- Known: [List given quantities with symbols and values]
+- Known: [List given quantities as variables]
 - Unknown: [What you're solving for]
-- Equations: [Relevant formulas and WHY they apply to this problem]
 
-**EXECUTE**:
-- [Step-by-step algebraic solution]
-- [Substitute numbers]
-- [Final numerical answer with units]
+**APPROACH**:
+- [Step-by-step reasoning and strategy]
+- [Which formulas to use and WHY]
+- [Order of operations]
 
 **EVALUATE**:
-- Units: [Dimensional analysis - do units work out?]
-- Sign/direction: [Physical interpretation of sign]
-- Reasonableness: [Does the magnitude make sense?]
-```
-
-**Compact syntax** (for simple problems):
-```markdown
-P: [Simple question]
-
-S: [Direct answer with brief justification]
+- Units: [Dimensional analysis]
+- Sign/direction: [Physical interpretation]
+- Limiting cases: [What happens in special cases?]
 ```
 
 **Examples**:
 
-**Complex problem**:
+**Methodology-focused problem**:
 ```markdown
-P: A car accelerates uniformly from rest to 25 m/s in 5.0 seconds. How far does it travel during this time?
+P: A car accelerates uniformly from rest to final velocity $v$ in time $t$. How do you find the distance traveled?
 
 S:
-**IDENTIFY**: Constant acceleration kinematics problem, need displacement
+**IDENTIFY**: Constant acceleration kinematics problem
 
 **SET UP**:
-- Known: $v_0 = 0$ (from rest), $v = 25$ m/s, $t = 5.0$ s
-- Unknown: $\Delta x$ (displacement)
-- Equation: $\Delta x = v_0 t + \frac{1}{2}at^2$ (relates displacement, time, acceleration)
-- Also need: $a = \frac{v - v_0}{t}$ to find acceleration first
+- Known: $v_0$, $v$, $t$
+- Unknown: $\Delta x$
 
-**EXECUTE**:
-$$a = \frac{25 - 0}{5.0} = 5.0 \text{ m/s}^2$$
-$$\Delta x = 0 + \frac{1}{2}(5.0)(5.0)^2 = \frac{1}{2}(5.0)(25) = 62.5 \text{ m}$$
+**APPROACH**:
+1. Need acceleration first: $a = \frac{v - v_0}{t}$
+2. Apply displacement equation: $\Delta x = v_0 t + \frac{1}{2}at^2$
+3. Substitute acceleration: $\Delta x = v_0 t + \frac{1}{2}\left(\frac{v - v_0}{t}\right)t^2$
+4. Simplify: $\Delta x = v_0 t + \frac{1}{2}(v - v_0)t = \frac{1}{2}(v_0 + v)t$
 
 **EVALUATE**:
-- Units: m ✓ (correct for displacement)
-- Sign: Positive (forward motion) ✓
-- Reasonableness: ~60m in 5s at increasing speed seems correct (average ~12 m/s over 5s ≈ 60m) ✓
+- Units: $[v][t] = \text{distance}$ ✓
+- Limiting case: If $v_0 = 0$, reduces to $\Delta x = \frac{1}{2}vt$ (average velocity × time) ✓
+- Sign: Positive if $v > v_0$ (forward motion) ✓
 ```
 
-**Simple problem**:
+**Equation selection**:
 ```markdown
-P: What is the SI unit of energy?
+P: You know initial velocity, final velocity, and displacement, but not time. Which kinematic equation should you use and why?
 
-S: Joule (J), defined as $1 \text{ J} = 1 \text{ kg⋅m}^2\text{/s}^2$
+S:
+**IDENTIFY**: Kinematics equation selection problem
+
+**SET UP**:
+- Known: $v_0$, $v$, $\Delta x$
+- Unknown: Could be $a$ or other quantities
+- Missing: $t$ (time)
+
+**APPROACH**:
+Use $v^2 = v_0^2 + 2a\Delta x$ because:
+- It relates all four quantities we care about: $v$, $v_0$, $a$, $\Delta x$
+- It does NOT involve $t$, which we don't know
+- Other equations like $v = v_0 + at$ require knowing $t$
+
+**EVALUATE**:
+- Check: All known variables appear, unknown doesn't require $t$ ✓
+- Alternative: Could find $t$ first using other equations, but this is more direct
 ```
 
-**Formula application**:
+**Conceptual approach**:
 ```markdown
-P: You know initial and final velocities and displacement, but not time. Which kinematic equation should you use?
+P: How do you determine the net force on an object when multiple forces act at different angles?
 
-S: $v^2 = v_0^2 + 2a\Delta x$
-**Why**: This equation relates $v$, $v_0$, $a$, and $\Delta x$ without involving time $t$.
+S:
+**IDENTIFY**: Vector addition problem using Newton's second law
+
+**SET UP**:
+- Known: Multiple force vectors $\vec{F}_1, \vec{F}_2, ...$
+- Unknown: Net force $\vec{F}_{\text{net}}$
+
+**APPROACH**:
+1. Resolve each force into components: $F_{ix}$, $F_{iy}$
+2. Sum components separately: $F_{\text{net},x} = \sum F_{ix}$, $F_{\text{net},y} = \sum F_{iy}$
+3. Find magnitude: $|\vec{F}_{\text{net}}| = \sqrt{F_{\text{net},x}^2 + F_{\text{net},y}^2}$
+4. Find direction: $\theta = \arctan\left(\frac{F_{\text{net},y}}{F_{\text{net},x}}\right)$
+
+**EVALUATE**:
+- Units: All forces have same units ✓
+- Limiting case: If all forces along same axis, reduces to simple addition ✓
+- Sign: Direction matters (positive/negative indicates orientation)
 ```
 
 ---
 
-## Subject-Specific Guidelines
+## Subject-Specific Guidance
 
-Each subject repository should have its own `CLAUDE.md` that:
-1. References this global guide
-2. Provides subject-specific problem categorization
-3. Documents domain-specific flashcard strategies
-4. Lists common pitfalls for that subject
-5. Provides exemplary flashcards
+### Subject Overview
 
-**Example structure** (see physics repos for implementation):
+[Brief description of the subject scope and learning objectives]
+
+### Key Topics
+
+#### Topic 1: [Topic Name]
+
+**Core concepts**:
+- [Concept 1]
+- [Concept 2]
+- [Concept 3]
+
+**Common terminology**:
+- [Term]: [Definition]
+- [Term]: [Definition]
+
+**Key relationships**:
+- [How concepts relate to each other]
+
+#### Topic 2: [Topic Name]
+
+**Core concepts**:
+- [Concept 1]
+- [Concept 2]
+
+---
+
+## Common Problem Types
+
+### Type 1: [Problem Type Name]
+
+**Identify signals**: [Keywords or phrases that indicate this problem type]
+
+**Key approach**: [General strategy for solving]
+
+**Common pitfalls**:
+- [Pitfall 1]
+- [Pitfall 2]
+
+### Type 2: [Problem Type Name]
+
+**Identify signals**: [Keywords]
+
+**Key approach**: [Strategy]
+
+---
+
+## Flashcard Strategy for {SUBJECT_NAME}
+
+### Conceptual Before Computational
+
+Always create understanding cards before calculation/application cards.
+
+**Recommended order**:
+1. **Definition/concept** (C: or Q:/A:)
+2. **"Why" or "when to use"** (Q:/A:)
+3. **Formula/process** (C:)
+4. **Simple application** (Q:/A: or P:/S: compact)
+5. **Complex multi-step** (P:/S: full framework)
+
+**Example progression**:
 ```markdown
-# Flashcard Guide - [Subject Name]
+# Step 1: Concept
+Q: [Conceptual question about core idea]
+A: [Clear, concise answer]
 
-> **Global Reference**: See [FLASHCARD_GUIDE.md](path/to/flashcards/FLASHCARD_GUIDE.md) for universal SRS principles.
+# Step 2: Application
+Q: [When/why to use this concept]
+A: [Context and reasoning]
 
-## Subject-Specific Problem Types
-[Categorize problems by type, with IDENTIFY signals]
+# Step 3: Formula/Process
+C: [Key formula or process with cloze deletion]
 
-## Key Concepts Hierarchy
-[Order topics from foundational to advanced]
+# Step 4: Simple problem
+P: [Simple problem]
+S: [Brief solution with key steps]
+
+# Step 5: Complex problem
+P: [Multi-step problem]
+S: [Full solution with methodology]
+```
+
+---
 
 ## Common Pitfalls
-[Document frequent errors]
 
-## Figure References
-[List extracted figures and when to use them]
+### 1. [Pitfall Category]
+- [Specific error 1]
+- [Specific error 2]
+
+### 2. [Pitfall Category]
+- [Specific error 1]
+- [Specific error 2]
+
+---
 
 ## Example Flashcards
-[3-5 exemplary cards demonstrating best practices]
+
+### Conceptual Understanding
+```markdown
+Q: [Example conceptual question]
+A: [Clear answer with reasoning]
+```
+
+### Cloze Deletion
+```markdown
+C: [Example with [cloze deletion] showing key relationship]
+```
+
+### Problem-Solving
+```markdown
+P: [Example problem with realistic scenario]
+
+S:
+**IDENTIFY**: [What type of problem, key concepts]
+**SET UP**: [Knowns, unknowns, approach]
+**EXECUTE**: [Step-by-step solution]
+**EVALUATE**: [Check reasonableness, units, etc.]
 ```
 
 ---
 
-## PDF Figure Integration
+## Figure Integration
 
-### Extraction Methods
+Figures are organized by flashcard filename in the `figures/` directory.
 
-**Option A: Automated** (recommended for large projects)
+### Extracting Figures from PDFs
 
-Use the provided `extract_figures.py` script in the flashcards repository:
+**Automated extraction** (recommended for large projects):
 
 ```bash
 # Install dependencies (one-time setup)
@@ -260,14 +379,14 @@ brew install poppler  # macOS only
 
 # Extract figures from a PDF
 cd /path/to/your/subject-repo
-python3 /Users/thomasribeiro/code/flashcards/extract_figures.py \
-  --pdf public/sources/chapter_1.pdf \
-  --output public/figures/chapter_1/
+python3 scripts/extract_figures_from_pdf.py \
+  --pdf references/chapter_1.pdf \
+  --output figures/chapter_1/
 
 # Higher resolution (600 DPI)
-python3 /Users/thomasribeiro/code/flashcards/extract_figures.py \
-  --pdf public/sources/chapter_2.pdf \
-  --output public/figures/chapter_2/ \
+python3 scripts/extract_figures_from_pdf.py \
+  --pdf references/chapter_2.pdf \
+  --output figures/chapter_2/ \
   --dpi 600
 ```
 
@@ -277,9 +396,9 @@ The script extracts all pages as images. You'll then need to:
 3. Rename to descriptive names (e.g., `fig_1_5.png`, `vector_addition.png`)
 4. Delete unused full-page extractions
 
-**Option B: Manual screenshots**
+**Manual screenshots**:
 - Use system screenshot tool (⇧⌘4 on macOS, Snipping Tool on Windows)
-- Save directly to `public/figures/[chapter-or-topic-name]/`
+- Save directly to `figures/[chapter-or-topic-name]/`
 - Follow naming convention below
 
 ### Naming Convention
@@ -296,8 +415,7 @@ fig_[chapter]_[figure-number].png
 ### Folder Structure
 
 ```
-public/
-├── sources/              # Source PDFs
+├── references/           # Source PDFs
 │   ├── chapter_1.pdf
 │   └── chapter_2.pdf
 └── figures/              # Extracted images
@@ -312,22 +430,22 @@ public/
         └── free_body_example.png
 ```
 
-### Embedding in Flashcards
+### Using Figures in Flashcards
 
-**From `flashcards/*.md`**, use relative paths:
+Reference figures using relative paths:
 
 ```markdown
-Q: What does a position vs. time graph look like for constant velocity?
+Q: What does this diagram illustrate?
 
-![Position vs time for constant velocity](../public/figures/chapter_2/fig_2_3.png)
+![Description](../figures/topic_name/diagram_1.png)
 
-A: Straight line with constant positive or negative slope.
+A: [Answer explaining the diagram]
 ```
 
 **Path breakdown**:
 - Flashcard location: `flashcards/kinematics.md`
-- Figure location: `public/figures/chapter_2/fig_2_3.png`
-- Relative path: `../public/figures/chapter_2/fig_2_3.png` (up one level from flashcards/, then into public/)
+- Figure location: `figures/chapter_2/fig_2_3.png`
+- Relative path: `../figures/chapter_2/fig_2_3.png` (up one level from flashcards/, then into figures/)
 
 ---
 
@@ -374,24 +492,35 @@ Q: What is the magnitude of gravitational acceleration near Earth's surface?
 A: Approximately 9.8 m/s² (or 10 m/s² for rough estimates)
 ```
 
-### ❌ Don't Skip the Evaluate Step
+### ❌ Don't Use Numbers in P:/S: Cards
 ```markdown
-# BAD: No verification
+# BAD: Uses specific numbers (this is just arithmetic practice)
 P: A 5 kg object accelerates at 3 m/s². What is the net force?
 S: $F = ma = 5 \times 3 = 15$ N
 ```
 
 ```markdown
-# GOOD: Always evaluate
-P: A 5 kg object accelerates at 3 m/s². What is the net force?
+# GOOD: Uses variables (teaches the approach)
+P: How do you find the net force on an object given its mass and acceleration?
 S:
-**IDENTIFY**: Newton's second law problem
-**SET UP**: $m = 5$ kg, $a = 3$ m/s², find $F$ using $F = ma$
-**EXECUTE**: $F = (5)(3) = 15$ N
+**IDENTIFY**: Newton's second law application
+**SET UP**: Known: mass $m$, acceleration $a$. Unknown: force $F$
+**APPROACH**: Apply $F = ma$ directly
 **EVALUATE**:
-- Units: N = kg⋅m/s² ✓
-- Sign: Positive (force in direction of acceleration) ✓
-- Magnitude: Reasonable (about the weight of 1.5 kg) ✓
+- Units: $[\text{kg}][\text{m/s}^2] = \text{N}$ ✓
+- Sign: Force direction matches acceleration direction
+- Limiting case: If $a = 0$, then $F = 0$ (no net force) ✓
+```
+
+---
+
+## Cross-Topic Integration
+
+{SUBJECT_NAME} topics are interconnected. Create cards that bridge concepts:
+
+```markdown
+Q: How does [Topic A] relate to [Topic B]?
+A: [Explanation of connection]
 ```
 
 ---
@@ -406,7 +535,7 @@ When creating flashcards for a new topic:
 - [ ] **Create conceptual cards first**: Understanding before formulas
 - [ ] **Add two-way cards**: Test relationships bidirectionally
 - [ ] **Add application cards**: "When do you use this?"
-- [ ] **Add problem cards**: Use P:/S: with ISEE framework
+- [ ] **Add problem cards**: Use P:/S: with ISAE framework (methodology, not numbers)
 - [ ] **Include figures**: Extract and embed relevant diagrams
 - [ ] **Order by difficulty**: Simple → complex
 - [ ] **Review for clarity**: Are cards self-contained?
@@ -414,11 +543,12 @@ When creating flashcards for a new topic:
 
 ---
 
-## References and Resources
+## Resources
 
+- **Textbook**: [Primary textbook reference]
+- **Additional materials**: [Other resources]
 - **Effective Spaced Repetition**: https://borretti.me/article/effective-spaced-repetition
 - **FSRS Algorithm**: The scheduling algorithm used by this flashcard system
-- **Physics Problem-Solving**: *University Physics* (Young & Freedman, 15th Ed.), "To the Student: How to Succeed in Physics by Really Trying"
 - **Cognitive Science**: *Make It Stick: The Science of Successful Learning* (Brown, Roediger, McDaniel)
 
 ---
@@ -433,21 +563,18 @@ C: Text with [hidden answer] in brackets.
 Q: Question?
 A: Answer.
 
-# Problem/Solution (Full)
-P: Problem statement?
+# Problem/Solution (methodology-focused, use variables not numbers)
+P: Problem statement with variables?
 
 S:
 **IDENTIFY**: Type and concepts
-**SET UP**: Knowns, unknowns, equations
-**EXECUTE**: Solution steps
-**EVALUATE**: Units, sign, reasonableness
-
-# Problem/Solution (Compact)
-P: Simple question?
-S: Direct answer with justification
+**SET UP**: Known variables, unknown variable
+**APPROACH**: Step-by-step reasoning and formulas
+**EVALUATE**: Units, sign, limiting cases
 ```
 
 ---
 
-**Last updated**: 2025-11-22
-**For**: Spaced repetition flashcard repositories
+**Last updated**: {DATE}
+**Scope**: {SUBJECT_NAME}
+**Format**: Designed for spaced repetition flashcard systems

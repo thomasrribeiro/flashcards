@@ -15,10 +15,51 @@ An in-browser spaced-repetition system.
 - Node.js (v14 or higher)
 - npm
 
+### Installation
+
+**1. Install dependencies:**
+```bash
+npm install
+```
+
+**2. Link CLI globally (optional):**
+```bash
+npm link
+```
+
+**3. Run the app:**
+```bash
+npm run dev
+```
+
+Open your browser to the URL shown in the terminal.
+
+### Creating Decks
+
+Use the CLI to create a new deck with the proper structure:
+
+```bash
+# Create a deck (default: public/collection/<name>)
+flashcards create intro-mechanics
+
+# Create with subject template
+flashcards create intro-mechanics --template physics
+
+# Create at custom path
+flashcards create intro-mechanics --path ~/Documents/flashcards/intro-mechanics
+```
+
+This creates:
+- `flashcards/` - Your markdown files
+- `references/` - Place to store reference materials as PDFs
+- `figures/` - Place to store relevant images for use in flashcards
+- `CLAUDE.md` - Writing guidelines for Claude
+- `README.md` - Default template
+
 ### Creating flashcards
 
 #### Card format
-Flashcards are written in markdown files using a Q:/A: or C: format.
+Flashcards are written in markdown files using Q:/A:, C:, or P:/S: formats.
 
 **Question/Answer Cards:**
 ```markdown
@@ -31,7 +72,20 @@ A: Rome.
 C: [Rome] is the capital of Italy.
 ```
 
-Each `[text]` in a cloze card creates a separate card where that text is hidden.
+**Problem/Solution Cards (methodology-focused, no numerical values):**
+```markdown
+P: A car accelerates uniformly from rest to final velocity v in time t. How do you find the distance traveled?
+
+S:
+**IDENTIFY**: Constant acceleration kinematics problem
+**SET UP**: Known: v₀, v, t. Unknown: Δx
+**APPROACH**: Need acceleration first, then use kinematic equation for displacement
+**EXECUTE**:
+  1. Find acceleration: a = (v - v₀)/t
+  2. Apply displacement equation: Δx = v₀t + ½at²
+  3. Result: Δx = v₀t + ½((v - v₀)/t)t²
+**EVALUATE**: Check units (distance), sign (direction), limiting cases (if v₀=0, reduces correctly)
+```
 
 **Supported Features:**
 - **Multiline content** - Questions and answers can span multiple lines
@@ -41,34 +95,21 @@ Each `[text]` in a cloze card creates a separate card where that text is hidden.
 
 #### File Structure
 
-Organize your flashcards in `public/collection/` with the following structure:
-
 ```
 public/collection/
-├── my-deck/
-│   └── flashcards/
-│       ├── topic1.md
-│       └── topic2.md
+├── intro-mechanics/
+│   ├── flashcards/
+│   │   ├── topic1.md
+│   │   └── topic2.md
+│   ├── figures/
+│   ├── references/
+│   └── CLAUDE.md
 └── another-deck/
     └── flashcards/
         └── cards.md
 ```
 
-Each directory in `public/collection/` becomes a separate deck. Place your markdown files in the `flashcards/` subdirectory.
-
-### Installation
-
-**1. Install dependencies:**
-```bash
-npm install
-```
-
-**2. Run the app:**
-```bash
-npm run dev
-```
-
-Open your browser to the URL shown in the terminal.
+Each directory in `public/collection/` becomes a separate deck.
 
 ### ⚠️ Important
 

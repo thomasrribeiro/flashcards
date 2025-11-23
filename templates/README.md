@@ -44,7 +44,7 @@ Contributions welcome! Follow these guidelines:
 - **Self-contained cards**: Each card should make sense on its own
 - **Include context**: Don't assume prior card knowledge
 
-See [general.md](https://github.com/thomasrribeiro/flashcards/blob/main/guides/general.md) for universal SRS principles.
+See the [flashcards repository](https://github.com/thomasrribeiro/flashcards) for universal SRS principles.
 
 ## 📚 Reference Materials
 
@@ -93,7 +93,7 @@ A: [Answer]
 
 For detailed flashcard writing guidelines specific to this subject, see [CLAUDE.md](CLAUDE.md).
 
-For general spaced repetition principles and card formats, see the [universal guide](https://github.com/thomasrribeiro/flashcards/blob/main/guides/general.md).
+For general spaced repetition principles and card formats, see [CLAUDE.md](CLAUDE.md) in this repository.
 
 ## 🔗 Related Repositories
 

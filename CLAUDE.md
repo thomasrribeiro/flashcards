@@ -19,8 +19,8 @@ npm run build             # Production build (vite build + process-submodules)
 npm run preview           # Preview production build
 npm run process-submodules # Generate card index from public/collection/ markdown files
 
-# Worker deployment (separate repository)
-cd /Users/thomasribeiro/code/flashcards-worker
+# Worker deployment (separate repository: https://github.com/thomasrribeiro/flashcards-worker)
+# Navigate to the flashcards-worker repository directory first
 npx wrangler dev          # Local worker dev server on localhost:8787
 npx wrangler deploy       # Deploy worker to production
 npx wrangler tail         # Stream worker logs
@@ -45,7 +45,7 @@ GitHub Repo → Parser → Cards (w/ BLAKE3 hash) → Local Cache + D1 Backend �
 
 **Three-Layer System:**
 
-1. **Cloudflare D1 (Persistence Layer)** - Worker at `/Users/thomasribeiro/code/flashcards-worker`
+1. **Cloudflare D1 (Persistence Layer)** - [Worker repository](https://github.com/thomasrribeiro/flashcards-worker)
    - `users` table: GitHub user profiles
    - `repos` table: User's deck collection (which repos they've added)
    - `card_hashes` table: Registry of all card hashes with content type
@@ -56,7 +56,7 @@ GitHub Repo → Parser → Cards (w/ BLAKE3 hash) → Local Cache + D1 Backend �
    - `reposCache`: Repository metadata (in-memory, populated from D1)
    - `reviewsCache`: Review states (in-memory, synced to/from D1)
 
-3. **REST API** - Worker endpoints at `/Users/thomasribeiro/code/flashcards-worker/src/api.js`
+3. **REST API** - [Worker endpoints](https://github.com/thomasrribeiro/flashcards-worker/blob/main/src/api.js)
    - `POST /api/users/ensure` - Create/verify user exists
    - `POST /api/repos/add` - Add repo to collection + register card hashes
    - `GET /api/repos/:userId` - Get user's repo collection
@@ -137,9 +137,9 @@ VITE_WORKER_URL=http://localhost:8787  # or https://flashcards-worker.yourname.w
 VITE_GITHUB_CLIENT_ID=your_client_id   # from GitHub OAuth app
 ```
 
-**Worker** (secrets set via wrangler):
+**Worker** (secrets set via wrangler in the flashcards-worker repository):
 ```bash
-cd /Users/thomasribeiro/code/flashcards-worker
+# In the flashcards-worker directory
 wrangler secret put GITHUB_CLIENT_ID
 wrangler secret put GITHUB_CLIENT_SECRET
 wrangler secret put ALLOWED_ORIGINS  # Comma-separated, e.g., http://localhost:3000,https://yourdomain.com
@@ -194,14 +194,14 @@ FRONTEND_URL=http://localhost:3000
 4. Verify hash stability (same content = same hash)
 
 ### When adding new API endpoint
-1. Add handler function in `/Users/thomasribeiro/code/flashcards-worker/src/api.js`
-2. Add route in `/Users/thomasribeiro/code/flashcards-worker/src/index.js`
+1. Add handler function in [flashcards-worker/src/api.js](https://github.com/thomasrribeiro/flashcards-worker/blob/main/src/api.js)
+2. Add route in [flashcards-worker/src/index.js](https://github.com/thomasrribeiro/flashcards-worker/blob/main/src/index.js)
 3. Update [src/storage.js](src/storage.js) to call the endpoint
 4. Test locally with `wrangler dev` (worker) + `npm run dev` (frontend)
-5. Deploy worker: `cd /Users/thomasribeiro/code/flashcards-worker && npx wrangler deploy`
+5. Deploy worker: In flashcards-worker directory, run `npx wrangler deploy`
 
 ### When modifying D1 schema
-1. Create migration file: `/Users/thomasribeiro/code/flashcards-worker/migrations/XXXX_description.sql`
+1. Create migration file in flashcards-worker: `migrations/XXXX_description.sql`
 2. Test locally: `wrangler d1 execute flashcards-db --local --file=migrations/XXXX.sql`
 3. Apply to production: `wrangler d1 execute flashcards-db --remote --file=migrations/XXXX.sql`
 4. Update API handlers in `api.js` to use new schema
@@ -209,7 +209,7 @@ FRONTEND_URL=http://localhost:3000
 
 ### When deploying
 1. **Frontend:** `npm run build` → deploy `dist/` to GitHub Pages or static host
-2. **Worker:** `cd /Users/thomasribeiro/code/flashcards-worker && npx wrangler deploy`
+2. **Worker:** In flashcards-worker directory, run `npx wrangler deploy`
 3. Verify secrets are set: `wrangler secret list`
 4. Test OAuth flow end-to-end
 5. Monitor logs: `wrangler tail --format pretty`
@@ -218,4 +218,4 @@ FRONTEND_URL=http://localhost:3000
 
 - **hashcards** (https://github.com/kersh1337228/hashcards): Original Rust implementation this parser replicates
 - **ts-fsrs** (https://github.com/open-spaced-repetition/ts-fsrs): FSRS algorithm implementation
-- **flashcards-worker** (`/Users/thomasribeiro/code/flashcards-worker`): Cloudflare Worker for OAuth + D1 API
+- **flashcards-worker** (https://github.com/thomasrribeiro/flashcards-worker): Cloudflare Worker for OAuth + D1 API

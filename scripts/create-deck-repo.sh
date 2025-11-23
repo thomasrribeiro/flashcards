@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Creates a new flashcard deck repository with proper structure
-# Usage: ./scripts/create-deck-repo.sh <repo-path> [--topic <topic-name>]
+# Usage: ./scripts/create-deck-repo.sh <repo-path> [--guides <guide-name>]
 
 set -e
 
 REPO_PATH=""
-TOPIC=""
+GUIDE=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --topic)
-            TOPIC="$2"
+        --guides)
+            GUIDE="$2"
             shift 2
             ;;
         *)
@@ -36,15 +36,15 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 if [ -z "$REPO_PATH" ]; then
-    echo "Usage: $0 <repo-path> [--topic <topic-name>]"
+    echo "Usage: $0 <repo-path> [--guides <guide-name>]"
     echo ""
     echo "Examples:"
     echo "  $0 ~/notes/intro-mechanics"
-    echo "  $0 ~/notes/organic-chem --topic chemistry"
-    echo "  $0 ~/notes/calculus-1 --topic mathematics"
+    echo "  $0 ~/notes/organic-chem --guides chemistry"
+    echo "  $0 ~/notes/calculus-1 --guides mathematics"
     echo ""
     echo "The subject name will be derived from the folder name."
-    echo "Optional --topic flag will copy guides/<topic>.md if it exists."
+    echo "Optional --guides flag will copy templates/<guide-name>.md if it exists."
     exit 1
 fi
 
@@ -72,33 +72,33 @@ echo "  - figures/      (extracted images and diagrams)"
 echo ""
 
 # Copy and substitute README template
-if [ -f "$FLASHCARDS_ROOT/guides/templates/README.md" ]; then
+if [ -f "$FLASHCARDS_ROOT/templates/README.md" ]; then
     sed -e "s/{SUBJECT_NAME}/$SUBJECT_NAME/g" \
         -e "s/{DATE}/$CURRENT_DATE/g" \
-        "$FLASHCARDS_ROOT/guides/templates/README.md" > "$REPO_PATH/README.md"
+        "$FLASHCARDS_ROOT/templates/README.md" > "$REPO_PATH/README.md"
     echo -e "${GREEN}✓${NC} Created README.md from template"
 else
-    echo -e "${YELLOW}⚠${NC} Template not found: guides/templates/README.md"
+    echo -e "${YELLOW}⚠${NC} Template not found: templates/README.md"
 fi
 
 # Copy and substitute CLAUDE.md template
-if [ -f "$FLASHCARDS_ROOT/guides/templates/CLAUDE.md" ]; then
+if [ -f "$FLASHCARDS_ROOT/templates/CLAUDE.md" ]; then
     sed -e "s/{SUBJECT_NAME}/$SUBJECT_NAME/g" \
         -e "s/{DATE}/$CURRENT_DATE/g" \
-        "$FLASHCARDS_ROOT/guides/templates/CLAUDE.md" > "$REPO_PATH/CLAUDE.md"
+        "$FLASHCARDS_ROOT/templates/CLAUDE.md" > "$REPO_PATH/CLAUDE.md"
     echo -e "${GREEN}✓${NC} Created CLAUDE.md from template"
 else
-    echo -e "${YELLOW}⚠${NC} Template not found: guides/templates/CLAUDE.md"
+    echo -e "${YELLOW}⚠${NC} Template not found: templates/CLAUDE.md"
 fi
 
-# Copy topic-specific guide if --topic flag is provided
-if [ -n "$TOPIC" ]; then
-    TOPIC_GUIDE="$FLASHCARDS_ROOT/guides/$TOPIC.md"
-    if [ -f "$TOPIC_GUIDE" ]; then
-        cp "$TOPIC_GUIDE" "$REPO_PATH/$TOPIC.md"
-        echo -e "${GREEN}✓${NC} Copied topic-specific guide: $TOPIC.md"
+# Copy subject-specific guide if --guides flag is provided
+if [ -n "$GUIDE" ]; then
+    GUIDE_FILE="$FLASHCARDS_ROOT/templates/$GUIDE.md"
+    if [ -f "$GUIDE_FILE" ]; then
+        cp "$GUIDE_FILE" "$REPO_PATH/$GUIDE.md"
+        echo -e "${GREEN}✓${NC} Copied subject-specific guide: $GUIDE.md"
     else
-        echo -e "${YELLOW}⚠${NC} Topic guide not found: guides/$TOPIC.md (skipping)"
+        echo -e "${YELLOW}⚠${NC} Subject guide not found: templates/$GUIDE.md (skipping)"
     fi
 fi
 
