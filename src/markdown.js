@@ -92,7 +92,7 @@ export function parseSolutionSteps(solution) {
     let currentStep = null;
 
     for (const line of lines) {
-        // Match lines like "**IDENTIFY**: content" or "**SET UP**: content"
+        // Match lines like "**IDENTIFY**: content" or "**PLAN**: content"
         const match = line.match(/^\*\*([^*]+)\*\*:\s*(.*)$/);
 
         if (match) {

@@ -532,8 +532,8 @@ body {
 
 /* Answer separator for Q/A cards */
 .answer-separator {
-    margin: 0.2em 0 0 0;
-    padding-top: 0.3em;
+    margin: 0 0 0 0;
+    padding-top: 0.1em;
 }
 
 .answer-separator::before {
@@ -563,19 +563,114 @@ body {
 
 /* Solution step styling for P:/S: cards */
 .solution-step {
-    margin: 1.5em 0;
+    margin: 0.5em 0;
     padding: 0;
 }
 
 .solution-step-label {
     font-weight: 700;
     color: var(--gold);
-    margin-bottom: 0.5em;
+    margin-bottom: 0;
+    display: inline-block;
+    position: relative;
 }
 
 .solution-step-content {
     margin-left: 1em;
+    margin-top: 0.1em;
     color: var(--black);
+}
+
+/* Info icon and tooltip */
+.info-icon {
+    position: absolute;
+    left: -16px;
+    top: -3px;
+    cursor: help;
+}
+
+.info-icon-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--white);
+    color: var(--black);
+    border: 1px solid var(--black);
+    font-size: 7px;
+    font-weight: 700;
+    font-style: normal;
+    line-height: 1;
+}
+
+.tooltip {
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 8px);
+    transform: translateX(-50%);
+    background: var(--white);
+    border: 1px solid var(--black);
+    border-radius: 4px;
+    padding: 12px 16px;
+    min-width: 250px;
+    max-width: 350px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+}
+
+.info-icon:hover .tooltip,
+.info-icon.active .tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+.tooltip::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-bottom-color: var(--black);
+}
+
+.tooltip::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    transform: translateX(-50%) translateY(1px);
+    border: 5px solid transparent;
+    border-bottom-color: var(--white);
+}
+
+.tooltip ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--black);
+}
+
+.tooltip li {
+    padding: 4px 0;
+    position: relative;
+    padding-left: 16px;
+}
+
+.tooltip li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--gold);
+    font-weight: 700;
 }
 
 .action-prompt {
@@ -632,20 +727,12 @@ kbd {
     transform: translateY(1px);
 }
 
-.grade-again:hover {
-    border-color: #d32f2f;
-}
-
-.grade-hard:hover {
-    border-color: #f57c00;
-}
-
-.grade-good:hover {
-    border-color: #388e3c;
-}
-
-.grade-easy:hover {
-    border-color: #1976d2;
+.grade-btn kbd {
+    background: var(--black);
+    color: var(--white);
+    border: none;
+    padding: 2px 8px;
+    border-radius: 3px;
 }
 
 .session-complete {
@@ -1098,8 +1185,8 @@ kbd {
     position: relative;
     background: var(--white);
     border: 1px solid var(--black);
-    max-width: 90%;
-    max-height: 90%;
+    width: 90vw;
+    max-height: 90vh;
     display: flex;
     flex-direction: column;
     z-index: 1001;
@@ -1168,9 +1255,8 @@ kbd {
     overflow-y: auto;
     flex: 1;
     display: grid;
-    grid-template-columns: repeat(auto-fit, 320px);
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 30px;
-    justify-content: center;
     align-content: start;
 }
 

@@ -20,6 +20,34 @@ let currentFsrsCard = null;
 let currentStepIndex = 0;
 let solutionSteps = [];
 
+// Step guidance tooltips
+const stepGuidance = {
+    'IDENTIFY': [
+        'Restate the problem in your own words',
+        'Identify what\'s being asked (the goal)',
+        'Spot key information and constraints',
+        'Classify the type of problem'
+    ],
+    'PLAN': [
+        'Represent the problem (diagram, table, notation)',
+        'Identify what you know and what you need to find',
+        'Choose relevant methods, formulas, or strategies',
+        'Outline your approach in plain language'
+    ],
+    'EXECUTE': [
+        'Carry out your plan step-by-step',
+        'Show all your work clearly',
+        'Work systematically through each stage',
+        'Keep your reasoning organized and logical'
+    ],
+    'EVALUATE': [
+        'Check that your answer makes sense',
+        'Verify you answered the actual question',
+        'Test edge cases or special conditions',
+        'Reflect: What did I learn that applies elsewhere?'
+    ]
+};
+
 // DOM elements
 const cardFront = document.getElementById('card-front');
 const cardBack = document.getElementById('card-back');
@@ -29,6 +57,24 @@ const cardsDue = document.getElementById('cards-due');
 const cardsReviewed = document.getElementById('cards-reviewed');
 const studyArea = document.getElementById('study-area');
 const sessionComplete = document.getElementById('session-complete');
+
+/**
+ * Render a step label with info icon
+ */
+function renderStepLabel(label) {
+    const guidance = stepGuidance[label.toUpperCase()];
+    const guidanceHtml = guidance ? guidance.map(item => `<li>${item}</li>`).join('') : '';
+
+    return `<div class="solution-step-label">
+        ${label}:
+        <span class="info-icon" data-tooltip="${label}">
+            <span class="info-icon-circle">i</span>
+            <div class="tooltip">
+                <ul>${guidanceHtml}</ul>
+            </div>
+        </span>
+    </div>`;
+}
 
 /**
  * Ensure cards are loaded for the deck
@@ -263,6 +309,32 @@ function setupEventListeners() {
             gradeCard(grade);
         });
     });
+
+    // Tooltip click handling for mobile
+    document.addEventListener('click', (e) => {
+        const infoIcon = e.target.closest('.info-icon');
+
+        if (infoIcon) {
+            // Toggle active class on click (for mobile)
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Close other tooltips
+            document.querySelectorAll('.info-icon.active').forEach(icon => {
+                if (icon !== infoIcon) {
+                    icon.classList.remove('active');
+                }
+            });
+
+            // Toggle current tooltip
+            infoIcon.classList.toggle('active');
+        } else {
+            // Click outside - close all tooltips
+            document.querySelectorAll('.info-icon.active').forEach(icon => {
+                icon.classList.remove('active');
+            });
+        }
+    });
 }
 
 /**
@@ -290,7 +362,7 @@ function showNextCard() {
         // Show the first step's header immediately
         if (solutionSteps.length > 0) {
             const firstStepHeader = `<div class="solution-step">
-                <div class="solution-step-label">${solutionSteps[0].label}:</div>
+                ${renderStepLabel(solutionSteps[0].label)}
             </div>`;
             cardBack.innerHTML = firstStepHeader;
             cardBack.classList.remove('hidden');
@@ -337,7 +409,7 @@ function revealAnswer() {
             if (currentStepIndex + 1 < solutionSteps.length) {
                 const nextStep = solutionSteps[currentStepIndex + 1];
                 html += `<div class="solution-step">
-                    <div class="solution-step-label">${nextStep.label}:</div>
+                    ${renderStepLabel(nextStep.label)}
                 </div>`;
             }
 
