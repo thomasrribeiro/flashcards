@@ -238,12 +238,9 @@ body {
 
 .yellow-header {
     background: var(--gold);
-    padding: 25px 25px;
-    margin-left: -25px;
-    margin-right: -25px;
-    margin-top: -20px;
-    width: calc(100% + 50px);
-    margin-bottom: 12px;
+    padding: 25px 0;
+    width: 100%;
+    margin-bottom: 0;
 }
 
 .breadcrumb-path {
@@ -253,6 +250,7 @@ body {
     display: flex;
     align-items: center;
     margin-bottom: 8px;
+    margin-top: 8px;
     gap: 2px;
 }
 
