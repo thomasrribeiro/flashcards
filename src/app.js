@@ -4,7 +4,7 @@
 
 import { initDB, getCard, getAllCards, getAllReviews, saveReview, saveCards } from './storage.js';
 import { reviewCard, createCard, Rating, GradeKeys, getDueCards as filterDueCards, State } from './fsrs-client.js';
-import { renderCardFront, renderCardBack } from './markdown.js';
+import { renderCardFront, renderCardBack, parseSolutionSteps, renderSolutionStep } from './markdown.js';
 import { parseDeck } from './parser.js';
 import { hashCard } from './hasher.js';
 
@@ -15,6 +15,10 @@ let reviewedCount = 0;
 let isRevealed = false;
 let currentCard = null;
 let currentFsrsCard = null;
+
+// Problem card state
+let currentStepIndex = 0;
+let solutionSteps = [];
 
 // DOM elements
 const cardFront = document.getElementById('card-front');
@@ -41,8 +45,8 @@ async function ensureCardsLoaded(deckId) {
 
     console.log(`[App] No cards found for deck ${deckId}, attempting to load...`);
 
-    // Skip loading for basics deck and local repos - they should already be loaded
-    if (deckId === 'basics' || deckId.startsWith('local/')) {
+    // Skip loading for local repos - they should already be loaded
+    if (deckId.startsWith('local/')) {
         console.error(`[App] Local deck ${deckId} should already be loaded but cards not found`);
         alert(`Failed to load cards for deck: Local deck not properly initialized. Try refreshing the page.`);
         return;
@@ -268,34 +272,76 @@ function showNextCard() {
     currentCard = cardData.card;
     currentFsrsCard = cardData.fsrsCard;
     isRevealed = false;
+    currentStepIndex = 0;
 
     // Render front
     cardFront.innerHTML = renderCardFront(currentCard);
-    cardBack.innerHTML = renderCardBack(currentCard);
+
+    if (currentCard.type === 'problem') {
+        // Parse solution steps for problem cards
+        solutionSteps = parseSolutionSteps(currentCard.content.solution);
+        cardBack.innerHTML = ''; // Will be populated step by step
+    } else {
+        cardBack.innerHTML = renderCardBack(currentCard);
+        solutionSteps = [];
+    }
 
     // Show front, hide back
     cardFront.classList.remove('hidden');
     cardBack.classList.add('hidden');
     revealPrompt.classList.remove('hidden');
     gradeButtons.classList.add('hidden');
+
+    // Reset reveal button text
+    const revealBtn = document.getElementById('reveal-btn');
+    if (revealBtn) {
+        revealBtn.textContent = currentCard.type === 'problem' ? 'Reveal Next Step' : 'Reveal Answer';
+    }
 }
 
 /**
  * Reveal the answer
  */
 function revealAnswer() {
-    isRevealed = true;
+    if (currentCard.type === 'problem') {
+        // For problem cards, reveal next step
+        if (currentStepIndex < solutionSteps.length) {
+            const step = solutionSteps[currentStepIndex];
+            const stepHtml = renderSolutionStep(step);
 
-    if (currentCard.type === 'cloze') {
-        // For cloze cards, replace the ... with the revealed answer inline
-        cardFront.innerHTML = renderCardBack(currentCard);
+            // Append step to card back
+            cardBack.innerHTML += stepHtml;
+            cardBack.classList.remove('hidden');
+
+            currentStepIndex++;
+
+            // Update button text based on progress
+            const revealBtn = document.getElementById('reveal-btn');
+            if (currentStepIndex >= solutionSteps.length) {
+                // All steps revealed, show grade buttons
+                revealPrompt.classList.add('hidden');
+                gradeButtons.classList.remove('hidden');
+                isRevealed = true;
+            } else {
+                // More steps to reveal
+                revealBtn.textContent = 'Reveal Next Step';
+            }
+        }
     } else {
-        // For basic cards, show the back
-        cardBack.classList.remove('hidden');
-    }
+        // For basic and cloze cards, single reveal
+        isRevealed = true;
 
-    revealPrompt.classList.add('hidden');
-    gradeButtons.classList.remove('hidden');
+        if (currentCard.type === 'cloze') {
+            // For cloze cards, replace the ... with the revealed answer inline
+            cardFront.innerHTML = renderCardBack(currentCard);
+        } else {
+            // For basic cards, show the back
+            cardBack.classList.remove('hidden');
+        }
+
+        revealPrompt.classList.add('hidden');
+        gradeButtons.classList.remove('hidden');
+    }
 }
 
 /**

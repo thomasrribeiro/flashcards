@@ -221,8 +221,8 @@ export async function loadDefaultRepo() {
     ].map(card => ({
         ...card,
         hash: hashCard(card),
-        deckName: 'basics',
-        source: { repo: 'local', file: 'basics.md' }
+        deckName: 'example',
+        source: { repo: 'local', file: 'example.md' }
     }));
 
     await saveCards(exampleCards);

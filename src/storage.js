@@ -36,11 +36,25 @@ export function getCurrentUser() {
 export async function initDB() {
     if (!currentUser) {
         console.log('[Storage] No user authenticated, loading from localStorage');
-        // Load reviews from localStorage
+
+        // Migration: Clean up old "basics" deck references
         try {
-            const stored = localStorage.getItem('flashcards_reviews');
+            const oldReviewsKey = 'flashcards_reviews';
+            const stored = localStorage.getItem(oldReviewsKey);
             if (stored) {
-                reviewsCache = JSON.parse(stored);
+                const reviews = JSON.parse(stored);
+                // Filter out any reviews for the old "basics" deck
+                const cleanedReviews = reviews.filter(r =>
+                    r.deckId !== 'basics' &&
+                    !r.cardHash?.includes('basics')
+                );
+
+                if (cleanedReviews.length !== reviews.length) {
+                    console.log(`[Storage] Migration: Removed ${reviews.length - cleanedReviews.length} old "basics" deck reviews`);
+                    localStorage.setItem(oldReviewsKey, JSON.stringify(cleanedReviews));
+                }
+
+                reviewsCache = cleanedReviews;
                 console.log(`[Storage] Loaded ${reviewsCache.length} reviews from localStorage`);
             }
         } catch (error) {

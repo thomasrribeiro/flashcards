@@ -106,10 +106,10 @@ async function loadRepositories() {
         // Check login status
         const isLoggedIn = githubAuth.isAuthenticated();
 
-        // Filter out local decks and basics when logged in
+        // Filter out local decks when logged in
         let displayDecks = allDecks;
         if (isLoggedIn) {
-            displayDecks = allDecks.filter(deck => !deck.id.startsWith('local/') && deck.id !== 'basics');
+            displayDecks = allDecks.filter(deck => !deck.id.startsWith('local/'));
             console.log(`[Main] Filtered out local decks. Showing ${displayDecks.length} GitHub decks`);
         }
 
@@ -188,13 +188,12 @@ function createDeckCard(deck) {
 
     const card = document.createElement('div');
 
-    // basics deck is a simple leaf, others have hierarchy/modal navigation
-    const isBasicsDeck = deck.id === 'basics';
+    // All decks can have hierarchy/modal navigation
     const isLocalRepo = deck.id.startsWith('local/');
 
-    card.className = isBasicsDeck ? 'project-card file-card' : 'project-card';
+    card.className = 'project-card';
 
-    if (!isBasicsDeck) {
+    if (true) {
         card.style.cursor = 'pointer';
         card.onclick = () => openSubdeckModal(deck);
     } else {
@@ -562,50 +561,12 @@ function escapeHtml(text) {
 
 /**
  * Load all local collection repos from public/collection/
- * Special handling: basics.md is loaded as a simple leaf deck, others as full repos with hierarchy
  */
 export async function loadLocalCollectionRepos() {
     try {
         console.log('[Main] Loading local collection repos...');
 
-        // First, try to load basics.md as a simple example deck
-        try {
-            const basicsResponse = await fetch(`${import.meta.env.BASE_URL}collection/basics.md`);
-            if (basicsResponse.ok) {
-                const markdown = await basicsResponse.text();
-                const { cards, metadata } = parseDeck(markdown, 'basics.md');
-
-                const cardsWithMeta = cards.map(card => {
-                    const hash = hashCard(card);
-                    return {
-                        ...card,
-                        hash,
-                        deckName: 'basics',
-                        deckMetadata: metadata,
-                        source: {
-                            repo: 'local',
-                            file: 'basics.md'
-                        }
-                    };
-                });
-
-                await saveCards(cardsWithMeta);
-                await saveRepoMetadata({
-                    id: 'basics',
-                    name: 'basics',
-                    repo: 'local/basics',
-                    cardCount: cardsWithMeta.length,
-                    fileCount: 1,
-                    createdAt: new Date().toISOString()
-                });
-
-                console.log(`[Main] Loaded ${cardsWithMeta.length} cards from basics.md`);
-            }
-        } catch (error) {
-            console.log('[Main] No basics.md found or failed to load');
-        }
-
-        // Load the collection index for other repos
+        // Load the collection index
         const indexResponse = await fetch(`${import.meta.env.BASE_URL}collection/index.json`);
         if (!indexResponse.ok) {
             console.log('[Main] No collection index found');
@@ -615,11 +576,8 @@ export async function loadLocalCollectionRepos() {
         const index = await indexResponse.json();
         console.log(`[Main] Found ${index.repos.length} repos in collection`);
 
-        // Load each repo (skip basics if it exists in the index)
+        // Load each repo from the index
         for (const repoInfo of index.repos) {
-            if (repoInfo.name === 'basics') {
-                continue; // Already loaded as simple deck
-            }
             await loadLocalRepo(repoInfo);
         }
 

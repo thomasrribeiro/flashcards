@@ -18,6 +18,10 @@ export function hashCard(card) {
         hasher.update(encoder.encode('Basic'));
         hasher.update(encoder.encode(card.content.question));
         hasher.update(encoder.encode(card.content.answer));
+    } else if (card.type === 'problem') {
+        hasher.update(encoder.encode('Problem'));
+        hasher.update(encoder.encode(card.content.problem));
+        hasher.update(encoder.encode(card.content.solution));
     } else if (card.type === 'cloze') {
         hasher.update(encoder.encode('Cloze'));
         hasher.update(encoder.encode(card.content.text));

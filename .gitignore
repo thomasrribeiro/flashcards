@@ -4,7 +4,5 @@ public/data/
 .DS_Store
 *.log
 .env
-public/collection/*
-!public/collection/basics.md
 
 

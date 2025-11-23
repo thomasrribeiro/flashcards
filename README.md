@@ -27,12 +27,21 @@ npm install
 npm link
 ```
 
-**3. Run the app:**
+**3. Build the collection index:**
+```bash
+npm run process-submodules
+```
+
+This scans `public/collection/` and generates an index of all markdown files.
+
+**4. Run the app:**
 ```bash
 npm run dev
 ```
 
 Open your browser to the URL shown in the terminal.
+
+**Note:** Whenever you add, remove, or move markdown files in `public/collection/`, run `npm run process-submodules` to update the card index.
 
 ### Creating Decks
 

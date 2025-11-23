@@ -7,13 +7,17 @@ const State = {
     INITIAL: 'initial',
     READING_QUESTION: 'reading_question',
     READING_ANSWER: 'reading_answer',
-    READING_CLOZE: 'reading_cloze'
+    READING_CLOZE: 'reading_cloze',
+    READING_PROBLEM: 'reading_problem',
+    READING_SOLUTION: 'reading_solution'
 };
 
 const LineType = {
     START_QUESTION: 'start_question',
     START_ANSWER: 'start_answer',
     START_CLOZE: 'start_cloze',
+    START_PROBLEM: 'start_problem',
+    START_SOLUTION: 'start_solution',
     SEPARATOR: 'separator',
     TEXT: 'text'
 };
@@ -91,6 +95,10 @@ function readLine(line) {
         return { type: LineType.START_ANSWER, text: line.slice(2).trim() };
     } else if (line.startsWith('C:')) {
         return { type: LineType.START_CLOZE, text: line.slice(2).trim() };
+    } else if (line.startsWith('P:')) {
+        return { type: LineType.START_PROBLEM, text: line.slice(2).trim() };
+    } else if (line.startsWith('S:')) {
+        return { type: LineType.START_SOLUTION, text: line.slice(2).trim() };
     } else if (line.trim() === '---') {
         return { type: LineType.SEPARATOR, text: '' };
     } else {
@@ -246,6 +254,12 @@ export class Parser {
             case State.READING_CLOZE:
                 return this.parseReadingCloze(state, line, lineNum, cards);
 
+            case State.READING_PROBLEM:
+                return this.parseReadingProblem(state, line, lineNum, cards);
+
+            case State.READING_SOLUTION:
+                return this.parseReadingSolution(state, line, lineNum, cards);
+
             default:
                 throw new Error(`Unknown state: ${state.type}`);
         }
@@ -274,9 +288,30 @@ export class Parser {
                     startLine: lineNum
                 };
 
+            case LineType.START_PROBLEM:
+                return {
+                    type: State.READING_PROBLEM,
+                    problem: line.text,
+                    startLine: lineNum
+                };
+
+            case LineType.START_SOLUTION:
+                throw new ParserError(
+                    'Found solution tag without a problem.',
+                    this.filePath,
+                    lineNum
+                );
+
             case LineType.SEPARATOR:
             case LineType.TEXT:
                 return { type: State.INITIAL };
+
+            default:
+                throw new ParserError(
+                    `Unknown line type in INITIAL state: ${line.type}`,
+                    this.filePath,
+                    lineNum
+                );
         }
     }
 
@@ -304,6 +339,20 @@ export class Parser {
                     lineNum
                 );
 
+            case LineType.START_PROBLEM:
+                throw new ParserError(
+                    'Found problem tag while reading a question.',
+                    this.filePath,
+                    lineNum
+                );
+
+            case LineType.START_SOLUTION:
+                throw new ParserError(
+                    'Found solution tag while reading a question.',
+                    this.filePath,
+                    lineNum
+                );
+
             case LineType.SEPARATOR:
                 throw new ParserError(
                     'Found flashcard separator while reading a question.',
@@ -316,6 +365,13 @@ export class Parser {
                     ...state,
                     question: state.question + '\n' + line.text
                 };
+
+            default:
+                throw new ParserError(
+                    `Unknown line type in READING_QUESTION state: ${line.type}`,
+                    this.filePath,
+                    lineNum
+                );
         }
     }
 
@@ -366,6 +422,32 @@ export class Parser {
                     startLine: lineNum
                 };
 
+            case LineType.START_PROBLEM:
+                // Finalize previous card
+                cards.push({
+                    type: 'basic',
+                    deckName: this.deckName,
+                    filePath: this.filePath,
+                    range: [state.startLine, lineNum],
+                    content: {
+                        question: state.question.trim(),
+                        answer: state.answer.trim()
+                    }
+                });
+                // Start new problem
+                return {
+                    type: State.READING_PROBLEM,
+                    problem: line.text,
+                    startLine: lineNum
+                };
+
+            case LineType.START_SOLUTION:
+                throw new ParserError(
+                    'Found solution tag while reading an answer.',
+                    this.filePath,
+                    lineNum
+                );
+
             case LineType.SEPARATOR:
                 // Finalize current card
                 cards.push({
@@ -385,6 +467,13 @@ export class Parser {
                     ...state,
                     answer: state.answer + '\n' + line.text
                 };
+
+            default:
+                throw new ParserError(
+                    `Unknown line type in READING_ANSWER state: ${line.type}`,
+                    this.filePath,
+                    lineNum
+                );
         }
     }
 
@@ -431,6 +520,30 @@ export class Parser {
                     startLine: lineNum
                 };
 
+            case LineType.START_PROBLEM:
+                // Finalize previous cloze card
+                const clozeCards3a = parseClozeCards(
+                    state.text,
+                    this.deckName,
+                    this.filePath,
+                    state.startLine,
+                    lineNum
+                );
+                cards.push(...clozeCards3a);
+                // Start new problem
+                return {
+                    type: State.READING_PROBLEM,
+                    problem: line.text,
+                    startLine: lineNum
+                };
+
+            case LineType.START_SOLUTION:
+                throw new ParserError(
+                    'Found solution tag while reading a cloze card.',
+                    this.filePath,
+                    lineNum
+                );
+
             case LineType.SEPARATOR:
                 // Finalize current cloze card
                 const clozeCards3 = parseClozeCards(
@@ -447,6 +560,161 @@ export class Parser {
                 return {
                     ...state,
                     text: state.text + '\n' + line.text
+                };
+
+            default:
+                throw new ParserError(
+                    `Unknown line type in READING_CLOZE state: ${line.type}`,
+                    this.filePath,
+                    lineNum
+                );
+        }
+    }
+
+    parseReadingProblem(state, line, lineNum, cards) {
+        switch (line.type) {
+            case LineType.START_QUESTION:
+                throw new ParserError(
+                    'New question without solution.',
+                    this.filePath,
+                    lineNum
+                );
+
+            case LineType.START_ANSWER:
+                throw new ParserError(
+                    'Found answer tag while reading a problem.',
+                    this.filePath,
+                    lineNum
+                );
+
+            case LineType.START_CLOZE:
+                throw new ParserError(
+                    'Found cloze tag while reading a problem.',
+                    this.filePath,
+                    lineNum
+                );
+
+            case LineType.START_PROBLEM:
+                throw new ParserError(
+                    'New problem without solution.',
+                    this.filePath,
+                    lineNum
+                );
+
+            case LineType.START_SOLUTION:
+                return {
+                    type: State.READING_SOLUTION,
+                    problem: state.problem,
+                    solution: line.text,
+                    startLine: state.startLine
+                };
+
+            case LineType.SEPARATOR:
+                throw new ParserError(
+                    'Found flashcard separator while reading a problem.',
+                    this.filePath,
+                    lineNum
+                );
+
+            case LineType.TEXT:
+                return {
+                    ...state,
+                    problem: state.problem + '\n' + line.text
+                };
+        }
+    }
+
+    parseReadingSolution(state, line, lineNum, cards) {
+        switch (line.type) {
+            case LineType.START_QUESTION:
+                // Finalize previous card
+                cards.push({
+                    type: 'problem',
+                    deckName: this.deckName,
+                    filePath: this.filePath,
+                    range: [state.startLine, lineNum],
+                    content: {
+                        problem: state.problem.trim(),
+                        solution: state.solution.trim()
+                    }
+                });
+                // Start new question
+                return {
+                    type: State.READING_QUESTION,
+                    question: line.text,
+                    startLine: lineNum
+                };
+
+            case LineType.START_ANSWER:
+                throw new ParserError(
+                    'Found answer tag while reading a solution.',
+                    this.filePath,
+                    lineNum
+                );
+
+            case LineType.START_CLOZE:
+                // Finalize previous card
+                cards.push({
+                    type: 'problem',
+                    deckName: this.deckName,
+                    filePath: this.filePath,
+                    range: [state.startLine, lineNum],
+                    content: {
+                        problem: state.problem.trim(),
+                        solution: state.solution.trim()
+                    }
+                });
+                // Start reading cloze card
+                return {
+                    type: State.READING_CLOZE,
+                    text: line.text,
+                    startLine: lineNum
+                };
+
+            case LineType.START_PROBLEM:
+                // Finalize previous card
+                cards.push({
+                    type: 'problem',
+                    deckName: this.deckName,
+                    filePath: this.filePath,
+                    range: [state.startLine, lineNum],
+                    content: {
+                        problem: state.problem.trim(),
+                        solution: state.solution.trim()
+                    }
+                });
+                // Start new problem
+                return {
+                    type: State.READING_PROBLEM,
+                    problem: line.text,
+                    startLine: lineNum
+                };
+
+            case LineType.START_SOLUTION:
+                throw new ParserError(
+                    'Found solution tag while reading a solution.',
+                    this.filePath,
+                    lineNum
+                );
+
+            case LineType.SEPARATOR:
+                // Finalize current card
+                cards.push({
+                    type: 'problem',
+                    deckName: this.deckName,
+                    filePath: this.filePath,
+                    range: [state.startLine, lineNum],
+                    content: {
+                        problem: state.problem.trim(),
+                        solution: state.solution.trim()
+                    }
+                });
+                return { type: State.INITIAL };
+
+            case LineType.TEXT:
+                return {
+                    ...state,
+                    solution: state.solution + '\n' + line.text
                 };
         }
     }
@@ -486,6 +754,26 @@ export class Parser {
                 );
                 cards.push(...clozeCards);
                 return;
+
+            case State.READING_PROBLEM:
+                throw new ParserError(
+                    'File ended while reading a problem without solution.',
+                    this.filePath,
+                    lastLine
+                );
+
+            case State.READING_SOLUTION:
+                cards.push({
+                    type: 'problem',
+                    deckName: this.deckName,
+                    filePath: this.filePath,
+                    range: [state.startLine, lastLine],
+                    content: {
+                        problem: state.problem.trim(),
+                        solution: state.solution.trim()
+                    }
+                });
+                return;
         }
     }
 
@@ -493,6 +781,8 @@ export class Parser {
         // Simple hash for deduplication (will use BLAKE3 in hasher.js)
         if (card.type === 'basic') {
             return `basic:${card.content.question}:${card.content.answer}`;
+        } else if (card.type === 'problem') {
+            return `problem:${card.content.problem}:${card.content.solution}`;
         } else {
             return `cloze:${card.content.text}:${card.content.start}:${card.content.end}`;
         }

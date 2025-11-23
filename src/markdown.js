@@ -83,11 +83,51 @@ export function markdownToHtmlInline(markdown) {
 }
 
 /**
+ * Parse solution steps from P:/S: card
+ * Returns array of {label, content} objects
+ */
+export function parseSolutionSteps(solution) {
+    const steps = [];
+    const lines = solution.split('\n');
+    let currentStep = null;
+
+    for (const line of lines) {
+        // Match lines like "**IDENTIFY**: content" or "**SET UP**: content"
+        const match = line.match(/^\*\*([^*]+)\*\*:\s*(.*)$/);
+
+        if (match) {
+            // Save previous step if exists
+            if (currentStep) {
+                steps.push(currentStep);
+            }
+
+            // Start new step
+            currentStep = {
+                label: match[1].trim(),
+                content: match[2] || ''
+            };
+        } else if (currentStep) {
+            // Continuation of current step
+            currentStep.content += '\n' + line;
+        }
+    }
+
+    // Save last step
+    if (currentStep) {
+        steps.push(currentStep);
+    }
+
+    return steps;
+}
+
+/**
  * Render card front (question or cloze with hidden deletion)
  */
 export function renderCardFront(card) {
     if (card.type === 'basic') {
         return markdownToHtml(card.content.question);
+    } else if (card.type === 'problem') {
+        return markdownToHtml(card.content.problem);
     } else if (card.type === 'cloze') {
         // Replace deletion with placeholder
         const CLOZE_TAG = 'CLOZE_DELETION';
@@ -115,6 +155,10 @@ export function renderCardFront(card) {
 export function renderCardBack(card) {
     if (card.type === 'basic') {
         return markdownToHtml(card.content.answer);
+    } else if (card.type === 'problem') {
+        // For problem cards, this is handled by step-by-step reveal
+        // This function won't be called for problem cards
+        return '';
     } else if (card.type === 'cloze') {
         // Extract deletion text and render it
         const textBytes = new TextEncoder().encode(card.content.text);
@@ -139,4 +183,15 @@ export function renderCardBack(card) {
         // Replace placeholder with revealed deletion
         return html.replace(CLOZE_TAG, `<span class="cloze-reveal">${deletedHtml}</span>`);
     }
+}
+
+/**
+ * Render a single solution step
+ */
+export function renderSolutionStep(step) {
+    const html = markdownToHtml(step.content.trim());
+    return `<div class="solution-step">
+        <div class="solution-step-label">${step.label}:</div>
+        <div class="solution-step-content">${html}</div>
+    </div>`;
 }

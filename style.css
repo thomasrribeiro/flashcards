@@ -546,6 +546,23 @@ body {
     font-weight: 700;
 }
 
+/* Solution step styling for P:/S: cards */
+.solution-step {
+    margin: 1.5em 0;
+    padding: 0;
+}
+
+.solution-step-label {
+    font-weight: 700;
+    color: var(--gold);
+    margin-bottom: 0.5em;
+}
+
+.solution-step-content {
+    margin-left: 1em;
+    color: var(--black);
+}
+
 .action-prompt {
     text-align: center;
     font-size: 14px;
