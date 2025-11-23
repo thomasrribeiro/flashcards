@@ -4,7 +4,7 @@
 
 import { initDB, getCard, getAllCards, getAllReviews, saveReview, saveCards } from './storage.js';
 import { reviewCard, createCard, Rating, GradeKeys, getDueCards as filterDueCards, State } from './fsrs-client.js';
-import { renderCardFront, renderCardBack, parseSolutionSteps, renderSolutionStep } from './markdown.js';
+import { renderCardFront, renderCardBack, parseSolutionSteps, renderSolutionStep, markdownToHtml } from './markdown.js';
 import { parseDeck } from './parser.js';
 import { hashCard } from './hasher.js';
 
@@ -242,9 +242,15 @@ function setupEventListeners() {
         });
     }
 
-    // Number keys for grading
+    // Spacebar for reveal, number keys for grading
     document.addEventListener('keydown', (e) => {
-        if (isRevealed && GradeKeys[e.key]) {
+        // Spacebar to reveal answer
+        if (e.key === ' ' && !isRevealed) {
+            e.preventDefault();
+            revealAnswer();
+        }
+        // Number keys for grading
+        else if (isRevealed && GradeKeys[e.key]) {
             e.preventDefault();
             gradeCard(GradeKeys[e.key]);
         }
@@ -280,22 +286,37 @@ function showNextCard() {
     if (currentCard.type === 'problem') {
         // Parse solution steps for problem cards
         solutionSteps = parseSolutionSteps(currentCard.content.solution);
-        cardBack.innerHTML = ''; // Will be populated step by step
+
+        // Show the first step's header immediately
+        if (solutionSteps.length > 0) {
+            const firstStepHeader = `<div class="solution-step">
+                <div class="solution-step-label">${solutionSteps[0].label}:</div>
+            </div>`;
+            cardBack.innerHTML = firstStepHeader;
+            cardBack.classList.remove('hidden');
+        } else {
+            cardBack.innerHTML = '';
+        }
     } else {
         cardBack.innerHTML = renderCardBack(currentCard);
         solutionSteps = [];
     }
 
-    // Show front, hide back
+    // Show front
     cardFront.classList.remove('hidden');
-    cardBack.classList.add('hidden');
+
+    // For non-problem cards, hide back initially
+    if (currentCard.type !== 'problem') {
+        cardBack.classList.add('hidden');
+    }
+
     revealPrompt.classList.remove('hidden');
     gradeButtons.classList.add('hidden');
 
     // Reset reveal button text
     const revealBtn = document.getElementById('reveal-btn');
     if (revealBtn) {
-        revealBtn.textContent = currentCard.type === 'problem' ? 'Reveal Next Step' : 'Reveal Answer';
+        revealBtn.textContent = 'Reveal';
     }
 }
 
@@ -304,27 +325,34 @@ function showNextCard() {
  */
 function revealAnswer() {
     if (currentCard.type === 'problem') {
-        // For problem cards, reveal next step
+        // For problem cards, reveal current step's content and next step's header
         if (currentStepIndex < solutionSteps.length) {
-            const step = solutionSteps[currentStepIndex];
-            const stepHtml = renderSolutionStep(step);
+            const currentStep = solutionSteps[currentStepIndex];
 
-            // Append step to card back
-            cardBack.innerHTML += stepHtml;
+            // Build HTML for current step's content
+            const currentStepContent = markdownToHtml(currentStep.content.trim());
+            let html = `<div class="solution-step-content">${currentStepContent}</div>`;
+
+            // If there's a next step, add its header
+            if (currentStepIndex + 1 < solutionSteps.length) {
+                const nextStep = solutionSteps[currentStepIndex + 1];
+                html += `<div class="solution-step">
+                    <div class="solution-step-label">${nextStep.label}:</div>
+                </div>`;
+            }
+
+            // Append to card back
+            cardBack.innerHTML += html;
             cardBack.classList.remove('hidden');
 
             currentStepIndex++;
 
             // Update button text based on progress
-            const revealBtn = document.getElementById('reveal-btn');
             if (currentStepIndex >= solutionSteps.length) {
                 // All steps revealed, show grade buttons
                 revealPrompt.classList.add('hidden');
                 gradeButtons.classList.remove('hidden');
                 isRevealed = true;
-            } else {
-                // More steps to reveal
-                revealBtn.textContent = 'Reveal Next Step';
             }
         }
     } else {

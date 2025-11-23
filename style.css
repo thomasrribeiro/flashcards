@@ -530,6 +530,21 @@ body {
     margin: 1.5em 0;
 }
 
+/* Answer separator for Q/A cards */
+.answer-separator {
+    margin: 0.2em 0 0 0;
+    padding-top: 0.3em;
+}
+
+.answer-separator::before {
+    content: '---';
+    color: var(--black);
+    opacity: 0.6;
+    font-size: 0.9em;
+    display: block;
+    margin-bottom: 1em;
+}
+
 /* Cloze styling */
 .cloze {
     background: var(--gold);
@@ -673,7 +688,7 @@ kbd {
     display: inline-block;
     background: var(--black);
     color: var(--white);
-    padding: 8px 20px;
+    padding: 8px 64px;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 16px;
     border: none;
@@ -684,6 +699,28 @@ kbd {
 
 .btn-reveal:hover {
     opacity: 0.8;
+}
+
+.action-prompt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.action-prompt .hint {
+    font-size: 0.65em;
+    opacity: 0.7;
+    color: var(--black);
+}
+
+.action-prompt .hint kbd {
+    background: var(--white);
+    color: var(--black);
+    border: 1px solid var(--black);
+    padding: 1px 12px;
+    font-size: 1em;
+    border-radius: 2px;
 }
 
 /* Responsive */

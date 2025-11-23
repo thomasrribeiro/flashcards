@@ -1,12 +1,23 @@
 {
-  "generatedAt": "2025-11-23T02:34:56.736Z",
+  "generatedAt": "2025-11-23T03:07:47.145Z",
   "repoCount": 1,
-  "fileCount": 1,
+  "fileCount": 12,
   "repos": [
     {
       "name": "example",
       "files": [
-        "flashcards/example.md"
+        "flashcards/arts.md",
+        "flashcards/bible.md",
+        "flashcards/biology.md",
+        "flashcards/chemistry.md",
+        "flashcards/computer-science.md",
+        "flashcards/economics.md",
+        "flashcards/history.md",
+        "flashcards/languages.md",
+        "flashcards/literature.md",
+        "flashcards/mathematics.md",
+        "flashcards/physics.md",
+        "flashcards/sports.md"
       ]
     }
   ]

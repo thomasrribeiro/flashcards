@@ -621,6 +621,13 @@ export class Parser {
                     ...state,
                     problem: state.problem + '\n' + line.text
                 };
+
+            default:
+                throw new ParserError(
+                    `Unknown line type in READING_PROBLEM state: ${line.type}`,
+                    this.filePath,
+                    lineNum
+                );
         }
     }
 
@@ -716,6 +723,13 @@ export class Parser {
                     ...state,
                     solution: state.solution + '\n' + line.text
                 };
+
+            default:
+                throw new ParserError(
+                    `Unknown line type in READING_SOLUTION state: ${line.type}`,
+                    this.filePath,
+                    lineNum
+                );
         }
     }
 

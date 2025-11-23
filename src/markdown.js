@@ -154,7 +154,8 @@ export function renderCardFront(card) {
  */
 export function renderCardBack(card) {
     if (card.type === 'basic') {
-        return markdownToHtml(card.content.answer);
+        const answerHtml = markdownToHtml(card.content.answer);
+        return `<div class="answer-separator">${answerHtml}</div>`;
     } else if (card.type === 'problem') {
         // For problem cards, this is handled by step-by-step reveal
         // This function won't be called for problem cards
