@@ -40,7 +40,7 @@ Contributions welcome! Follow these guidelines:
 - **Use appropriate format**:
   - `C:` for cloze deletions
   - `Q:/A:` for questions and answers
-  - `P:/S:` for problems with step-by-step solutions (ISEE framework)
+  - `P:/S:` for problems with step-by-step solutions (ISAE framework)
 - **Self-contained cards**: Each card should make sense on its own
 - **Include context**: Don't assume prior card knowledge
 

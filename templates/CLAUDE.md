@@ -1,115 +1,247 @@
 # {SUBJECT_NAME} - Flashcard Writing Guide
 
-> **Purpose**: This guide covers {SUBJECT_NAME}-specific strategies for creating effective spaced repetition flashcards, building on universal SRS principles.
+> **Purpose**: This guide provides research-based strategies for creating highly effective spaced repetition flashcards for {SUBJECT_NAME}, optimized for the FSRS algorithm.
+
+> **Foundation**: Based on cognitive science research, SuperMemo's 20 Rules of Formulating Knowledge, and 2025 spaced repetition best practices.
+
+> **IMPORTANT**: If there is a subject-specific guide file in this directory (e.g., `physics.md`, `chemistry.md`, `history.md`), **read it FIRST** before creating flashcards. It contains crucial {SUBJECT_NAME}-specific strategies, common patterns, and pitfalls to avoid.
+
+---
+
+## Why This Matters
+
+**The Science**: Practicing retrieval ONE time doubles long-term retention. Repeated retrieval produces a 400% improvement compared to re-reading. Well-formulated flashcards using FSRS reduce review time by 20-30% while maintaining the same retention level.
+
+**The Key**: The quality of your flashcards determines learning efficiency. The same material can be learned 10x faster if properly formulated.
 
 ---
 
 ## Core Principles (Research-Based)
 
-### 1. Atomicity
-**One concept per card**. Break complex ideas into the smallest testable units.
+### 1. **Understand Before You Memorize** ⚠️ CRITICAL
+**Never create flashcards for material you don't comprehend.** Material learned without understanding has near-zero practical value and wastes study time.
 
-❌ **Bad**:
+**Build the big picture first:**
+- Read overview/introduction chapters before details
+- Understand WHY concepts matter before WHAT they are
+- If you can't explain it simply, you don't understand it yet
+
+✅ **Create "why" cards before "what" cards:**
 ```markdown
-C: Newton's laws state that [objects at rest stay at rest], [F=ma], and [every action has an equal and opposite reaction].
+# History example:
+Q: Why did the Treaty of Versailles contribute to World War II?
+A: Harsh reparations and territorial losses humiliated Germany, creating economic hardship and resentment that enabled Hitler's rise to power.
+
+# THEN create the fact card:
+C: The Treaty of Versailles was signed in [1919], ending World War I.
+
+# Philosophy example:
+Q: Why is Descartes' "I think, therefore I am" considered foundational?
+A: It's the first principle that survives radical skepticism - even if everything else is doubted, the act of doubting proves the doubter exists.
+
+# THEN:
+C: Descartes' foundational principle is ["Cogito, ergo sum"] ("I think, therefore I am").
 ```
 
-✅ **Good**:
+### 2. **Minimum Information Principle** 🎯
+**Keep cards EXTREMELY simple.** One card should test ONE atomic piece of knowledge.
+
+**Rule**: If a card seems complex, split it into 5-10 simpler sub-cards.
+
+❌ **Bad** (too much information):
 ```markdown
-C: Newton's first law: An object at rest [stays at rest] unless acted upon by a [net external force].
-
-C: Newton's second law states that $\vec{F} = $ [$m\vec{a}$].
-
-C: Newton's third law: For every action there is an [equal and opposite] reaction.
+# Biology - too complex:
+C: Mitochondria are [the powerhouse of the cell], have [their own DNA], contain [cristae for increased surface area], and produce [ATP through oxidative phosphorylation].
 ```
 
-### 2. Two-Way Testing
-Create inverse cards for relationships to test understanding from multiple directions.
-
-✅ **Example**:
+✅ **Good** (atomic cards):
 ```markdown
-Q: What causes acceleration according to Newton's second law?
-A: Net force. ($\vec{F} = m\vec{a}$)
+C: Mitochondria are called the [powerhouse of the cell] because they produce most cellular ATP.
 
-Q: What is the effect of applying a net force to an object?
-A: The object accelerates in the direction of the force. ($\vec{F} = m\vec{a}$)
+C: Mitochondria contain their own [DNA], inherited maternally.
+
+C: The inner mitochondrial membrane folds into structures called [cristae].
+
+Q: Why do mitochondria have cristae?
+A: To increase surface area for ATP production via electron transport chain.
 ```
 
-### 3. Multiple Perspectives
-Test the same concept from different angles: conceptual → computational → application.
+**Why it works**: Simpler cards are easier to schedule, faster to review, and have lower failure rates.
 
-✅ **Progression**:
+### 3. **Build on the Basics**
+**Master fundamentals first.** Don't skip "obvious" foundational concepts.
+
+✅ **Examples across subjects**:
 ```markdown
-# Level 1: Definition
-Q: What is Newton's second law?
-A: The net force on an object equals its mass times its acceleration: $\vec{F} = m\vec{a}$
+# Economics - don't skip basics:
+Q: What is the fundamental economic problem?
+A: Scarcity - unlimited wants but limited resources.
 
-# Level 2: Conceptual
-Q: If you double the force on an object while keeping mass constant, what happens to acceleration?
-A: Acceleration doubles (linear relationship from F = ma)
+Q: What is opportunity cost?
+A: The value of the next-best alternative given up when making a choice.
 
-# Level 3: Application
-P: A 2.0 kg object experiences a net force of 10 N. What is its acceleration?
-S: $a = F/m = 10/2.0 = 5.0$ m/s²
+# Computer Science:
+Q: What is an algorithm?
+A: A step-by-step procedure for solving a problem or performing a computation.
+
+C: An algorithm has three requirements: [definiteness], [effectiveness], and [finiteness].
+
+# Law:
+Q: What is the burden of proof in criminal vs civil cases?
+A: Criminal: "beyond reasonable doubt" (very high). Civil: "preponderance of evidence" (more likely than not).
 ```
 
-### 4. Context-Rich Questions
-Cards should be self-contained and unambiguous.
+### 4. **Atomicity: One Concept Per Card**
+Break complex ideas into the smallest independently testable units.
 
-❌ **Bad**: `Q: What is it? A: Force`
+**Test**: Can you answer this card without thinking "it depends" or "which part?" If yes, it's atomic enough.
 
-✅ **Good**: `Q: What is the SI unit of force? A: Newton (N)`
+### 5. **Combat Interference** 🧠
+Similar cards cause confusion and high failure rates. When two cards interfere:
 
-### 5. Understand Before Memorizing
-Never create flashcards for material you don't understand. If you can't explain **why**, you don't truly understand it.
+**Strategies**:
+- Add vivid, contrasting examples
+- Use emotional or personal connections
+- Add context cues (prefixes, categories)
+- Use mnemonic devices
+- Consider deleting one card if interference persists
 
-**Create "why" cards before "what" cards:**
+❌ **High interference**:
 ```markdown
-Q: Why do we use free-body diagrams?
-A: To isolate a single object and visualize all forces acting on it, making it easier to correctly apply Newton's laws.
+# Psychology - confusing similar concepts:
+Q: What is classical conditioning?
+A: Learning through association.
 
-C: A free-body diagram shows all [forces] acting on a [single isolated object].
+Q: What is operant conditioning?
+A: Learning through consequences.
+```
+
+✅ **Reduced interference** (add distinguishing context):
+```markdown
+Q: What is classical conditioning (Pavlov's dogs)?
+A: Learning through ASSOCIATION - a neutral stimulus becomes associated with a natural response (bell → salivation).
+
+Q: What is operant conditioning (Skinner's rats)?
+A: Learning through CONSEQUENCES - behavior strengthened by rewards or weakened by punishments (lever press → food).
+
+# Even better: Add vivid examples
+Q: What's a classic example of classical conditioning?
+A: Pavlov's dogs: bell (neutral) + food (natural stimulus) → bell alone causes salivation.
+
+Q: What's a classic example of operant conditioning?
+A: Skinner box: rat presses lever (behavior) → gets food (reward) → presses more often.
+```
+
+### 6. **Optimize Wording**
+**Trim ruthlessly.** Remove every unnecessary word like reducing a mathematical equation.
+
+❌ **Wordy**:
+```markdown
+Q: In the context of Renaissance art during the 14th-16th centuries in Europe, what technique did artists develop for creating the illusion of three-dimensional depth on two-dimensional surfaces?
+A: Perspective
+```
+
+✅ **Optimized**:
+```markdown
+Q: What Renaissance technique creates the illusion of 3D depth on 2D surfaces?
+A: Linear perspective (vanishing point)
+```
+
+### 7. **Use Context Cues to Simplify**
+Add prefixes or categories to provide context without lengthy wording.
+
+✅ **Examples**:
+```markdown
+# Instead of: "In organic chemistry, what functional group is -OH?"
+ochem: Q: What functional group is -OH?
+A: Hydroxyl group (alcohols)
+
+# Instead of: "In contract law, what is consideration?"
+contracts: Q: What is consideration?
+A: Something of value exchanged by both parties (makes contract binding)
+
+# Instead of: "In music theory, what is a dominant chord?"
+theory: Q: What is the V chord called?
+A: Dominant chord (creates tension, wants to resolve to I)
 ```
 
 ---
 
 ## Card Format Types
 
-### C: Cloze Deletion
+### C: Cloze Deletion ⭐ FASTEST TO CREATE
 
-**Use for**: Definitions, formulas, fill-in-the-blank facts
+**Use for**: Definitions, formulas, relationships, fill-in-the-blank facts
+
+**Why cloze is powerful**:
+- Fastest card creation method
+- Reduces cognitive load during review
+- Forces precise recall
+- One sentence can generate multiple cards
 
 **Syntax**: `C: The [answer] is hidden in brackets.`
 
 **Best practices**:
-- Maximum 1-2 deletions per card (prefer 1)
+- **Maximum 1-2 deletions per card** (prefer 1)
 - Ensure remaining context is sufficient to answer
 - Each `[deletion]` creates a separate flashcard
+- Don't delete so much that it becomes ambiguous
 
-**Examples**:
+**Examples across subjects**:
 ```markdown
-C: The SI unit of force is the [Newton (N)].
+# Literature:
+C: Shakespeare's [Hamlet] features a prince seeking revenge for his father's murder.
 
-C: Newton's second law: $\vec{F} = $ [$m\vec{a}$]
+C: The novel [1984] by George Orwell depicts a totalitarian surveillance state.
 
-C: A vector has both [magnitude] and [direction].
+# Finance:
+C: A [bull market] is characterized by rising prices and investor optimism.
+
+C: The [P/E ratio] compares a company's stock price to its earnings per share.
+
+# Computer Science:
+C: A [stack] follows Last-In-First-Out (LIFO) order.
+
+C: Time complexity of binary search is [O(log n)].
+
+# Medicine (careful with similar terms):
+C: [Hypertension] means abnormally high blood pressure.
+
+C: [Hypotension] means abnormally low blood pressure.
 ```
 
-**Multiple deletions** (creates 2 cards):
+**Multiple deletions** (creates multiple cards):
 ```markdown
-C: The [dot product] $\vec{A} \cdot \vec{B}$ yields a [scalar], while the [cross product] $\vec{A} \times \vec{B}$ yields a [vector].
+# Linguistics:
+C: [Phonemes] are the smallest units of [sound] that distinguish meaning in a language.
+
+# This creates 2 cards testing each deletion separately
 ```
-This creates:
-- Card 1: "The **[?]** $\vec{A} \cdot \vec{B}$ yields a scalar..."
-- Card 2: "The dot product $\vec{A} \cdot \vec{B}$ yields a **[?]**..."
-- Card 3: "...while the **[?]** $\vec{A} \times \vec{B}$ yields a vector."
-- Card 4: "...cross product $\vec{A} \times \vec{B}$ yields a **[?]**."
+
+**Advanced: Graphic Deletion** 🖼️
+Cover portions of diagrams and ask to identify missing components.
+
+```markdown
+# Art History:
+Q: What architectural element is missing from this Gothic cathedral diagram?
+
+![Gothic cathedral with flying buttress removed](../figures/architecture/cathedral_missing_buttress.png)
+
+A: Flying buttress (supports the weight of the walls and roof)
+
+# Anatomy:
+Q: Identify the missing bone in this skeletal diagram.
+
+![Skeleton with femur hidden](../figures/anatomy/skeleton_missing_femur.png)
+
+A: Femur (thigh bone, longest bone in the body)
+```
 
 ---
 
 ### Q:/A: Question and Answer
 
-**Use for**: Explanations, procedures, "why" questions, comparisons
+**Use for**: Explanations, "why" questions, procedures, comparisons, application contexts
 
 **Syntax**:
 ```markdown
@@ -118,410 +250,411 @@ A: Answer text here.
 ```
 
 **Best practices**:
-- Make questions specific and unambiguous
-- Keep answers concise (2-4 sentences maximum)
-- Use for conceptual understanding, not rote memorization
+- Make questions **specific and unambiguous**
+- Keep answers **concise** (1-4 sentences maximum)
+- Use for **conceptual understanding**, not rote memorization
+- Ask "why" and "when" to test deeper understanding
 
-**Examples**:
+**Examples across subjects**:
 ```markdown
-Q: Why do we use significant figures in physics?
-A: To communicate the precision of a measurement. The number of significant figures indicates the uncertainty in the last digit.
+# Political Science:
+Q: What is the main difference between a federal and unitary system?
+A: Federal divides power between national and state governments (US, Germany). Unitary concentrates power in a central government (UK, France).
 
-Q: When do you use $v^2 = v_0^2 + 2a\Delta x$ instead of $v = v_0 + at$?
-A: When you know/need displacement but don't have/need time information.
+# Theatre:
+Q: What is the purpose of a proscenium arch?
+A: Frames the stage like a picture, separating audience from performers and defining the viewing area.
 
-Q: What's the difference between speed and velocity?
-A: Speed is a scalar (magnitude only), while velocity is a vector (magnitude and direction). An object can have constant speed but changing velocity if its direction changes.
+# Chemistry:
+Q: Why does ice float on water?
+A: Water expands when freezing - hydrogen bonds create an open hexagonal crystal structure less dense than liquid water.
+
+# Mathematics:
+Q: When do you use integration by parts?
+A: When integrating a product of two functions, especially when one simplifies upon differentiation (like ln(x), x^n with trig/exp).
+
+# Sociology:
+Q: What's the difference between cultural assimilation and acculturation?
+A: Assimilation: minority culture fully adopts dominant culture. Acculturation: borrowing elements while maintaining distinct identity.
 ```
 
 ---
 
 ### P:/S: Problem and Solution Roadmap
 
-**Use for**: Teaching problem-solving **methodology** and **approach**, not numerical computation
+**Use for**: Teaching problem-solving **methodology** and **systematic approach**, NOT numerical computation
 
-**IMPORTANT**: P:/S: cards should use **variables only**, no specific numerical values. The goal is to learn the approach and reasoning steps, not to practice arithmetic.
+**⚠️ CRITICAL**: P:/S: cards use **VARIABLES or general principles**, never specific numbers (except when teaching specific facts). The goal is to learn reasoning steps and methodology.
 
-**Framework**: **ISAE** (Identify, Set Up, Approach, Evaluate)
+**Framework**: **Flexible based on subject** - adapt to your field's problem-solving approach
 
-**Syntax**:
+**Common frameworks**:
+- **STEM**: ISAE (Identify, Set Up, Approach, Evaluate)
+- **Humanities**: Context → Analysis → Evidence → Conclusion
+- **Law**: IRAC (Issue, Rule, Application, Conclusion)
+- **Medicine**: SOAP (Subjective, Objective, Assessment, Plan)
+
+**Examples across subjects**:
+
+**Mathematics**:
 ```markdown
-P: [Problem statement using variables, not numbers]
+P: How do you determine if a function $f(x)$ is continuous at a point $x = a$?
 
 S:
-**IDENTIFY**: [Problem type and key concepts that apply]
+**IDENTIFY**: Continuity definition problem
 
 **SET UP**:
-- Known: [List given quantities as variables]
-- Unknown: [What you're solving for]
+- Need three conditions to be satisfied
+- Function must be defined at $a$
 
 **APPROACH**:
-- [Step-by-step reasoning and strategy]
-- [Which formulas to use and WHY]
-- [Order of operations]
+1. Check $f(a)$ exists (function is defined at $a$)
+2. Check $\lim_{x \to a} f(x)$ exists (limit exists)
+3. Check $\lim_{x \to a} f(x) = f(a)$ (limit equals function value)
 
 **EVALUATE**:
-- Units: [Dimensional analysis]
-- Sign/direction: [Physical interpretation]
-- Limiting cases: [What happens in special cases?]
+- All three conditions must hold simultaneously
+- If any fails, function is discontinuous at $a$
+- Common discontinuities: removable, jump, infinite
 ```
 
-**Examples**:
-
-**Methodology-focused problem**:
+**History/Humanities**:
 ```markdown
-P: A car accelerates uniformly from rest to final velocity $v$ in time $t$. How do you find the distance traveled?
+P: How do you analyze the causes of a historical event like the French Revolution?
 
 S:
-**IDENTIFY**: Constant acceleration kinematics problem
+**CONTEXT**: Identify time period, key actors, and immediate circumstances (1789, France, absolute monarchy)
 
-**SET UP**:
-- Known: $v_0$, $v$, $t$
-- Unknown: $\Delta x$
+**FACTORS**: Categorize causes
+- Political: Absolute monarchy, weak king (Louis XVI), Enlightenment ideas
+- Economic: National bankruptcy, unfair taxation, bread shortages
+- Social: Estates system, rising bourgeoisie, peasant grievances
 
-**APPROACH**:
-1. Need acceleration first: $a = \frac{v - v_0}{t}$
-2. Apply displacement equation: $\Delta x = v_0 t + \frac{1}{2}at^2$
-3. Substitute acceleration: $\Delta x = v_0 t + \frac{1}{2}\left(\frac{v - v_0}{t}\right)t^2$
-4. Simplify: $\Delta x = v_0 t + \frac{1}{2}(v - v_0)t = \frac{1}{2}(v_0 + v)t$
+**CONNECTIONS**: How factors interrelated
+- Economic crisis → calling Estates-General → political crisis
+- Enlightenment ideas provided intellectual framework for change
+- Social tensions amplified by economic hardship
 
-**EVALUATE**:
-- Units: $[v][t] = \text{distance}$ ✓
-- Limiting case: If $v_0 = 0$, reduces to $\Delta x = \frac{1}{2}vt$ (average velocity × time) ✓
-- Sign: Positive if $v > v_0$ (forward motion) ✓
+**CONCLUSION**: Multiple interconnected causes, no single trigger
+- Structural factors (Ancien Régime, inequality) created conditions
+- Immediate triggers (fiscal crisis, harvest failures) sparked action
 ```
 
-**Equation selection**:
+**Computer Science**:
 ```markdown
-P: You know initial velocity, final velocity, and displacement, but not time. Which kinematic equation should you use and why?
+P: How do you choose between a hash table and a binary search tree for a data structure?
 
 S:
-**IDENTIFY**: Kinematics equation selection problem
+**IDENTIFY**: Data structure selection problem
 
-**SET UP**:
-- Known: $v_0$, $v$, $\Delta x$
-- Unknown: Could be $a$ or other quantities
-- Missing: $t$ (time)
+**REQUIREMENTS**:
+- What operations are needed? (search, insert, delete, range queries, ordering)
+- What are the performance requirements?
+- Is memory a constraint?
 
-**APPROACH**:
-Use $v^2 = v_0^2 + 2a\Delta x$ because:
-- It relates all four quantities we care about: $v$, $v_0$, $a$, $\Delta x$
-- It does NOT involve $t$, which we don't know
-- Other equations like $v = v_0 + at$ require knowing $t$
+**COMPARE**:
+Hash Table:
+- O(1) average search/insert/delete
+- No ordering, no range queries
+- More memory overhead
+
+BST (balanced):
+- O(log n) search/insert/delete
+- Maintains ordering, supports range queries
+- Less memory overhead
+
+**DECISION**:
+- Use hash table if: Need fast lookups, don't need ordering
+- Use BST if: Need ordered data, range queries, or sorted iteration
 
 **EVALUATE**:
-- Check: All known variables appear, unknown doesn't require $t$ ✓
-- Alternative: Could find $t$ first using other equations, but this is more direct
+- Consider worst-case scenarios (hash collisions, unbalanced BST)
+- Balanced BST (AVL, Red-Black) gives guaranteed O(log n)
 ```
 
-**Conceptual approach**:
+**Law**:
 ```markdown
-P: How do you determine the net force on an object when multiple forces act at different angles?
+P: How do you analyze a contracts problem using IRAC?
 
 S:
-**IDENTIFY**: Vector addition problem using Newton's second law
+**ISSUE**: Is there a valid enforceable contract?
+
+**RULE**: Contract requires:
+- Offer (definite terms)
+- Acceptance (mirror image or UCC 2-207)
+- Consideration (bargained-for exchange)
+- Capacity (legal ability to contract)
+- Legality (lawful purpose)
+
+**APPLICATION**:
+1. Identify the offer: What were the specific terms?
+2. Find acceptance: Did offeree agree to exact terms?
+3. Find consideration: What did each party give/promise?
+4. Check capacity: Were parties competent adults?
+5. Verify legality: Was the purpose lawful?
+
+**CONCLUSION**:
+- If all elements present: Valid contract
+- If any element missing: No contract (identify which failed)
+- Discuss defenses (fraud, duress, mistake) if applicable
+```
+
+**Economics**:
+```markdown
+P: How do you determine the effect of a price ceiling on market equilibrium?
+
+S:
+**IDENTIFY**: Price control analysis (ceiling = maximum legal price)
 
 **SET UP**:
-- Known: Multiple force vectors $\vec{F}_1, \vec{F}_2, ...$
-- Unknown: Net force $\vec{F}_{\text{net}}$
+- Market equilibrium: $P_e$ (equilibrium price), $Q_e$ (equilibrium quantity)
+- Price ceiling: $P_c < P_e$ (binding) or $P_c > P_e$ (non-binding)
 
 **APPROACH**:
-1. Resolve each force into components: $F_{ix}$, $F_{iy}$
-2. Sum components separately: $F_{\text{net},x} = \sum F_{ix}$, $F_{\text{net},y} = \sum F_{iy}$
-3. Find magnitude: $|\vec{F}_{\text{net}}| = \sqrt{F_{\text{net},x}^2 + F_{\text{net},y}^2}$
-4. Find direction: $\theta = \arctan\left(\frac{F_{\text{net},y}}{F_{\text{net},x}}\right)$
+If $P_c < P_e$ (binding):
+1. At $P_c$: quantity demanded $Q_d > Q_e$
+2. At $P_c$: quantity supplied $Q_s < Q_e$
+3. Result: shortage = $Q_d - Q_s$
+4. Actual quantity traded: $\min(Q_d, Q_s) = Q_s$ (limited by supply)
 
 **EVALUATE**:
-- Units: All forces have same units ✓
-- Limiting case: If all forces along same axis, reduces to simple addition ✓
-- Sign: Direction matters (positive/negative indicates orientation)
+- Consumer surplus: some gain (lower price), some lose (can't buy)
+- Producer surplus: decreases (lower price, lower quantity)
+- Deadweight loss: $\frac{1}{2}(Q_e - Q_s)(P_d - P_s)$
+- Non-price rationing emerges (queues, favoritism, black markets)
+```
+
+---
+
+## Advanced Principles from Research
+
+### Two-Way Testing (Bidirectional Cards)
+**Create inverse cards to test relationships from both directions.**
+
+✅ **Examples**:
+```markdown
+# Biology - Forward and reverse:
+Q: What molecule carries genetic information in cells?
+A: DNA (deoxyribonucleic acid)
+
+Q: What is the function of DNA?
+A: Stores and transmits genetic information
+
+# Art History:
+Q: Who painted "Starry Night"?
+A: Vincent van Gogh (1889)
+
+Q: What is Vincent van Gogh's most famous painting?
+A: Starry Night (1889, swirling night sky)
+
+# Programming:
+Q: What design pattern separates data from presentation?
+A: Model-View-Controller (MVC)
+
+Q: What are the three components of MVC?
+A: Model (data), View (presentation), Controller (logic)
+```
+
+### Personalize and Provide Examples
+**Link material to YOUR personal experiences and emotions.**
+
+✅ **Examples**:
+```markdown
+# Generic (harder to remember):
+C: Confirmation bias is the tendency to [seek information that confirms existing beliefs].
+
+# Personalized (much more memorable):
+C: Confirmation bias explains why I only read [news sources that agree with my political views].
+
+# Literature with personal connection:
+Q: What literary technique does Kafka use in "The Metamorphosis"?
+A: Absurdism - Gregor's transformation into an insect is never explained, reflecting the inexplicable alienation I feel in bureaucratic systems.
+```
+
+### Avoid Sets and Enumerations ⚠️
+**Don't ask for unordered lists.**
+
+❌ **Bad**:
+```markdown
+Q: List the seven continents.
+A: Africa, Antarctica, Asia, Australia, Europe, North America, South America
+```
+
+✅ **Good** (individual cards with mnemonics or context):
+```markdown
+C: The seven continents are [Africa], [Antarctica], [Asia], [Australia], [Europe], [North America], and [South America].
+
+# Or use mnemonic:
+C: Mnemonic for continents: [A]unt [A]nnie [A]te [A]sparagus [E]very [N]oon [S]aturday
+
+# Or create geographical cards:
+Q: Which continent is entirely in the Southern Hemisphere and has no permanent population?
+A: Antarctica
+
+Q: Which continent contains the most countries?
+A: Africa (54 countries)
+```
+
+**For sequences**, use overlapping cloze deletions:
+```markdown
+# Scientific method:
+C: Scientific method: [Observe] → Hypothesize → Experiment → Analyze → Conclude
+
+C: Scientific method: Observe → [Hypothesize] → Experiment → Analyze → Conclude
+
+C: Scientific method: Observe → Hypothesize → [Experiment] → Analyze → Conclude
+```
+
+### Redundancy Does NOT Contradict Minimum Information
+**Create multiple cards for the same concept from different angles.**
+
+✅ **Examples**:
+```markdown
+# Philosophy - same concept, different angles:
+C: [Utilitarianism] judges actions by their consequences (greatest good for greatest number).
+
+Q: What ethical theory judges actions solely by outcomes?
+A: Consequentialism (utilitarianism is the most common form)
+
+Q: How does utilitarianism differ from deontology?
+A: Utilitarianism focuses on outcomes/consequences. Deontology focuses on duties/rules regardless of outcomes.
+
+Q: What's a criticism of pure utilitarianism?
+A: Can justify harming individuals for collective benefit (tyranny of the majority)
 ```
 
 ---
 
 ## Subject-Specific Guidance
 
+**⚠️ IMPORTANT**: Before creating flashcards for {SUBJECT_NAME}, check if there is a subject-specific template file in this directory:
+
+**Look for**: `physics.md`, `chemistry.md`, `biology.md`, `math.md`, `history.md`, `cs.md`, etc.
+
+**If found**: READ IT FIRST. It contains:
+- {SUBJECT_NAME}-specific problem-solving frameworks
+- Common terminology and notation conventions
+- Typical problem types and signal words
+- Subject-specific pitfalls to avoid
+- Recommended card progression for topics
+
+**How to reference**: `See [physics.md](physics.md) for physics-specific strategies` or `See [chemistry.md](chemistry.md) for chemistry flashcard guidelines`
+
 ### Subject Overview
 
-[Brief description of the subject scope and learning objectives]
+[Brief description of {SUBJECT_NAME} scope and learning objectives]
 
-### Key Topics
+### Key Topics to Master
 
 #### Topic 1: [Topic Name]
 
-**Core concepts**:
-- [Concept 1]
-- [Concept 2]
-- [Concept 3]
+**Core concepts to create cards for**:
+- [Concept 1] - focus on understanding WHY it matters
+- [Concept 2] - break into atomic sub-concepts
+- [Concept 3] - connect to other topics
 
 **Common terminology**:
-- [Term]: [Definition]
-- [Term]: [Definition]
+- [Term]: [Precise definition + example]
+- [Term]: [Precise definition + context for use]
 
-**Key relationships**:
-- [How concepts relate to each other]
-
-#### Topic 2: [Topic Name]
-
-**Core concepts**:
-- [Concept 1]
-- [Concept 2]
+**Key relationships between concepts**:
+- [How Concept A relates to Concept B]
+- [What happens when you vary parameter X]
 
 ---
 
-## Common Problem Types
-
-### Type 1: [Problem Type Name]
-
-**Identify signals**: [Keywords or phrases that indicate this problem type]
-
-**Key approach**: [General strategy for solving]
-
-**Common pitfalls**:
-- [Pitfall 1]
-- [Pitfall 2]
-
-### Type 2: [Problem Type Name]
-
-**Identify signals**: [Keywords]
-
-**Key approach**: [Strategy]
-
----
-
-## Flashcard Strategy for {SUBJECT_NAME}
-
-### Conceptual Before Computational
-
-Always create understanding cards before calculation/application cards.
-
-**Recommended order**:
-1. **Definition/concept** (C: or Q:/A:)
-2. **"Why" or "when to use"** (Q:/A:)
-3. **Formula/process** (C:)
-4. **Simple application** (Q:/A: or P:/S: compact)
-5. **Complex multi-step** (P:/S: full framework)
-
-**Example progression**:
-```markdown
-# Step 1: Concept
-Q: [Conceptual question about core idea]
-A: [Clear, concise answer]
-
-# Step 2: Application
-Q: [When/why to use this concept]
-A: [Context and reasoning]
-
-# Step 3: Formula/Process
-C: [Key formula or process with cloze deletion]
-
-# Step 4: Simple problem
-P: [Simple problem]
-S: [Brief solution with key steps]
-
-# Step 5: Complex problem
-P: [Multi-step problem]
-S: [Full solution with methodology]
-```
-
----
-
-## Common Pitfalls
-
-### 1. [Pitfall Category]
-- [Specific error 1]
-- [Specific error 2]
-
-### 2. [Pitfall Category]
-- [Specific error 1]
-- [Specific error 2]
-
----
-
-## Example Flashcards
-
-### Conceptual Understanding
-```markdown
-Q: [Example conceptual question]
-A: [Clear answer with reasoning]
-```
-
-### Cloze Deletion
-```markdown
-C: [Example with [cloze deletion] showing key relationship]
-```
-
-### Problem-Solving
-```markdown
-P: [Example problem with realistic scenario]
-
-S:
-**IDENTIFY**: [What type of problem, key concepts]
-**SET UP**: [Knowns, unknowns, approach]
-**EXECUTE**: [Step-by-step solution]
-**EVALUATE**: [Check reasonableness, units, etc.]
-```
-
----
-
-## Figure Integration
-
-Figures are organized by flashcard filename in the `figures/` directory.
-
-### Extracting Figures from PDFs
-
-**Automated extraction** (recommended for large projects):
-
-```bash
-# Install dependencies (one-time setup)
-pip install pdf2image pillow
-brew install poppler  # macOS only
-
-# Extract figures from a PDF
-cd /path/to/your/subject-repo
-python3 scripts/extract_figures_from_pdf.py \
-  --pdf references/chapter_1.pdf \
-  --output figures/chapter_1/
-
-# Higher resolution (600 DPI)
-python3 scripts/extract_figures_from_pdf.py \
-  --pdf references/chapter_2.pdf \
-  --output figures/chapter_2/ \
-  --dpi 600
-```
-
-The script extracts all pages as images. You'll then need to:
-1. Review extracted pages
-2. Crop specific figures you need (using Preview, GIMP, or ImageMagick)
-3. Rename to descriptive names (e.g., `fig_1_5.png`, `vector_addition.png`)
-4. Delete unused full-page extractions
-
-**Manual screenshots**:
-- Use system screenshot tool (⇧⌘4 on macOS, Snipping Tool on Windows)
-- Save directly to `figures/[chapter-or-topic-name]/`
-- Follow naming convention below
-
-### Naming Convention
-
-```
-fig_[chapter]_[figure-number].png
-```
-
-**Examples**:
-- `fig_1_5.png` → Chapter 1, Figure 1.5
-- `fig_3_12.png` → Chapter 3, Figure 3.12
-- `vector_addition.png` → Descriptive name for custom diagram
-
-### Folder Structure
-
-```
-├── references/           # Source PDFs
-│   ├── chapter_1.pdf
-│   └── chapter_2.pdf
-└── figures/              # Extracted images
-    ├── chapter_1/
-    │   ├── fig_1_5.png
-    │   ├── fig_1_7.png
-    │   └── fig_1_19.png
-    ├── chapter_2/
-    │   ├── fig_2_1.png
-    │   └── fig_2_15.png
-    └── custom_diagrams/
-        └── free_body_example.png
-```
-
-### Using Figures in Flashcards
-
-Reference figures using relative paths:
-
-```markdown
-Q: What does this diagram illustrate?
-
-![Description](../figures/topic_name/diagram_1.png)
-
-A: [Answer explaining the diagram]
-```
-
-**Path breakdown**:
-- Flashcard location: `flashcards/kinematics.md`
-- Figure location: `figures/chapter_2/fig_2_3.png`
-- Relative path: `../figures/chapter_2/fig_2_3.png` (up one level from flashcards/, then into figures/)
-
----
-
-## Anti-Patterns (What NOT to Do)
+## Anti-Patterns (What NOT to Do) ⛔
 
 ### ❌ Don't Create Mega-Cards
 ```markdown
-# BAD: Too many concepts in one card
-C: Kinematic equations for constant acceleration are [$v = v_0 + at$], [$x = x_0 + v_0t + \frac{1}{2}at^2$], [$v^2 = v_0^2 + 2a(x-x_0)$], and [$x = x_0 + \frac{1}{2}(v_0 + v)t$].
+# BAD: History - too many concepts
+C: World War I was caused by [nationalism], [imperialism], [militarism], [alliance systems], and [the assassination of Archduke Franz Ferdinand], and lasted from [1914] to [1918].
+
+# This creates 6 cards that are hard to distinguish and will interfere with each other
 ```
 
-**Fix**: Create 4 separate cards, one for each equation, plus "when to use" cards for each.
+**Fix**: Create separate cards:
+```markdown
+C: One major cause of World War I was [nationalism] - intense pride and loyalty to one's nation.
+
+C: European [alliance systems] before WWI divided nations into opposing camps (Triple Alliance vs Triple Entente).
+
+C: The immediate trigger for WWI was the [assassination of Archduke Franz Ferdinand] in Sarajevo (1914).
+
+C: World War I lasted from [1914] to [1918].
+
+# Then add "why" cards:
+Q: How did nationalism contribute to WWI?
+A: Encouraged competition between nations and made populations willing to support war for national glory.
+```
 
 ### ❌ Don't Memorize Without Understanding
 ```markdown
-# BAD: Rote memorization without context
-C: The formula for centripetal acceleration is [$a_c = v^2/r$].
+# BAD: Law - rote memorization
+C: The elements of negligence are [duty], [breach], [causation], and [damages].
 ```
 
-**Fix**: Add understanding first:
+**Fix**: Build understanding first:
 ```markdown
-# GOOD: Understanding before formula
-Q: Why does circular motion require acceleration even at constant speed?
-A: Because velocity is a vector (includes direction), changing direction means velocity is changing, which requires acceleration.
+# GOOD: Understanding before memorization
 
-C: Centripetal acceleration points [toward the center] of the circular path.
+Q: What is the purpose of tort law?
+A: To provide remedies when someone's wrongful conduct harms another (compensation for victims, deterrence of harmful behavior).
 
-C: The magnitude of centripetal acceleration is $a_c = $ [$v^2/r$].
+Q: What must a plaintiff prove in a negligence case?
+A: Four elements: duty, breach, causation, and damages (all four required).
 
-Q: Why does centripetal acceleration increase with speed squared?
-A: Higher speed means greater change in velocity direction per unit time, requiring larger inward force/acceleration. The squared relationship comes from the geometry of circular motion.
+# Now individual element cards:
+C: In negligence, [duty] means the defendant owed a legal obligation to the plaintiff.
+
+Q: What's an example of breach of duty in negligence?
+A: A driver running a red light (violating duty to follow traffic laws and drive safely).
+
+Q: What are the two types of causation in negligence?
+A: Actual cause (but-for test) and proximate cause (foreseeability).
 ```
 
 ### ❌ Don't Use Ambiguous Context
 ```markdown
-# BAD: No context
+# BAD:
 Q: What is the value?
-A: 9.8 m/s²
+A: 3.14159
+
+Q: What is the symbol?
+A: π
 ```
 
 ```markdown
-# GOOD: Clear and specific
-Q: What is the magnitude of gravitational acceleration near Earth's surface?
-A: Approximately 9.8 m/s² (or 10 m/s² for rough estimates)
-```
+# GOOD:
+Q: What is the approximate value of pi (π) to 5 decimal places?
+A: 3.14159
 
-### ❌ Don't Use Numbers in P:/S: Cards
-```markdown
-# BAD: Uses specific numbers (this is just arithmetic practice)
-P: A 5 kg object accelerates at 3 m/s². What is the net force?
-S: $F = ma = 5 \times 3 = 15$ N
-```
-
-```markdown
-# GOOD: Uses variables (teaches the approach)
-P: How do you find the net force on an object given its mass and acceleration?
-S:
-**IDENTIFY**: Newton's second law application
-**SET UP**: Known: mass $m$, acceleration $a$. Unknown: force $F$
-**APPROACH**: Apply $F = ma$ directly
-**EVALUATE**:
-- Units: $[\text{kg}][\text{m/s}^2] = \text{N}$ ✓
-- Sign: Force direction matches acceleration direction
-- Limiting case: If $a = 0$, then $F = 0$ (no net force) ✓
+C: The mathematical constant representing the ratio of a circle's circumference to its diameter is [π] (pi).
 ```
 
 ---
 
-## Cross-Topic Integration
+## Study Best Practices (2025 Research)
 
-{SUBJECT_NAME} topics are interconnected. Create cards that bridge concepts:
+### Daily Consistency Beats Marathon Sessions
+- **Minimum**: 15 minutes daily is better than 2 hours weekly
+- FSRS works best with consistent daily reviews
+- Set a specific time (morning coffee, before bed, commute)
 
-```markdown
-Q: How does [Topic A] relate to [Topic B]?
-A: [Explanation of connection]
-```
+### Interleaving Enhances Learning
+- Don't study all cards from one topic in sequence
+- Mix topics to prevent pattern-based memory
+- Particularly important for similar concepts (e.g., similar historical events, similar chemical reactions)
+
+### Active Recall is Non-Negotiable
+- **Always try to recall BEFORE revealing the answer**
+- Passive reading/recognition is 10x less effective
+- Even if you "know it," force yourself to mentally retrieve it
+
+### The Forgetting Curve is Your Friend
+- FSRS schedules reviews just before you forget (90% retention threshold)
+- Don't review early - trust the algorithm
+- The struggle to recall strengthens the memory
 
 ---
 
@@ -529,52 +662,82 @@ A: [Explanation of connection]
 
 When creating flashcards for a new topic:
 
-- [ ] **Understand first**: Read and comprehend the material
-- [ ] **Identify key concepts**: What are the essential ideas?
-- [ ] **Break into atoms**: One concept per card
-- [ ] **Create conceptual cards first**: Understanding before formulas
-- [ ] **Add two-way cards**: Test relationships bidirectionally
-- [ ] **Add application cards**: "When do you use this?"
-- [ ] **Add problem cards**: Use P:/S: with ISAE framework (methodology, not numbers)
-- [ ] **Include figures**: Extract and embed relevant diagrams
-- [ ] **Order by difficulty**: Simple → complex
-- [ ] **Review for clarity**: Are cards self-contained?
-- [ ] **Test yourself**: Do cards actually work?
+- [ ] **Check for subject-specific guide** - Read `[subject].md` if it exists in this directory
+- [ ] **Understand first** - Read, comprehend, explain to yourself
+- [ ] **Build the basics** - Create foundational concept cards even if "obvious"
+- [ ] **Identify key concepts** - What are the 3-5 core ideas?
+- [ ] **Break into atoms** - One testable concept per card
+- [ ] **Create "why" cards** - Understanding before facts
+- [ ] **Add "when to use" cards** - Application context
+- [ ] **Create formulas/definitions** - Use cloze deletion for speed
+- [ ] **Add two-way cards** - Test relationships bidirectionally
+- [ ] **Create methodology cards** - P:/S: for systematic problem-solving
+- [ ] **Personalize examples** - Connect to YOUR experiences
+- [ ] **Add figures** - One diagram → 5-10 cards (if applicable)
+- [ ] **Optimize wording** - Trim every unnecessary word
+- [ ] **Check for interference** - Similar cards? Add distinguishing context
+- [ ] **Order by difficulty** - Basic → advanced
+- [ ] **Test yourself** - Do cards actually work? Ambiguous? Too hard? Revise!
+
+---
+
+## Quality Self-Check
+
+**Before finalizing a card, ask:**
+
+1. **Minimum information?** Can I split this into 2+ simpler cards?
+2. **Understood?** Can I explain WHY this is true?
+3. **Self-contained?** Can I answer without seeing other cards?
+4. **Unambiguous?** Is there only ONE correct interpretation?
+5. **Optimized?** Have I removed unnecessary words?
+6. **Interference?** Does this conflict with similar cards? Add context?
+7. **Personal?** Can I add a personal example or emotional connection?
+
+**If you answer "no" to any question, revise the card.**
 
 ---
 
 ## Resources
 
+### Research Foundations
+- **SuperMemo 20 Rules**: https://www.supermemo.com/en/blog/twenty-rules-of-formulating-knowledge
+- **FSRS Algorithm**: Research-backed scheduling (20-30% fewer reviews vs SM-2)
+- **Cognitive Science**: *Make It Stick: The Science of Successful Learning* (Brown, Roediger, McDaniel)
+- **Active Recall Research**: Retrieval practice produces 400% improvement vs re-reading
+
+### {SUBJECT_NAME} Resources
 - **Textbook**: [Primary textbook reference]
 - **Additional materials**: [Other resources]
-- **Effective Spaced Repetition**: https://borretti.me/article/effective-spaced-repetition
-- **FSRS Algorithm**: The scheduling algorithm used by this flashcard system
-- **Cognitive Science**: *Make It Stick: The Science of Successful Learning* (Brown, Roediger, McDaniel)
+- **Subject-specific guide**: Check this directory for `[subject].md` files with detailed strategies
 
 ---
 
-## Quick Reference Card Format Syntax
+## Quick Reference: Card Format Syntax
 
 ```markdown
-# Cloze Deletion
+# Cloze Deletion (fastest, most efficient)
 C: Text with [hidden answer] in brackets.
 
-# Question/Answer
-Q: Question?
-A: Answer.
+# Question/Answer (for explanations, "why", comparisons)
+Q: Clear, specific question?
+A: Concise answer (1-4 sentences max).
 
-# Problem/Solution (methodology-focused, use variables not numbers)
-P: Problem statement with variables?
+# Problem/Solution (methodology, adapt framework to your field)
+P: Problem statement?
 
 S:
-**IDENTIFY**: Type and concepts
-**SET UP**: Known variables, unknown variable
-**APPROACH**: Step-by-step reasoning and formulas
-**EVALUATE**: Units, sign, limiting cases
+[Use appropriate framework for your subject]
+STEM: ISAE (Identify, Set Up, Approach, Evaluate)
+Humanities: Context → Analysis → Evidence → Conclusion
+Law: IRAC (Issue, Rule, Application, Conclusion)
+Medicine: SOAP (Subjective, Objective, Assessment, Plan)
 ```
 
 ---
 
 **Last updated**: {DATE}
 **Scope**: {SUBJECT_NAME}
-**Format**: Designed for spaced repetition flashcard systems
+**Format**: Optimized for FSRS spaced repetition algorithm
+**Research basis**: SuperMemo 20 Rules, FSRS optimization, active recall research, 2025 SRS best practices
+
+**📌 REMINDER**: If a subject-specific guide exists (e.g., `physics.md`, `chemistry.md`), read it before creating flashcards for detailed subject strategies.

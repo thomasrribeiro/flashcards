@@ -110,7 +110,8 @@ function createDeck(name, options) {
       if (existsSync(templatePath)) {
         const templateContent = readFileSync(templatePath, 'utf-8');
         writeFileSync(join(basePath, `${options.template}.md`), templateContent);
-        console.log(`\x1b[32m✓\x1b[0m Copied subject-specific template: ${options.template}.md`);
+        console.log(`\x1b[32m✓\x1b[0m Copied subject-specific guide: ${options.template}.md`);
+        console.log(`   \x1b[90m(Provides ${subjectName}-specific flashcard strategies for Claude)\x1b[0m`);
       } else {
         console.log(`\x1b[33m⚠\x1b[0m Subject template not found: templates/${options.template}.md (skipping)`);
       }
@@ -182,7 +183,10 @@ A: Q:/A: is for simple questions with direct answers. P:/S: is for teaching prob
   console.log('     Get extract_figures_from_pdf.py from:');
   console.log('     https://github.com/thomasrribeiro/flashcards/blob/main/scripts/extract_figures_from_pdf.py');
   console.log('  4. Create flashcards in flashcards/*.md');
-  console.log(`  5. Read CLAUDE.md for ${subjectName}-specific guidelines`);
+  console.log(`  5. Read CLAUDE.md for flashcard best practices`);
+  if (options.template) {
+    console.log(`  6. Read ${options.template}.md for ${subjectName}-specific strategies`);
+  }
   console.log();
 
   // Only show GitHub instructions if not in public/collection

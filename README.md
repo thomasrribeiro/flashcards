@@ -1,18 +1,18 @@
 # Flashcards
 
-An in-browser spaced-repetition system.
+An in-browser spaced-repetition system for learning anything.
 
-**Live Demo:** https://thomasrribeiro.com/flashcards/ 
+**Live Demo:** https://thomasrribeiro.com/flashcards/
 
 <img src="public/screenshots/gui.png" alt="Flashcard interface" width="400">
 
-*Review what's important and outsmart the forgetting curve.*
+*Master what's important to you and outsmart the forgetting curve.*
 
 ## Getting started
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
+- Node.js (v18 or higher)
 - npm
 
 ### Installation
@@ -40,21 +40,26 @@ Use the CLI to create a new deck with the proper structure:
 
 ```bash
 # Create a deck (default: public/collection/<name>)
-flashcards create intro-mechanics
+flashcards create intro-biology
 
-# Create with subject template
-flashcards create intro-mechanics --template physics
+# Create with subject template for specialized guidance
+flashcards create quantum-mechanics --template physics
+flashcards create organic-chem --template chemistry
 
 # Create at custom path
-flashcards create intro-mechanics --path ~/Documents/flashcards/intro-mechanics
+flashcards create world-history --path ~/Documents/flashcards/world-history
 ```
 
+**Available templates:**
+- `physics` - For physics topics (mechanics, E&M, quantum, etc.)
+- More templates coming soon (chemistry, biology, math, etc.)
+
 This creates:
-- `flashcards/` - Your markdown files
-- `references/` - Place to store reference materials as PDFs
-- `figures/` - Place to store relevant images for use in flashcards
-- `CLAUDE.md` - Writing guidelines for Claude
-- `README.md` - Default template
+- `flashcards/` - Your markdown files containing cards
+- `references/` - Reference materials such as PDFs
+- `figures/` - Relevant images
+- `CLAUDE.md` - Writing guidelines for creating effective flashcards
+- `README.md` - Documentation template
 
 ### Creating flashcards
 
@@ -63,28 +68,45 @@ Flashcards are written in markdown files using Q:/A:, C:, or P:/S: formats.
 
 **Question/Answer Cards:**
 ```markdown
-Q: What is the capital of Italy?
-A: Rome.
+Q: What is the capital of France?
+A: Paris.
+
+Q: Who wrote "1984"?
+A: George Orwell (published 1949).
 ```
 
 **Cloze Deletion Cards:**
 ```markdown
-C: [Rome] is the capital of Italy.
+C: The [mitochondria] is called the powerhouse of the cell.
+
+C: Shakespeare wrote [Hamlet], [Macbeth], and [Romeo and Juliet].
 ```
 
-**Problem/Solution Cards (methodology-focused, no numerical values):**
+**Problem/Solution Cards (methodology-focused):**
+
+Use for teaching systematic problem-solving approaches. Adapt the framework to your subject:
+
 ```markdown
-P: A car accelerates uniformly from rest to final velocity v in time t. How do you find the distance traveled?
+# STEM example (ISAE framework):
+P: How do you determine if a function f(x) is continuous at point x = a?
 
 S:
-**IDENTIFY**: Constant acceleration kinematics problem
-**SET UP**: Known: v₀, v, t. Unknown: Δx
-**APPROACH**: Need acceleration first, then use kinematic equation for displacement
-**EXECUTE**:
-  1. Find acceleration: a = (v - v₀)/t
-  2. Apply displacement equation: Δx = v₀t + ½at²
-  3. Result: Δx = v₀t + ½((v - v₀)/t)t²
-**EVALUATE**: Check units (distance), sign (direction), limiting cases (if v₀=0, reduces correctly)
+**IDENTIFY**: Continuity definition problem
+**SET UP**: Need three conditions satisfied
+**APPROACH**:
+  1. Check f(a) exists (function defined at a)
+  2. Check limit exists as x → a
+  3. Check limit equals f(a)
+**EVALUATE**: All three must hold; if any fails, discontinuous at a
+
+# Humanities example:
+P: How do you analyze the causes of a historical event?
+
+S:
+**CONTEXT**: Identify time period, key actors, immediate circumstances
+**FACTORS**: Categorize causes (political, economic, social, cultural)
+**CONNECTIONS**: How factors interrelated and influenced each other
+**CONCLUSION**: Multiple interconnected causes, distinguish triggers vs. conditions
 ```
 
 **Supported Features:**
@@ -93,20 +115,20 @@ S:
 - **Images** - Embed with `![alt text](image-url)`
 - **Audio** - Embed with `![audio](audio-file.mp3)`
 
-#### File Structure
+#### File Structure (Local Development)
 
 ```
 public/collection/
-├── intro-mechanics/
+├── biology-basics/
 │   ├── flashcards/
-│   │   ├── topic1.md
-│   │   └── topic2.md
+│   │   ├── cell-biology.md
+│   │   └── genetics.md
 │   ├── figures/
 │   ├── references/
 │   └── CLAUDE.md
-└── another-deck/
+└── us-history/
     └── flashcards/
-        └── cards.md
+        └── civil-war.md
 ```
 
 Each directory in `public/collection/` becomes a separate deck.
@@ -116,11 +138,45 @@ Each directory in `public/collection/` becomes a separate deck.
 When running locally without GitHub authentication, your review progress is stored in **localStorage only**. This means:
 
 - Progress is saved locally in your browser
-- Your Free Spaced Repitition Scheduler (FSRS) will be lost if you clear browser data
+- Your FSRS scheduler state will be lost if you clear browser data
 - No cross-device sync
 
+---
+
+## Community Contributions
+
+### Before Creating Your Flashcard Deck
+
+Visit [thomasrribeiro-flashcards](https://github.com/thomasrribeiro-flashcards) organization to see if a deck for your subject already exists.
+
+##### Deck Already Exists → Contribute! 🤝
+
+- **Fork** the repository
+- **Add** your flashcards following the existing structure
+- **Submit a pull request** to contribute your cards
+- Help build a comprehensive community resource!
+
+##### Deck Doesn't Exist → Create It! 🚀
+
+- **Share with community?** → Create public deck in organization
+- **Personal/private study?** → Create private GitHub repository
+
+---
+
+### Guidelines
+
+**Quality standards:**
+1. Follow template/CLAUDE.md in the repository for subject-specific best practices
+2. One concept per card, self-contained with context
+3. Use proper format: Q:/A: (facts), C: (definitions), P:/S: (methodology)
+4. Test cards before committing
+
+**For public contributions:** Submit quality PRs, respect conventions, accept feedback.
+
+---
+
 ## Prior Work
-- [hashcards](https://github.com/eudoxia0/hashcards?tab=readme-ov-file)
+- [hashcards](https://github.com/eudoxia0/hashcards?tab=readme-ov-file) - Inspiration for the card format
 
 ## License
 © 2025 by [Thomas Ribeiro](https://thomasrribeiro.com). Licensed under the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license.
