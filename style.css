@@ -282,13 +282,13 @@ body {
 
 .breadcrumb-path a,
 .breadcrumb-path a:visited,
+.breadcrumb-path a:hover,
 .breadcrumb-path a:active {
     color: var(--black);
-    text-decoration: none;
+    text-decoration: underline;
     padding: 2px 4px;
     border-radius: 3px;
     background: var(--white);
-    transition: background 0.15s ease;
 }
 
 .breadcrumb-path a:hover {
