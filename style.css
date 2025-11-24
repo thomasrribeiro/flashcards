@@ -212,7 +212,7 @@ body {
 
 .sidebar-content ol {
     margin: 0 0 15px 0;
-    padding-left: 25px;
+    padding-left: 30px;
 }
 
 .sidebar-content li {
@@ -937,6 +937,10 @@ kbd {
 
     .sidebar .title {
         font-size: 14px;
+    }
+
+    .sidebar-content ol {
+        padding-left: 35px;
     }
 
     .project-card {
