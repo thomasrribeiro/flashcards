@@ -69,12 +69,14 @@ function scanCollection() {
         // Find all markdown files in this repo
         const markdownFiles = findMarkdownFiles(repoPath);
 
-        // Convert to relative paths from repo root
-        const relativeFiles = markdownFiles.map(file => {
-            const rel = path.relative(repoPath, file);
-            // Normalize path separators to forward slashes for web
-            return rel.replace(/\\/g, '/');
-        });
+        // Convert to relative paths from repo root and filter for flashcards/ directory only
+        const relativeFiles = markdownFiles
+            .map(file => {
+                const rel = path.relative(repoPath, file);
+                // Normalize path separators to forward slashes for web
+                return rel.replace(/\\/g, '/');
+            })
+            .filter(file => file.startsWith('flashcards/'));
 
         if (relativeFiles.length > 0) {
             repos.push({

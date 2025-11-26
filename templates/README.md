@@ -9,7 +9,9 @@ Spaced repetition flashcards for **{SUBJECT_NAME}** compatible with the [flashca
 ├── flashcards/          # Markdown flashcard files (Q:/A:, C:, P:/S: formats)
 ├── references/          # Source PDFs and textbooks (gitignored)
 ├── figures/             # Extracted diagrams and images (organized by flashcard filename)
-├── CLAUDE.md            # Flashcard writing guide for this subject
+├── guides/              # Flashcard writing guides for Claude
+│   ├── general.md       # Universal SRS principles
+│   └── [subject].md     # Subject-specific strategies (if applicable)
 └── README.md            # This file
 ```
 
@@ -32,7 +34,7 @@ Contributions welcome! Follow these guidelines:
 
 ### Quick Start
 1. Fork this repository
-2. Create flashcards following the format in [CLAUDE.md](CLAUDE.md)
+2. Create flashcards following the format in [guides/general.md](guides/general.md)
 3. Submit a pull request
 
 ### Flashcard Quality Guidelines
@@ -91,9 +93,9 @@ A: [Answer]
 
 ## 📖 Writing Guidelines
 
-For detailed flashcard writing guidelines specific to this subject, see [CLAUDE.md](CLAUDE.md).
-
-For general spaced repetition principles and card formats, see [CLAUDE.md](CLAUDE.md) in this repository.
+For detailed flashcard writing guidelines:
+- **Universal SRS principles**: See [guides/general.md](guides/general.md)
+- **Subject-specific strategies**: See [guides/](guides/) for subject guides (e.g., physics.md, chemistry.md)
 
 ## 🔗 Related Repositories
 

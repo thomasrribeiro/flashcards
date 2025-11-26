@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Note for AI Generation**: The flashcard writing guides in `templates/guides/` are automatically included when using the `flashcards generate` command. The AI will follow the principles in `general.md` and any subject-specific guides (e.g., `physics.md`) when creating flashcards from PDFs.
+
 ## Project Overview
 
 A browser-based spaced repetition flashcard system using the FSRS algorithm. The system parses markdown files in the hashcards Q:/A:/C: format and is designed to work with GitHub repositories as deck sources. Review state is persisted to Cloudflare D1 for cross-device sync and persistence.
@@ -18,6 +20,11 @@ npm run dev:watch         # Dev server + auto-rebuild on file changes
 npm run build             # Production build (vite build + process-submodules)
 npm run preview           # Preview production build
 npm run process-submodules # Generate card index from public/collection/ markdown files
+
+# CLI - Deck Management
+flashcards create <name> [--template physics|chemistry]  # Create new deck
+flashcards auth login                                     # Setup Anthropic API key
+flashcards generate <pdf-filename> [--output name]        # Generate flashcards from PDF
 
 # Worker deployment (separate repository: https://github.com/thomasrribeiro/flashcards-worker)
 # Navigate to the flashcards-worker repository directory first

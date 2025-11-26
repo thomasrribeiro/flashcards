@@ -5,4 +5,4 @@ public/data/
 *.log
 .env
 
-
+public/collection/test/

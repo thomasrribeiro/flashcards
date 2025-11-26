@@ -2,9 +2,11 @@
 
 import { Command } from 'commander';
 import { fileURLToPath } from 'url';
-import { dirname, join, resolve } from 'path';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
+import { dirname, join, resolve, basename } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync, statSync } from 'fs';
 import { homedir } from 'os';
+import * as readline from 'readline';
+import * as claudeClient from './lib/claude-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -14,8 +16,8 @@ const program = new Command();
 
 program
   .name('flashcards')
-  .description('CLI tool for managing flashcard deck repositories')
-  .version('1.0.0');
+  .description('CLI tool for managing flashcard decks and generating cards from PDFs')
+  .version('1.1.0');
 
 program
   .command('create')
@@ -58,11 +60,13 @@ function createDeck(name, options) {
     mkdirSync(join(basePath, 'flashcards'), { recursive: true });
     mkdirSync(join(basePath, 'references'), { recursive: true });
     mkdirSync(join(basePath, 'figures'), { recursive: true });
+    mkdirSync(join(basePath, 'guides'), { recursive: true });
 
     console.log('\x1b[32m✓\x1b[0m Created directory structure:');
     console.log('  - flashcards/   (markdown flashcard files)');
     console.log('  - references/   (source PDFs and textbooks, gitignored)');
     console.log('  - figures/      (extracted images and diagrams)');
+    console.log('  - guides/       (flashcard writing guides for Claude)');
     console.log();
   } catch (error) {
     console.error(`\x1b[31mError creating directories: ${error.message}\x1b[0m`);
@@ -86,37 +90,37 @@ function createDeck(name, options) {
     console.error(`\x1b[31mError creating README.md: ${error.message}\x1b[0m`);
   }
 
-  // Copy and substitute CLAUDE.md template
+  // Copy general guide (always included)
   try {
-    const claudeTemplatePath = join(FLASHCARDS_ROOT, 'templates', 'CLAUDE.md');
-    if (existsSync(claudeTemplatePath)) {
-      const claudeTemplate = readFileSync(claudeTemplatePath, 'utf-8');
-      const claude = claudeTemplate
+    const generalGuidePath = join(FLASHCARDS_ROOT, 'templates', 'guides', 'general.md');
+    if (existsSync(generalGuidePath)) {
+      const generalGuide = readFileSync(generalGuidePath, 'utf-8');
+      const guide = generalGuide
         .replace(/{SUBJECT_NAME}/g, subjectName)
         .replace(/{DATE}/g, currentDate);
-      writeFileSync(join(basePath, 'CLAUDE.md'), claude);
-      console.log('\x1b[32m✓\x1b[0m Created CLAUDE.md from template');
+      writeFileSync(join(basePath, 'guides', 'general.md'), guide);
+      console.log('\x1b[32m✓\x1b[0m Created guides/general.md (universal SRS principles)');
     } else {
-      console.log('\x1b[33m⚠\x1b[0m Template not found: templates/CLAUDE.md');
+      console.log('\x1b[33m⚠\x1b[0m Template not found: templates/guides/general.md');
     }
   } catch (error) {
-    console.error(`\x1b[31mError creating CLAUDE.md: ${error.message}\x1b[0m`);
+    console.error(`\x1b[31mError creating guides/general.md: ${error.message}\x1b[0m`);
   }
 
-  // Copy subject-specific template if --template flag is provided
+  // Copy subject-specific guide if --template flag is provided
   if (options.template) {
     try {
-      const templatePath = join(FLASHCARDS_ROOT, 'templates', `${options.template}.md`);
+      const templatePath = join(FLASHCARDS_ROOT, 'templates', 'guides', `${options.template}.md`);
       if (existsSync(templatePath)) {
         const templateContent = readFileSync(templatePath, 'utf-8');
-        writeFileSync(join(basePath, `${options.template}.md`), templateContent);
-        console.log(`\x1b[32m✓\x1b[0m Copied subject-specific guide: ${options.template}.md`);
+        writeFileSync(join(basePath, 'guides', `${options.template}.md`), templateContent);
+        console.log(`\x1b[32m✓\x1b[0m Created guides/${options.template}.md (subject-specific strategies)`);
         console.log(`   \x1b[90m(Provides ${subjectName}-specific flashcard strategies for Claude)\x1b[0m`);
       } else {
-        console.log(`\x1b[33m⚠\x1b[0m Subject template not found: templates/${options.template}.md (skipping)`);
+        console.log(`\x1b[33m⚠\x1b[0m Subject template not found: templates/guides/${options.template}.md (skipping)`);
       }
     } catch (error) {
-      console.error(`\x1b[31mError copying template: ${error.message}\x1b[0m`);
+      console.error(`\x1b[31mError copying subject guide: ${error.message}\x1b[0m`);
     }
   }
 
@@ -152,7 +156,7 @@ A: To demonstrate the flashcard format. Delete this file and create your own!
 C: Flashcards use [Q:/A:] for questions, [C:] for cloze deletions, and [P:/S:] for methodology.
 
 Q: Where can I find flashcard writing guidelines?
-A: See CLAUDE.md in this repository for ${subjectName}-specific guidelines.
+A: See guides/general.md for universal SRS principles, and guides/ for subject-specific strategies.
 
 Q: What is the difference between Q:/A: and P:/S: cards?
 A: Q:/A: is for simple questions with direct answers. P:/S: is for teaching problem-solving methodology using the ISAE framework (Identify, Set Up, Approach, Evaluate) with variables only, not numerical computation.
@@ -183,9 +187,9 @@ A: Q:/A: is for simple questions with direct answers. P:/S: is for teaching prob
   console.log('     Get extract_figures_from_pdf.py from:');
   console.log('     https://github.com/thomasrribeiro/flashcards/blob/main/scripts/extract_figures_from_pdf.py');
   console.log('  4. Create flashcards in flashcards/*.md');
-  console.log(`  5. Read CLAUDE.md for flashcard best practices`);
+  console.log('  5. Read guides/general.md for universal flashcard best practices');
   if (options.template) {
-    console.log(`  6. Read ${options.template}.md for ${subjectName}-specific strategies`);
+    console.log(`  6. Read guides/${options.template}.md for ${subjectName}-specific strategies`);
   }
   console.log();
 
@@ -211,6 +215,382 @@ A: Q:/A: is for simple questions with direct answers. P:/S: is for teaching prob
   }
   console.log();
   console.log('📖 Happy studying!');
+}
+
+// ==================== Auth Command ====================
+
+program
+  .command('auth')
+  .description('Set up Anthropic API key for AI flashcard generation')
+  .action(async () => {
+    await authLogin();
+  });
+
+async function authLogin() {
+  console.log('\x1b[34m🔐 Authentication Setup\x1b[0m');
+  console.log('━'.repeat(50));
+  console.log();
+
+  // Check if Claude Code CLI is available
+  const claudeCLIAvailable = await claudeClient.isClaudeCodeCLIAvailable();
+  if (claudeCLIAvailable) {
+    console.log('\x1b[32m✓ Claude Code CLI detected\x1b[0m');
+    console.log();
+    console.log('Your CLI tool will use your Claude Max/Pro subscription.');
+    console.log('No additional setup required!');
+    console.log();
+    console.log('📚 Generate flashcards with:');
+    console.log('   \x1b[36mflashcards generate references/<pdf-filename>\x1b[0m');
+    console.log();
+    console.log('💡 Example:');
+    console.log('   cd my-deck');
+    console.log('   flashcards generate references/textbook.pdf --output chapter-1');
+    console.log();
+    return;
+  }
+
+  // No Claude Code token, offer API key option
+  console.log('No Claude Code authentication detected.');
+  console.log();
+  console.log('You have two options:');
+  console.log();
+  console.log('\x1b[36m1. Use Claude Code (Recommended)\x1b[0m');
+  console.log('   - If you have Claude Max/Pro, run this command in the Claude Code terminal');
+  console.log('   - Your subscription includes API access for this tool');
+  console.log();
+  console.log('\x1b[36m2. Use API Key (Alternative)\x1b[0m');
+  console.log('   - Get an API key from: https://console.anthropic.com/settings/keys');
+  console.log('   - Note: Requires separate API credits (billed separately from Claude Max/Pro)');
+  console.log();
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  const question = (prompt) => new Promise((resolve) => {
+    rl.question(prompt, resolve);
+  });
+
+  try {
+    const choice = await question('Enter API key? (y/n) [n]: ');
+    console.log();
+
+    if (choice.toLowerCase() !== 'y') {
+      console.log('To use Claude Code authentication, run this command in the Claude Code terminal.');
+      rl.close();
+      return;
+    }
+
+    const apiKey = await question('Enter your Anthropic API key: ');
+    console.log();
+
+    if (!apiKey || apiKey.trim().length === 0) {
+      console.log('\x1b[31m❌ No API key provided\x1b[0m');
+      rl.close();
+      process.exit(1);
+    }
+
+    // Validate API key format
+    const trimmedKey = apiKey.trim();
+    if (!trimmedKey.startsWith('sk-ant-')) {
+      console.log('\x1b[33m⚠  Warning: API key should start with "sk-ant-"\x1b[0m');
+      const confirm = await question('Continue anyway? (y/n) [n]: ');
+      if (confirm.toLowerCase() !== 'y') {
+        console.log('Cancelled.');
+        rl.close();
+        process.exit(0);
+      }
+    }
+
+    console.log('⏳ Validating API key...');
+    const validation = await claudeClient.validateApiKey(trimmedKey);
+
+    if (!validation.valid) {
+      console.log(`\x1b[31m❌ Invalid API key: ${validation.error}\x1b[0m`);
+      console.log();
+      console.log('💡 Make sure you copied the entire key from the console.');
+      rl.close();
+      process.exit(1);
+    }
+
+    // Save API key
+    claudeClient.saveConfig({
+      type: 'api_key',
+      anthropic_api_key: trimmedKey
+    });
+
+    console.log('\x1b[32m✓ API key saved successfully!\x1b[0m');
+    console.log();
+    console.log('📚 You\'re all set! Generate flashcards with:');
+    console.log('   \x1b[36mflashcards generate references/<pdf-filename>\x1b[0m');
+    console.log();
+
+  } catch (error) {
+    console.log(`\x1b[31m❌ Error: ${error.message}\x1b[0m`);
+    console.log();
+    rl.close();
+    process.exit(1);
+  }
+
+  rl.close();
+}
+
+// ==================== Generate Command ====================
+
+program
+  .command('generate <pdf-path>')
+  .description('Generate flashcards from PDF using Claude AI (path relative to deck root)')
+  .option('--output <filename>', 'Output markdown filename (default: PDF name)')
+  .option('--model <model>', 'Claude model to use', 'claude-sonnet-4-5-20250514')
+  .option('--api-key <key>', 'Override stored API key')
+  .option('--deck <path>', 'Deck path (auto-detect from cwd if not specified)')
+  .option('--verbose', 'Show detailed progress and prompt')
+  .action(async (pdfFilename, options) => {
+    await generateFlashcards(pdfFilename, options);
+  });
+
+async function generateFlashcards(pdfFilename, options) {
+  console.log('\x1b[34m🤖 AI Flashcard Generation\x1b[0m');
+  console.log('━'.repeat(50));
+  console.log();
+
+  try {
+    // Step 1: Get API key or OAuth token
+    let apiKey = options.apiKey;
+    if (!apiKey) {
+      apiKey = await claudeClient.getAccessToken();
+      if (!apiKey) {
+        console.log('\x1b[31m❌ Not authenticated\x1b[0m');
+        console.log();
+        console.log('Run: \x1b[36mflashcards auth\x1b[0m');
+        console.log();
+        process.exit(1);
+      }
+    }
+
+    // Step 2: Find deck directory
+    let deckPath = options.deck;
+    if (!deckPath) {
+      deckPath = claudeClient.findDeckDirectory();
+      if (!deckPath) {
+        console.log('\x1b[31m❌ Not in a flashcard deck directory\x1b[0m');
+        console.log();
+        console.log('A deck must contain:');
+        console.log('  flashcards/  - Markdown flashcard files');
+        console.log('  guides/      - Flashcard writing guides');
+        console.log('  references/  - Source PDFs');
+        console.log();
+        console.log('Create a deck first: \x1b[36mflashcards create <name>\x1b[0m');
+        console.log('Or specify deck path: \x1b[36m--deck <path>\x1b[0m');
+        console.log();
+        process.exit(1);
+      }
+    } else {
+      deckPath = resolve(deckPath);
+    }
+
+    // Step 3: Validate deck structure
+    const validation = claudeClient.validateDeckStructure(deckPath);
+    if (!validation.valid) {
+      console.log(`\x1b[31m❌ Invalid deck structure\x1b[0m`);
+      console.log();
+      console.log(`Missing folders: ${validation.missing.join(', ')}`);
+      console.log();
+      process.exit(1);
+    }
+
+    // Step 4: Locate PDF file (use relative path from deck root)
+    const pdfPath = join(deckPath, pdfFilename);
+    if (!existsSync(pdfPath)) {
+      console.log(`\x1b[31m❌ PDF not found: ${pdfFilename}\x1b[0m`);
+      console.log();
+
+      const availablePDFs = claudeClient.listPDFsInReferences(deckPath);
+      if (availablePDFs.length > 0) {
+        console.log('Available PDFs in references/:');
+        availablePDFs.forEach(pdf => console.log(`  • references/${pdf}`));
+        console.log();
+        console.log('Did you mean one of these?');
+      } else {
+        console.log('No PDFs found in references/ folder.');
+        console.log();
+        console.log('Add your PDF: \x1b[36mcp ~/file.pdf references/\x1b[0m');
+      }
+      console.log();
+      process.exit(1);
+    }
+
+    // Step 5: Load guides
+    console.log('📚 Loading flashcard writing guides...');
+    const guides = claudeClient.loadGuides(deckPath);
+
+    if (guides.warning) {
+      console.log(`\x1b[33m⚠  ${guides.warning}\x1b[0m`);
+    }
+
+    if (guides.files.length > 0) {
+      console.log(`✓ Loaded guides: ${guides.files.join(', ')}`);
+    }
+    console.log();
+
+    // Step 6: Show cost estimate
+    const pdfStats = statSync(pdfPath);
+    const pdfSizeMB = (pdfStats.size / 1024 / 1024).toFixed(2);
+    const costEstimate = claudeClient.estimateCost(pdfStats.size, options.model);
+
+    console.log(`📄 PDF: ${pdfFilename} (${pdfSizeMB} MB)`);
+    console.log(`🤖 Model: ${options.model}`);
+    console.log(`💰 Estimated cost: $${costEstimate.min.toFixed(2)} - $${costEstimate.max.toFixed(2)}`);
+    console.log();
+
+    // Confirm for large PDFs
+    if (pdfStats.size > 10 * 1024 * 1024) { // > 10MB
+      console.log('\x1b[33m⚠  Large PDF detected\x1b[0m');
+
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      const answer = await new Promise((resolve) => {
+        rl.question('Continue? (y/n) [y]: ', resolve);
+      });
+      rl.close();
+
+      if (answer.toLowerCase() === 'n') {
+        console.log('Cancelled.');
+        process.exit(0);
+      }
+      console.log();
+    }
+
+    // Step 7: Call Claude API or Claude Code CLI
+    const useClaudeCode = apiKey === 'USE_CLAUDE_CODE_CLI';
+
+    if (useClaudeCode) {
+      console.log('✨ Using Claude Code (your Max/Pro subscription)');
+    }
+    console.log(`⏳ Generating flashcards... (this may take 1-3 minutes)`);
+    console.log();
+
+    const result = await claudeClient.callClaudeWithPDF(pdfPath, guides.content, {
+      apiKey: useClaudeCode ? null : apiKey,
+      model: options.model,
+      verbose: options.verbose,
+      useClaudeCode
+    });
+
+    // Step 8: Validate flashcards
+    const validationResult = claudeClient.validateFlashcards(result.flashcards);
+
+    if (validationResult.warnings.length > 0 && options.verbose) {
+      console.log('\x1b[33m⚠  Validation warnings:\x1b[0m');
+      validationResult.warnings.forEach(w => console.log(`   ${w}`));
+      console.log();
+    }
+
+    if (!validationResult.valid) {
+      console.log('\x1b[31m❌ Generated flashcards have errors:\x1b[0m');
+      validationResult.errors.forEach(e => console.log(`   ${e}`));
+      console.log();
+      console.log('Saving anyway - please review and fix manually.');
+      console.log();
+    }
+
+    // Step 9: Save output
+    const outputFilename = options.output || basename(pdfFilename).replace('.pdf', '') + '.md';
+    const outputPath = join(deckPath, 'flashcards', outputFilename);
+
+    // Ensure .md extension
+    const finalOutputPath = outputPath.endsWith('.md') ? outputPath : outputPath + '.md';
+
+    // Debug logging
+    if (options.verbose) {
+      console.log(`[DEBUG] deckPath: ${deckPath}`);
+      console.log(`[DEBUG] outputFilename: ${outputFilename}`);
+      console.log(`[DEBUG] finalOutputPath: ${finalOutputPath}`);
+      console.log(`[DEBUG] Content length: ${result.flashcards.length} chars`);
+    }
+
+    // Ensure flashcards directory exists
+    const flashcardsDir = join(deckPath, 'flashcards');
+    if (!existsSync(flashcardsDir)) {
+      mkdirSync(flashcardsDir, { recursive: true });
+      if (options.verbose) {
+        console.log(`[DEBUG] Created directory: ${flashcardsDir}`);
+      }
+    }
+
+    // Write file with error handling
+    try {
+      writeFileSync(finalOutputPath, result.flashcards, 'utf-8');
+      if (options.verbose) {
+        console.log(`[DEBUG] Successfully wrote file to: ${finalOutputPath}`);
+      }
+    } catch (error) {
+      console.error(`\x1b[31m❌ Failed to write flashcards file:\x1b[0m`);
+      console.error(`   Path: ${finalOutputPath}`);
+      console.error(`   Error: ${error.message}`);
+      process.exit(1);
+    }
+
+    // Step 10: Extract images (if any)
+    const imageResult = await claudeClient.extractImagesFromPDF(
+      pdfPath,
+      result.flashcards,
+      join(deckPath, 'figures', outputFilename.replace('.md', ''))
+    );
+
+    // Step 11: Show summary
+    console.log(`\x1b[32m✓ Generated ${validationResult.cardCount} flashcards → flashcards/${outputFilename}\x1b[0m`);
+    if (imageResult.extracted.length > 0) {
+      console.log(`\x1b[32m✓ Extracted ${imageResult.extracted.length} images → figures/${outputFilename.replace('.md', '')}/\x1b[0m`);
+    }
+
+    if (useClaudeCode) {
+      console.log(`\x1b[32m✓ Cost: Included in your Claude subscription\x1b[0m`);
+    } else {
+      const actualCost = ((result.usage.input_tokens / 1000000) * 3 +
+                          (result.usage.output_tokens / 1000000) * 15).toFixed(2);
+      console.log(`\x1b[32m✓ Cost: $${actualCost}\x1b[0m`);
+    }
+    console.log();
+
+    console.log('📝 Next steps:');
+    console.log(`  1. Review generated flashcards (AI may have errors!)`);
+    console.log(`  2. Edit flashcards/${outputFilename} to refine wording`);
+    console.log('  3. Verify image references are correct');
+    console.log('  4. Run: \x1b[36mnpm run process-submodules\x1b[0m (to rebuild index)');
+    console.log('  5. Study in the flashcards app!');
+    console.log();
+
+    console.log('💡 \x1b[33mGenerated flashcards need human review. Check for:\x1b[0m');
+    console.log('   • Factual accuracy (AI can hallucinate)');
+    console.log('   • Appropriate difficulty');
+    console.log('   • Atomic concepts (one idea per card)');
+    console.log('   • Proper formatting (Q:/A:/C:/P:/S:)');
+    console.log();
+
+    if (guides.files.length > 0) {
+      console.log(`📚 Guides used: ${guides.files.join(', ')}`);
+      console.log();
+    }
+
+  } catch (error) {
+    console.log(`\x1b[31m❌ Error: ${error.message}\x1b[0m`);
+    console.log();
+
+    if (error.message.includes('Rate limit')) {
+      console.log('💡 Wait a moment and try again.');
+    } else if (error.message.includes('Invalid API key')) {
+      console.log('💡 Run: \x1b[36mflashcards auth login\x1b[0m');
+    } else if (error.message.includes('too large')) {
+      console.log('💡 Try a smaller PDF');
+    }
+    console.log();
+    process.exit(1);
+  }
 }
 
 program.parse();

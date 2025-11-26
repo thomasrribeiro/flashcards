@@ -72,6 +72,52 @@ This creates:
 
 ### Creating flashcards
 
+#### AI-Assisted Flashcard Generation ✨
+
+Generate flashcards automatically from PDF textbooks using Claude AI.
+
+**Setup:**
+1. Get an API key from [Anthropic Console](https://console.anthropic.com/)
+2. Run: `flashcards auth login`
+3. Enter your API key when prompted
+
+**Usage:**
+```bash
+# Create a deck
+flashcards create intro-physics --template physics
+
+# Add your PDF to references/
+cp ~/textbook.pdf intro-physics/references/
+
+# Generate flashcards
+cd intro-physics
+flashcards generate textbook.pdf --output chapter-1
+
+# Review and refine
+nano flashcards/chapter-1.md
+
+# Study!
+cd ../.. && npm run dev
+```
+
+**Options:**
+```bash
+flashcards generate <pdf-filename> [options]
+
+  --output <filename>    Output filename (default: PDF name)
+  --model <model>        Claude model (default: claude-sonnet-4-5-20250514)
+  --max-cards <number>   Maximum cards to generate (default: 50)
+  --deck <path>          Deck path (auto-detect from cwd)
+  --verbose              Show detailed progress
+```
+
+**Tips:**
+- ✅ Generated flashcards need human review (AI isn't perfect!)
+- ✅ Subject guides (physics, chemistry) improve generation quality
+- ✅ Use `--max-cards` to control output and costs
+- ✅ Keep PDFs under 200 pages for best results
+- ✅ Claude analyzes images and problems automatically
+
 #### Card format
 Flashcards are written in markdown files using Q:/A:, C:, or P:/S: formats.
 

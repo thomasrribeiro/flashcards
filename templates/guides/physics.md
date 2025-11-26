@@ -18,22 +18,22 @@
 
 ---
 
-## The ISAE Problem-Solving Framework
+## The IPEE Problem-Solving Framework
 
-All physics problem-solving follows the **ISAE** framework:
+All physics problem-solving follows the **IPEE** framework:
 
 ### **1. IDENTIFY**
 - What physics concepts apply?
 - What type of problem is this? (kinematics, dynamics, energy, waves, etc.)
 - What are the "signal words" that indicate this approach?
 
-### **2. SET UP**
+### **2. PLAN**
 - List all knowns with symbols (use variables, not numbers)
 - Clearly state the unknown(s)
 - Choose relevant equations and explain **WHY** they apply
 - Draw diagrams (free-body, circuit, ray, energy, etc.)
 
-### **3. APPROACH**
+### **3. EXECUTE**
 - Solve algebraically using variables
 - Show reasoning and methodology step-by-step
 - Focus on **why** each step follows, not just computation
@@ -45,6 +45,58 @@ All physics problem-solving follows the **ISAE** framework:
 - Does the formula structure make sense?
 
 **IMPORTANT**: Use this framework in all P:/S: problem cards with **variables only**, no numerical values. The goal is to learn methodology, not arithmetic.
+
+---
+
+## Card Type Distribution for Physics
+
+**Target distribution** for comprehensive physics coverage:
+- **~33% Cloze (C:)** - Definitions, formulas, relationships, key facts
+- **~33% Q:/A:** - Conceptual understanding, "why", "when to use", comparisons
+- **~33% P:/S:** - Problem-solving methodology and systematic procedures
+
+**⚠️ CRITICAL**: Physics requires **equal balance** of all three card types. Create a **P:/S: card for EVERY major procedure or algorithm**. Don't skip methodologies just because they seem "obvious" - the systematic approach is what students struggle with most.
+
+**Don't**: Create P:/S: cards for simple lookups or single-step operations that are better as C: or Q:/A: cards.
+
+---
+
+## Mining Problems from Source Material
+
+**⚠️ KEY STRATEGY**: When reading a physics textbook or chapter, actively look for:
+
+### **1. Worked Examples Throughout the Chapter**
+- Look for highlighted boxes labeled "Example N.N" with step-by-step solutions
+- These demonstrate expert problem-solving methodology
+- Convert each worked example into a P:/S: card using the IPEE framework
+- Replace specific numbers with variables (e.g., "mass = 5 kg" → "mass $m$")
+
+### **2. End-of-Chapter Problem Sets** ⭐⭐⭐ **CRITICAL - DO NOT SKIP**
+- **MANDATORY**: Scan the PDF for "Problems", "Exercises", or "Practice Questions" sections at the end of chapters
+- These problems are specifically designed to test chapter concepts through application and synthesis
+- **Create P:/S: cards for AS MANY problems as possible** - aim for at least 10-20 problems from each problem set
+- Look for problems marked with difficulty indicators (★, ★★, ★★★) - these often require multi-step methodology
+- End-of-chapter problems are often the most valuable cards in the entire deck because they test real problem-solving ability
+
+### **3. How to Convert Problems to P:/S: Cards**
+
+**Example transformation:**
+
+**Original textbook problem:**
+> "A 5 kg block slides down a 30° incline for 10 m. Find its final speed."
+
+**Converted to P:/S: card:**
+```markdown
+P: A block of mass $m$ slides down a frictionless incline of angle $\theta$ from rest. After sliding a distance $d$ along the incline, how do you find its speed?
+
+S:
+**IDENTIFY**: Energy conservation problem (frictionless → no non-conservative work)
+**PLAN**: Known: $m$, $\theta$, $d$, $v_0 = 0$. Unknown: $v$. Use $E_i = E_f$
+**EXECUTE**: [step-by-step solution with variables]
+**EVALUATE**: Check units, limiting cases, physical reasonableness
+```
+
+**Key principle**: Copy the **problem structure and reasoning approach**, NOT the specific numbers.
 
 ---
 
@@ -973,7 +1025,7 @@ Always create understanding cards before calculation cards.
 2. **"Why" or "when to use"** (Q:/A:)
 3. **Formula** (C:)
 4. **Simple methodology** (P:/S: compact)
-5. **Complex multi-step** (P:/S: full ISAE)
+5. **Complex multi-step** (P:/S: full IPEE)
 
 **Example progression**:
 ```markdown
@@ -992,12 +1044,12 @@ C: Average velocity is defined as $\bar{v} = $ [$\frac{\Delta x}{\Delta t}$].
 P: An object moves from position $x_0$ to $x_f$ in time $t$. How do you find average velocity?
 S:
 **IDENTIFY**: Kinematics - average velocity definition
-**SET UP**: Known: $x_0$, $x_f$, $t$. Unknown: $\bar{v}$
-**APPROACH**: Use $\bar{v} = \frac{\Delta x}{\Delta t} = \frac{x_f - x_0}{t}$
+**PLAN**: Known: $x_0$, $x_f$, $t$. Unknown: $\bar{v}$
+**EXECUTE**: Use $\bar{v} = \frac{\Delta x}{\Delta t} = \frac{x_f - x_0}{t}$
 **EVALUATE**: Units [m]/[s] = [m/s] ✓, sign indicates direction ✓
 
 # Step 5: Complex problem
-[Multi-step kinematics with full ISAE]
+[Multi-step kinematics with full IPEE]
 ```
 
 ---
@@ -1037,8 +1089,8 @@ A: To find acceleration given forces, or to find required force for desired acce
 P: An object of mass $m$ has net force $F$. How do you find its acceleration?
 S:
 **IDENTIFY**: Newton's second law problem
-**SET UP**: Known: $m$, $F$. Unknown: $a$. Use $\sum F = ma$
-**APPROACH**: Rearrange to solve for $a$: $a = F/m$
+**PLAN**: Known: $m$, $F$. Unknown: $a$. Use $\sum F = ma$
+**EXECUTE**: Rearrange to solve for $a$: $a = F/m$
 **EVALUATE**: Units [N]/[kg] = [m/s²] ✓, larger force → larger $a$ ✓, larger mass → smaller $a$ ✓
 ```
 
@@ -1086,7 +1138,7 @@ A: $K = \frac{1}{2}mv^2$ → [kg][m/s]² = kg⋅m²/s² ≡ J
 
 ---
 
-## Example Problem Card (Full ISAE)
+## Example Problem Card (Full IPEE)
 
 ```markdown
 P: A block of mass $m$ slides down a frictionless incline of angle $\theta$ from rest. After sliding a distance $d$ along the incline, how do you find its speed?
@@ -1094,13 +1146,13 @@ P: A block of mass $m$ slides down a frictionless incline of angle $\theta$ from
 S:
 **IDENTIFY**: Energy conservation problem (frictionless → no non-conservative work)
 
-**SET UP**:
+**PLAN**:
 - Known: $m$, $\theta$, $d$, $v_0 = 0$
 - Unknown: $v$ (speed after sliding distance $d$)
 - Approach: Use energy conservation $E_i = E_f$ → $U_{g,i} + K_i = U_{g,f} + K_f$
 - Height drop: $h = d\sin\theta$
 
-**APPROACH**:
+**EXECUTE**:
 Initial state: $E_i = mgh + 0$ (at rest, so $K_i = 0$)
 Final state: $E_f = 0 + \frac{1}{2}mv^2$ (take this as reference level)
 
@@ -1142,6 +1194,129 @@ A: Electric field is the negative gradient of potential: $\vec{E} = -\nabla V$, 
 
 ---
 
+## ⚠️ CRITICAL: Respect Typical Learning Progression
+
+**DO NOT reference advanced concepts or topics that come later in a typical physics curriculum.**
+
+When creating flashcards from a specific chapter or PDF, students should only encounter material they would reasonably be expected to know at that stage in a standard educational sequence. Forward-referencing creates confusion and violates pedagogical progression.
+
+**Key principle**: Match the **typical curriculum order**, not just what's in this specific book. Students may learn from multiple sources, but the learning sequence follows a standard progression.
+
+### **What to AVOID**:
+
+❌ **Mentioning advanced topics from later in the curriculum**:
+```markdown
+# BAD - Chapter 1 (Units & Vectors) references advanced chemistry/solid state physics:
+Q: What is the bond angle in methane's sp³ hybridization?
+A: 109.5° (tetrahedral angle, characteristic of diamond crystal structure)
+```
+**Problems**:
+- "sp³ hybridization" is organic chemistry (typically taught after introductory physics)
+- "diamond crystal structure" is condensed matter physics (upper-level undergraduate)
+- Students learning basic vectors don't have this background
+
+✅ **Good - appropriate for the level**:
+```markdown
+# GOOD - Same problem, stays within intro physics scope:
+Q: How do you find the angle between vectors $\vec{A} = \hat{i} + \hat{j} + \hat{k}$ and $\vec{B} = \hat{i} - \hat{j} - \hat{k}$?
+A: Use $\cos\phi = \frac{\vec{A} \cdot \vec{B}}{AB}$ where $\vec{A} \cdot \vec{B} = (1)(1) + (1)(-1) + (1)(-1) = -1$ and $A = B = \sqrt{3}$, giving $\phi = 109.5°$.
+```
+
+❌ **Using concepts typically taught later in sequence**:
+```markdown
+# BAD - Kinematics chapter using energy (typically taught 2-3 chapters later):
+Q: Why does acceleration remain constant in free fall?
+A: Because gravitational potential energy converts to kinetic energy at a constant rate, maintaining constant acceleration.
+```
+**Problem**: Energy conservation typically comes after forces/dynamics in curriculum. Students may not know about potential/kinetic energy yet.
+
+✅ **Good - uses concepts from earlier in curriculum**:
+```markdown
+# GOOD - Uses forces (prerequisite knowledge):
+Q: Why does acceleration remain constant in free fall near Earth's surface?
+A: Gravitational force is approximately constant (weight = mg), so by F = ma, acceleration is constant at g ≈ 9.8 m/s² downward.
+```
+
+❌ **Advanced mathematics beyond the course level**:
+```markdown
+# BAD - Intro physics using differential equations:
+P: How do you find the position of an oscillating mass-spring system?
+S: **EXECUTE**: Solve differential equation $m\frac{d^2x}{dt^2} = -kx$ to get $x(t) = A\cos(\omega t + \phi)$ where $\omega = \sqrt{k/m}$
+```
+**Problem**: If differential equations haven't been introduced yet (typical for algebra-based physics), don't require them.
+
+✅ **Good - uses algebra appropriate to level**:
+```markdown
+# GOOD - Algebra-based approach:
+P: How do you find the period of a mass-spring oscillator?
+S: **EXECUTE**: Use $T = 2\pi\sqrt{\frac{m}{k}}$ (derived from energy conservation and kinematics in the textbook)
+```
+
+### **Guidelines**:
+
+1. **Use only concepts that would be covered at or before this point in a typical physics curriculum**
+2. **Don't mention applications from advanced physics** (quantum, relativity, particle physics) unless the material is at that level
+3. **Avoid jargon from other disciplines** (chemistry, biology, engineering) unless essential AND explained in the source
+4. **Keep mathematical tools appropriate to course level** (algebra-based vs calculus-based)
+5. **If source material uses advanced context**, simplify while preserving the core physics methodology
+
+### **Typical Physics Curriculum Order** (as reference):
+
+**Introductory sequence** (Mechanics → E&M → Modern):
+1. Units, measurement, vectors
+2. Kinematics (1D and 2D motion)
+3. Newton's laws and forces
+4. Energy and work
+5. Momentum and collisions
+6. Rotational motion
+7. Oscillations and waves
+8. Electrostatics
+9. Circuits
+10. Magnetism
+11. Modern physics (relativity, quantum intro)
+
+**Upper-level sequence**:
+- Classical mechanics (Lagrangian/Hamiltonian)
+- Electromagnetism (Maxwell's equations)
+- Thermodynamics & statistical mechanics
+- Quantum mechanics
+- Advanced topics (solid state, particle physics, etc.)
+
+### **When Cross-Referencing IS Appropriate**:
+
+✅ **Referencing prerequisite material from earlier in the curriculum**:
+```markdown
+# Chapter 5 (Energy) can reference Chapter 2 (Kinematics) and Chapter 3 (Forces):
+Q: How are the work-energy theorem and kinematics related?
+A: For constant force, work-energy gives $W = \Delta K = \frac{1}{2}m(v^2 - v_0^2)$. This matches the kinematic result from earlier: $v^2 = v_0^2 + 2a\Delta x$ when $W = F\Delta x = ma\Delta x$.
+```
+
+✅ **Building on established foundations** (even from different books):
+```markdown
+# Momentum chapter builds on Newton's Laws (always a prerequisite):
+Q: How does Newton's third law lead to momentum conservation?
+A: Action-reaction pairs (N3L) mean $\vec{F}_{AB} = -\vec{F}_{BA}$. Since $\vec{F} = \frac{d\vec{p}}{dt}$, the momentum changes cancel, so total momentum is conserved in isolated systems.
+```
+
+✅ **Connecting to standard prerequisites** (from other courses):
+```markdown
+# Intro physics can reference high school math:
+Q: Why do we use sine and cosine for vector components?
+A: From trigonometry: in a right triangle, $\cos\theta = \frac{adjacent}{hypotenuse}$ and $\sin\theta = \frac{opposite}{hypotenuse}$. For a vector at angle $\theta$, this gives $A_x = A\cos\theta$ and $A_y = A\sin\theta$.
+```
+
+### **Self-Check Questions**:
+
+Before including a concept or reference, ask:
+- ✅ Would this concept appear at or before this point in a standard physics curriculum?
+- ✅ Does the student have the mathematical background for this?
+- ✅ Is this jargon/terminology they would recognize from prerequisite courses?
+- ✅ Can I explain this using ONLY concepts from earlier in the typical learning sequence?
+
+If any answer is "no", simplify or remove the advanced reference.
+
+---
+
 ## Additional Resources
 
 When creating flashcards, consult:
@@ -1165,4 +1340,4 @@ When creating flashcards, consult:
 - **Condensed Matter**: Crystal structure, band theory, semiconductors
 
 **Format**: Designed for spaced repetition flashcard systems
-**Framework**: ISAE (Identify, Set Up, Approach, Evaluate) with variables only
+**Framework**: IPEE (Identify, Plan, Execute, Evaluate) with variables only
