@@ -337,15 +337,12 @@ export function loadGuides(deckPath) {
   }
 }
 
-// ==================== Claude Code CLI Integration ====================
+// ==================== PDF Text Extraction ====================
 
-async function callClaudeCodeCLI(pdfPath, guidesContext, options = {}) {
-  const { model, verbose, deckPath } = options;
-  const { spawn, execSync } = await import('child_process');
+async function extractPDFText(pdfPath, verbose = false) {
+  const { execSync } = await import('child_process');
 
-  // Extract PDF text using Python script
   // import.meta.url is file:///path/to/bin/lib/claude-client.js
-  // We need to go up to the project root to find bin/lib/extract_pdf_text.py
   const scriptDir = dirname(new URL(import.meta.url).pathname); // /path/to/bin/lib
   const projectRoot = dirname(dirname(scriptDir)); // /path/to (project root)
   const extractorScript = join(scriptDir, 'extract_pdf_text.py');
@@ -368,6 +365,18 @@ async function callClaudeCodeCLI(pdfPath, guidesContext, options = {}) {
   if (verbose) {
     console.log(`[DEBUG] Extracted text size: ${pdfText.length} characters`);
   }
+
+  return pdfText;
+}
+
+// ==================== Claude Code CLI Integration ====================
+
+async function callClaudeCodeCLI(pdfPath, guidesContext, options = {}) {
+  const { model, verbose, deckPath } = options;
+  const { spawn } = await import('child_process');
+
+  // Extract PDF text using shared function
+  const pdfText = await extractPDFText(pdfPath, verbose);
 
   // Get the guides directory path
   const guidesDir = join(deckPath, 'guides');
@@ -522,19 +531,25 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
     throw new Error('API key is required');
   }
 
+  // Extract PDF text using shared function
+  const pdfText = await extractPDFText(pdfPath, verbose);
+
   // Initialize Anthropic client with API key
   const client = new Anthropic({ apiKey });
-
-  // Read PDF file as base64
-  const pdfBuffer = readFileSync(pdfPath);
-  const pdfBase64 = pdfBuffer.toString('base64');
 
   // Prepare system prompt
   const systemPrompt = `You are an expert flashcard creator.
 
 ${guidesContext}
 
-Generate flashcards from the attached PDF, following ALL principles in the guides above.`;
+Generate flashcards from the PDF text below, following ALL principles in the guides above.`;
+
+  // Prepare user message with extracted text
+  const userMessage = `<pdf_text>
+${pdfText}
+</pdf_text>
+
+Generate flashcards from the PDF text above, following ALL principles in the guides.`;
 
   // Make API call
   try {
@@ -550,20 +565,7 @@ Generate flashcards from the attached PDF, following ALL principles in the guide
       system: systemPrompt,
       messages: [{
         role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: 'application/pdf',
-              data: pdfBase64
-            }
-          },
-          {
-            type: 'text',
-            text: 'Please analyze this PDF and generate flashcards following the guidelines provided.'
-          }
-        ]
+        content: userMessage
       }]
     });
 

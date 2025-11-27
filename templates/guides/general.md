@@ -498,7 +498,6 @@ When creating flashcards for a new topic:
 - [ ] **Create formulas/definitions** - Use cloze deletion for speed
 - [ ] **Add two-way cards** - Test relationships bidirectionally
 - [ ] **Create methodology cards** - P:/S: for systematic problem-solving
-- [ ] **Add figures** - One diagram → 5-10 cards (if applicable)
 - [ ] **Optimize wording** - Trim every unnecessary word
 - [ ] **Check for interference** - Similar cards? Add distinguishing context
 
