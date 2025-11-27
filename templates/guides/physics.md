@@ -98,6 +98,48 @@ S:
 
 **Key principle**: Copy the **problem structure and reasoning approach**, NOT the specific numbers.
 
+### **⚠️ CRITICAL: Use Variables ONLY in P:/S: Cards**
+
+**NEVER use specific numerical values in P:/S: cards.** These cards teach methodology, not arithmetic.
+
+❌ **BAD - Uses specific numbers**:
+```markdown
+P: A car travels 100 m in 5.0 s. How do you find its average speed?
+S:
+**EXECUTE**: $v_{avg} = \frac{100 \text{ m}}{5.0 \text{ s}} = 20 \text{ m/s}$
+```
+
+✅ **GOOD - Uses variables**:
+```markdown
+P: An object travels distance $d$ in time $t$. How do you find its average speed?
+S:
+**EXECUTE**: $v_{avg} = \frac{d}{t}$
+**EVALUATE**: Units [$\frac{\text{length}}{\text{time}}$] = [speed] ✓
+```
+
+**Why variables only?**
+1. Students learn the **method**, not memorize one specific calculation
+2. Transferable to any similar problem
+3. Focuses on understanding, not computation
+4. One card teaches infinite variations
+
+**Exception**: Constants and conversion factors (e.g., $g = 9.8$ m/s², 1 mi = 1.609 km) are acceptable when teaching the method itself.
+
+❌ **BAD - Specific example disguised as methodology**:
+```markdown
+P: How do you find the resultant of two perpendicular vectors of magnitude 3.0 m and 4.0 m?
+S: **EXECUTE**: $R = \sqrt{3.0^2 + 4.0^2} = 5.0$ m
+```
+
+✅ **GOOD - Pure methodology**:
+```markdown
+P: How do you find the resultant of two perpendicular vectors with magnitudes $A$ and $B$?
+S: **EXECUTE**: $R = \sqrt{A^2 + B^2}$
+**EVALUATE**:
+- Special case: If $A = 3$, $B = 4$, then $R = 5$ (3-4-5 triangle)
+- Check: $|A - B| \leq R \leq A + B$
+```
+
 ---
 
 ## Common Physics Topics
