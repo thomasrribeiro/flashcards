@@ -29,6 +29,15 @@ program
     createDeck(name, options);
   });
 
+program
+  .command('add')
+  .description('Add a new flashcard file to a deck')
+  .argument('<path-to-deck>', 'Path to the deck directory')
+  .argument('<card-name>', 'Name of the flashcard file (without .md extension)')
+  .action((deckPath, cardName) => {
+    addCard(deckPath, cardName);
+  });
+
 function createDeck(name, options) {
   // Determine deck path
   const basePath = options.path
@@ -219,96 +228,73 @@ A: Q:/A: is for simple questions with direct answers. P:/S: is for teaching prob
 
 // ==================== Add Command ====================
 
-program
-  .command('add <deck-path> <flashcard-name>')
-  .description('Add a new flashcard file and corresponding figures folder to a deck')
-  .action((deckPath, flashcardName) => {
-    addFlashcard(deckPath, flashcardName);
-  });
-
-function addFlashcard(deckPath, flashcardName) {
-  // Resolve deck path relative to current working directory
+function addCard(deckPath, cardName) {
+  // Resolve the deck path
   const resolvedDeckPath = resolve(process.cwd(), deckPath);
 
-  // Validate deck exists
-  if (!existsSync(resolvedDeckPath)) {
-    console.error(`\x1b[31m❌ Error: Deck not found at ${resolvedDeckPath}\x1b[0m`);
+  // Validate deck structure
+  const validation = claudeClient.validateDeckStructure(resolvedDeckPath);
+  if (!validation.valid) {
+    console.error(`\x1b[31mError: Not a valid deck directory: ${resolvedDeckPath}\x1b[0m`);
+    console.log();
+    console.log(`Missing folders: ${validation.missing.join(', ')}`);
+    console.log();
+    console.log('A deck must contain:');
+    console.log('  flashcards/  - Markdown flashcard files');
+    console.log('  guides/      - Flashcard writing guides');
+    console.log('  references/  - Source PDFs');
+    console.log();
     process.exit(1);
   }
 
-  // Ensure deck has required structure
+  // Ensure card name doesn't have .md extension
+  const cleanCardName = cardName.replace(/\.md$/, '');
+
+  // Create paths
   const flashcardsDir = join(resolvedDeckPath, 'flashcards');
   const figuresDir = join(resolvedDeckPath, 'figures');
+  const markdownFilePath = join(flashcardsDir, `${cleanCardName}.md`);
+  const figuresFolderPath = join(figuresDir, cleanCardName);
 
-  if (!existsSync(flashcardsDir)) {
-    console.error(`\x1b[31m❌ Error: No 'flashcards/' directory found in deck\x1b[0m`);
-    console.error(`   Expected: ${flashcardsDir}`);
-    process.exit(1);
-  }
-
-  if (!existsSync(figuresDir)) {
-    mkdirSync(figuresDir, { recursive: true });
-    console.log(`\x1b[90m📁 Created figures/ directory\x1b[0m`);
-  }
-
-  // Ensure flashcard name has .md extension
-  const flashcardFile = flashcardName.endsWith('.md') ? flashcardName : `${flashcardName}.md`;
-  const flashcardPath = join(flashcardsDir, flashcardFile);
-
-  // Extract base name (without .md extension) for figures folder
-  const baseName = flashcardFile.replace(/\.md$/, '');
-  const figuresFolderPath = join(figuresDir, baseName);
-
-  // Check if flashcard already exists
-  if (existsSync(flashcardPath)) {
-    console.error(`\x1b[31m❌ Error: Flashcard file already exists: ${flashcardFile}\x1b[0m`);
+  // Check if markdown file already exists
+  if (existsSync(markdownFilePath)) {
+    console.error(`\x1b[31mError: Flashcard file already exists: flashcards/${cleanCardName}.md\x1b[0m`);
     process.exit(1);
   }
 
   // Check if figures folder already exists
   if (existsSync(figuresFolderPath)) {
-    console.error(`\x1b[31m❌ Error: Figures folder already exists: figures/${baseName}/\x1b[0m`);
+    console.error(`\x1b[31mError: Figures folder already exists: figures/${cleanCardName}/\x1b[0m`);
     process.exit(1);
   }
 
-  // Create empty markdown file
-  const emptyContent = `---
-name: ${baseName.replace(/_/g, ' ').replace(/-/g, ' ')}
-subject:
-topic:
-tags: []
----
-
-`;
+  console.log('\x1b[34mAdding new flashcard file\x1b[0m');
+  console.log(`\x1b[34mDeck: ${resolvedDeckPath}\x1b[0m`);
+  console.log(`\x1b[34mName: ${cleanCardName}\x1b[0m`);
+  console.log();
 
   try {
-    writeFileSync(flashcardPath, emptyContent, 'utf-8');
-    console.log(`\x1b[32m✓\x1b[0m Created flashcard: flashcards/${flashcardFile}`);
-  } catch (error) {
-    console.error(`\x1b[31m❌ Error writing flashcard file: ${error.message}\x1b[0m`);
-    process.exit(1);
-  }
+    // Create empty markdown file
+    writeFileSync(markdownFilePath, '', 'utf-8');
+    console.log(`\x1b[32m✓\x1b[0m Created flashcards/${cleanCardName}.md`);
 
-  // Create figures folder
-  try {
+    // Create empty figures folder
     mkdirSync(figuresFolderPath, { recursive: true });
-    console.log(`\x1b[32m✓\x1b[0m Created figures folder: figures/${baseName}/`);
+    console.log(`\x1b[32m✓\x1b[0m Created figures/${cleanCardName}/`);
+    console.log();
+
+    console.log('\x1b[32m✓ Done!\x1b[0m');
+    console.log();
+    console.log('📝 Next steps:');
+    console.log(`  1. Edit flashcards/${cleanCardName}.md and add your flashcards`);
+    console.log(`  2. Add any figures to figures/${cleanCardName}/`);
+    console.log('  3. Run: \x1b[36mnpm run process-submodules\x1b[0m (to rebuild index)');
+    console.log();
   } catch (error) {
-    console.error(`\x1b[31m❌ Error creating figures folder: ${error.message}\x1b[0m`);
+    console.error(`\x1b[31mError: ${error.message}\x1b[0m`);
     process.exit(1);
   }
-
-  console.log();
-  console.log(`\x1b[32m✨ Successfully created:\x1b[0m`);
-  console.log(`   📝 ${flashcardPath}`);
-  console.log(`   📁 ${figuresFolderPath}`);
-  console.log();
-  console.log(`\x1b[90m💡 Next steps:\x1b[0m`);
-  console.log(`   1. Edit flashcards/${flashcardFile} to add your flashcards`);
-  console.log(`   2. Add any figures/diagrams to figures/${baseName}/`);
-  console.log(`   3. Reference images in flashcards using: ![](../figures/${baseName}/image.png)`);
 }
-
 // ==================== Rename Figures Command ====================
 
 program
