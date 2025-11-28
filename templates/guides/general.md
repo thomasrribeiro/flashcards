@@ -247,10 +247,21 @@ If $P_c < P_e$ (binding):
 
 ## Technical File Format Requirements
 
-**Formatting Rules**:
+**File Organization**:
+- ✅ **DO**: Use markdown headers to organize sections
+  - `# Chapter Title` or `# Topic Name` as the main header
+  - `## Section Name` or `## Subtopic` to group related flashcards
+  - Headers provide visual structure WITHOUT interfering with flashcard parsing
 - ✅ **DO**: Use LaTeX for ALL math: `$x^2$` (inline), `$$E=mc^2$$` (display)
-- ❌ **DON'T**: Add preambles or explanations outside cards
-**Output**: Return ONLY the flashcards in valid markdown format - nothing else.
+
+**Critical Output Rules**:
+- ❌ **DON'T**: Add preambles, introductions, or explanations before flashcards
+- ❌ **DON'T**: Write "Now I'll create...", "Here are...", "I've created...", etc.
+- ❌ **DON'T**: Add summaries, statistics, or commentary at the end
+- ✅ **DO**: Start IMMEDIATELY with the chapter/topic header followed by flashcards
+- ✅ **DO**: End with the last flashcard - no trailing text
+
+**Output**: Return ONLY the flashcards organized with markdown headers - nothing else.
 
 ## Core Principles (Research-Based)
 
