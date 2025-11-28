@@ -206,14 +206,19 @@ export async function isClaudeCodeCLIAvailable() {
 export async function getAccessToken() {
   const config = loadConfig();
 
+  // Prefer Claude Code CLI if available (works with Max/Pro subscription)
+  if (await isClaudeCodeCLIAvailable()) {
+    return 'USE_CLAUDE_CODE_CLI';  // Special marker
+  }
+
+  // Return OAuth access token if available
+  if (config && config.type === 'oauth' && config.access_token) {
+    return config.access_token;
+  }
+
   // Return API key if available
   if (config && config.anthropic_api_key) {
     return config.anthropic_api_key;
-  }
-
-  // No API key configured, check if Claude Code CLI is available
-  if (await isClaudeCodeCLIAvailable()) {
-    return 'USE_CLAUDE_CODE_CLI';  // Special marker
   }
 
   return null;
