@@ -241,11 +241,66 @@ If $P_c < P_e$ (binding):
 
 **DO NOT stop generating cards prematurely.** You must create a comprehensive deck that covers:
 
+✅ **ALL sections from source material** - If the PDF has sections 1.1, 1.2, 1.3, etc., create flashcards for EVERY section. Skipping sections creates knowledge gaps!
 ✅ **ALL worked examples** - Convert each one to a P:/S: card using the IPEE framework
 ✅ **ALL end-of-chapter problems** - These are CRITICAL! Scan the PDF for "Problems", "Exercises", or "Practice Questions" sections (usually at the end of chapters) and create P:/S: cards from each problem set
 ✅ **All key concepts** - Ensure C: and Q:/A: cards cover definitions, formulas, and conceptual understanding
 
+**⚠️ Section Coverage Check**: Before finishing, verify you've covered ALL numbered sections in the source document. Missing sections = incomplete learning.
+
+## Flashcard Continuity & Sequential Learning
+
+**Within-file continuity**: Flashcards must build sequentially. **Define concepts before referencing them.**
+
+❌ **Bad example** (assumes knowledge not yet introduced):
+```markdown
+Q: Why doesn't a feather and a cannonball falling at different rates in air disprove Galileo's theory?
+A: Galileo's theory has a range of validity: it applies only when air resistance is negligible compared to weight. The feather is outside this range.
+```
+**Problem**: References "Galileo's theory" without ever explaining what it is!
+
+✅ **Good example** (builds sequentially):
+```markdown
+# First, define the concept:
+C: Galileo's theory of falling objects states that [all objects fall at the same rate] in the absence of air resistance.
+
+Q: What is the range of validity for Galileo's falling object theory?
+A: It applies only when air resistance and buoyancy are much smaller than the weight. Light objects with high air resistance (feathers, parachutes) are outside this range.
+
+# THEN ask application questions:
+Q: Why doesn't a feather and a cannonball falling at different rates in air disprove Galileo's theory?
+A: Galileo's theory has a range of validity: it applies only when air resistance is negligible compared to weight. The feather is outside this range.
+```
+
+**Rule**: Before ANY flashcard references a concept, that concept must appear in an earlier flashcard in the same file.
+
 ## Technical File Format Requirements
+
+**TOML Frontmatter** (REQUIRED at the top of EVERY file):
+```toml
++++
+order = <integer>
+tags = [<comma-separated-strings>]
+prerequisites = [<list-of-prerequisite-filenames>]
++++
+```
+
+**Field definitions**:
+- **order**: Integer for deck ordering (e.g., `1` for Chapter 1, `2` for Chapter 2, or infer from source material numbering)
+- **tags**: Array of relevant topic tags from content (e.g., `["kinematics", "vectors", "measurement"]`)
+- **prerequisites**: Array of prerequisite .md filenames needed for context (e.g., `["0_intro.md", "basics.md"]`)
+  - Include prerequisites provided via CLI flag
+  - Add additional prerequisites based on content analysis
+  - Use empty array `[]` if no prerequisites
+
+**Example frontmatter**:
+```toml
++++
+order = 1
+tags = ["units", "measurement", "vectors", "dimensional-analysis"]
+prerequisites = []
++++
+```
 
 **File Organization**:
 - ✅ **DO**: Use markdown headers to organize sections

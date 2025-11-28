@@ -652,6 +652,9 @@ program
   .option('--model <model>', 'Claude model to use', 'claude-sonnet-4-5-20250514')
   .option('--api-key <key>', 'Override stored API key')
   .option('--deck <path>', 'Deck path (auto-detect from cwd if not specified)')
+  .option('--prerequisites <files...>', 'Prerequisite markdown files for context (space-separated)')
+  .option('--order <number>', 'Order number for TOML frontmatter (e.g., 1 for Chapter 1)', parseInt)
+  .option('--tags <tags...>', 'Tags for TOML frontmatter (space-separated, e.g., vectors kinematics)')
   .option('--verbose', 'Show detailed progress and prompt')
   .action(async (pdfFilename, options) => {
     await generateFlashcards(pdfFilename, options);
@@ -741,6 +744,38 @@ async function generateFlashcards(pdfFilename, options) {
     }
     console.log();
 
+    // Step 5.5: Load prerequisite files (if specified)
+    let prerequisitesContent = '';
+    const prerequisiteFilenames = [];
+
+    if (options.prerequisites && options.prerequisites.length > 0) {
+      console.log('📖 Loading prerequisite files...');
+      const flashcardsDir = join(deckPath, 'flashcards');
+
+      for (const prereqFile of options.prerequisites) {
+        const prereqPath = join(flashcardsDir, prereqFile);
+
+        if (!existsSync(prereqPath)) {
+          console.log(`\x1b[33m⚠  Prerequisite not found: ${prereqFile} (skipping)\x1b[0m`);
+          continue;
+        }
+
+        try {
+          const prereqContent = readFileSync(prereqPath, 'utf-8');
+          prerequisitesContent += `\n\n# PREREQUISITE FILE: ${prereqFile}\n\n${prereqContent}`;
+          prerequisiteFilenames.push(prereqFile);
+          console.log(`✓ Loaded prerequisite: ${prereqFile}`);
+        } catch (error) {
+          console.log(`\x1b[33m⚠  Error reading ${prereqFile}: ${error.message}\x1b[0m`);
+        }
+      }
+
+      if (prerequisiteFilenames.length > 0) {
+        console.log(`✓ Loaded ${prerequisiteFilenames.length} prerequisite file(s)`);
+      }
+      console.log();
+    }
+
     // Step 6: Show cost estimate
     const pdfStats = statSync(pdfPath);
     const pdfSizeMB = (pdfStats.size / 1024 / 1024).toFixed(2);
@@ -785,7 +820,11 @@ async function generateFlashcards(pdfFilename, options) {
       apiKey: useClaudeCode ? null : apiKey,
       model: options.model,
       verbose: options.verbose,
-      useClaudeCode
+      useClaudeCode,
+      prerequisites: prerequisitesContent,
+      prerequisiteFilenames,
+      order: options.order,
+      tags: options.tags
     });
 
     // Step 8: Validate flashcards

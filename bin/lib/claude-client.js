@@ -377,7 +377,7 @@ async function extractPDFText(pdfPath, verbose = false) {
 // ==================== Claude Code CLI Integration ====================
 
 async function callClaudeCodeCLI(pdfPath, guidesContext, options = {}) {
-  const { model, verbose, deckPath } = options;
+  const { model, verbose, deckPath, prerequisites = '', prerequisiteFilenames = [], order, tags = [] } = options;
   const { spawn } = await import('child_process');
 
   // Extract PDF text using shared function
@@ -385,6 +385,7 @@ async function callClaudeCodeCLI(pdfPath, guidesContext, options = {}) {
 
   // Get the guides directory path
   const guidesDir = join(deckPath, 'guides');
+  const flashcardsDir = join(deckPath, 'flashcards');
 
   // List available guide files
   const guideFiles = existsSync(guidesDir)
@@ -399,8 +400,18 @@ ${guideFiles.map(f => `- Read guides/${f} for comprehensive flashcard creation p
 These guides contain research-based SRS principles and subject-specific strategies. Follow ALL principles exactly.`
     : 'Follow research-based spaced repetition principles for flashcard creation.';
 
+  // Add prerequisites context if provided
+  const prerequisitesSection = prerequisites
+    ? `\n\n## Prerequisite Knowledge\n\nThe following flashcard files contain prerequisite knowledge that students will have already studied:\n${prerequisites}\n\nYou may reference concepts from these prerequisites without re-explaining them in detail. When listing prerequisites in the TOML frontmatter, include: ${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}`
+    : '';
+
+  // Add TOML frontmatter instructions if order or tags are specified
+  const tomlInstructions = (order !== undefined || tags.length > 0)
+    ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = (infer from content)'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
+    : '';
+
   // Prepare the prompt - trust the guides completely
-  const promptText = `${guideInstructions}
+  const promptText = `${guideInstructions}${prerequisitesSection}${tomlInstructions}
 
 <pdf_text>
 ${pdfText}
@@ -410,10 +421,11 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
 
   return new Promise((resolve, reject) => {
     // Use Claude Code CLI with --print for non-interactive mode
-    // Use --add-dir to give Claude access to read the guides
+    // Use --add-dir to give Claude access to read the guides and flashcards (for prerequisites)
     // PDF text is now included directly in the prompt
     const args = [
       '--add-dir', guidesDir,
+      '--add-dir', flashcardsDir,
       '--print',
       '--dangerously-skip-permissions',
       promptText
@@ -424,7 +436,11 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
 
     if (verbose) {
       console.log(`[DEBUG] Spawning claude with guides access from: ${guidesDir}`);
+      console.log(`[DEBUG] Flashcards directory for prerequisites: ${flashcardsDir}`);
       console.log(`[DEBUG] Available guides: ${guideFiles.join(', ')}`);
+      if (prerequisiteFilenames.length > 0) {
+        console.log(`[DEBUG] Prerequisites: ${prerequisiteFilenames.join(', ')}`);
+      }
     }
 
     const claude = spawn('claude', args, {
@@ -522,14 +538,26 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
     apiKey,
     model = 'claude-sonnet-4-5-20250514',
     verbose = false,
-    useClaudeCode = false
+    useClaudeCode = false,
+    prerequisites = '',
+    prerequisiteFilenames = [],
+    order,
+    tags = []
   } = options;
 
   // If using Claude Code CLI, delegate to that
   if (useClaudeCode) {
     // Extract deckPath from pdfPath (pdfPath is deckPath/references/filename.pdf)
     const deckPath = dirname(dirname(pdfPath));
-    return await callClaudeCodeCLI(pdfPath, guidesContext, { model, verbose, deckPath });
+    return await callClaudeCodeCLI(pdfPath, guidesContext, {
+      model,
+      verbose,
+      deckPath,
+      prerequisites,
+      prerequisiteFilenames,
+      order,
+      tags
+    });
   }
 
   if (!apiKey) {
@@ -542,10 +570,20 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
   // Initialize Anthropic client with API key
   const client = new Anthropic({ apiKey });
 
+  // Add prerequisites context if provided
+  const prerequisitesSection = prerequisites
+    ? `\n\n## Prerequisite Knowledge\n\nThe following flashcard files contain prerequisite knowledge that students will have already studied:\n${prerequisites}\n\nYou may reference concepts from these prerequisites without re-explaining them in detail. When listing prerequisites in the TOML frontmatter, include: ${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}`
+    : '';
+
+  // Add TOML frontmatter instructions if order or tags are specified
+  const tomlInstructions = (order !== undefined || tags.length > 0)
+    ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = (infer from content)'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
+    : '';
+
   // Prepare system prompt
   const systemPrompt = `You are an expert flashcard creator.
 
-${guidesContext}
+${guidesContext}${prerequisitesSection}${tomlInstructions}
 
 Generate flashcards from the PDF text below, following ALL principles in the guides above.`;
 
