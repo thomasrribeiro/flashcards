@@ -296,6 +296,236 @@ function addCard(deckPath, cardName) {
   }
 }
 
+
+// ==================== Rename Figures Command ====================
+
+program
+  .command('rename-figures <folder-path>')
+  .description('Rename all figures in a folder with descriptive names based on their content')
+  .option('--dry-run', 'Preview renaming without actually renaming files')
+  .option('--verbose', 'Show detailed progress')
+  .action(async (folderPath, options) => {
+    await renameFigures(folderPath, options);
+  });
+
+async function renameFigures(folderPath, options = {}) {
+  const { dryRun = false, verbose = false } = options;
+
+  console.log('\x1b[34m🖼️  Figure Renaming\x1b[0m');
+  console.log('━'.repeat(50));
+  console.log();
+
+  // Resolve folder path
+  const resolvedPath = resolve(process.cwd(), folderPath);
+
+  // Validate folder exists
+  if (!existsSync(resolvedPath)) {
+    console.error(`\x1b[31m❌ Error: Folder not found: ${resolvedPath}\x1b[0m`);
+    process.exit(1);
+  }
+
+  const stats = statSync(resolvedPath);
+  if (!stats.isDirectory()) {
+    console.error(`\x1b[31m❌ Error: Path is not a directory: ${resolvedPath}\x1b[0m`);
+    process.exit(1);
+  }
+
+  // Get API key or Claude Code CLI
+  const apiKey = await claudeClient.getAccessToken();
+  if (!apiKey) {
+    console.error('\x1b[31m❌ Error: No authentication configured\x1b[0m');
+    console.error('   Run: flashcards auth');
+    process.exit(1);
+  }
+
+  const useClaudeCode = apiKey === 'USE_CLAUDE_CODE_CLI';
+
+  console.log(`📁 Scanning folder: ${resolvedPath}`);
+  console.log();
+
+  // Find all image files recursively
+  const imageFiles = [];
+  function scanDirectory(dir) {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scanDirectory(fullPath);
+      } else if (entry.isFile()) {
+        const ext = entry.name.toLowerCase().split('.').pop();
+        if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+          imageFiles.push(fullPath);
+        }
+      }
+    }
+  }
+
+  scanDirectory(resolvedPath);
+
+  if (imageFiles.length === 0) {
+    console.log('\x1b[33m⚠️  No image files found\x1b[0m');
+    return;
+  }
+
+  console.log(`Found ${imageFiles.length} image(s)`);
+  if (dryRun) {
+    console.log('\x1b[33m[DRY RUN MODE - No files will be renamed]\x1b[0m');
+  }
+  console.log();
+
+  // Process each image
+  const renamings = [];
+  for (let i = 0; i < imageFiles.length; i++) {
+    const imagePath = imageFiles[i];
+    const relativePath = imagePath.replace(resolvedPath + '/', '');
+
+    console.log(`[${i + 1}/${imageFiles.length}] Analyzing: ${relativePath}`);
+
+    try {
+      // Read image as base64
+      const imageBuffer = readFileSync(imagePath);
+      const imageBase64 = imageBuffer.toString('base64');
+      const ext = imagePath.toLowerCase().split('.').pop();
+      const mediaType = ext === 'png' ? 'image/png' :
+                       ext === 'gif' ? 'image/gif' :
+                       ext === 'webp' ? 'image/webp' : 'image/jpeg';
+
+      // Analyze image with Claude
+      let newName;
+      if (useClaudeCode) {
+        // Use Claude Code CLI with --add-dir to give access to the image
+        const { execSync } = await import('child_process');
+        const imageDir = dirname(imagePath);
+        const imageFilename = basename(imagePath);
+
+        if (verbose) {
+          console.log(`   [DEBUG] imageDir: ${imageDir}`);
+          console.log(`   [DEBUG] imageFilename: ${imageFilename}`);
+        }
+
+        const prompt = `Look at the image file "${imageFilename}" and provide a short, descriptive filename (lowercase, underscores for spaces, no extension). Focus on what the image shows (e.g., "force_diagram", "velocity_graph", "circuit_schematic"). Return ONLY the filename, nothing else.`;
+
+        // Build command with proper quoting
+        const cmd = `claude --add-dir "${imageDir}" --print --dangerously-skip-permissions '${prompt.replace(/'/g, "'\\''")}'`;
+
+        if (verbose) {
+          console.log(`   [DEBUG] Running: ${cmd.substring(0, 100)}...`);
+        }
+
+        let stdout;
+        try {
+          stdout = execSync(cmd, {
+            encoding: 'utf-8',
+            timeout: 60000,
+            maxBuffer: 1024 * 1024
+          });
+        } catch (error) {
+          throw new Error(`Claude CLI failed: ${error.message}`);
+        }
+
+        newName = stdout.trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '');
+      } else {
+        // Use API
+        const Anthropic = (await import('@anthropic-ai/sdk')).default;
+        const client = new Anthropic({ apiKey });
+
+        const response = await client.messages.create({
+          model: 'claude-sonnet-4-5-20250514',
+          max_tokens: 100,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mediaType,
+                  data: imageBase64
+                }
+              },
+              {
+                type: 'text',
+                text: 'Analyze this image and provide a short, descriptive filename (lowercase, underscores for spaces, no extension). Focus on what the image shows (e.g., "force_diagram", "velocity_graph", "circuit_schematic"). Return ONLY the filename, nothing else.'
+              }
+            ]
+          }]
+        });
+
+        newName = response.content
+          .filter(block => block.type === 'text')
+          .map(block => block.text.trim())
+          .join('')
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '');
+      }
+
+      // Ensure we have a valid name
+      if (!newName || newName.length === 0) {
+        console.log(`   \x1b[33m⚠️  Could not generate name, skipping\x1b[0m`);
+        continue;
+      }
+
+      // Build new path
+      const dir = dirname(imagePath);
+      const newPath = join(dir, `${newName}.${ext}`);
+
+      // Check if new path already exists
+      if (existsSync(newPath) && newPath !== imagePath) {
+        console.log(`   \x1b[33m⚠️  Target exists: ${newName}.${ext} - skipping\x1b[0m`);
+        continue;
+      }
+
+      renamings.push({ oldPath: imagePath, newPath, newName: `${newName}.${ext}` });
+      console.log(`   \x1b[32m→\x1b[0m ${newName}.${ext}`);
+
+    } catch (error) {
+      console.log(`   \x1b[31m❌ Error: ${error.message}\x1b[0m`);
+      if (verbose) {
+        console.error(error);
+      }
+    }
+  }
+
+  console.log();
+  console.log('━'.repeat(50));
+  console.log();
+
+  if (renamings.length === 0) {
+    console.log('\x1b[33mNo files to rename\x1b[0m');
+    return;
+  }
+
+  // Show summary
+  console.log(`\x1b[32m✓ Generated ${renamings.length} new name(s)\x1b[0m`);
+  console.log();
+
+  if (!dryRun) {
+    // Actually rename files
+    console.log('Renaming files...');
+    for (const { oldPath, newPath } of renamings) {
+      try {
+        const fs = await import('fs');
+        fs.renameSync(oldPath, newPath);
+        if (verbose) {
+          console.log(`  ✓ ${basename(oldPath)} → ${basename(newPath)}`);
+        }
+      } catch (error) {
+        console.error(`  \x1b[31m❌ Failed to rename ${basename(oldPath)}: ${error.message}\x1b[0m`);
+      }
+    }
+    console.log();
+    console.log('\x1b[32m✨ Renaming complete!\x1b[0m');
+  } else {
+    console.log('\x1b[90m(Use without --dry-run to actually rename files)\x1b[0m');
+  }
+}
+
 // ==================== Auth Command ====================
 
 program
