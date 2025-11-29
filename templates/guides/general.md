@@ -32,6 +32,7 @@
 - Ensure remaining context is sufficient to answer
 - Each `[deletion]` creates a separate flashcard
 - Don't delete so much that it becomes ambiguous
+- ⚠️ **CRITICAL**: Every cloze card MUST contain at least one `[deletion]`. A line starting with `C:` without any brackets will cause a parser error.
 
 **Examples across subjects**:
 ```markdown

@@ -426,6 +426,19 @@ async function renameFigures(folderPath, options = {}) {
           .replace(/[^a-z0-9_]/g, '_')
           .replace(/_+/g, '_')
           .replace(/^_|_$/g, '');
+
+        // Check for error messages (AI couldn't process the image)
+        if (newName.includes('cannot') || newName.includes('error') || newName.includes('unable') || newName.includes('sorry')) {
+          console.log(`   \x1b[33m⚠️  AI could not analyze image, skipping\x1b[0m`);
+          continue;
+        }
+
+        // Enforce maximum filename length
+        const maxLength = 200;
+        if (newName.length > maxLength) {
+          newName = newName.substring(0, maxLength).replace(/_+$/, '');
+          console.log(`   \x1b[33m⚠️  Name too long, truncated to ${maxLength} chars\x1b[0m`);
+        }
       } else {
         // Use API
         const Anthropic = (await import('@anthropic-ai/sdk')).default;
@@ -467,6 +480,21 @@ async function renameFigures(folderPath, options = {}) {
       if (!newName || newName.length === 0) {
         console.log(`   \x1b[33m⚠️  Could not generate name, skipping\x1b[0m`);
         continue;
+      }
+
+      // Check for error messages (AI couldn't process the image)
+      if (newName.includes('cannot') || newName.includes('error') || newName.includes('unable') || newName.includes('sorry')) {
+        console.log(`   \x1b[33m⚠️  AI could not analyze image, skipping\x1b[0m`);
+        continue;
+      }
+
+      // Enforce maximum filename length (255 bytes is filesystem limit, use 200 to be safe)
+      const maxLength = 200;
+      if (newName.length > maxLength) {
+        newName = newName.substring(0, maxLength);
+        // Remove any trailing underscores after truncation
+        newName = newName.replace(/_+$/, '');
+        console.log(`   \x1b[33m⚠️  Name too long, truncated to ${maxLength} chars\x1b[0m`);
       }
 
       // Build new path

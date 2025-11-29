@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2025-11-26T01:28:23.495Z",
+  "generatedAt": "2025-11-29T05:22:56.480Z",
   "repoCount": 2,
-  "fileCount": 15,
+  "fileCount": 13,
   "repos": [
     {
       "name": "example",
@@ -23,9 +23,7 @@
     {
       "name": "test",
       "files": [
-        "flashcards/ai_generated_analysis.md",
-        "flashcards/ai_generated_comparison_old.md",
-        "flashcards/units_physical_quantities_vectors.md"
+        "flashcards/1_units_physical_quantities_vectors.md"
       ]
     }
   ]
