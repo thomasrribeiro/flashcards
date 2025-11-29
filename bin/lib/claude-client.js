@@ -407,7 +407,7 @@ These guides contain research-based SRS principles and subject-specific strategi
 
   // Add TOML frontmatter instructions if order or tags are specified
   const tomlInstructions = (order !== undefined || tags.length > 0)
-    ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = (infer from content)'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
+    ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = []'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
     : '';
 
   // Prepare the prompt - trust the guides completely
@@ -421,26 +421,27 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
 
   return new Promise((resolve, reject) => {
     // Use Claude Code CLI with --print for non-interactive mode
-    // Use --add-dir to give Claude access to read the guides and flashcards (for prerequisites)
-    // PDF text is now included directly in the prompt
-    const args = [
-      '--add-dir', guidesDir,
-      '--add-dir', flashcardsDir,
-      '--print',
-      '--dangerously-skip-permissions',
-      promptText
-    ];
+    // Use --add-dir to give Claude access to read the guides
+    // Only add flashcards directory if prerequisites are specified
+    const args = ['--add-dir', guidesDir];
+
+    // Only add flashcards directory if prerequisites are provided
+    if (prerequisiteFilenames.length > 0) {
+      args.push('--add-dir', flashcardsDir);
+    }
+
+    args.push('--print', '--dangerously-skip-permissions', promptText);
 
     // Note: We don't pass --model to Claude CLI, it uses the default (latest sonnet)
     // The model parameter from options is only used for API calls
 
     if (verbose) {
       console.log(`[DEBUG] Spawning claude with guides access from: ${guidesDir}`);
-      console.log(`[DEBUG] Flashcards directory for prerequisites: ${flashcardsDir}`);
-      console.log(`[DEBUG] Available guides: ${guideFiles.join(', ')}`);
       if (prerequisiteFilenames.length > 0) {
+        console.log(`[DEBUG] Flashcards directory for prerequisites: ${flashcardsDir}`);
         console.log(`[DEBUG] Prerequisites: ${prerequisiteFilenames.join(', ')}`);
       }
+      console.log(`[DEBUG] Available guides: ${guideFiles.join(', ')}`);
     }
 
     const claude = spawn('claude', args, {
@@ -577,7 +578,7 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
 
   // Add TOML frontmatter instructions if order or tags are specified
   const tomlInstructions = (order !== undefined || tags.length > 0)
-    ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = (infer from content)'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
+    ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = []'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
     : '';
 
   // Prepare system prompt
