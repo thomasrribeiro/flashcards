@@ -680,7 +680,7 @@ program
   .option('--model <model>', 'Claude model to use', 'claude-sonnet-4-5-20250514')
   .option('--api-key <key>', 'Override stored API key')
   .option('--deck <path>', 'Deck path (auto-detect from cwd if not specified)')
-  .option('--prerequisites <files...>', 'Prerequisite files relative to CWD (space-separated)')
+  .option('--prereqs <files...>', 'Prerequisite files relative to CWD (space-separated)')
   .option('--order <number>', 'Order number for TOML frontmatter (e.g., 1 for Chapter 1)', parseInt)
   .option('--tags <tags...>', 'Tags for TOML frontmatter (space-separated, e.g., vectors kinematics)')
   .option('--with-images [path]', 'Include figures from path relative to CWD (default: deck/figures/)')
@@ -773,35 +773,19 @@ async function generateFlashcards(pdfFilename, options) {
     }
     console.log();
 
-    // Step 5.5: Load prerequisite files (if specified)
-    let prerequisitesContent = '';
+    // Step 5.5: Validate prerequisite filenames (if specified)
     const prerequisiteFilenames = [];
 
-    if (options.prerequisites && options.prerequisites.length > 0) {
-      console.log('📖 Loading prerequisite files...');
+    if (options.prereqs && options.prereqs.length > 0) {
+      console.log('📋 Validating prerequisite files...');
 
-      for (const prereqFile of options.prerequisites) {
-        // Resolve path relative to CWD (or absolute if provided)
-        const prereqPath = resolve(prereqFile);
-
-        if (!existsSync(prereqPath)) {
-          console.log(`\x1b[33m⚠  Prerequisite not found: ${prereqFile} (skipping)\x1b[0m`);
-          continue;
-        }
-
-        try {
-          const prereqContent = readFileSync(prereqPath, 'utf-8');
-          prerequisitesContent += `\n\n# PREREQUISITE FILE: ${prereqFile}\n\n${prereqContent}`;
-          prerequisiteFilenames.push(prereqFile);
-          console.log(`✓ Loaded prerequisite: ${prereqFile}`);
-        } catch (error) {
-          console.log(`\x1b[33m⚠  Error reading ${prereqFile}: ${error.message}\x1b[0m`);
-        }
+      for (const prereqFile of options.prereqs) {
+        // Just validate the filename format - don't read the file
+        prerequisiteFilenames.push(prereqFile);
+        console.log(`✓ Will add to frontmatter: ${prereqFile}`);
       }
 
-      if (prerequisiteFilenames.length > 0) {
-        console.log(`✓ Loaded ${prerequisiteFilenames.length} prerequisite file(s)`);
-      }
+      console.log(`✓ ${prerequisiteFilenames.length} prerequisite(s) will be added to TOML frontmatter`);
       console.log();
     }
 
@@ -910,7 +894,6 @@ async function generateFlashcards(pdfFilename, options) {
       model: options.model,
       verbose: options.verbose,
       useClaudeCode,
-      prerequisites: prerequisitesContent,
       prerequisiteFilenames,
       order: options.order,
       tags: options.tags,
@@ -968,26 +951,36 @@ async function generateFlashcards(pdfFilename, options) {
     let outputPath;
     let outputFilename;
 
+    console.log('💾 Preparing to save flashcards...');
+    if (options.verbose) {
+      console.log(`[DEBUG] CWD: ${process.cwd()}`);
+      console.log(`[DEBUG] pdfFilename: ${pdfFilename}`);
+      console.log(`[DEBUG] deckPath: ${deckPath}`);
+      console.log(`[DEBUG] options.output: ${options.output || '(not specified)'}`);
+    }
+
     if (options.output) {
       // User provided --output: resolve relative to CWD (or absolute if provided)
       outputPath = resolve(options.output);
       outputFilename = basename(options.output);
+      console.log(`   Using --output path: ${options.output}`);
     } else {
       // No --output: default to flashcards/<pdf-name>.md in deck directory
       outputFilename = basename(pdfFilename).replace('.pdf', '') + '.md';
       outputPath = join(deckPath, 'flashcards', outputFilename);
+      console.log(`   Using default path: flashcards/${outputFilename}`);
     }
 
     // Ensure .md extension
     const finalOutputPath = outputPath.endsWith('.md') ? outputPath : outputPath + '.md';
 
-    // Debug logging
+    console.log(`   Final path: ${finalOutputPath}`);
     if (options.verbose) {
-      console.log(`[DEBUG] deckPath: ${deckPath}`);
       console.log(`[DEBUG] outputFilename: ${outputFilename}`);
       console.log(`[DEBUG] finalOutputPath: ${finalOutputPath}`);
       console.log(`[DEBUG] Content length: ${finalFlashcards.length} chars`);
     }
+    console.log();
 
     // Ensure output directory exists
     const outputDir = dirname(finalOutputPath);
@@ -1000,7 +993,10 @@ async function generateFlashcards(pdfFilename, options) {
 
     // Write file with error handling
     try {
+      console.log(`💾 Writing ${finalFlashcards.length} characters to: ${finalOutputPath}`);
       writeFileSync(finalOutputPath, finalFlashcards, 'utf-8');
+      console.log(`\x1b[32m✓ File saved successfully\x1b[0m`);
+      console.log();
       if (options.verbose) {
         console.log(`[DEBUG] Successfully wrote file to: ${finalOutputPath}`);
       }

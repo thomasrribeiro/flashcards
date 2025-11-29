@@ -377,7 +377,7 @@ async function extractPDFText(pdfPath, verbose = false) {
 // ==================== Claude Code CLI Integration ====================
 
 async function callClaudeCodeCLI(pdfPath, guidesContext, options = {}) {
-  const { model, verbose, deckPath, prerequisites = '', prerequisiteFilenames = [], order, tags = [], figuresPath = null, imageFiles = [] } = options;
+  const { model, verbose, deckPath, prerequisiteFilenames = [], order, tags = [], figuresPath = null, imageFiles = [] } = options;
   const { spawn } = await import('child_process');
 
   // Extract PDF text using shared function
@@ -385,7 +385,6 @@ async function callClaudeCodeCLI(pdfPath, guidesContext, options = {}) {
 
   // Get the guides directory path
   const guidesDir = join(deckPath, 'guides');
-  const flashcardsDir = join(deckPath, 'flashcards');
 
   // List available guide files
   const guideFiles = existsSync(guidesDir)
@@ -400,20 +399,15 @@ ${guideFiles.map(f => `- Read guides/${f} for comprehensive flashcard creation p
 These guides contain research-based SRS principles and subject-specific strategies. Follow ALL principles exactly.`
     : 'Follow research-based spaced repetition principles for flashcard creation.';
 
-  // Add prerequisites context if provided
-  const prerequisitesSection = prerequisites
-    ? `\n\n## Prerequisite Knowledge\n\nThe following flashcard files contain prerequisite knowledge that students will have already studied:\n${prerequisites}\n\nYou may reference concepts from these prerequisites without re-explaining them in detail. When listing prerequisites in the TOML frontmatter, include: ${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}`
-    : '';
-
-  // Add TOML frontmatter instructions if order or tags are specified
-  const tomlInstructions = (order !== undefined || tags.length > 0)
+  // Add TOML frontmatter instructions if order, tags, or prerequisites are specified
+  const tomlInstructions = (order !== undefined || tags.length > 0 || prerequisiteFilenames.length > 0)
     ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = []'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
     : '';
 
   // Note: Image instructions removed - figures are added in post-processing stage
 
   // Prepare the prompt - trust the guides completely
-  const promptText = `${guideInstructions}${prerequisitesSection}${tomlInstructions}
+  const promptText = `${guideInstructions}${tomlInstructions}
 
 <pdf_text>
 ${pdfText}
@@ -424,15 +418,10 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
   return new Promise((resolve, reject) => {
     // Use Claude Code CLI with --print for non-interactive mode
     // Use --add-dir to give Claude access to read the guides
-    // Only add flashcards directory if prerequisites are specified
     const args = ['--add-dir', guidesDir];
 
-    // Only add flashcards directory if prerequisites are provided
-    if (prerequisiteFilenames.length > 0) {
-      args.push('--add-dir', flashcardsDir);
-    }
-
     // Note: Figures directory NOT added here - handled in post-processing stage
+    // Note: Flashcards directory NOT added - prerequisites are metadata only
 
     args.push('--print', '--dangerously-skip-permissions', promptText);
 
@@ -442,8 +431,7 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
     if (verbose) {
       console.log(`[DEBUG] Spawning claude with guides access from: ${guidesDir}`);
       if (prerequisiteFilenames.length > 0) {
-        console.log(`[DEBUG] Flashcards directory for prerequisites: ${flashcardsDir}`);
-        console.log(`[DEBUG] Prerequisites: ${prerequisiteFilenames.join(', ')}`);
+        console.log(`[DEBUG] Prerequisites (metadata only): ${prerequisiteFilenames.join(', ')}`);
       }
       console.log(`[DEBUG] Available guides: ${guideFiles.join(', ')}`);
     }
@@ -492,11 +480,25 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
       // Parse the output to extract flashcards
       let flashcards = stdout.trim();
 
-      // Extract from markdown code block if present
-      if (flashcards.includes('```markdown')) {
-        const match = flashcards.match(/```markdown\s*([\s\S]*?)\s*```/);
+      if (verbose) {
+        console.log(`[DEBUG] Raw Claude output length: ${flashcards.length} chars`);
+        console.log(`[DEBUG] First 200 chars: ${flashcards.substring(0, 200)}`);
+      }
+
+      // Extract from ANY markdown code block (try multiple patterns)
+      if (flashcards.includes('```')) {
+        // Try ```markdown first
+        let match = flashcards.match(/```markdown\s*([\s\S]*?)\s*```/);
         if (match) {
           flashcards = match[1].trim();
+          if (verbose) console.log('[DEBUG] Extracted from ```markdown block');
+        } else {
+          // Try plain ``` block
+          match = flashcards.match(/```\s*([\s\S]*?)\s*```/);
+          if (match) {
+            flashcards = match[1].trim();
+            if (verbose) console.log('[DEBUG] Extracted from ``` block');
+          }
         }
       }
 
@@ -505,11 +507,17 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
         /^Based on the PDF content.*?here are.*?flashcards.*?:\s*/is,
         /^Here are.*?flashcards.*?:\s*/is,
         /^I've created.*?flashcards.*?:\s*/is,
-        /^I'll create.*?flashcards.*?:\s*/is
+        /^I'll create.*?flashcards.*?:\s*/is,
+        /^Let me create.*?flashcards.*?:\s*/is,
+        /^Sure!.*?flashcards.*?:\s*/is
       ];
 
       for (const pattern of preamblePatterns) {
+        const before = flashcards.length;
         flashcards = flashcards.replace(pattern, '');
+        if (verbose && before !== flashcards.length) {
+          console.log(`[DEBUG] Removed preamble, ${before - flashcards.length} chars`);
+        }
       }
 
       // Remove trailing summaries/conclusions
@@ -518,6 +526,11 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
 
       // Trim again after all cleaning
       flashcards = flashcards.trim();
+
+      if (verbose) {
+        console.log(`[DEBUG] After cleanup length: ${flashcards.length} chars`);
+        console.log(`[DEBUG] First 200 chars after cleanup: ${flashcards.substring(0, 200)}`);
+      }
 
       // Return in the same format as the API version
       resolve({
@@ -544,7 +557,6 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
     model = 'claude-sonnet-4-5-20250514',
     verbose = false,
     useClaudeCode = false,
-    prerequisites = '',
     prerequisiteFilenames = [],
     order,
     tags = [],
@@ -560,7 +572,6 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
       model,
       verbose,
       deckPath,
-      prerequisites,
       prerequisiteFilenames,
       order,
       tags,
@@ -579,13 +590,8 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
   // Initialize Anthropic client with API key
   const client = new Anthropic({ apiKey });
 
-  // Add prerequisites context if provided
-  const prerequisitesSection = prerequisites
-    ? `\n\n## Prerequisite Knowledge\n\nThe following flashcard files contain prerequisite knowledge that students will have already studied:\n${prerequisites}\n\nYou may reference concepts from these prerequisites without re-explaining them in detail. When listing prerequisites in the TOML frontmatter, include: ${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}`
-    : '';
-
-  // Add TOML frontmatter instructions if order or tags are specified
-  const tomlInstructions = (order !== undefined || tags.length > 0)
+  // Add TOML frontmatter instructions if order, tags, or prerequisites are specified
+  const tomlInstructions = (order !== undefined || tags.length > 0 || prerequisiteFilenames.length > 0)
     ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = []'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
     : '';
 
@@ -594,7 +600,7 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
   // Prepare system prompt
   const systemPrompt = `You are an expert flashcard creator.
 
-${guidesContext}${prerequisitesSection}${tomlInstructions}
+${guidesContext}${tomlInstructions}
 
 Generate flashcards from the PDF text below, following ALL principles in the guides above.`;
 
