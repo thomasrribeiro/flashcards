@@ -468,6 +468,41 @@ theory: Q: What is the V chord called?
 A: Dominant chord (creates tension, wants to resolve to I)
 ```
 
+### 8. **Define All Variables in Mathematical Expressions** ⚠️ CRITICAL
+**Every mathematical formula must explicitly define what each variable represents.** Never assume the student will infer variable meanings, even if they seem "obvious."
+
+❌ **Bad** (undefined variables):
+```markdown
+# Physics - assumes x_1, x_2 are understood:
+C: [Displacement] is the change in position of a particle, defined as $\Delta x = x_2 - x_1$.
+
+# Economics - assumes P, Q are understood:
+C: [Consumer surplus] is the area between demand curve and price: $\frac{1}{2}(P_{\text{max}} - P)(Q)$.
+
+# Statistics - assumes μ, σ are understood:
+C: The [z-score] formula is $z = \frac{x - \mu}{\sigma}$.
+```
+
+✅ **Good** (all variables defined):
+```markdown
+# Physics - explicitly defines each variable:
+C: [Displacement] is the change in position of a particle, defined as $\Delta x = x_2 - x_1$, where $x_2$ is the final position and $x_1$ is the initial position.
+
+# Economics - defines all terms:
+C: [Consumer surplus] is the area between the demand curve and market price: $\frac{1}{2}(P_{\text{max}} - P)(Q)$, where $P_{\text{max}}$ is the maximum willingness to pay, $P$ is market price, and $Q$ is quantity purchased.
+
+# Statistics - complete definition:
+C: The [z-score] measures how many standard deviations a value is from the mean: $z = \frac{x - \mu}{\sigma}$, where $x$ is the data point, $\mu$ is the population mean, and $\sigma$ is the population standard deviation.
+```
+
+**Why this matters:**
+- Mathematical notation varies across textbooks and disciplines
+- Students often forget subscript meanings ($x_1$ vs $x_2$, $v_i$ vs $v_f$)
+- Defining variables reinforces conceptual understanding, not just symbol manipulation
+- Prevents card ambiguity that causes review frustration
+
+**Rule**: If a formula contains ANY variables, symbols, or subscripts, the card must define what they represent.
+
 ---
 
 ## Advanced Principles from Research
