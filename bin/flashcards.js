@@ -655,6 +655,7 @@ program
   .option('--prerequisites <files...>', 'Prerequisite markdown files for context (space-separated)')
   .option('--order <number>', 'Order number for TOML frontmatter (e.g., 1 for Chapter 1)', parseInt)
   .option('--tags <tags...>', 'Tags for TOML frontmatter (space-separated, e.g., vectors kinematics)')
+  .option('--with-images [path]', 'Include figures from directory (default: deck/figures/)')
   .option('--verbose', 'Show detailed progress and prompt')
   .action(async (pdfFilename, options) => {
     await generateFlashcards(pdfFilename, options);
@@ -776,6 +777,65 @@ async function generateFlashcards(pdfFilename, options) {
       console.log();
     }
 
+    // Step 5.6: Validate and load figures (if --with-images flag is set)
+    let figuresPath = null;
+    let imageFiles = [];
+
+    if (options.withImages !== undefined) {
+      console.log('🖼️  Loading figures...');
+
+      // Determine figures path (default to deck/figures/ or use custom path)
+      figuresPath = options.withImages === true || options.withImages === ''
+        ? join(deckPath, 'figures')
+        : resolve(options.withImages);
+
+      // Validate figures directory exists
+      if (!existsSync(figuresPath)) {
+        console.log(`\x1b[31m❌ Figures directory not found: ${figuresPath}\x1b[0m`);
+        console.log();
+        console.log('Create the figures directory and extract images first:');
+        console.log(`  mkdir -p ${figuresPath}`);
+        console.log(`  python scripts/extract_figures_from_pdf.py --pdf ${pdfFilename}`);
+        console.log();
+        process.exit(1);
+      }
+
+      // Validate directory is not empty and contains image files
+      const getAllFiles = (dirPath, arrayOfFiles = []) => {
+        const files = readdirSync(dirPath);
+
+        files.forEach(file => {
+          const filePath = join(dirPath, file);
+          if (statSync(filePath).isDirectory()) {
+            arrayOfFiles = getAllFiles(filePath, arrayOfFiles);
+          } else {
+            arrayOfFiles.push(filePath);
+          }
+        });
+
+        return arrayOfFiles;
+      };
+
+      const allFiles = getAllFiles(figuresPath);
+      const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
+      imageFiles = allFiles.filter(file => {
+        const ext = file.toLowerCase().slice(file.lastIndexOf('.'));
+        return imageExtensions.includes(ext);
+      });
+
+      if (imageFiles.length === 0) {
+        console.log(`\x1b[31m❌ No images found in ${figuresPath}\x1b[0m`);
+        console.log();
+        console.log('Extract images from PDF first:');
+        console.log(`  python scripts/extract_figures_from_pdf.py --pdf ${pdfFilename}`);
+        console.log();
+        process.exit(1);
+      }
+
+      console.log(`✓ Found ${imageFiles.length} image(s) in ${figuresPath}`);
+      console.log();
+    }
+
     // Step 6: Show cost estimate
     const pdfStats = statSync(pdfPath);
     const pdfSizeMB = (pdfStats.size / 1024 / 1024).toFixed(2);
@@ -824,7 +884,9 @@ async function generateFlashcards(pdfFilename, options) {
       prerequisites: prerequisitesContent,
       prerequisiteFilenames,
       order: options.order,
-      tags: options.tags
+      tags: options.tags,
+      figuresPath,
+      imageFiles
     });
 
     // Step 8: Validate flashcards
@@ -844,6 +906,35 @@ async function generateFlashcards(pdfFilename, options) {
       console.log();
     }
 
+    // Step 8.5: Enhance with figures (if --with-images flag is set)
+    let finalFlashcards = result.flashcards;
+
+    if (figuresPath && imageFiles.length > 0) {
+      console.log('🖼️  Stage 2: Enhancing flashcards with figures...');
+      console.log();
+
+      try {
+        const enhancedFlashcards = await claudeClient.enhanceFlashcardsWithFigures(
+          finalFlashcards,
+          figuresPath,
+          imageFiles,
+          {
+            verbose: options.verbose,
+            useClaudeCode,
+            deckPath
+          }
+        );
+
+        finalFlashcards = enhancedFlashcards;
+        console.log('✓ Flashcards enhanced with figure references');
+        console.log();
+      } catch (error) {
+        console.log(`\x1b[33m⚠  Warning: Figure enhancement failed: ${error.message}\x1b[0m`);
+        console.log('Continuing with text-only flashcards...');
+        console.log();
+      }
+    }
+
     // Step 9: Save output
     const outputFilename = options.output || basename(pdfFilename).replace('.pdf', '') + '.md';
     const outputPath = join(deckPath, 'flashcards', outputFilename);
@@ -856,7 +947,7 @@ async function generateFlashcards(pdfFilename, options) {
       console.log(`[DEBUG] deckPath: ${deckPath}`);
       console.log(`[DEBUG] outputFilename: ${outputFilename}`);
       console.log(`[DEBUG] finalOutputPath: ${finalOutputPath}`);
-      console.log(`[DEBUG] Content length: ${result.flashcards.length} chars`);
+      console.log(`[DEBUG] Content length: ${finalFlashcards.length} chars`);
     }
 
     // Ensure flashcards directory exists
@@ -870,7 +961,7 @@ async function generateFlashcards(pdfFilename, options) {
 
     // Write file with error handling
     try {
-      writeFileSync(finalOutputPath, result.flashcards, 'utf-8');
+      writeFileSync(finalOutputPath, finalFlashcards, 'utf-8');
       if (options.verbose) {
         console.log(`[DEBUG] Successfully wrote file to: ${finalOutputPath}`);
       }

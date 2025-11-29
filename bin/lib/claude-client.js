@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, chmodSync, mkdirSync } from 'fs';
-import { join, resolve, dirname } from 'path';
+import { join, resolve, dirname, basename } from 'path';
 import { homedir } from 'os';
 import { createHash, randomBytes } from 'crypto';
 
@@ -377,7 +377,7 @@ async function extractPDFText(pdfPath, verbose = false) {
 // ==================== Claude Code CLI Integration ====================
 
 async function callClaudeCodeCLI(pdfPath, guidesContext, options = {}) {
-  const { model, verbose, deckPath, prerequisites = '', prerequisiteFilenames = [], order, tags = [] } = options;
+  const { model, verbose, deckPath, prerequisites = '', prerequisiteFilenames = [], order, tags = [], figuresPath = null, imageFiles = [] } = options;
   const { spawn } = await import('child_process');
 
   // Extract PDF text using shared function
@@ -410,6 +410,8 @@ These guides contain research-based SRS principles and subject-specific strategi
     ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = []'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
     : '';
 
+  // Note: Image instructions removed - figures are added in post-processing stage
+
   // Prepare the prompt - trust the guides completely
   const promptText = `${guideInstructions}${prerequisitesSection}${tomlInstructions}
 
@@ -429,6 +431,8 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
     if (prerequisiteFilenames.length > 0) {
       args.push('--add-dir', flashcardsDir);
     }
+
+    // Note: Figures directory NOT added here - handled in post-processing stage
 
     args.push('--print', '--dangerously-skip-permissions', promptText);
 
@@ -543,7 +547,9 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
     prerequisites = '',
     prerequisiteFilenames = [],
     order,
-    tags = []
+    tags = [],
+    figuresPath = null,
+    imageFiles = []
   } = options;
 
   // If using Claude Code CLI, delegate to that
@@ -557,7 +563,9 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
       prerequisites,
       prerequisiteFilenames,
       order,
-      tags
+      tags,
+      figuresPath,
+      imageFiles
     });
   }
 
@@ -581,6 +589,8 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
     ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = []'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
     : '';
 
+  // Note: Image instructions removed - figures are added in post-processing stage
+
   // Prepare system prompt
   const systemPrompt = `You are an expert flashcard creator.
 
@@ -588,7 +598,7 @@ ${guidesContext}${prerequisitesSection}${tomlInstructions}
 
 Generate flashcards from the PDF text below, following ALL principles in the guides above.`;
 
-  // Prepare user message with extracted text
+  // Prepare user message (text only, no images during initial generation)
   const userMessage = `<pdf_text>
 ${pdfText}
 </pdf_text>
@@ -635,6 +645,164 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
       throw new Error('PDF is too large. Try a smaller file or fewer pages.');
     }
     throw new Error(`Claude API error: ${error.message}`);
+  }
+}
+
+// ==================== Figure Enhancement (Stage 2) ====================
+
+export async function enhanceFlashcardsWithFigures(flashcardsContent, figuresPath, imageFiles, options = {}) {
+  const { verbose = false, useClaudeCode = false, deckPath } = options;
+  const { spawn } = await import('child_process');
+
+  if (verbose) {
+    console.log(`\n[DEBUG] Stage 2: Enhancing flashcards with figures`);
+    console.log(`[DEBUG] Figures directory: ${figuresPath}`);
+    console.log(`[DEBUG] Image files: ${imageFiles.length} total`);
+  }
+
+  // Build prompt for figure enhancement
+  const imageListings = imageFiles.slice(0, 30).map(f => `- ${basename(f)}`).join('\n');
+  const imageListingSuffix = imageFiles.length > 30 ? `\n... and ${imageFiles.length - 30} more` : '';
+
+  const promptText = `You are enhancing existing flashcards by adding figure references where pedagogically valuable.
+
+## Task
+
+Review the flashcards below and the available figures. For flashcards that would benefit from visual aids, add image references using the format: ![Description](../figures/subfolder/image.png)
+
+## Available Figures (${imageFiles.length} total):
+${imageListings}${imageListingSuffix}
+
+## Guidelines for Adding Figures
+
+**Add figures when they:**
+- Show complex diagrams (circuit diagrams, free-body diagrams, anatomical drawings, vector diagrams)
+- Display graphs and charts with important data relationships
+- Illustrate spatial/structural relationships difficult to describe in text
+- Contain visual information that significantly enhances understanding
+
+**DO NOT add figures when:**
+- The concept is simple and easily described in text
+- The image would be purely decorative
+- Text is clearer and more searchable than the image
+
+## CRITICAL RULES - MUST FOLLOW EXACTLY
+
+1. **Preserve ALL existing content** - Only ADD figure references, NEVER remove or modify ANY existing text
+2. **Preserve ALL formatting** - Keep EVERY Q:/A:/C:/P:/S: prefix, ALL spacing, ALL structure EXACTLY as-is
+3. **Preserve TOML frontmatter** - Keep the +++ header EXACTLY as-is, including ALL fields (order, tags, prerequisites)
+4. **Preserve ALL headers** - Keep EVERY # and ## header EXACTLY as written in the original
+5. **Preserve ALL separators** - Keep ALL --- separators between cards
+6. **Only ADD, never remove** - Your ONLY job is to INSERT figure references where helpful. Do NOT rewrite, rephrase, or reorganize ANYTHING.
+7. **Use relative paths** - Format: ../figures/subfolder/image.png
+8. **Write descriptive alt-text** - The text in ![...] should describe what the figure shows
+9. **Be selective** - Only add figures where they genuinely add value
+
+**Example of CORRECT enhancement:**
+
+BEFORE:
+\`\`\`
+# Vectors
+
+Q: What is a vector?
+A: A quantity with magnitude and direction.
+\`\`\`
+
+AFTER (with figure added):
+\`\`\`
+# Vectors
+
+Q: What is a vector?
+A: A quantity with magnitude and direction.
+
+![Vector diagram showing magnitude and direction](../figures/vectors/vector_basics.png)
+\`\`\`
+
+Notice: The # header is PRESERVED. The Q: and A: are PRESERVED. Only the figure was ADDED.
+
+## Flashcards to Enhance
+
+<flashcards>
+${flashcardsContent}
+</flashcards>
+
+Return the enhanced flashcards with figure references added where appropriate. Preserve ALL existing content, ALL headers, ALL formatting - only ADD figure references.`;
+
+  if (useClaudeCode) {
+    // Use Claude Code CLI
+    return new Promise((resolve, reject) => {
+      const args = [
+        '--add-dir', figuresPath,
+        '--print',
+        '--dangerously-skip-permissions',
+        promptText
+      ];
+
+      if (verbose) {
+        console.log(`[DEBUG] Spawning claude for figure enhancement`);
+      }
+
+      const claude = spawn('claude', args, {
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let timedOut = false;
+
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        claude.kill();
+        reject(new Error('Figure enhancement timed out after 5 minutes'));
+      }, 5 * 60 * 1000);
+
+      claude.stdout.on('data', (data) => {
+        stdout += data.toString();
+        if (verbose) {
+          process.stdout.write(data);
+        }
+      });
+
+      claude.stderr.on('data', (data) => {
+        stderr += data.toString();
+        if (verbose) {
+          process.stderr.write(data);
+        }
+      });
+
+      claude.on('close', (code) => {
+        clearTimeout(timeout);
+
+        if (timedOut) {
+          return;
+        }
+
+        if (code !== 0) {
+          reject(new Error(`Figure enhancement failed: ${stderr}`));
+          return;
+        }
+
+        let enhanced = stdout.trim();
+
+        // Extract from markdown code block if present
+        if (enhanced.includes('```markdown')) {
+          const match = enhanced.match(/```markdown\s*([\s\S]*?)\s*```/);
+          if (match) {
+            enhanced = match[1].trim();
+          }
+        }
+
+        resolve(enhanced);
+      });
+
+      claude.on('error', (error) => {
+        clearTimeout(timeout);
+        reject(new Error(`Failed to spawn Claude Code CLI for enhancement: ${error.message}`));
+      });
+    });
+  } else {
+    // Use Anthropic API
+    throw new Error('API-based figure enhancement not yet implemented. Use Claude Code CLI.');
   }
 }
 
