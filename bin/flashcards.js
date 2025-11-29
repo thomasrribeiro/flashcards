@@ -675,15 +675,15 @@ async function authLogin() {
 
 program
   .command('generate <pdf-path>')
-  .description('Generate flashcards from PDF using Claude AI (path relative to deck root)')
-  .option('--output <filename>', 'Output markdown filename (default: PDF name)')
+  .description('Generate flashcards from PDF using Claude AI (run from within deck directory)')
+  .option('--output <path>', 'Output path relative to CWD (default: flashcards/<pdf-name>.md)')
   .option('--model <model>', 'Claude model to use', 'claude-sonnet-4-5-20250514')
   .option('--api-key <key>', 'Override stored API key')
   .option('--deck <path>', 'Deck path (auto-detect from cwd if not specified)')
-  .option('--prerequisites <files...>', 'Prerequisite markdown files for context (space-separated)')
+  .option('--prerequisites <files...>', 'Prerequisite files relative to CWD (space-separated)')
   .option('--order <number>', 'Order number for TOML frontmatter (e.g., 1 for Chapter 1)', parseInt)
   .option('--tags <tags...>', 'Tags for TOML frontmatter (space-separated, e.g., vectors kinematics)')
-  .option('--with-images [path]', 'Include figures from directory (default: deck/figures/)')
+  .option('--with-images [path]', 'Include figures from path relative to CWD (default: deck/figures/)')
   .option('--verbose', 'Show detailed progress and prompt')
   .action(async (pdfFilename, options) => {
     await generateFlashcards(pdfFilename, options);
@@ -739,8 +739,8 @@ async function generateFlashcards(pdfFilename, options) {
       process.exit(1);
     }
 
-    // Step 4: Locate PDF file (use relative path from deck root)
-    const pdfPath = join(deckPath, pdfFilename);
+    // Step 4: Locate PDF file (relative to CWD or absolute)
+    const pdfPath = resolve(pdfFilename);
     if (!existsSync(pdfPath)) {
       console.log(`\x1b[31m❌ PDF not found: ${pdfFilename}\x1b[0m`);
       console.log();
@@ -779,10 +779,10 @@ async function generateFlashcards(pdfFilename, options) {
 
     if (options.prerequisites && options.prerequisites.length > 0) {
       console.log('📖 Loading prerequisite files...');
-      const flashcardsDir = join(deckPath, 'flashcards');
 
       for (const prereqFile of options.prerequisites) {
-        const prereqPath = join(flashcardsDir, prereqFile);
+        // Resolve path relative to CWD (or absolute if provided)
+        const prereqPath = resolve(prereqFile);
 
         if (!existsSync(prereqPath)) {
           console.log(`\x1b[33m⚠  Prerequisite not found: ${prereqFile} (skipping)\x1b[0m`);
@@ -812,7 +812,8 @@ async function generateFlashcards(pdfFilename, options) {
     if (options.withImages !== undefined) {
       console.log('🖼️  Loading figures...');
 
-      // Determine figures path (default to deck/figures/ or use custom path)
+      // Determine figures path (relative to CWD or absolute if provided)
+      // If no path given (true or empty string), default to deck/figures/
       figuresPath = options.withImages === true || options.withImages === ''
         ? join(deckPath, 'figures')
         : resolve(options.withImages);
@@ -964,8 +965,18 @@ async function generateFlashcards(pdfFilename, options) {
     }
 
     // Step 9: Save output
-    const outputFilename = options.output || basename(pdfFilename).replace('.pdf', '') + '.md';
-    const outputPath = join(deckPath, 'flashcards', outputFilename);
+    let outputPath;
+    let outputFilename;
+
+    if (options.output) {
+      // User provided --output: resolve relative to CWD (or absolute if provided)
+      outputPath = resolve(options.output);
+      outputFilename = basename(options.output);
+    } else {
+      // No --output: default to flashcards/<pdf-name>.md in deck directory
+      outputFilename = basename(pdfFilename).replace('.pdf', '') + '.md';
+      outputPath = join(deckPath, 'flashcards', outputFilename);
+    }
 
     // Ensure .md extension
     const finalOutputPath = outputPath.endsWith('.md') ? outputPath : outputPath + '.md';
@@ -978,12 +989,12 @@ async function generateFlashcards(pdfFilename, options) {
       console.log(`[DEBUG] Content length: ${finalFlashcards.length} chars`);
     }
 
-    // Ensure flashcards directory exists
-    const flashcardsDir = join(deckPath, 'flashcards');
-    if (!existsSync(flashcardsDir)) {
-      mkdirSync(flashcardsDir, { recursive: true });
+    // Ensure output directory exists
+    const outputDir = dirname(finalOutputPath);
+    if (!existsSync(outputDir)) {
+      mkdirSync(outputDir, { recursive: true });
       if (options.verbose) {
-        console.log(`[DEBUG] Created directory: ${flashcardsDir}`);
+        console.log(`[DEBUG] Created directory: ${outputDir}`);
       }
     }
 
