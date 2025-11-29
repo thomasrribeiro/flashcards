@@ -600,8 +600,11 @@ body {
 }
 
 .card-content img {
-    max-width: 100%;
+    max-width: 500px;
+    max-height: 500px;
     height: auto;
+    width: auto;
+    object-fit: contain;
     display: block;
     margin: 20px 0;
 }

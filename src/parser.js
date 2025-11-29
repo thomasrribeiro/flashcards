@@ -89,6 +89,13 @@ function extractFrontmatter(text) {
  * Classify a line into its type
  */
 function readLine(line) {
+    const trimmedLine = line.trim();
+
+    // Ignore markdown headers (treat as separators to avoid parsing as content)
+    if (trimmedLine.startsWith('#')) {
+        return { type: LineType.SEPARATOR, text: '' };
+    }
+
     if (line.startsWith('Q:')) {
         return { type: LineType.START_QUESTION, text: line.slice(2).trim() };
     } else if (line.startsWith('A:')) {
@@ -99,7 +106,7 @@ function readLine(line) {
         return { type: LineType.START_PROBLEM, text: line.slice(2).trim() };
     } else if (line.startsWith('S:')) {
         return { type: LineType.START_SOLUTION, text: line.slice(2).trim() };
-    } else if (line.trim() === '---') {
+    } else if (trimmedLine === '---') {
         return { type: LineType.SEPARATOR, text: '' };
     } else {
         return { type: LineType.TEXT, text: line };

@@ -4,7 +4,7 @@
 
 import { initDB, getCard, getAllCards, getAllReviews, saveReview, saveCards } from './storage.js';
 import { reviewCard, createCard, Rating, GradeKeys, getDueCards as filterDueCards, State } from './fsrs-client.js';
-import { renderCardFront, renderCardBack, parseSolutionSteps, renderSolutionStep, markdownToHtml } from './markdown.js';
+import { renderCardFront, renderCardBack, parseSolutionSteps, renderSolutionStep, markdownToHtml, setCardContext } from './markdown.js';
 import { parseDeck } from './parser.js';
 import { hashCard } from './hasher.js';
 
@@ -400,6 +400,9 @@ function revealAnswer() {
         // For problem cards, reveal current step's content and next step's header
         if (currentStepIndex < solutionSteps.length) {
             const currentStep = solutionSteps[currentStepIndex];
+
+            // Set card context for image resolution
+            setCardContext(currentCard);
 
             // Build HTML for current step's content
             const currentStepContent = markdownToHtml(currentStep.content.trim());

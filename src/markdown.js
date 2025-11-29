@@ -11,14 +11,71 @@ import katex from 'katex';
  */
 const renderer = new marked.Renderer();
 
+// Store current card context for image resolution
+let currentCardContext = null;
+
 // Custom image renderer to handle relative paths
 renderer.image = function(href, title, text) {
-    // Convert relative paths to absolute from topics directory
-    const src = href.startsWith('http') ? href : `topics/${href}`;
+    let src = href;
+
+    // Handle absolute URLs
+    if (href.startsWith('http')) {
+        src = href;
+    }
+    // Handle relative paths from flashcards
+    else if (currentCardContext) {
+        // For local decks: collection/deck-name/figures/...
+        // For GitHub repos: owner/repo/figures/...
+        const deckName = currentCardContext.deckName;
+        const filePath = currentCardContext.filePath || '';
+
+        if (deckName.startsWith('local/')) {
+            // Local deck: collection/deck-name/relative-path
+            const localDeckName = deckName.replace('local/', '');
+
+            // Resolve relative path from the file's location
+            // filePath is like "flashcards/file.md", so we need to resolve from that directory
+            const fileDir = filePath.substring(0, filePath.lastIndexOf('/'));
+
+            // Build full path: collection/deck-name/file-directory/relative-href
+            const fullPath = `collection/${localDeckName}/${fileDir}/${href}`;
+
+            // Normalize path (resolve ../ and ./)
+            src = normalizePath(fullPath);
+        } else {
+            // GitHub repo: use same pattern
+            const fileDir = filePath.substring(0, filePath.lastIndexOf('/'));
+            const fullPath = `collection/${deckName}/${fileDir}/${href}`;
+            src = normalizePath(fullPath);
+        }
+    }
+    // Fallback to topics directory (legacy)
+    else {
+        src = `topics/${href}`;
+    }
+
     const titleAttr = title ? ` title="${title}"` : '';
     const altAttr = text ? ` alt="${text}"` : '';
     return `<img src="${src}"${altAttr}${titleAttr}>`;
 };
+
+/**
+ * Normalize a path by resolving . and .. segments
+ */
+function normalizePath(path) {
+    const parts = path.split('/');
+    const result = [];
+
+    for (const part of parts) {
+        if (part === '..') {
+            result.pop(); // Go up one directory
+        } else if (part !== '.' && part !== '') {
+            result.push(part);
+        }
+    }
+
+    return result.join('/');
+}
 
 marked.setOptions({
     renderer: renderer,
@@ -58,6 +115,20 @@ function renderMath(text) {
     });
 
     return text;
+}
+
+/**
+ * Set the current card context for image path resolution
+ */
+export function setCardContext(card) {
+    currentCardContext = card;
+}
+
+/**
+ * Clear the current card context
+ */
+export function clearCardContext() {
+    currentCardContext = null;
 }
 
 /**
@@ -124,28 +195,36 @@ export function parseSolutionSteps(solution) {
  * Render card front (question or cloze with hidden deletion)
  */
 export function renderCardFront(card) {
-    if (card.type === 'basic') {
-        return markdownToHtml(card.content.question);
-    } else if (card.type === 'problem') {
-        return markdownToHtml(card.content.problem);
-    } else if (card.type === 'cloze') {
-        // Replace deletion with placeholder
-        const CLOZE_TAG = 'CLOZE_DELETION';
-        const textBytes = new TextEncoder().encode(card.content.text);
-        const before = textBytes.slice(0, card.content.start);
-        const after = textBytes.slice(card.content.end + 1);
-        const clozeBytes = new TextEncoder().encode(CLOZE_TAG);
+    // Set card context for image resolution
+    currentCardContext = card;
 
-        const combined = new Uint8Array(before.length + clozeBytes.length + after.length);
-        combined.set(before, 0);
-        combined.set(clozeBytes, before.length);
-        combined.set(after, before.length + clozeBytes.length);
+    try {
+        if (card.type === 'basic') {
+            return markdownToHtml(card.content.question);
+        } else if (card.type === 'problem') {
+            return markdownToHtml(card.content.problem);
+        } else if (card.type === 'cloze') {
+            // Replace deletion with placeholder
+            const CLOZE_TAG = 'CLOZE_DELETION';
+            const textBytes = new TextEncoder().encode(card.content.text);
+            const before = textBytes.slice(0, card.content.start);
+            const after = textBytes.slice(card.content.end + 1);
+            const clozeBytes = new TextEncoder().encode(CLOZE_TAG);
 
-        const textWithCloze = new TextDecoder().decode(combined);
-        const html = markdownToHtml(textWithCloze);
+            const combined = new Uint8Array(before.length + clozeBytes.length + after.length);
+            combined.set(before, 0);
+            combined.set(clozeBytes, before.length);
+            combined.set(after, before.length + clozeBytes.length);
 
-        // Replace placeholder with styled cloze
-        return html.replace(CLOZE_TAG, '<span class="cloze">.............</span>');
+            const textWithCloze = new TextDecoder().decode(combined);
+            const html = markdownToHtml(textWithCloze);
+
+            // Replace placeholder with styled cloze
+            return html.replace(CLOZE_TAG, '<span class="cloze">.............</span>');
+        }
+    } finally {
+        // Clear context after rendering
+        currentCardContext = null;
     }
 }
 
@@ -153,36 +232,44 @@ export function renderCardFront(card) {
  * Render card back (answer or cloze with revealed deletion)
  */
 export function renderCardBack(card) {
-    if (card.type === 'basic') {
-        const answerHtml = markdownToHtml(card.content.answer);
-        return `<div class="answer-separator">${answerHtml}</div>`;
-    } else if (card.type === 'problem') {
-        // For problem cards, this is handled by step-by-step reveal
-        // This function won't be called for problem cards
-        return '';
-    } else if (card.type === 'cloze') {
-        // Extract deletion text and render it
-        const textBytes = new TextEncoder().encode(card.content.text);
-        const deletedBytes = textBytes.slice(card.content.start, card.content.end + 1);
-        const deletedText = new TextDecoder().decode(deletedBytes);
-        const deletedHtml = markdownToHtmlInline(deletedText);
+    // Set card context for image resolution
+    currentCardContext = card;
 
-        // Replace deletion with placeholder in full text
-        const CLOZE_TAG = 'CLOZE_DELETION';
-        const before = textBytes.slice(0, card.content.start);
-        const after = textBytes.slice(card.content.end + 1);
-        const clozeBytes = new TextEncoder().encode(CLOZE_TAG);
+    try {
+        if (card.type === 'basic') {
+            const answerHtml = markdownToHtml(card.content.answer);
+            return `<div class="answer-separator">${answerHtml}</div>`;
+        } else if (card.type === 'problem') {
+            // For problem cards, this is handled by step-by-step reveal
+            // This function won't be called for problem cards
+            return '';
+        } else if (card.type === 'cloze') {
+            // Extract deletion text and render it
+            const textBytes = new TextEncoder().encode(card.content.text);
+            const deletedBytes = textBytes.slice(card.content.start, card.content.end + 1);
+            const deletedText = new TextDecoder().decode(deletedBytes);
+            const deletedHtml = markdownToHtmlInline(deletedText);
 
-        const combined = new Uint8Array(before.length + clozeBytes.length + after.length);
-        combined.set(before, 0);
-        combined.set(clozeBytes, before.length);
-        combined.set(after, before.length + clozeBytes.length);
+            // Replace deletion with placeholder in full text
+            const CLOZE_TAG = 'CLOZE_DELETION';
+            const before = textBytes.slice(0, card.content.start);
+            const after = textBytes.slice(card.content.end + 1);
+            const clozeBytes = new TextEncoder().encode(CLOZE_TAG);
 
-        const textWithCloze = new TextDecoder().decode(combined);
-        const html = markdownToHtml(textWithCloze);
+            const combined = new Uint8Array(before.length + clozeBytes.length + after.length);
+            combined.set(before, 0);
+            combined.set(clozeBytes, before.length);
+            combined.set(after, before.length + clozeBytes.length);
 
-        // Replace placeholder with revealed deletion
-        return html.replace(CLOZE_TAG, `<span class="cloze-reveal">${deletedHtml}</span>`);
+            const textWithCloze = new TextDecoder().decode(combined);
+            const html = markdownToHtml(textWithCloze);
+
+            // Replace placeholder with revealed deletion
+            return html.replace(CLOZE_TAG, `<span class="cloze-reveal">${deletedHtml}</span>`);
+        }
+    } finally {
+        // Clear context after rendering
+        currentCardContext = null;
     }
 }
 
