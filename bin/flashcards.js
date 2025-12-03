@@ -674,23 +674,22 @@ async function authLogin() {
 // ==================== Generate Command ====================
 
 program
-  .command('generate <pdf-path>')
-  .description('Generate flashcards from PDF using Claude AI (run from within deck directory)')
-  .option('--output <path>', 'Output path relative to CWD (default: flashcards/<pdf-name>.md)')
+  .command('generate <mineru-dir>')
+  .description('Generate flashcards from MineRU-processed PDF output (run from within deck directory)')
+  .option('--output <name>', 'Output filename (default: derived from MineRU input)')
   .option('--model <model>', 'Claude model to use', 'claude-sonnet-4-5-20250514')
   .option('--api-key <key>', 'Override stored API key')
   .option('--deck <path>', 'Deck path (auto-detect from cwd if not specified)')
   .option('--prereqs <files...>', 'Prerequisite files relative to CWD (space-separated)')
   .option('--order <number>', 'Order number for TOML frontmatter (e.g., 1 for Chapter 1)', parseInt)
   .option('--tags <tags...>', 'Tags for TOML frontmatter (space-separated, e.g., vectors kinematics)')
-  .option('--with-images [path]', 'Include figures from path relative to CWD (default: deck/figures/)')
   .option('--verbose', 'Show detailed progress and prompt')
-  .action(async (pdfFilename, options) => {
-    await generateFlashcards(pdfFilename, options);
+  .action(async (mineruDir, options) => {
+    await generateFlashcards(mineruDir, options);
   });
 
-async function generateFlashcards(pdfFilename, options) {
-  console.log('\x1b[34m🤖 AI Flashcard Generation\x1b[0m');
+async function generateFlashcards(mineruDirInput, options) {
+  console.log('\x1b[34m🤖 AI Flashcard Generation (MineRU)\x1b[0m');
   console.log('━'.repeat(50));
   console.log();
 
@@ -739,26 +738,41 @@ async function generateFlashcards(pdfFilename, options) {
       process.exit(1);
     }
 
-    // Step 4: Locate PDF file (relative to CWD or absolute)
-    const pdfPath = resolve(pdfFilename);
-    if (!existsSync(pdfPath)) {
-      console.log(`\x1b[31m❌ PDF not found: ${pdfFilename}\x1b[0m`);
+    // Step 4: Validate MineRU output directory
+    const mineruDir = resolve(mineruDirInput);
+    if (!existsSync(mineruDir)) {
+      console.log(`\x1b[31m❌ MineRU output directory not found: ${mineruDirInput}\x1b[0m`);
       console.log();
-
-      const availablePDFs = claudeClient.listPDFsInReferences(deckPath);
-      if (availablePDFs.length > 0) {
-        console.log('Available PDFs in references/:');
-        availablePDFs.forEach(pdf => console.log(`  • references/${pdf}`));
-        console.log();
-        console.log('Did you mean one of these?');
-      } else {
-        console.log('No PDFs found in references/ folder.');
-        console.log();
-        console.log('Add your PDF: \x1b[36mcp ~/file.pdf references/\x1b[0m');
-      }
+      console.log('Run MineRU first to process your PDF:');
+      console.log('  magic-pdf -p your-file.pdf -o output-dir');
       console.log();
       process.exit(1);
     }
+
+    // Check for content_list.json
+    const mineruFiles = readdirSync(mineruDir);
+    const contentListFile = mineruFiles.find(f => f.endsWith('_content_list.json'));
+    if (!contentListFile) {
+      console.log(`\x1b[31m❌ No *_content_list.json found in: ${mineruDir}\x1b[0m`);
+      console.log();
+      console.log('This directory does not appear to be a valid MineRU output.');
+      console.log('Expected files: *_content_list.json, images/');
+      console.log();
+      process.exit(1);
+    }
+
+    // Check for images directory
+    const imagesDir = join(mineruDir, 'images');
+    const hasImages = existsSync(imagesDir);
+    let imageCount = 0;
+    if (hasImages) {
+      imageCount = readdirSync(imagesDir).filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f)).length;
+    }
+
+    console.log(`📂 MineRU input: ${mineruDir}`);
+    console.log(`   Content: ${contentListFile}`);
+    console.log(`   Images: ${imageCount} found`);
+    console.log();
 
     // Step 5: Load guides
     console.log('📚 Loading flashcard writing guides...');
@@ -780,7 +794,6 @@ async function generateFlashcards(pdfFilename, options) {
       console.log('📋 Validating prerequisite files...');
 
       for (const prereqFile of options.prereqs) {
-        // Just validate the filename format - don't read the file
         prerequisiteFilenames.push(prereqFile);
         console.log(`✓ Will add to frontmatter: ${prereqFile}`);
       }
@@ -789,96 +802,13 @@ async function generateFlashcards(pdfFilename, options) {
       console.log();
     }
 
-    // Step 5.6: Validate and load figures (if --with-images flag is set)
-    let figuresPath = null;
-    let imageFiles = [];
+    // Step 6: Determine output name
+    const baseName = contentListFile.replace('_content_list.json', '');
+    const outputName = options.output || baseName;
 
-    if (options.withImages !== undefined) {
-      console.log('🖼️  Loading figures...');
-
-      // Determine figures path (relative to CWD or absolute if provided)
-      // If no path given (true or empty string), default to deck/figures/
-      figuresPath = options.withImages === true || options.withImages === ''
-        ? join(deckPath, 'figures')
-        : resolve(options.withImages);
-
-      // Validate figures directory exists
-      if (!existsSync(figuresPath)) {
-        console.log(`\x1b[31m❌ Figures directory not found: ${figuresPath}\x1b[0m`);
-        console.log();
-        console.log('Create the figures directory and extract images first:');
-        console.log(`  mkdir -p ${figuresPath}`);
-        console.log(`  python scripts/extract_figures_from_pdf.py --pdf ${pdfFilename}`);
-        console.log();
-        process.exit(1);
-      }
-
-      // Validate directory is not empty and contains image files
-      const getAllFiles = (dirPath, arrayOfFiles = []) => {
-        const files = readdirSync(dirPath);
-
-        files.forEach(file => {
-          const filePath = join(dirPath, file);
-          if (statSync(filePath).isDirectory()) {
-            arrayOfFiles = getAllFiles(filePath, arrayOfFiles);
-          } else {
-            arrayOfFiles.push(filePath);
-          }
-        });
-
-        return arrayOfFiles;
-      };
-
-      const allFiles = getAllFiles(figuresPath);
-      const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
-      imageFiles = allFiles.filter(file => {
-        const ext = file.toLowerCase().slice(file.lastIndexOf('.'));
-        return imageExtensions.includes(ext);
-      });
-
-      if (imageFiles.length === 0) {
-        console.log(`\x1b[31m❌ No images found in ${figuresPath}\x1b[0m`);
-        console.log();
-        console.log('Extract images from PDF first:');
-        console.log(`  python scripts/extract_figures_from_pdf.py --pdf ${pdfFilename}`);
-        console.log();
-        process.exit(1);
-      }
-
-      console.log(`✓ Found ${imageFiles.length} image(s) in ${figuresPath}`);
-      console.log();
-    }
-
-    // Step 6: Show cost estimate
-    const pdfStats = statSync(pdfPath);
-    const pdfSizeMB = (pdfStats.size / 1024 / 1024).toFixed(2);
-    const costEstimate = claudeClient.estimateCost(pdfStats.size, options.model);
-
-    console.log(`📄 PDF: ${pdfFilename} (${pdfSizeMB} MB)`);
     console.log(`🤖 Model: ${options.model}`);
-    console.log(`💰 Estimated cost: $${costEstimate.min.toFixed(2)} - $${costEstimate.max.toFixed(2)}`);
+    console.log(`📝 Output: flashcards/${outputName}.md`);
     console.log();
-
-    // Confirm for large PDFs
-    if (pdfStats.size > 10 * 1024 * 1024) { // > 10MB
-      console.log('\x1b[33m⚠  Large PDF detected\x1b[0m');
-
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-
-      const answer = await new Promise((resolve) => {
-        rl.question('Continue? (y/n) [y]: ', resolve);
-      });
-      rl.close();
-
-      if (answer.toLowerCase() === 'n') {
-        console.log('Cancelled.');
-        process.exit(0);
-      }
-      console.log();
-    }
 
     // Step 7: Call Claude API or Claude Code CLI
     const useClaudeCode = apiKey === 'USE_CLAUDE_CODE_CLI';
@@ -889,7 +819,7 @@ async function generateFlashcards(pdfFilename, options) {
     console.log(`⏳ Generating flashcards... (this may take 1-3 minutes)`);
     console.log();
 
-    const result = await claudeClient.callClaudeWithPDF(pdfPath, guides.content, {
+    const result = await claudeClient.callClaudeWithMineRU(mineruDir, guides.content, {
       apiKey: useClaudeCode ? null : apiKey,
       model: options.model,
       verbose: options.verbose,
@@ -897,8 +827,8 @@ async function generateFlashcards(pdfFilename, options) {
       prerequisiteFilenames,
       order: options.order,
       tags: options.tags,
-      figuresPath,
-      imageFiles
+      deckPath,
+      outputName
     });
 
     // Step 8: Validate flashcards
@@ -918,88 +848,60 @@ async function generateFlashcards(pdfFilename, options) {
       console.log();
     }
 
-    // Step 8.5: Enhance with figures (if --with-images flag is set)
-    let finalFlashcards = result.flashcards;
+    // Step 9: Copy used images to figures directory
+    const finalOutputName = result.outputName || outputName;
+    const figuresOutputDir = join(deckPath, 'figures', finalOutputName);
 
-    if (figuresPath && imageFiles.length > 0) {
-      console.log('🖼️  Stage 2: Enhancing flashcards with figures...');
-      console.log();
+    if (result.usedImages && result.usedImages.length > 0 && result.imagesDir) {
+      console.log(`🖼️  Copying ${result.usedImages.length} used image(s) to figures/${finalOutputName}/`);
 
-      try {
-        const enhancedFlashcards = await claudeClient.enhanceFlashcardsWithFigures(
-          finalFlashcards,
-          figuresPath,
-          imageFiles,
-          {
-            verbose: options.verbose,
-            useClaudeCode,
-            deckPath
-          }
-        );
-
-        finalFlashcards = enhancedFlashcards;
-        console.log('✓ Flashcards enhanced with figure references');
-        console.log();
-      } catch (error) {
-        console.log(`\x1b[33m⚠  Warning: Figure enhancement failed: ${error.message}\x1b[0m`);
-        console.log('Continuing with text-only flashcards...');
-        console.log();
+      // Create figures output directory
+      if (!existsSync(figuresOutputDir)) {
+        mkdirSync(figuresOutputDir, { recursive: true });
       }
+
+      // Copy each used image
+      for (const imgPath of result.usedImages) {
+        const srcPath = join(mineruDir, imgPath);
+        const destFilename = basename(imgPath);
+        const destPath = join(figuresOutputDir, destFilename);
+
+        if (existsSync(srcPath)) {
+          copyFileSync(srcPath, destPath);
+          if (options.verbose) {
+            console.log(`   ✓ ${destFilename}`);
+          }
+        } else if (options.verbose) {
+          console.log(`   ⚠ Not found: ${imgPath}`);
+        }
+      }
+      console.log();
     }
 
-    // Step 9: Save output
-    let outputPath;
-    let outputFilename;
+    // Step 10: Save flashcards
+    const outputFilename = `${finalOutputName}.md`;
+    const finalOutputPath = join(deckPath, 'flashcards', outputFilename);
 
     console.log('💾 Preparing to save flashcards...');
     if (options.verbose) {
       console.log(`[DEBUG] CWD: ${process.cwd()}`);
-      console.log(`[DEBUG] pdfFilename: ${pdfFilename}`);
       console.log(`[DEBUG] deckPath: ${deckPath}`);
-      console.log(`[DEBUG] options.output: ${options.output || '(not specified)'}`);
-    }
-
-    if (options.output) {
-      // User provided --output: resolve relative to CWD (or absolute if provided)
-      outputPath = resolve(options.output);
-      outputFilename = basename(options.output);
-      console.log(`   Using --output path: ${options.output}`);
-    } else {
-      // No --output: default to flashcards/<pdf-name>.md in deck directory
-      outputFilename = basename(pdfFilename).replace('.pdf', '') + '.md';
-      outputPath = join(deckPath, 'flashcards', outputFilename);
-      console.log(`   Using default path: flashcards/${outputFilename}`);
-    }
-
-    // Ensure .md extension
-    const finalOutputPath = outputPath.endsWith('.md') ? outputPath : outputPath + '.md';
-
-    console.log(`   Final path: ${finalOutputPath}`);
-    if (options.verbose) {
-      console.log(`[DEBUG] outputFilename: ${outputFilename}`);
       console.log(`[DEBUG] finalOutputPath: ${finalOutputPath}`);
-      console.log(`[DEBUG] Content length: ${finalFlashcards.length} chars`);
+      console.log(`[DEBUG] Content length: ${result.flashcards.length} chars`);
     }
-    console.log();
 
     // Ensure output directory exists
     const outputDir = dirname(finalOutputPath);
     if (!existsSync(outputDir)) {
       mkdirSync(outputDir, { recursive: true });
-      if (options.verbose) {
-        console.log(`[DEBUG] Created directory: ${outputDir}`);
-      }
     }
 
-    // Write file with error handling
+    // Write file
     try {
-      console.log(`💾 Writing ${finalFlashcards.length} characters to: ${finalOutputPath}`);
-      writeFileSync(finalOutputPath, finalFlashcards, 'utf-8');
+      console.log(`💾 Writing ${result.flashcards.length} characters to: ${finalOutputPath}`);
+      writeFileSync(finalOutputPath, result.flashcards, 'utf-8');
       console.log(`\x1b[32m✓ File saved successfully\x1b[0m`);
       console.log();
-      if (options.verbose) {
-        console.log(`[DEBUG] Successfully wrote file to: ${finalOutputPath}`);
-      }
     } catch (error) {
       console.error(`\x1b[31m❌ Failed to write flashcards file:\x1b[0m`);
       console.error(`   Path: ${finalOutputPath}`);
@@ -1007,17 +909,12 @@ async function generateFlashcards(pdfFilename, options) {
       process.exit(1);
     }
 
-    // Step 10: Extract images (if any)
-    const imageResult = await claudeClient.extractImagesFromPDF(
-      pdfPath,
-      result.flashcards,
-      join(deckPath, 'figures', outputFilename.replace('.md', ''))
-    );
-
     // Step 11: Show summary
-    console.log(`\x1b[32m✓ Generated ${validationResult.cardCount} flashcards → flashcards/${outputFilename}\x1b[0m`);
-    if (imageResult.extracted.length > 0) {
-      console.log(`\x1b[32m✓ Extracted ${imageResult.extracted.length} images → figures/${outputFilename.replace('.md', '')}/\x1b[0m`);
+    const chunkSuffix = result.chunkCount ? ` (${result.chunkCount} chunks)` : '';
+    console.log(`\x1b[32m✓ Generated ${validationResult.cardCount} flashcards → flashcards/${outputFilename}${chunkSuffix}\x1b[0m`);
+
+    if (result.usedImages && result.usedImages.length > 0) {
+      console.log(`\x1b[32m✓ Copied ${result.usedImages.length} figures → figures/${finalOutputName}/\x1b[0m`);
     }
 
     if (useClaudeCode) {
@@ -1058,7 +955,7 @@ async function generateFlashcards(pdfFilename, options) {
     } else if (error.message.includes('Invalid API key')) {
       console.log('💡 Run: \x1b[36mflashcards auth login\x1b[0m');
     } else if (error.message.includes('too large')) {
-      console.log('💡 Try a smaller PDF');
+      console.log('💡 Try processing a smaller document with MineRU');
     }
     console.log();
     process.exit(1);

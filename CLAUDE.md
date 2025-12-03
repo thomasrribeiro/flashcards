@@ -24,7 +24,17 @@ npm run process-submodules # Generate card index from public/collection/ markdow
 # CLI - Deck Management
 flashcards create <name> [--template physics|chemistry]  # Create new deck
 flashcards auth login                                     # Setup Anthropic API key
-flashcards generate <pdf-filename> [--output name]        # Generate flashcards from PDF
+
+# Flashcard generation from MineRU-processed PDFs
+# First, process your PDF with MineRU:
+#   magic-pdf -p your-file.pdf -o output-dir
+# Then generate flashcards:
+flashcards generate <mineru-output-dir> [--output name]
+# Options:
+#   --output <name>  : Output filename (default: derived from MineRU input)
+#   --order <number> : Order number for TOML frontmatter
+#   --tags <tags...> : Tags for TOML frontmatter
+#   --deck <path>    : Deck path (auto-detect from cwd if not specified)
 
 # Worker deployment (separate repository: https://github.com/thomasrribeiro/flashcards-worker)
 # Navigate to the flashcards-worker repository directory first
@@ -191,6 +201,47 @@ FRONTEND_URL=http://localhost:3000
 - **GitHub repos:** Added via "Add Repository" input (requires auth for private)
 - **Local collection:** Markdown files in `public/collection/` (for offline/example content)
 - Build script (`scripts/build.js`) scans `public/collection/` and generates `index.json`
+
+## MineRU Integration for PDF Processing
+
+### Overview
+The flashcard CLI uses MineRU (magic-pdf) for PDF processing. MineRU must be run separately to preprocess PDFs before flashcard generation.
+
+### Workflow
+1. **Process PDF with MineRU**: Run `magic-pdf -p your-file.pdf -o output-dir`
+2. **Generate flashcards**: Run `flashcards generate output-dir/your-file`
+
+### MineRU Output Structure
+MineRU produces several files, but the CLI uses:
+- `*_content_list.json` - Structured content (text, images, tables) in reading order
+- `images/` - Extracted figures as JPG files
+
+### Usage
+```bash
+# Step 1: Process PDF with MineRU
+magic-pdf -p textbook.pdf -o ./mineru-output
+
+# Step 2: Generate flashcards from MineRU output
+cd your-deck
+flashcards generate ../mineru-output/textbook --output chapter1
+
+# With additional options
+flashcards generate ../mineru-output/textbook \
+  --output chapter1 \
+  --order 1 \
+  --tags physics mechanics vectors
+```
+
+### How It Works
+1. CLI reads `*_content_list.json` for structured document content
+2. Claude receives formatted content with image references
+3. Claude generates flashcards, referencing images where helpful
+4. Used images are copied to `figures/<output-name>/` in the deck
+
+### Implementation Details
+- **MineRU loader**: `bin/lib/claude-client.js` - `loadMineRUContent()`, `formatMineRUContentForClaude()`
+- **CLI**: `bin/flashcards.js` - `generate` command
+- **Figure handling**: Images Claude references are automatically copied to the deck's figures folder
 
 ## Development Workflow
 

@@ -342,46 +342,275 @@ export function loadGuides(deckPath) {
   }
 }
 
-// ==================== PDF Text Extraction ====================
+// ==================== MineRU Content Loading ====================
 
-async function extractPDFText(pdfPath, verbose = false) {
-  const { execSync } = await import('child_process');
+/**
+ * Load content from a MineRU output directory
+ * @param {string} mineruDir - Path to MineRU output directory
+ * @param {boolean} verbose - Enable verbose logging
+ * @returns {Object} { content: Array, imagesDir: string, baseName: string }
+ */
+export function loadMineRUContent(mineruDir, verbose = false) {
+  // Find the content_list.json file
+  const files = readdirSync(mineruDir);
+  const contentListFile = files.find(f => f.endsWith('_content_list.json'));
 
-  // import.meta.url is file:///path/to/bin/lib/claude-client.js
-  const scriptDir = dirname(new URL(import.meta.url).pathname); // /path/to/bin/lib
-  const projectRoot = dirname(dirname(scriptDir)); // /path/to (project root)
-  const extractorScript = join(scriptDir, 'extract_pdf_text.py');
-  const venvPython = join(projectRoot, '.venv/bin/python3');
-
-  if (verbose) {
-    console.log(`[DEBUG] Extracting text from PDF using: ${venvPython} ${extractorScript}`);
+  if (!contentListFile) {
+    throw new Error(`No *_content_list.json file found in ${mineruDir}`);
   }
 
-  let pdfText;
-  try {
-    pdfText = execSync(`"${venvPython}" "${extractorScript}" "${pdfPath}"`, {
-      encoding: 'utf-8',
-      maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+  const contentListPath = join(mineruDir, contentListFile);
+  const imagesDir = join(mineruDir, 'images');
+
+  // Extract base name (e.g., "1_units_physical_quantities_vectors" from "1_units_physical_quantities_vectors_content_list.json")
+  const baseName = contentListFile.replace('_content_list.json', '');
+
+  if (verbose) {
+    console.log(`[DEBUG] Loading MineRU content from: ${contentListPath}`);
+    console.log(`[DEBUG] Images directory: ${imagesDir}`);
+    console.log(`[DEBUG] Base name: ${baseName}`);
+  }
+
+  // Load and parse the JSON
+  const contentJson = readFileSync(contentListPath, 'utf-8');
+  const content = JSON.parse(contentJson);
+
+  if (verbose) {
+    console.log(`[DEBUG] Loaded ${content.length} content blocks`);
+    const imageBlocks = content.filter(b => b.type === 'image');
+    console.log(`[DEBUG] Found ${imageBlocks.length} image blocks`);
+  }
+
+  // Check if images directory exists
+  const hasImages = existsSync(imagesDir);
+  if (verbose && hasImages) {
+    const imageCount = readdirSync(imagesDir).filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f)).length;
+    console.log(`[DEBUG] Images directory contains ${imageCount} images`);
+  }
+
+  return {
+    content,
+    imagesDir: hasImages ? imagesDir : null,
+    baseName,
+    contentListPath
+  };
+}
+
+/**
+ * Convert MineRU content array to formatted text for Claude
+ * @param {Array} content - MineRU content_list.json array
+ * @returns {string} Formatted text representation
+ */
+export function formatMineRUContentForClaude(content) {
+  let result = '';
+  let currentPage = -1;
+
+  for (const block of content) {
+    // Add page marker when page changes
+    if (block.page_idx !== undefined && block.page_idx !== currentPage) {
+      currentPage = block.page_idx;
+      result += `\n\n=== PAGE ${currentPage + 1} ===\n\n`;
+    }
+
+    switch (block.type) {
+      case 'text':
+        // Handle text with optional heading level
+        if (block.text_level) {
+          const headingPrefix = '#'.repeat(Math.min(block.text_level, 6));
+          result += `${headingPrefix} ${block.text}\n\n`;
+        } else {
+          result += `${block.text}\n\n`;
+        }
+        break;
+
+      case 'image':
+        // Include image with caption info for Claude's context
+        const imgPath = block.img_path || '';
+        const caption = block.image_caption?.join(' ') || '';
+        const footnote = block.image_footnote?.join(' ') || '';
+
+        result += `[IMAGE: ${imgPath}]\n`;
+        if (caption) result += `Caption: ${caption}\n`;
+        if (footnote) result += `Note: ${footnote}\n`;
+        result += '\n';
+        break;
+
+      case 'list':
+        // Handle list items
+        if (block.list_items && Array.isArray(block.list_items)) {
+          for (const item of block.list_items) {
+            result += `• ${item}\n`;
+          }
+          result += '\n';
+        }
+        break;
+
+      case 'table':
+        // Include table indicator
+        result += `[TABLE]\n${block.text || ''}\n\n`;
+        break;
+
+      case 'header':
+      case 'footer':
+      case 'page_number':
+        // Skip these metadata types
+        break;
+
+      default:
+        // Handle any other type with text
+        if (block.text) {
+          result += `${block.text}\n\n`;
+        }
+    }
+  }
+
+  return result.trim();
+}
+
+/**
+ * Extract list of all image paths from MineRU content
+ * @param {Array} content - MineRU content_list.json array
+ * @returns {Array} List of image paths with metadata
+ */
+export function extractImageList(content) {
+  return content
+    .filter(block => block.type === 'image' && block.img_path)
+    .map(block => ({
+      path: block.img_path,
+      caption: block.image_caption?.join(' ') || '',
+      footnote: block.image_footnote?.join(' ') || '',
+      page: block.page_idx
+    }));
+}
+
+// ==================== JSON Chunking for Large Documents ====================
+
+/**
+ * Split MineRU content array into chunks by page boundaries
+ * @param {Array} content - Full content_list.json array
+ * @param {number} maxCharsPerChunk - Target max chars per chunk (default: 120000)
+ * @returns {Array<{content: Array, startPage: number, endPage: number}>}
+ */
+export function chunkContentByPages(content, maxCharsPerChunk = 120000) {
+  const chunks = [];
+  let currentChunk = [];
+  let currentSize = 0;
+  let chunkStartPage = 0;
+  let lastPage = -1;
+
+  for (const block of content) {
+    // Estimate formatted size of this block
+    const blockText = formatBlockForSize(block);
+    const blockSize = blockText.length;
+    const blockPage = block.page_idx ?? lastPage;
+
+    // Initialize start page for first chunk
+    if (currentChunk.length === 0) {
+      chunkStartPage = blockPage >= 0 ? blockPage : 0;
+    }
+
+    // Start new chunk if:
+    // 1. Adding this block would exceed limit AND
+    // 2. We're at a page boundary (new page) AND
+    // 3. Current chunk is not empty
+    if (currentSize + blockSize > maxCharsPerChunk && blockPage !== lastPage && currentChunk.length > 0) {
+      chunks.push({
+        content: currentChunk,
+        startPage: chunkStartPage,
+        endPage: lastPage >= 0 ? lastPage : chunkStartPage
+      });
+      currentChunk = [];
+      currentSize = 0;
+      chunkStartPage = blockPage >= 0 ? blockPage : 0;
+    }
+
+    currentChunk.push(block);
+    currentSize += blockSize;
+    if (blockPage >= 0) {
+      lastPage = blockPage;
+    }
+  }
+
+  // Don't forget the last chunk
+  if (currentChunk.length > 0) {
+    chunks.push({
+      content: currentChunk,
+      startPage: chunkStartPage,
+      endPage: lastPage >= 0 ? lastPage : chunkStartPage
     });
-  } catch (error) {
-    throw new Error(`Failed to extract PDF text: ${error.message}`);
   }
 
-  if (verbose) {
-    console.log(`[DEBUG] Extracted text size: ${pdfText.length} characters`);
+  return chunks;
+}
+
+/**
+ * Estimate formatted size of a single content block
+ * @param {Object} block - Content block from MineRU
+ * @returns {string} Formatted text representation
+ */
+function formatBlockForSize(block) {
+  let result = '';
+
+  switch (block.type) {
+    case 'text':
+      if (block.text_level) {
+        result = `${'#'.repeat(Math.min(block.text_level, 6))} ${block.text}\n\n`;
+      } else {
+        result = `${block.text}\n\n`;
+      }
+      break;
+
+    case 'image':
+      const imgPath = block.img_path || '';
+      const caption = block.image_caption?.join(' ') || '';
+      const footnote = block.image_footnote?.join(' ') || '';
+      result = `[IMAGE: ${imgPath}]\n${caption ? `Caption: ${caption}\n` : ''}${footnote ? `Note: ${footnote}\n` : ''}\n`;
+      break;
+
+    case 'list':
+      if (block.list_items && Array.isArray(block.list_items)) {
+        result = block.list_items.map(item => `• ${item}\n`).join('') + '\n';
+      }
+      break;
+
+    case 'table':
+      result = `[TABLE]\n${block.text || ''}\n\n`;
+      break;
+
+    default:
+      if (block.text) {
+        result = `${block.text}\n\n`;
+      }
   }
 
-  return pdfText;
+  return result;
+}
+
+/**
+ * Strip TOML frontmatter and preamble from flashcard content
+ * @param {string} markdown - Flashcard markdown content
+ * @returns {string} Content without frontmatter
+ */
+function stripFrontmatter(markdown) {
+  // Remove +++ ... +++ block
+  const frontmatterRegex = /^\+\+\+[\s\S]*?\+\+\+\s*/;
+  let result = markdown.replace(frontmatterRegex, '');
+
+  // Also strip any preamble text before first heading or card prefix
+  // Look for first # heading or Q:/C:/P: prefix
+  const contentStart = result.search(/^(#|Q:|C:|P:)/m);
+  if (contentStart > 0) {
+    result = result.substring(contentStart);
+  }
+
+  return result.trim();
 }
 
 // ==================== Claude Code CLI Integration ====================
 
-async function callClaudeCodeCLI(pdfPath, guidesContext, options = {}) {
-  const { model, verbose, deckPath, prerequisiteFilenames = [], order, tags = [], figuresPath = null, imageFiles = [] } = options;
+async function callClaudeCodeCLI(contentText, guidesContext, imageList, options = {}) {
+  const { model, verbose, deckPath, prerequisiteFilenames = [], order, tags = [], outputName = 'flashcards', chunkInfo } = options;
   const { spawn } = await import('child_process');
-
-  // Extract PDF text using shared function
-  const pdfText = await extractPDFText(pdfPath, verbose);
 
   // Get the guides directory path
   const guidesDir = join(deckPath, 'guides');
@@ -400,33 +629,83 @@ These guides contain research-based SRS principles and subject-specific strategi
     : 'Follow research-based spaced repetition principles for flashcard creation.';
 
   // Add TOML frontmatter instructions if order, tags, or prerequisites are specified
-  const tomlInstructions = (order !== undefined || tags.length > 0 || prerequisiteFilenames.length > 0)
+  // For chunked processing, only the first chunk gets frontmatter
+  const shouldIncludeFrontmatter = !chunkInfo || chunkInfo.isFirst;
+  const tomlInstructions = shouldIncludeFrontmatter && (order !== undefined || tags.length > 0 || prerequisiteFilenames.length > 0)
     ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = []'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
     : '';
 
-  // Note: Image instructions removed - figures are added in post-processing stage
+  // Add chunk context information for multi-chunk processing
+  const chunkContext = chunkInfo
+    ? `\n\n## Document Context\nThis is chunk ${chunkInfo.current} of ${chunkInfo.total} (pages ${chunkInfo.startPage}-${chunkInfo.endPage}).
+${chunkInfo.isFirst ? 'Include TOML frontmatter at the start.' : 'Do NOT include TOML frontmatter - this will be appended to existing flashcards.'}
+${chunkInfo.isLast ? 'This is the final chunk.' : 'More content follows in subsequent chunks.'}
+Continue creating flashcards for this section, maintaining the same quality and format.`
+    : '';
+
+  // Build image instructions if we have images
+  let imageInstructions = '';
+  if (imageList && imageList.length > 0) {
+    imageInstructions = `\n\n## Available Figures
+
+The document contains ${imageList.length} figures. When creating flashcards, you may reference relevant figures using this format:
+![Description](figures/${outputName}/filename.jpg)
+
+Available images:
+${imageList.slice(0, 50).map(img => `- ${img.path}${img.caption ? `: ${img.caption}` : ''}`).join('\n')}
+${imageList.length > 50 ? `\n... and ${imageList.length - 50} more images` : ''}
+
+IMPORTANT: Only reference figures that genuinely enhance understanding. Use the exact filename from the list above.`;
+  }
+
+  // Truncate content if too large for Claude CLI (keep under 150K chars to leave room for guides and instructions)
+  const MAX_CONTENT_SIZE = 150000;
+  let truncatedContent = contentText;
+  let truncationWarning = '';
+  let wasTruncated = false;
+
+  if (contentText.length > MAX_CONTENT_SIZE) {
+    wasTruncated = true;
+    // Find a good break point (end of a page marker)
+    let breakPoint = contentText.lastIndexOf('\n=== PAGE', MAX_CONTENT_SIZE);
+    if (breakPoint === -1 || breakPoint < MAX_CONTENT_SIZE * 0.5) {
+      // Fall back to simple truncation at paragraph boundary
+      breakPoint = contentText.lastIndexOf('\n\n', MAX_CONTENT_SIZE);
+    }
+    if (breakPoint === -1) {
+      breakPoint = MAX_CONTENT_SIZE;
+    }
+
+    truncatedContent = contentText.substring(0, breakPoint);
+    truncationWarning = `\n\n[NOTE: Document was truncated from ${contentText.length} to ${truncatedContent.length} characters due to size limits. Focus on creating high-quality flashcards for the content provided.]`;
+
+    // Show truncation warning to user
+    console.log(`\x1b[33m⚠  Content truncated: ${contentText.length} → ${truncatedContent.length} chars (Claude CLI limit)\x1b[0m`);
+    console.log();
+  }
 
   // Prepare the prompt - trust the guides completely
-  const promptText = `${guideInstructions}${tomlInstructions}
+  const frontmatterInstruction = shouldIncludeFrontmatter
+    ? 'Output ONLY the flashcard markdown content, starting with the +++ TOML frontmatter.'
+    : 'Output ONLY the flashcard markdown content. Do NOT include TOML frontmatter (this content will be appended to existing flashcards).';
 
-<pdf_text>
-${pdfText}
-</pdf_text>
+  const promptText = `${guideInstructions}${tomlInstructions}${chunkContext}${imageInstructions}
 
-Generate flashcards from the PDF text above, following ALL principles in the guides.`;
+<document_content>
+${truncatedContent}
+</document_content>${truncationWarning}
+
+Generate flashcards from the document content above, following ALL principles in the guides. ${frontmatterInstruction} Do not include any preamble, explanation, or summary.`;
+
+  if (verbose) {
+    console.log(`[DEBUG] Prompt size: ${promptText.length} chars`);
+  }
 
   return new Promise((resolve, reject) => {
     // Use Claude Code CLI with --print for non-interactive mode
     // Use --add-dir to give Claude access to read the guides
-    const args = ['--add-dir', guidesDir];
-
-    // Note: Figures directory NOT added here - handled in post-processing stage
-    // Note: Flashcards directory NOT added - prerequisites are metadata only
-
-    args.push('--print', '--dangerously-skip-permissions', promptText);
-
-    // Note: We don't pass --model to Claude CLI, it uses the default (latest sonnet)
-    // The model parameter from options is only used for API calls
+    // Pipe the prompt through stdin to avoid command line length limits
+    const args = ['--add-dir', guidesDir, '--print', '--dangerously-skip-permissions'];
 
     if (verbose) {
       console.log(`[DEBUG] Spawning claude with guides access from: ${guidesDir}`);
@@ -434,11 +713,16 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
         console.log(`[DEBUG] Prerequisites (metadata only): ${prerequisiteFilenames.join(', ')}`);
       }
       console.log(`[DEBUG] Available guides: ${guideFiles.join(', ')}`);
+      console.log(`[DEBUG] Available images: ${imageList?.length || 0}`);
     }
 
     const claude = spawn('claude', args, {
-      stdio: ['ignore', 'pipe', 'pipe']  // ignore stdin, pipe stdout/stderr
+      stdio: ['pipe', 'pipe', 'pipe']  // pipe stdin, stdout, stderr
     });
+
+    // Write prompt to stdin and close it
+    claude.stdin.write(promptText);
+    claude.stdin.end();
 
     let stdout = '';
     let stderr = '';
@@ -473,7 +757,9 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
       }
 
       if (code !== 0) {
-        reject(new Error(`Claude Code CLI failed: ${stderr}`));
+        // Check if there's an API error in stdout (Claude returns errors on stdout sometimes)
+        const errorOutput = stderr || stdout;
+        reject(new Error(`Claude Code CLI failed (exit code ${code}): ${errorOutput.substring(0, 500)}`));
         return;
       }
 
@@ -504,7 +790,7 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
 
       // Remove common preambles that Claude might add
       const preamblePatterns = [
-        /^Based on the PDF content.*?here are.*?flashcards.*?:\s*/is,
+        /^Based on the (?:PDF|document) content.*?here are.*?flashcards.*?:\s*/is,
         /^Here are.*?flashcards.*?:\s*/is,
         /^I've created.*?flashcards.*?:\s*/is,
         /^I'll create.*?flashcards.*?:\s*/is,
@@ -549,9 +835,121 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
   });
 }
 
-// ==================== Claude API ====================
+// ==================== Claude API with MineRU ====================
 
-export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
+// Maximum content size before chunking is needed (leave room for guides and instructions)
+const MAX_CONTENT_SIZE_FOR_CHUNKING = 120000;
+
+/**
+ * Process large documents in chunks, aggregating results
+ * @param {string} mineruDir - MineRU output directory
+ * @param {string} guidesContext - Loaded guides
+ * @param {Object} options - Generation options
+ * @returns {Object} Aggregated {flashcards, usedImages, chunkCount}
+ */
+async function callClaudeWithChunkedMineRU(mineruDir, guidesContext, options = {}) {
+  const {
+    model = 'claude-sonnet-4-5-20250514',
+    verbose = false,
+    prerequisiteFilenames = [],
+    order,
+    tags = [],
+    deckPath,
+    outputName = 'flashcards'
+  } = options;
+
+  // Load MineRU content
+  const { content, imagesDir, baseName } = loadMineRUContent(mineruDir, verbose);
+
+  // Extract full image list (available to all chunks)
+  const fullImageList = extractImageList(content);
+
+  // Use the outputName or fall back to baseName
+  const finalOutputName = outputName || baseName;
+
+  // Chunk the content by page boundaries
+  const chunks = chunkContentByPages(content, MAX_CONTENT_SIZE_FOR_CHUNKING);
+
+  console.log(`📄 Document too large - splitting into ${chunks.length} chunks`);
+
+  let allFlashcards = '';
+  let allUsedImages = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const chunkContent = formatMineRUContentForClaude(chunk.content);
+    const chunkImageList = extractImageList(chunk.content);
+
+    console.log(`\n⏳ Processing chunk ${i + 1}/${chunks.length} (pages ${chunk.startPage + 1}-${chunk.endPage + 1})...`);
+
+    if (verbose) {
+      console.log(`[DEBUG] Chunk ${i + 1} size: ${chunkContent.length} chars`);
+      console.log(`[DEBUG] Chunk ${i + 1} images: ${chunkImageList.length}`);
+    }
+
+    const chunkResult = await callClaudeCodeCLI(
+      chunkContent,
+      guidesContext,
+      fullImageList,  // Provide full image list so Claude knows what's available
+      {
+        model,
+        verbose,
+        deckPath,
+        prerequisiteFilenames,
+        order,
+        tags,
+        outputName: finalOutputName,
+        chunkInfo: {
+          current: i + 1,
+          total: chunks.length,
+          startPage: chunk.startPage + 1,
+          endPage: chunk.endPage + 1,
+          isFirst: i === 0,
+          isLast: i === chunks.length - 1
+        }
+      }
+    );
+
+    // Aggregate results
+    if (i === 0) {
+      allFlashcards = chunkResult.flashcards;
+    } else {
+      // Strip TOML frontmatter from subsequent chunks and append
+      const strippedContent = stripFrontmatter(chunkResult.flashcards);
+      allFlashcards += '\n\n' + strippedContent;
+    }
+
+    // Extract used images from this chunk
+    const chunkUsedImages = extractUsedImages(chunkResult.flashcards, fullImageList);
+    allUsedImages.push(...chunkUsedImages);
+
+    // Count cards in this chunk
+    const chunkCardCount = (chunkResult.flashcards.match(/^(Q:|C:|P:)/gm) || []).length;
+    console.log(`✓ Generated ${chunkCardCount} cards from chunk ${i + 1}`);
+  }
+
+  return {
+    flashcards: allFlashcards,
+    usedImages: [...new Set(allUsedImages)], // Dedupe
+    imagesDir,
+    baseName,
+    outputName: finalOutputName,
+    chunkCount: chunks.length,
+    usage: {
+      input_tokens: 0,  // Not available from CLI
+      output_tokens: 0  // Not available from CLI
+    }
+  };
+}
+
+/**
+ * Generate flashcards from MineRU content using Claude
+ * @param {string} mineruDir - Path to MineRU output directory
+ * @param {string} guidesContext - Loaded guides content
+ * @param {Object} options - Generation options
+ * @returns {Object} { flashcards, usage, usedImages }
+ */
+export async function callClaudeWithMineRU(mineruDir, guidesContext, options = {}) {
   const {
     apiKey,
     model = 'claude-sonnet-4-5-20250514',
@@ -560,32 +958,60 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
     prerequisiteFilenames = [],
     order,
     tags = [],
-    figuresPath = null,
-    imageFiles = []
+    deckPath,
+    outputName = 'flashcards'
   } = options;
+
+  // Load MineRU content
+  const { content, imagesDir, baseName } = loadMineRUContent(mineruDir, verbose);
+
+  // Format content for Claude
+  const contentText = formatMineRUContentForClaude(content);
+
+  // Extract image list
+  const imageList = extractImageList(content);
+
+  if (verbose) {
+    console.log(`[DEBUG] Formatted content: ${contentText.length} chars`);
+    console.log(`[DEBUG] Available images: ${imageList.length}`);
+  }
+
+  // Use the outputName or fall back to baseName
+  const finalOutputName = outputName || baseName;
+
+  // Check if content is too large and needs chunking (only for Claude Code CLI)
+  if (useClaudeCode && contentText.length > MAX_CONTENT_SIZE_FOR_CHUNKING) {
+    console.log(`\x1b[33m📊 Content size: ${Math.round(contentText.length / 1000)}K chars (exceeds ${Math.round(MAX_CONTENT_SIZE_FOR_CHUNKING / 1000)}K limit)\x1b[0m`);
+    return callClaudeWithChunkedMineRU(mineruDir, guidesContext, options);
+  }
 
   // If using Claude Code CLI, delegate to that
   if (useClaudeCode) {
-    // Extract deckPath from pdfPath (pdfPath is deckPath/references/filename.pdf)
-    const deckPath = dirname(dirname(pdfPath));
-    return await callClaudeCodeCLI(pdfPath, guidesContext, {
+    const result = await callClaudeCodeCLI(contentText, guidesContext, imageList, {
       model,
       verbose,
       deckPath,
       prerequisiteFilenames,
       order,
       tags,
-      figuresPath,
-      imageFiles
+      outputName: finalOutputName
     });
+
+    // Extract used images from the flashcard content
+    const usedImages = extractUsedImages(result.flashcards, imageList);
+
+    return {
+      ...result,
+      usedImages,
+      imagesDir,
+      baseName,
+      outputName: finalOutputName
+    };
   }
 
   if (!apiKey) {
     throw new Error('API key is required');
   }
-
-  // Extract PDF text using shared function
-  const pdfText = await extractPDFText(pdfPath, verbose);
 
   // Initialize Anthropic client with API key
   const client = new Anthropic({ apiKey });
@@ -595,21 +1021,34 @@ export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
     ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = []'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
     : '';
 
-  // Note: Image instructions removed - figures are added in post-processing stage
+  // Build image instructions
+  let imageInstructions = '';
+  if (imageList.length > 0) {
+    imageInstructions = `\n\n## Available Figures
+
+The document contains ${imageList.length} figures. When creating flashcards, reference relevant figures using:
+![Description](figures/${finalOutputName}/filename.jpg)
+
+Available images:
+${imageList.slice(0, 50).map(img => `- ${img.path}${img.caption ? `: ${img.caption}` : ''}`).join('\n')}
+${imageList.length > 50 ? `\n... and ${imageList.length - 50} more images` : ''}
+
+IMPORTANT: Only reference figures that genuinely enhance understanding.`;
+  }
 
   // Prepare system prompt
   const systemPrompt = `You are an expert flashcard creator.
 
-${guidesContext}${tomlInstructions}
+${guidesContext}${tomlInstructions}${imageInstructions}
 
-Generate flashcards from the PDF text below, following ALL principles in the guides above.`;
+Generate flashcards from the document content below, following ALL principles in the guides above.`;
 
-  // Prepare user message (text only, no images during initial generation)
-  const userMessage = `<pdf_text>
-${pdfText}
-</pdf_text>
+  // Prepare user message
+  const userMessage = `<document_content>
+${contentText}
+</document_content>
 
-Generate flashcards from the PDF text above, following ALL principles in the guides.`;
+Generate flashcards from the document content above, following ALL principles in the guides.`;
 
   // Make API call
   try {
@@ -635,10 +1074,17 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
       .map(block => block.text)
       .join('\n');
 
+    // Extract used images from the flashcard content
+    const usedImages = extractUsedImages(flashcards, imageList);
+
     return {
       flashcards,
       usage: response.usage,
-      model: response.model
+      model: response.model,
+      usedImages,
+      imagesDir,
+      baseName,
+      outputName: finalOutputName
     };
   } catch (error) {
     if (error.status === 429) {
@@ -648,10 +1094,41 @@ Generate flashcards from the PDF text above, following ALL principles in the gui
       throw new Error('Invalid API key. Please run "flashcards auth login" again.');
     }
     if (error.status === 413) {
-      throw new Error('PDF is too large. Try a smaller file or fewer pages.');
+      throw new Error('Content is too large. Try a smaller document.');
     }
     throw new Error(`Claude API error: ${error.message}`);
   }
+}
+
+/**
+ * Extract list of images used in flashcard content
+ * @param {string} flashcards - Generated flashcard markdown
+ * @param {Array} imageList - Available images from MineRU
+ * @returns {Array} List of used image paths
+ */
+function extractUsedImages(flashcards, imageList) {
+  const usedImages = [];
+
+  // Find all image references in the flashcard content
+  // Pattern: ![...](figures/outputName/filename.jpg) or ![...](images/filename.jpg)
+  const imageRefPattern = /!\[[^\]]*\]\((?:figures\/[^\/]+\/|images\/)([^)]+)\)/g;
+  let match;
+
+  while ((match = imageRefPattern.exec(flashcards)) !== null) {
+    const filename = match[1];
+    // Find corresponding image in the list
+    const img = imageList.find(i => i.path.endsWith(filename) || i.path === `images/${filename}`);
+    if (img && !usedImages.includes(img.path)) {
+      usedImages.push(img.path);
+    }
+  }
+
+  return usedImages;
+}
+
+// Legacy function for backwards compatibility - throws helpful error
+export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
+  throw new Error('PDF input is no longer supported. Please use MineRU to preprocess your PDF first, then use callClaudeWithMineRU().');
 }
 
 // ==================== Figure Enhancement (Stage 2) ====================
@@ -670,11 +1147,15 @@ export async function enhanceFlashcardsWithFigures(flashcardsContent, figuresPat
   const imageListings = imageFiles.slice(0, 30).map(f => `- ${basename(f)}`).join('\n');
   const imageListingSuffix = imageFiles.length > 30 ? `\n... and ${imageFiles.length - 30} more` : '';
 
-  const promptText = `You are enhancing existing flashcards by adding figure references where pedagogically valuable.
+  const promptText = `CRITICAL: DO NOT CREATE ANY FILES. DO NOT USE THE Write TOOL. OUTPUT EVERYTHING DIRECTLY AS TEXT.
+
+You are enhancing existing flashcards by adding figure references where pedagogically valuable.
 
 ## Task
 
 Review the flashcards below and the available figures. For flashcards that would benefit from visual aids, add image references using the format: ![Description](../figures/subfolder/image.png)
+
+IMPORTANT: Output the COMPLETE enhanced flashcards content directly. Do not create files, do not provide summaries, do not write preambles. Output ONLY the full flashcard content with figures added.
 
 ## Available Figures (${imageFiles.length} total):
 ${imageListings}${imageListingSuffix}
@@ -732,7 +1213,9 @@ Notice: The # header is PRESERVED. The Q: and A: are PRESERVED. Only the figure 
 ${flashcardsContent}
 </flashcards>
 
-Return the enhanced flashcards with figure references added where appropriate. Preserve ALL existing content, ALL headers, ALL formatting - only ADD figure references.`;
+Return the COMPLETE enhanced flashcards with figure references added where appropriate. Preserve ALL existing content, ALL headers, ALL formatting - only ADD figure references.
+
+FINAL REMINDER: DO NOT create any files. DO NOT use the Write tool. DO NOT output summaries or preambles. Output ONLY the complete flashcard content with figures added.`;
 
   if (useClaudeCode) {
     // Use Claude Code CLI
