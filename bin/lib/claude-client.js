@@ -698,13 +698,21 @@ You MUST follow every principle above. Key reminders:
 - Start with # Chapter/Topic Title, then use ## Section headers
 - NO --- separators between cards - just blank lines
 - Cover ALL sections comprehensively
-- DEFINE concepts before referencing them (sequential learning)`
+- DEFINE concepts before referencing them (sequential learning)
+
+**CRITICAL - END-OF-CHAPTER PROBLEMS**:
+The document likely includes "Exercises" and "Problems" sections at the end (numbered like 1.1, 1.2, ..., 1.21, etc.).
+These are ESSENTIAL practice material - convert 10-15 representative problems into P:/S: cards.
+Include problems with figures (E1.21, E1.22, etc.) - reference the figure in the solution.
+DO NOT SKIP the end-of-chapter problems section!`
     : 'Follow research-based spaced repetition principles for flashcard creation.';
 
   // Add chunk context information for multi-chunk processing
   const chunkContext = chunkInfo
     ? `\n\n## Document Context\nThis is chunk ${chunkInfo.current} of ${chunkInfo.total} (pages ${chunkInfo.startPage}-${chunkInfo.endPage}).
-${chunkInfo.isLast ? 'This is the final chunk.' : 'More content follows in subsequent chunks.'}
+${chunkInfo.isLast
+  ? 'This is the FINAL chunk - it likely contains the end-of-chapter Exercises and Problems sections. DO NOT SKIP these - convert 10-15 problems into P:/S: cards!'
+  : 'More content follows in subsequent chunks.'}
 Continue creating flashcards for this section, maintaining the same quality and format.`
     : '';
 
@@ -730,10 +738,10 @@ ${figureList || '(none)'}
 ${labeledFigures.length > 50 ? `\n... and ${labeledFigures.length - 50} more labeled figures` : ''}
 ${unlabeledCount > 0 ? `\n(Plus ${unlabeledCount} unlabeled figures available)` : ''}
 
-**IMPORTANT: Include figures liberally.** The source material includes these figures for pedagogical reasons. Add figures when they:
-- Illustrate concepts being tested (diagrams, graphs, coordinate systems)
+**IMPORTANT: Include figures liberally.**  Add figures when they:
+- Illustrate concepts being tested (diagrams, graphs, systems)
 - Are referenced in the source text (e.g., "as shown in Figure 1.11")
-- Show relationships that are hard to describe in words (vector addition, geometric interpretations)
+- Show relationships that are hard to describe in words
 - Provide visual examples that reinforce understanding
 
 When in doubt, include the figure. Visual learners benefit significantly from diagrams.`;
