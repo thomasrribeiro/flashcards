@@ -314,8 +314,10 @@ prerequisites = []
 - ❌ **DON'T**: Add preambles, introductions, or explanations before flashcards
 - ❌ **DON'T**: Write "Now I'll create...", "Here are...", "I've created...", etc.
 - ❌ **DON'T**: Add summaries, statistics, or commentary at the end
+- ❌ **DON'T**: Use `---` separators between cards. Just use blank lines.
 - ✅ **DO**: Start IMMEDIATELY with the chapter/topic header followed by flashcards
 - ✅ **DO**: End with the last flashcard - no trailing text
+- ✅ **DO**: Use `## Section Name` headers to organize cards by topic (e.g., `## 1.1 The Nature of Physics`)
 
 **Output**: Return ONLY the flashcards organized with markdown headers - nothing else.
 

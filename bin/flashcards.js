@@ -683,6 +683,7 @@ program
   .option('--prereqs <files...>', 'Prerequisite files relative to CWD (space-separated)')
   .option('--order <number>', 'Order number for TOML frontmatter (e.g., 1 for Chapter 1)', parseInt)
   .option('--tags <tags...>', 'Tags for TOML frontmatter (space-separated, e.g., vectors kinematics)')
+  .option('--template <subjects...>', 'Subject-specific guide templates (space-separated, e.g., physics chemistry)')
   .option('--verbose', 'Show detailed progress and prompt')
   .action(async (mineruDir, options) => {
     await generateFlashcards(mineruDir, options);
@@ -774,9 +775,9 @@ async function generateFlashcards(mineruDirInput, options) {
     console.log(`   Images: ${imageCount} found`);
     console.log();
 
-    // Step 5: Load guides
+    // Step 5: Load guides (with optional subject-specific template)
     console.log('📚 Loading flashcard writing guides...');
-    const guides = claudeClient.loadGuides(deckPath);
+    const guides = claudeClient.loadGuides(deckPath, options.template);
 
     if (guides.warning) {
       console.log(`\x1b[33m⚠  ${guides.warning}\x1b[0m`);
@@ -784,6 +785,24 @@ async function generateFlashcards(mineruDirInput, options) {
 
     if (guides.files.length > 0) {
       console.log(`✓ Loaded guides: ${guides.files.join(', ')}`);
+    }
+
+    if (options.template && options.template.length > 0) {
+      const foundTemplates = [];
+      const missingTemplates = [];
+      for (const t of options.template) {
+        if (guides.files.includes(`${t}.md`)) {
+          foundTemplates.push(t);
+        } else {
+          missingTemplates.push(t);
+        }
+      }
+      if (foundTemplates.length > 0) {
+        console.log(`✓ Using templates: ${foundTemplates.join(', ')}`);
+      }
+      if (missingTemplates.length > 0) {
+        console.log(`\x1b[33m⚠  Templates not found: ${missingTemplates.join(', ')}\x1b[0m`);
+      }
     }
     console.log();
 
@@ -878,16 +897,23 @@ async function generateFlashcards(mineruDirInput, options) {
       console.log();
     }
 
-    // Step 10: Save flashcards
+    // Step 10: Add TOML frontmatter and save flashcards
     const outputFilename = `${finalOutputName}.md`;
     const finalOutputPath = join(deckPath, 'flashcards', outputFilename);
+
+    // Add deterministic TOML frontmatter based on CLI options
+    const finalContent = claudeClient.prependFrontmatter(result.flashcards, {
+      order: options.order || 1,
+      tags: options.tags || [],
+      prerequisites: prerequisiteFilenames
+    });
 
     console.log('💾 Preparing to save flashcards...');
     if (options.verbose) {
       console.log(`[DEBUG] CWD: ${process.cwd()}`);
       console.log(`[DEBUG] deckPath: ${deckPath}`);
       console.log(`[DEBUG] finalOutputPath: ${finalOutputPath}`);
-      console.log(`[DEBUG] Content length: ${result.flashcards.length} chars`);
+      console.log(`[DEBUG] Content length: ${finalContent.length} chars`);
     }
 
     // Ensure output directory exists
@@ -898,8 +924,8 @@ async function generateFlashcards(mineruDirInput, options) {
 
     // Write file
     try {
-      console.log(`💾 Writing ${result.flashcards.length} characters to: ${finalOutputPath}`);
-      writeFileSync(finalOutputPath, result.flashcards, 'utf-8');
+      console.log(`💾 Writing ${finalContent.length} characters to: ${finalOutputPath}`);
+      writeFileSync(finalOutputPath, finalContent, 'utf-8');
       console.log(`\x1b[32m✓ File saved successfully\x1b[0m`);
       console.log();
     } catch (error) {

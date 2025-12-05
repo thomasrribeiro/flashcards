@@ -284,7 +284,13 @@ export function listPDFsInReferences(deckPath) {
 
 // ==================== Guides Loading ====================
 
-export function loadGuides(deckPath) {
+/**
+ * Load guides from deck's guides/ folder
+ * @param {string} deckPath - Path to deck directory
+ * @param {string|string[]} templates - Optional subject-specific template(s) (e.g., 'physics' or ['physics', 'chemistry'])
+ * @returns {Object} { content, files, warning }
+ */
+export function loadGuides(deckPath, templates = null) {
   const guidesPath = join(deckPath, 'guides');
 
   if (!existsSync(guidesPath)) {
@@ -296,16 +302,9 @@ export function loadGuides(deckPath) {
   }
 
   try {
-    const files = readdirSync(guidesPath)
-      .filter(f => f.endsWith('.md'))
-      .sort((a, b) => {
-        // Prioritize general.md first
-        if (a === 'general.md') return -1;
-        if (b === 'general.md') return 1;
-        return a.localeCompare(b);
-      });
+    const allFiles = readdirSync(guidesPath).filter(f => f.endsWith('.md'));
 
-    if (files.length === 0) {
+    if (allFiles.length === 0) {
       return {
         content: '',
         files: [],
@@ -313,10 +312,38 @@ export function loadGuides(deckPath) {
       };
     }
 
+    // Normalize templates to array
+    const templateList = templates
+      ? (Array.isArray(templates) ? templates : [templates])
+      : [];
+
+    // Determine which files to load:
+    // - Always load general.md if it exists
+    // - If templates specified, also load each {template}.md
+    const filesToLoad = [];
+
+    // Always include general.md first
+    if (allFiles.includes('general.md')) {
+      filesToLoad.push('general.md');
+    }
+
+    // Include subject-specific templates if specified and exist
+    for (const template of templateList) {
+      const templateFile = `${template}.md`;
+      if (allFiles.includes(templateFile) && !filesToLoad.includes(templateFile)) {
+        filesToLoad.push(templateFile);
+      }
+    }
+
+    // If no templates specified and no general.md, load all guides
+    if (filesToLoad.length === 0) {
+      filesToLoad.push(...allFiles.sort());
+    }
+
     let content = '';
     const loadedFiles = [];
 
-    for (const file of files) {
+    for (const file of filesToLoad) {
       const filePath = join(guidesPath, file);
       const guideContent = readFileSync(filePath, 'utf-8');
       const guideName = file.replace('.md', '');
@@ -587,6 +614,44 @@ function formatBlockForSize(block) {
 }
 
 /**
+ * Generate TOML frontmatter deterministically from CLI options
+ * @param {Object} options - { order, tags, prerequisites }
+ * @returns {string} TOML frontmatter block
+ */
+export function generateFrontmatter(options = {}) {
+  const { order = 1, tags = [], prerequisites = [] } = options;
+
+  const tagsStr = tags.length > 0
+    ? `[${tags.map(t => `"${t}"`).join(', ')}]`
+    : '[]';
+
+  const prereqsStr = prerequisites.length > 0
+    ? `[${prerequisites.map(p => `"${p}"`).join(', ')}]`
+    : '[]';
+
+  return `+++
+order = ${order}
+tags = ${tagsStr}
+prerequisites = ${prereqsStr}
++++
+
+`;
+}
+
+/**
+ * Prepend TOML frontmatter to flashcard content
+ * @param {string} flashcards - Flashcard markdown content (without frontmatter)
+ * @param {Object} options - { order, tags, prerequisites }
+ * @returns {string} Flashcards with frontmatter prepended
+ */
+export function prependFrontmatter(flashcards, options = {}) {
+  // First strip any existing frontmatter Claude may have added
+  const content = stripFrontmatter(flashcards);
+  // Then prepend our deterministic frontmatter
+  return generateFrontmatter(options) + content;
+}
+
+/**
  * Strip TOML frontmatter and preamble from flashcard content
  * @param {string} markdown - Flashcard markdown content
  * @returns {string} Content without frontmatter
@@ -609,7 +674,7 @@ function stripFrontmatter(markdown) {
 // ==================== Claude Code CLI Integration ====================
 
 async function callClaudeCodeCLI(contentText, guidesContext, imageList, options = {}) {
-  const { model, verbose, deckPath, prerequisiteFilenames = [], order, tags = [], outputName = 'flashcards', chunkInfo } = options;
+  const { verbose, deckPath, prerequisiteFilenames = [], outputName = 'flashcards', chunkInfo } = options;
   const { spawn } = await import('child_process');
 
   // Get the guides directory path
@@ -620,25 +685,25 @@ async function callClaudeCodeCLI(contentText, guidesContext, imageList, options 
     ? readdirSync(guidesDir).filter(f => f.endsWith('.md'))
     : [];
 
-  // Build comprehensive prompt combining condensed guidelines with guides directory access
-  const guideInstructions = guideFiles.length > 0
-    ? `First, read ALL the flashcard writing guides from the guides directory:
-${guideFiles.map(f => `- Read guides/${f} for comprehensive flashcard creation principles`).join('\n')}
+  // Include guide content directly in prompt (don't rely on Claude choosing to read files)
+  // This guarantees Claude sees the guide content
+  const guideInstructions = guidesContext && guidesContext.length > 0
+    ? `CRITICAL: Follow ALL principles in these guides EXACTLY.
 
-These guides contain research-based SRS principles and subject-specific strategies. Follow ALL principles exactly.`
+${guidesContext}
+
+=== END OF GUIDES ===
+
+You MUST follow every principle above. Key reminders:
+- Start with # Chapter/Topic Title, then use ## Section headers
+- NO --- separators between cards - just blank lines
+- Cover ALL sections comprehensively
+- DEFINE concepts before referencing them (sequential learning)`
     : 'Follow research-based spaced repetition principles for flashcard creation.';
-
-  // Add TOML frontmatter instructions if order, tags, or prerequisites are specified
-  // For chunked processing, only the first chunk gets frontmatter
-  const shouldIncludeFrontmatter = !chunkInfo || chunkInfo.isFirst;
-  const tomlInstructions = shouldIncludeFrontmatter && (order !== undefined || tags.length > 0 || prerequisiteFilenames.length > 0)
-    ? `\n\n## TOML Frontmatter Requirements\n\nUse the following values in the TOML frontmatter:\n${order !== undefined ? `- order = ${order}` : '- order = (infer from content or use 1)'}\n${tags.length > 0 ? `- tags = [${tags.map(t => `"${t}"`).join(', ')}]` : '- tags = []'}\n- prerequisites = ${prerequisiteFilenames.length > 0 ? `[${prerequisiteFilenames.map(f => `"${f}"`).join(', ')}]` : '[]'}`
-    : '';
 
   // Add chunk context information for multi-chunk processing
   const chunkContext = chunkInfo
     ? `\n\n## Document Context\nThis is chunk ${chunkInfo.current} of ${chunkInfo.total} (pages ${chunkInfo.startPage}-${chunkInfo.endPage}).
-${chunkInfo.isFirst ? 'Include TOML frontmatter at the start.' : 'Do NOT include TOML frontmatter - this will be appended to existing flashcards.'}
 ${chunkInfo.isLast ? 'This is the final chunk.' : 'More content follows in subsequent chunks.'}
 Continue creating flashcards for this section, maintaining the same quality and format.`
     : '';
@@ -646,26 +711,40 @@ Continue creating flashcards for this section, maintaining the same quality and 
   // Build image instructions if we have images
   let imageInstructions = '';
   if (imageList && imageList.length > 0) {
+    // Separate labeled (with captions) and unlabeled figures
+    const labeledFigures = imageList.filter(img => img.caption);
+    const unlabeledCount = imageList.length - labeledFigures.length;
+
+    // Build figure list showing filename: caption
+    const figureList = labeledFigures.slice(0, 50).map(img => {
+      const filename = img.path.split('/').pop();
+      return `- ${filename}: ${img.caption}`;
+    }).join('\n');
+
     imageInstructions = `\n\n## Available Figures
 
-The document contains ${imageList.length} figures. When creating flashcards, you may reference relevant figures using this format:
-![Description](figures/${outputName}/filename.jpg)
+Reference syntax: ![Description](figures/${outputName}/filename.jpg)
 
-Available images:
-${imageList.slice(0, 50).map(img => `- ${img.path}${img.caption ? `: ${img.caption}` : ''}`).join('\n')}
-${imageList.length > 50 ? `\n... and ${imageList.length - 50} more images` : ''}
+Labeled figures:
+${figureList || '(none)'}
+${labeledFigures.length > 50 ? `\n... and ${labeledFigures.length - 50} more labeled figures` : ''}
+${unlabeledCount > 0 ? `\n(Plus ${unlabeledCount} unlabeled figures available)` : ''}
 
-IMPORTANT: Only reference figures that genuinely enhance understanding. Use the exact filename from the list above.`;
+**IMPORTANT: Include figures liberally.** The source material includes these figures for pedagogical reasons. Add figures when they:
+- Illustrate concepts being tested (diagrams, graphs, coordinate systems)
+- Are referenced in the source text (e.g., "as shown in Figure 1.11")
+- Show relationships that are hard to describe in words (vector addition, geometric interpretations)
+- Provide visual examples that reinforce understanding
+
+When in doubt, include the figure. Visual learners benefit significantly from diagrams.`;
   }
 
   // Truncate content if too large for Claude CLI (keep under 150K chars to leave room for guides and instructions)
   const MAX_CONTENT_SIZE = 150000;
   let truncatedContent = contentText;
   let truncationWarning = '';
-  let wasTruncated = false;
 
   if (contentText.length > MAX_CONTENT_SIZE) {
-    wasTruncated = true;
     // Find a good break point (end of a page marker)
     let breakPoint = contentText.lastIndexOf('\n=== PAGE', MAX_CONTENT_SIZE);
     if (breakPoint === -1 || breakPoint < MAX_CONTENT_SIZE * 0.5) {
@@ -685,17 +764,16 @@ IMPORTANT: Only reference figures that genuinely enhance understanding. Use the 
   }
 
   // Prepare the prompt - trust the guides completely
-  const frontmatterInstruction = shouldIncludeFrontmatter
-    ? 'Output ONLY the flashcard markdown content, starting with the +++ TOML frontmatter.'
-    : 'Output ONLY the flashcard markdown content. Do NOT include TOML frontmatter (this content will be appended to existing flashcards).';
+  // Claude should NOT output TOML frontmatter - we add it deterministically after generation
+  const frontmatterInstruction = 'Do NOT include TOML frontmatter (+++). Start directly with the # Chapter/Topic Title header.';
 
-  const promptText = `${guideInstructions}${tomlInstructions}${chunkContext}${imageInstructions}
+  const promptText = `${guideInstructions}${chunkContext}${imageInstructions}
 
 <document_content>
 ${truncatedContent}
 </document_content>${truncationWarning}
 
-Generate flashcards from the document content above, following ALL principles in the guides. ${frontmatterInstruction} Do not include any preamble, explanation, or summary.`;
+Generate flashcards from the document content above, following ALL principles in the guides. ${frontmatterInstruction}`;
 
   if (verbose) {
     console.log(`[DEBUG] Prompt size: ${promptText.length} chars`);
@@ -795,7 +873,9 @@ Generate flashcards from the document content above, following ALL principles in
         /^I've created.*?flashcards.*?:\s*/is,
         /^I'll create.*?flashcards.*?:\s*/is,
         /^Let me create.*?flashcards.*?:\s*/is,
-        /^Sure!.*?flashcards.*?:\s*/is
+        /^Sure!.*?flashcards.*?:\s*/is,
+        /^Now I'll (?:generate|create).*?\.\s*/is,
+        /^Now I(?:'ll| will).*?flashcards.*?\.\s*/is
       ];
 
       for (const pattern of preamblePatterns) {
@@ -804,6 +884,15 @@ Generate flashcards from the document content above, following ALL principles in
         if (verbose && before !== flashcards.length) {
           console.log(`[DEBUG] Removed preamble, ${before - flashcards.length} chars`);
         }
+      }
+
+      // Aggressive cleanup: if there's text before +++, strip it
+      const frontmatterStart = flashcards.indexOf('+++');
+      if (frontmatterStart > 0) {
+        if (verbose) {
+          console.log(`[DEBUG] Stripping ${frontmatterStart} chars before +++`);
+        }
+        flashcards = flashcards.substring(frontmatterStart);
       }
 
       // Remove trailing summaries/conclusions
