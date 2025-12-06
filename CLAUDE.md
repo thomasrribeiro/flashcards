@@ -23,18 +23,20 @@ npm run process-submodules # Generate card index from public/collection/ markdow
 
 # CLI - Deck Management
 flashcards create <name> [--template physics|chemistry]  # Create new deck
-flashcards auth login                                     # Setup Anthropic API key
+flashcards auth                                          # Setup authentication
 
-# Flashcard generation from MineRU-processed PDFs
-# First, process your PDF with MineRU:
-#   magic-pdf -p your-file.pdf -o output-dir
-# Then generate flashcards:
-flashcards generate <mineru-output-dir> [--output name]
-# Options:
-#   --output <name>  : Output filename (default: derived from MineRU input)
-#   --order <number> : Order number for TOML frontmatter
-#   --tags <tags...> : Tags for TOML frontmatter
-#   --deck <path>    : Deck path (auto-detect from cwd if not specified)
+# Flashcard generation workflow
+flashcards process <pdf-path> --output <name>            # Process PDF → sources/<name>/
+flashcards generate sources/<name> --output <name>       # Generate flashcards
+
+# Generate options:
+#   --output <name>     : Output filename (default: derived from input)
+#   --template <name>   : Subject-specific guide (physics, chemistry)
+#   --order <number>    : Order number for TOML frontmatter
+#   --tags <tags...>    : Tags for TOML frontmatter
+
+# Reproducibility
+flashcards show-prompt <flashcard-file>                  # Reconstruct generation prompt
 
 # Worker deployment (separate repository: https://github.com/thomasrribeiro/flashcards-worker)
 # Navigate to the flashcards-worker repository directory first
@@ -202,46 +204,87 @@ FRONTEND_URL=http://localhost:3000
 - **Local collection:** Markdown files in `public/collection/` (for offline/example content)
 - Build script (`scripts/build.js`) scans `public/collection/` and generates `index.json`
 
-## MineRU Integration for PDF Processing
+## PDF Processing for Flashcard Generation
 
 ### Overview
-The flashcard CLI uses MineRU (magic-pdf) for PDF processing. MineRU must be run separately to preprocess PDFs before flashcard generation.
+The flashcard CLI processes PDFs into a `sources/` directory structure that is tracked in git. This parsed content is then used by Claude to generate flashcards.
 
-### Workflow
-1. **Process PDF with MineRU**: Run `magic-pdf -p your-file.pdf -o output-dir`
-2. **Generate flashcards**: Run `flashcards generate output-dir/your-file`
-
-### MineRU Output Structure
-MineRU produces several files, but the CLI uses:
-- `*_content_list.json` - Structured content (text, images, tables) in reading order
-- `images/` - Extracted figures as JPG files
-
-### Usage
-```bash
-# Step 1: Process PDF with MineRU
-magic-pdf -p textbook.pdf -o ./mineru-output
-
-# Step 2: Generate flashcards from MineRU output
-cd your-deck
-flashcards generate ../mineru-output/textbook --output chapter1
-
-# With additional options
-flashcards generate ../mineru-output/textbook \
-  --output chapter1 \
-  --order 1 \
-  --tags physics mechanics vectors
+### Deck Folder Structure
+```
+deck-repo/
+├── sources/                      # Parsed document content (tracked in git)
+│   ├── chapter_1/
+│   │   ├── content.json          # Document content
+│   │   └── images/               # Extracted figures
+│   │       └── {hash}.jpg
+│   └── chapter_2/
+│       ├── content.json
+│       └── images/
+├── flashcards/                   # Generated flashcard markdown
+│   ├── chapter_1.md
+│   └── chapter_2.md
+├── guides/                       # Flashcard writing guides
+│   ├── general.md
+│   └── physics.md
+├── references/                   # Original PDFs (gitignored)
+│   └── chapter_1.pdf
+└── .gitignore
 ```
 
-### How It Works
-1. CLI reads `*_content_list.json` for structured document content
-2. Claude receives formatted content with image references
-3. Claude generates flashcards, referencing images where helpful
-4. Used images are copied to `figures/<output-name>/` in the deck
+### Workflow
+```bash
+cd your-deck
+flashcards process references/textbook.pdf --output chapter1
+flashcards generate sources/chapter1 --output chapter1
+```
+
+### CLI Commands
+```bash
+# Process PDF (creates sources/<name>/ directory)
+flashcards process <pdf-path> [--output <name>] [--deck <path>]
+
+# Generate flashcards from processed source
+flashcards generate <source-dir> --output <name> [--template physics] [--order 1] [--tags ...]
+
+# Reconstruct the prompt used to generate flashcards (for reproducibility)
+flashcards show-prompt <flashcard-file> [--output <file>]
+```
+
+### Figure References in Flashcards
+Images are referenced from the sources directory using relative paths:
+```markdown
+![Vector addition diagram](../sources/chapter_1/images/{hash}.jpg)
+```
+Since flashcard files are in `flashcards/`, they use `../sources/` to reference images.
+
+### TOML Frontmatter with Generation Metadata
+Generated flashcards include metadata for reproducibility:
+```toml
++++
+# Generation metadata (for reproducibility)
+[generation]
+source = "sources/chapter_1/content.json"
+images_dir = "sources/chapter_1/images"
+generated_at = "2025-12-05T10:30:00Z"
+flashcards_commit = "c7ead62"
+model = "claude-sonnet-4-5-20250514"
+guides = ["general.md", "physics.md"]
+guides_hash = "a1b2c3d4"
++++
+```
+
+This captures everything needed to reconstruct the exact prompt:
+- Source content file path
+- Which guides were used + hash to detect if guides changed
+- Model used for generation (or "claude-code-cli" if using Claude Code)
+- Flashcards CLI git commit for exact codebase version lookup
 
 ### Implementation Details
-- **MineRU loader**: `bin/lib/claude-client.js` - `loadMineRUContent()`, `formatMineRUContentForClaude()`
-- **CLI**: `bin/flashcards.js` - `generate` command
-- **Figure handling**: Images Claude references are automatically copied to the deck's figures folder
+- **Source loader**: `bin/lib/claude-client.js` - `loadSourceContent()`, `formatSourceContentForClaude()`
+- **Prompt building**: `bin/lib/claude-client.js` - `buildPrompt()` (extracted for reuse)
+- **Prompt reconstruction**: `bin/lib/claude-client.js` - `reconstructPrompt()`, `parseFrontmatter()`
+- **CLI**: `bin/flashcards.js` - `process`, `generate`, `show-prompt` commands
+- **Guides hash**: `computeGuidesHash()` - SHA256 hash of concatenated guide content
 
 ## Development Workflow
 

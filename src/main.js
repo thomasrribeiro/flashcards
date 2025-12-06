@@ -19,7 +19,7 @@ async function init() {
         console.log('DB initialized');
 
         const grid = document.getElementById('topics-grid');
-        grid.innerHTML = '<div class="loading">Loading repositories...</div>';
+        grid.innerHTML = '<div class="loading">Loading collection...</div>';
 
         const isAuthenticated = githubAuth.isAuthenticated();
 
@@ -38,12 +38,18 @@ async function init() {
         await loadRepositories();
         console.log('Repositories loaded');
 
+        // Restore navigation state from URL if present
+        await restoreNavigationFromURL();
+
         setupEventListeners();
 
         // Setup repo input if authenticated
         if (githubAuth.isAuthenticated()) {
             await setupRepoInput();
         }
+
+        // Handle browser back/forward navigation
+        window.addEventListener('popstate', handlePopState);
 
         console.log('=== INIT COMPLETE ===');
     } catch (error) {
@@ -154,6 +160,9 @@ async function loadRepositories() {
             grid.appendChild(card);
         }
 
+        // Show breadcrumb (displays "~ / home" on initial load)
+        updateDeckBreadcrumb();
+
     } catch (error) {
         console.error('Error loading repositories:', error);
         grid.innerHTML = `
@@ -193,12 +202,9 @@ function createDeckCard(deck) {
 
     card.className = 'project-card';
 
-    if (true) {
-        card.style.cursor = 'pointer';
-        card.onclick = () => openSubdeckModal(deck);
-    } else {
-        card.style.cursor = 'default';
-    }
+    // All decks are clickable for inline navigation
+    card.style.cursor = 'pointer';
+    card.onclick = () => navigateToDeck(deck);
 
     // Extract repo name from deck.id (e.g., "owner/repo" -> "repo", "local/my-deck" -> "my-deck")
     const displayName = deck.id.includes('/') ? deck.id.split('/').pop() : deck.id;
@@ -212,7 +218,7 @@ function createDeckCard(deck) {
     // Add reset button
     const resetBtn = document.createElement('button');
     resetBtn.className = 'card-reset-btn';
-    resetBtn.title = 'Reset all cards in this deck';
+    resetBtn.title = 'Reset progress';
     resetBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset">`;
     resetBtn.onclick = async (e) => {
         e.preventDefault();
@@ -227,7 +233,7 @@ function createDeckCard(deck) {
     // Add review button (gavel)
     const reviewBtn = document.createElement('button');
     reviewBtn.className = 'card-review-btn';
-    reviewBtn.title = 'Review this deck';
+    reviewBtn.title = 'Review';
     reviewBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review">`;
     reviewBtn.onclick = (e) => {
         e.preventDefault();
@@ -279,6 +285,9 @@ function createDeckCard(deck) {
         btnContainer.appendChild(deleteBtn);
     }
 
+    // Calculate progress percentage (cards reviewed at least once)
+    const progressPercent = totalCards > 0 ? Math.round((reviewedCards / totalCards) * 100) : 0;
+
     const contentDiv = document.createElement('div');
     contentDiv.className = 'project-content';
     contentDiv.innerHTML = `
@@ -287,7 +296,11 @@ function createDeckCard(deck) {
             ${escapeHtml(description)}
         </p>
         <div class="project-stats">
-            ${dueCards > 0 ? `<strong>${dueCards} due</strong>` : 'All done!'}
+            <span class="progress-label">Progress:</span>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" style="width: ${progressPercent}%"></div>
+            </div>
+            <span class="progress-percent">${progressPercent}%</span>
         </div>
     `;
 
@@ -653,10 +666,71 @@ async function loadLocalRepo(repoInfo) {
     }
 }
 
-// Modal navigation state
+// Deck navigation state (inline breadcrumb navigation)
 let currentDeck = null;
 let currentPath = [];
 let folderHierarchy = null;
+let allReviewsCache = null; // Cache for reviews during navigation
+
+/**
+ * Restore navigation state from URL parameters
+ */
+async function restoreNavigationFromURL() {
+    const url = new URL(window.location);
+    const deckId = url.searchParams.get('deck');
+    const pathParam = url.searchParams.get('path');
+
+    console.log('[Navigation] restoreNavigationFromURL called:', {
+        fullURL: window.location.href,
+        deckId,
+        pathParam,
+        historyLength: history.length
+    });
+
+    if (deckId) {
+        // Find the deck object
+        const allDecks = await getAllDecks();
+        console.log('[Navigation] Looking for deck:', deckId, 'in', allDecks.map(d => d.id));
+        const deck = allDecks.find(d => d.id === deckId);
+
+        if (deck) {
+            console.log('[Navigation] Found deck, restoring navigation');
+            const path = pathParam ? pathParam.split('/') : [];
+            // Use updateHistory=false since we're restoring, not navigating
+            await navigateToDeck(deck, path, false);
+        } else {
+            console.log('[Navigation] Deck not found!');
+        }
+    } else {
+        console.log('[Navigation] No deck in URL, showing home');
+    }
+}
+
+/**
+ * Handle browser back/forward navigation
+ */
+async function handlePopState(event) {
+    const state = event.state;
+
+    if (state && state.deck) {
+        // Find the deck object
+        const allDecks = await getAllDecks();
+        const deck = allDecks.find(d => d.id === state.deck);
+
+        if (deck) {
+            const path = state.path || [];
+            // Use updateHistory=false to avoid pushing duplicate history entry
+            await navigateToDeck(deck, path, false);
+        }
+    } else {
+        // No deck in state - show home view
+        currentDeck = null;
+        currentPath = [];
+        folderHierarchy = null;
+        allReviewsCache = null;
+        await loadRepositories();
+    }
+}
 
 /**
  * Build folder hierarchy from file paths
@@ -713,22 +787,32 @@ function getContentAtPath(hierarchy, path) {
 }
 
 /**
- * Open modal to show subdecks with hierarchical navigation
+ * Navigate into a deck (inline breadcrumb navigation, replaces modal)
  */
-async function openSubdeckModal(deck, path = []) {
+async function navigateToDeck(deck, path = [], updateHistory = true) {
     currentDeck = deck;
     currentPath = path;
 
-    const modal = document.getElementById('subdeck-modal');
-    const modalDeckName = document.getElementById('modal-deck-name');
-    const breadcrumb = document.getElementById('modal-breadcrumb');
-    const backBtn = document.getElementById('modal-back-btn');
-    const subdeckGrid = document.getElementById('subdeck-grid');
+    // Update URL to persist navigation state
+    if (updateHistory) {
+        const url = new URL(window.location);
+        url.searchParams.set('deck', deck.id);
+        if (path.length > 0) {
+            url.searchParams.set('path', path.join('/'));
+        } else {
+            url.searchParams.delete('path');
+        }
+        console.log('[Navigation] pushState:', url.toString(), 'historyLength before:', history.length);
+        // Use pushState to create a new history entry
+        // When user navigates to app.html and presses back, they return to this URL
+        history.pushState({ deck: deck.id, path: [...path] }, '', url);
+        console.log('[Navigation] historyLength after:', history.length);
+    }
 
     // Get all cards for this deck and group by file
     const allCards = await getAllCards();
     const deckCards = allCards.filter(c => c.deckName === deck.id);
-    const allReviews = await getAllReviews();
+    allReviewsCache = await getAllReviews();
 
     // Group cards by file
     const fileGroups = {};
@@ -743,70 +827,107 @@ async function openSubdeckModal(deck, path = []) {
     // Build folder hierarchy
     folderHierarchy = buildFolderHierarchy(fileGroups);
 
-    // Update modal content based on current path
-    await updateModalContent(allReviews);
-
-    // Show modal
-    modal.classList.remove('hidden');
+    // Update breadcrumb and render content inline
+    updateDeckBreadcrumb();
+    renderCurrentLevel();
 }
 
 /**
- * Update modal content based on current navigation path
+ * Update the deck navigation breadcrumb
  */
-async function updateModalContent(allReviews) {
-    const breadcrumb = document.getElementById('modal-breadcrumb');
-    const subdeckGrid = document.getElementById('subdeck-grid');
+function updateDeckBreadcrumb() {
+    const breadcrumb = document.getElementById('deck-breadcrumb');
 
-    // Update breadcrumb with clickable segments
-    const repoName = currentDeck.id.split('/').pop();
+    // Always show breadcrumb
+    breadcrumb.classList.remove('hidden');
     breadcrumb.innerHTML = '';
 
-    // Add repo name (clickable to go to root)
-    const repoSpan = document.createElement('span');
-    repoSpan.className = 'breadcrumb-segment breadcrumb-clickable';
-    repoSpan.textContent = repoName;
-    repoSpan.onclick = () => navigateToPath([]);
-    breadcrumb.appendChild(repoSpan);
+    // Add "~ /" prefix like the main breadcrumb
+    const tildeSpan = document.createElement('span');
+    tildeSpan.className = 'breadcrumb-separator';
+    tildeSpan.textContent = '~';
+    breadcrumb.appendChild(tildeSpan);
 
-    // Add each folder in the path
-    for (let i = 0; i < currentPath.length; i++) {
-        // Add separator
-        const separator = document.createElement('span');
-        separator.className = 'breadcrumb-separator';
-        separator.textContent = ' / ';
-        breadcrumb.appendChild(separator);
+    breadcrumb.appendChild(createBreadcrumbSeparator());
 
-        // Add folder segment (clickable to navigate to that level)
-        const folderSpan = document.createElement('span');
-        folderSpan.className = 'breadcrumb-segment breadcrumb-clickable';
-        folderSpan.textContent = currentPath[i];
-        const targetPath = currentPath.slice(0, i + 1);
-        folderSpan.onclick = () => navigateToPath(targetPath);
-        breadcrumb.appendChild(folderSpan);
+    // "home" segment - clickable if we're inside a deck, current otherwise
+    const homeSpan = document.createElement('span');
+    if (currentDeck) {
+        homeSpan.className = 'breadcrumb-segment breadcrumb-clickable';
+        homeSpan.onclick = () => exitDeckNavigation();
+    } else {
+        homeSpan.className = 'breadcrumb-segment current';
     }
+    homeSpan.textContent = 'home';
+    breadcrumb.appendChild(homeSpan);
 
-    // Get content at current path
+    // If we're inside a deck, show deck name and path
+    if (currentDeck) {
+        // Separator
+        breadcrumb.appendChild(createBreadcrumbSeparator());
+
+        // Deck name (clickable if we're in a subfolder)
+        const repoName = currentDeck.id.split('/').pop();
+        const deckSegment = document.createElement('span');
+        const isDeckClickable = currentPath.length > 0;
+        deckSegment.className = 'breadcrumb-segment' + (isDeckClickable ? ' breadcrumb-clickable' : ' current');
+        deckSegment.textContent = repoName;
+        if (isDeckClickable) {
+            deckSegment.onclick = () => navigateToPath([]);
+        }
+        breadcrumb.appendChild(deckSegment);
+
+        // Folder path segments
+        currentPath.forEach((folder, index) => {
+            breadcrumb.appendChild(createBreadcrumbSeparator());
+            const segment = document.createElement('span');
+            const isLast = index === currentPath.length - 1;
+            const isClickable = !isLast;
+            segment.className = 'breadcrumb-segment' + (isClickable ? ' breadcrumb-clickable' : ' current');
+            segment.textContent = folder;
+            if (isClickable) {
+                segment.onclick = () => navigateToPath(currentPath.slice(0, index + 1));
+            }
+            breadcrumb.appendChild(segment);
+        });
+    }
+}
+
+/**
+ * Create a breadcrumb separator element
+ */
+function createBreadcrumbSeparator() {
+    const sep = document.createElement('span');
+    sep.className = 'breadcrumb-separator';
+    sep.textContent = '/';
+    return sep;
+}
+
+/**
+ * Render the current level of folders/files in the main grid
+ */
+function renderCurrentLevel() {
+    const grid = document.getElementById('topics-grid');
+    grid.innerHTML = '';
+
     const content = getContentAtPath(folderHierarchy, currentPath);
     if (!content) {
         console.error('Invalid path:', currentPath);
         return;
     }
 
-    // Clear and populate subdeck grid
-    subdeckGrid.innerHTML = '';
-
     // Show folders first
     const sortedFolders = Object.keys(content.folders).sort();
     for (const folderName of sortedFolders) {
-        const folderCard = createFolderCard(folderName, content.folders[folderName], allReviews);
-        subdeckGrid.appendChild(folderCard);
+        const folderCard = createFolderCard(folderName, content.folders[folderName], allReviewsCache);
+        grid.appendChild(folderCard);
     }
 
     // Then show files
     const sortedFiles = Object.keys(content.files).sort();
     for (const fileName of sortedFiles) {
         const cards = content.files[fileName];
-        const fileReviews = allReviews.filter(r => {
+        const fileReviews = allReviewsCache.filter(r => {
             const card = cards.find(c => c.hash === r.cardHash);
             return !!card;
         });
@@ -823,49 +944,64 @@ async function updateModalContent(allReviews) {
         };
 
         const subdeckCard = createSubdeckCard(subdeckData);
-        subdeckGrid.appendChild(subdeckCard);
+        grid.appendChild(subdeckCard);
     }
 }
 
 /**
- * Navigate to a folder
+ * Exit deck navigation and return to deck list
  */
-async function navigateToFolder(folderName) {
+function exitDeckNavigation() {
+    currentDeck = null;
+    currentPath = [];
+    folderHierarchy = null;
+    allReviewsCache = null;
+
+    // Clear URL parameters and add to history
+    const url = new URL(window.location);
+    url.searchParams.delete('deck');
+    url.searchParams.delete('path');
+    // Use pushState so this becomes a new history entry
+    history.pushState({}, '', url);
+
+    loadRepositories();
+}
+
+/**
+ * Navigate to a folder (inline breadcrumb navigation)
+ */
+function navigateToFolder(folderName) {
     currentPath.push(folderName);
-    const allReviews = await getAllReviews();
-    await updateModalContent(allReviews);
+
+    // Update URL to persist navigation state
+    const url = new URL(window.location);
+    url.searchParams.set('path', currentPath.join('/'));
+    console.log('[Navigation] navigateToFolder pushState:', url.toString());
+    // Use pushState to create a new history entry for folder navigation
+    history.pushState({ deck: currentDeck.id, path: [...currentPath] }, '', url);
+
+    updateDeckBreadcrumb();
+    renderCurrentLevel();
 }
 
 /**
  * Navigate to a specific path (for breadcrumb clicks)
  */
-async function navigateToPath(targetPath) {
+function navigateToPath(targetPath) {
     currentPath = [...targetPath];
-    const allReviews = await getAllReviews();
-    await updateModalContent(allReviews);
-}
 
-/**
- * Navigate back to parent folder
- */
-async function navigateBack() {
-    if (currentPath.length > 0) {
-        currentPath.pop();
-        const allReviews = await getAllReviews();
-        await updateModalContent(allReviews);
+    // Update URL to persist navigation state
+    const url = new URL(window.location);
+    if (targetPath.length > 0) {
+        url.searchParams.set('path', targetPath.join('/'));
+    } else {
+        url.searchParams.delete('path');
     }
-}
+    // Use pushState to create a new history entry for breadcrumb navigation
+    history.pushState({ deck: currentDeck.id, path: [...currentPath] }, '', url);
 
-/**
- * Close subdeck modal
- */
-function closeSubdeckModal() {
-    const modal = document.getElementById('subdeck-modal');
-    modal.classList.add('hidden');
-    // Reset navigation state
-    currentPath = [];
-    currentDeck = null;
-    folderHierarchy = null;
+    updateDeckBreadcrumb();
+    renderCurrentLevel();
 }
 
 /**
@@ -906,37 +1042,25 @@ function createFolderCard(folderName, folderContent, allReviews) {
         return allCards;
     }
 
-    // Count due cards in this folder
-    function countDueCardsInFolder(content) {
-        let dueCount = 0;
-        const now = new Date();
+    // Count reviewed cards in this folder (cards that have been reviewed at least once)
+    function countReviewedCardsInFolder(content) {
+        let reviewedCount = 0;
 
-        // Helper to check if a card is due
-        function isCardDue(card) {
-            const review = allReviews.find(r => r.cardHash === card.hash);
-            if (!review) {
-                // New card - always due
-                return true;
-            }
-            // Reviewed card - check if due
-            return new Date(review.fsrsCard.due) <= now;
-        }
-
-        // Count due cards in files
+        // Count reviewed cards in files
         for (const cards of Object.values(content.files)) {
-            dueCount += cards.filter(isCardDue).length;
+            reviewedCount += cards.filter(card => allReviews.find(r => r.cardHash === card.hash)).length;
         }
 
-        // Count due cards in subfolders
+        // Count reviewed cards in subfolders
         for (const subfolder of Object.values(content.folders)) {
-            dueCount += countDueCardsInFolder(subfolder);
+            reviewedCount += countReviewedCardsInFolder(subfolder);
         }
 
-        return dueCount;
+        return reviewedCount;
     }
 
     const totalCards = countCardsInFolder(folderContent);
-    const dueCards = countDueCardsInFolder(folderContent);
+    const reviewedCards = countReviewedCardsInFolder(folderContent);
     const allCardsInFolder = getAllCardsInFolder(folderContent);
 
     const card = document.createElement('div');
@@ -953,7 +1077,7 @@ function createFolderCard(folderName, folderContent, allReviews) {
     // Add reset button
     const resetBtn = document.createElement('button');
     resetBtn.className = 'card-reset-btn';
-    resetBtn.title = 'Reset all cards in this folder';
+    resetBtn.title = 'Reset progress';
     resetBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset">`;
     resetBtn.onclick = async (e) => {
         e.preventDefault();
@@ -963,8 +1087,9 @@ function createFolderCard(folderName, folderContent, allReviews) {
             const folderPath = [...currentPath, folderName].join('/');
             const { refreshDeck } = await import('./storage.js');
             await refreshDeck(currentDeck.id, folderPath);
-            const allReviewsUpdated = await getAllReviews();
-            await updateModalContent(allReviewsUpdated);
+            // Refresh reviews cache and re-render
+            allReviewsCache = await getAllReviews();
+            renderCurrentLevel();
         }
     };
     btnContainer.appendChild(resetBtn);
@@ -972,7 +1097,7 @@ function createFolderCard(folderName, folderContent, allReviews) {
     // Add review button (gavel)
     const reviewBtn = document.createElement('button');
     reviewBtn.className = 'card-review-btn';
-    reviewBtn.title = 'Review this folder';
+    reviewBtn.title = 'Review';
     reviewBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review">`;
     reviewBtn.onclick = (e) => {
         e.preventDefault();
@@ -985,6 +1110,9 @@ function createFolderCard(folderName, folderContent, allReviews) {
 
     // No delete button for folders - managed via git
 
+    // Calculate progress percentage (cards reviewed at least once)
+    const progressPercent = totalCards > 0 ? Math.round((reviewedCards / totalCards) * 100) : 0;
+
     const contentDiv = document.createElement('div');
     contentDiv.className = 'project-content';
     contentDiv.innerHTML = `
@@ -993,7 +1121,11 @@ function createFolderCard(folderName, folderContent, allReviews) {
             ${escapeHtml(description)}
         </p>
         <div class="project-stats">
-            ${dueCards > 0 ? `<strong>${dueCards} due</strong>` : 'All done!'}
+            <span class="progress-label">Progress:</span>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" style="width: ${progressPercent}%"></div>
+            </div>
+            <span class="progress-percent">${progressPercent}%</span>
         </div>
     `;
 
@@ -1026,7 +1158,11 @@ function createSubdeckCard(subdeck) {
 
     const card = document.createElement('div');
     card.className = 'project-card file-card';
-    card.style.cursor = 'default'; // File cards are not clickable (only buttons are)
+    card.style.cursor = 'pointer'; // File cards are clickable to start review
+    card.onclick = () => {
+        // Navigate to app.html with file filter (use fullPath which includes folder structure)
+        window.location.href = `app.html?deck=${encodeURIComponent(subdeck.deckId)}&file=${encodeURIComponent(subdeck.fullPath)}`;
+    };
 
     // Extract just the filename from the path
     const displayName = subdeck.fileName.split('/').pop().replace('.md', '');
@@ -1039,7 +1175,7 @@ function createSubdeckCard(subdeck) {
     // Add reset button
     const resetBtn = document.createElement('button');
     resetBtn.className = 'card-reset-btn';
-    resetBtn.title = 'Reset all cards in this subdeck';
+    resetBtn.title = 'Reset progress';
     resetBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset">`;
     resetBtn.onclick = async (e) => {
         e.preventDefault();
@@ -1048,26 +1184,18 @@ function createSubdeckCard(subdeck) {
             // Use file path for filtering
             const { refreshDeck } = await import('./storage.js');
             await refreshDeck(subdeck.deckId, subdeck.fullPath);
-            closeSubdeckModal();
-            await loadRepositories();
+            // Refresh reviews cache and re-render
+            allReviewsCache = await getAllReviews();
+            renderCurrentLevel();
         }
     };
     btnContainer.appendChild(resetBtn);
 
-    // Add review button (gavel)
-    const reviewBtn = document.createElement('button');
-    reviewBtn.className = 'card-review-btn';
-    reviewBtn.title = 'Review this subdeck';
-    reviewBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review">`;
-    reviewBtn.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        // Navigate to app.html with file filter (use fullPath which includes folder structure)
-        window.location.href = `app.html?deck=${encodeURIComponent(subdeck.deckId)}&file=${encodeURIComponent(subdeck.fullPath)}`;
-    };
-    btnContainer.appendChild(reviewBtn);
-
+    // No gavel button - clicking the card starts review
     // No delete button for files - managed via git
+
+    // Calculate progress percentage (cards reviewed at least once)
+    const progressPercent = totalCards > 0 ? Math.round((reviewedCards / totalCards) * 100) : 0;
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'project-content';
@@ -1077,7 +1205,11 @@ function createSubdeckCard(subdeck) {
             ${escapeHtml(description)}
         </p>
         <div class="project-stats">
-            ${dueCards > 0 ? `<strong>${dueCards} due</strong>` : 'All done!'}
+            <span class="progress-label">Progress:</span>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" style="width: ${progressPercent}%"></div>
+            </div>
+            <span class="progress-percent">${progressPercent}%</span>
         </div>
     `;
 
@@ -1085,27 +1217,6 @@ function createSubdeckCard(subdeck) {
     card.appendChild(contentDiv);
     return card;
 }
-
-// Setup modal close handlers
-document.addEventListener('DOMContentLoaded', () => {
-    const closeBtn = document.getElementById('close-modal');
-    const overlay = document.querySelector('.modal-overlay');
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeSubdeckModal);
-    }
-
-    if (overlay) {
-        overlay.addEventListener('click', closeSubdeckModal);
-    }
-
-    // Close on escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            closeSubdeckModal();
-        }
-    });
-});
 
 // Initialize on load - only if topics-grid element exists (i.e., we're on index.html)
 if (document.getElementById('topics-grid')) {

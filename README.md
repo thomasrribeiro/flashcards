@@ -77,46 +77,59 @@ This creates:
 Generate flashcards automatically from PDF textbooks using Claude AI.
 
 **Setup:**
-1. Get an API key from [Anthropic Console](https://console.anthropic.com/)
-2. Run: `flashcards auth login`
-3. Enter your API key when prompted
+1. Install a PDF processor (using uv for Python dependency management):
+   ```bash
+   uv venv
+   source .venv/bin/activate
+   uv pip install magic-pdf
+   ```
+2. Optionally set up authentication: `flashcards auth`
 
-**Usage:**
+**Workflow:**
 ```bash
 # Create a deck
 flashcards create intro-physics --template physics
-
-# Add your PDF to references/
-cp ~/textbook.pdf intro-physics/references/
-
-# Generate flashcards
 cd intro-physics
-flashcards generate textbook.pdf --output chapter-1
+
+# Process PDF and generate flashcards
+flashcards process references/textbook.pdf --output chapter1
+flashcards generate sources/chapter1 --output chapter1
 
 # Review and refine
-nano flashcards/chapter-1.md
+nano flashcards/chapter1.md
 
 # Study!
-cd ../.. && npm run dev
+cd .. && npm run dev
 ```
 
-**Options:**
+**Commands:**
 ```bash
-flashcards generate <pdf-filename> [options]
+# Process PDF (creates sources/<name>/ directory)
+flashcards process <pdf-path> [options]
+  --output <name>    Output name for the source (default: derived from PDF)
+  --deck <path>      Deck path (auto-detect from cwd)
+  --keep-temp        Keep temporary processing output
 
-  --output <filename>    Output filename (default: PDF name)
-  --model <model>        Claude model (default: claude-sonnet-4-5-20250514)
-  --max-cards <number>   Maximum cards to generate (default: 50)
-  --deck <path>          Deck path (auto-detect from cwd)
-  --verbose              Show detailed progress
+# Generate flashcards from processed source
+flashcards generate <source-dir> [options]
+  --output <name>    Output filename (default: derived from input)
+  --model <model>    Claude model (default: claude-sonnet-4-5-20250514)
+  --template <name>  Subject-specific guide (e.g., physics, chemistry)
+  --order <number>   Order number for TOML frontmatter
+  --tags <tags...>   Tags for TOML frontmatter
+  --verbose          Show detailed progress
+
+# Reconstruct the prompt used to generate flashcards
+flashcards show-prompt <flashcard-file>
+  --output <file>    Write prompt to file instead of stdout
 ```
 
 **Tips:**
 - ✅ Generated flashcards need human review (AI isn't perfect!)
 - ✅ Subject guides (physics, chemistry) improve generation quality
-- ✅ Use `--max-cards` to control output and costs
-- ✅ Keep PDFs under 200 pages for best results
-- ✅ Claude analyzes images and problems automatically
+- ✅ Images are referenced from `sources/<name>/images/` directly
+- ✅ Generation metadata is stored in TOML frontmatter for reproducibility
+- ✅ Use `flashcards show-prompt` to see exactly what prompt was used
 
 #### Card format
 Flashcards are written in markdown files using Q:/A:, C:, or P:/S: formats.
@@ -178,15 +191,25 @@ public/collection/
 │   ├── flashcards/
 │   │   ├── cell-biology.md
 │   │   └── genetics.md
-│   ├── figures/
-│   ├── references/
-│   └── CLAUDE.md
+│   ├── sources/                    # Parsed document content (tracked in git)
+│   │   └── chapter1/
+│   │       ├── content.json        # Document content
+│   │       └── images/             # Extracted figures
+│   ├── references/                 # Original PDFs (gitignored)
+│   └── README.md
 └── us-history/
     └── flashcards/
         └── civil-war.md
 ```
 
 Each directory in `public/collection/` becomes a separate deck.
+
+**Key directories:**
+- `flashcards/` - Generated markdown flashcard files
+- `sources/` - Parsed document content (content.json + images/)
+- `references/` - Original PDFs (gitignored, keep local)
+
+**Note:** Flashcard writing guides are fetched automatically from this repo when generating cards.
 
 ### ⚠️ Important
 

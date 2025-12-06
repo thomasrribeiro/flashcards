@@ -295,6 +295,56 @@ body {
     background: #e8e8e8;
 }
 
+/* Deck Navigation Breadcrumb */
+.deck-breadcrumb {
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--black);
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 2px;
+    flex-wrap: wrap;
+}
+
+.deck-breadcrumb.hidden {
+    display: none;
+}
+
+.deck-breadcrumb .breadcrumb-segment {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 4px;
+    border-radius: 3px;
+    background: var(--white);
+    color: var(--black);
+    transition: background 0.15s ease;
+}
+
+.deck-breadcrumb .breadcrumb-segment.breadcrumb-clickable {
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.deck-breadcrumb .breadcrumb-segment.breadcrumb-clickable:hover {
+    background: #e8e8e8;
+}
+
+.deck-breadcrumb .breadcrumb-segment.current {
+    cursor: default;
+    font-weight: 500;
+}
+
+.deck-breadcrumb .breadcrumb-segment.current:hover {
+    background: var(--white);
+}
+
+.deck-breadcrumb .breadcrumb-separator {
+    color: var(--black);
+    padding: 0 2px;
+    user-select: none;
+}
+
 .header-row {
     display: flex;
     align-items: baseline;
@@ -493,10 +543,39 @@ body {
 }
 
 .project-stats {
-    font-size: 13px;
+    font-size: 11px;
     color: var(--black);
     margin-top: auto;
     padding-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.progress-label {
+    flex-shrink: 0;
+}
+
+.progress-bar-container {
+    flex: 1;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    min-width: 60px;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: var(--black);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.progress-percent {
+    flex-shrink: 0;
+    min-width: 32px;
+    text-align: right;
 }
 
 .card-buttons {

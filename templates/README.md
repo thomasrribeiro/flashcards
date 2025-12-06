@@ -7,11 +7,11 @@ Spaced repetition flashcards for **{SUBJECT_NAME}** compatible with the [flashca
 ```
 .
 ├── flashcards/          # Markdown flashcard files (Q:/A:, C:, P:/S: formats)
+├── sources/             # Parsed document content for LLM generation (tracked in git)
+│   └── chapter_name/
+│       ├── content.json # Document content
+│       └── images/      # Extracted figures
 ├── references/          # Source PDFs and textbooks (gitignored)
-├── figures/             # Extracted diagrams and images (organized by flashcard filename)
-├── guides/              # Flashcard writing guides for Claude
-│   ├── general.md       # Universal SRS principles
-│   └── [subject].md     # Subject-specific strategies (if applicable)
 └── README.md            # This file
 ```
 
@@ -34,7 +34,7 @@ Contributions welcome! Follow these guidelines:
 
 ### Quick Start
 1. Fork this repository
-2. Create flashcards following the format in [guides/general.md](guides/general.md)
+2. Create flashcards following the [universal SRS principles](https://github.com/thomasrribeiro/flashcards/blob/main/templates/guides/general.md)
 3. Submit a pull request
 
 ### Flashcard Quality Guidelines
@@ -61,41 +61,29 @@ Source materials are stored in `references/` (gitignored for copyright reasons).
 cp /path/to/textbook.pdf references/
 ```
 
-### Extracting Figures
-```bash
-# Use the extraction script from the flashcards repository
-python3 /path/to/flashcards/scripts/extract_figures_from_pdf.py \
-  --pdf references/textbook.pdf \
-  --output figures/topic_name/
-```
+## 📂 Figure References
 
-## 📂 Figure Organization
+Figures are stored in `sources/<chapter>/images/` and referenced from flashcards using relative paths:
 
-Figures are organized by flashcard filename for easy reference:
-
-```
-figures/
-├── 01_topic_name/
-│   ├── diagram_1.png
-│   └── diagram_2.png
-└── 02_another_topic/
-    └── chart.png
-```
-
-In flashcards, reference figures using relative paths:
 ```markdown
 Q: What does this diagram show?
 
-![Description](../figures/01_topic_name/diagram_1.png)
+![Description](../sources/chapter_name/images/figure.jpg)
 
 A: [Answer]
 ```
 
+Since flashcard files are in `flashcards/`, use `../sources/` to navigate up one directory.
+
+**Note:** Figures are extracted automatically when processing PDFs.
+Run `flashcards process` to parse PDFs, then `flashcards generate` to create flashcards.
+
 ## 📖 Writing Guidelines
 
-For detailed flashcard writing guidelines:
-- **Universal SRS principles**: See [guides/general.md](guides/general.md)
-- **Subject-specific strategies**: See [guides/](guides/) for subject guides (e.g., physics.md, chemistry.md)
+Flashcard writing guides are fetched automatically from the main [flashcards repository](https://github.com/thomasrribeiro/flashcards) when generating cards:
+
+- **Universal SRS principles**: [general.md](https://github.com/thomasrribeiro/flashcards/blob/main/templates/guides/general.md)
+- **Subject-specific guides**: Use `--template <subject>` (e.g., `--template physics`) when running `flashcards generate`
 
 ## 🔗 Related Repositories
 

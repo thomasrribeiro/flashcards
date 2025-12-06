@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, chmodSy
 import { join, resolve, dirname, basename } from 'path';
 import { homedir } from 'os';
 import { createHash, randomBytes } from 'crypto';
+import { execSync } from 'child_process';
 
 const CONFIG_DIR = join(homedir(), '.flashcards');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
@@ -238,10 +239,9 @@ export function findDeckDirectory(startPath = process.cwd()) {
   while (currentPath !== root) {
     // Check if this directory looks like a deck
     const hasFlashcards = existsSync(join(currentPath, 'flashcards'));
-    const hasGuides = existsSync(join(currentPath, 'guides'));
     const hasReferences = existsSync(join(currentPath, 'references'));
 
-    if (hasFlashcards || hasGuides || hasReferences) {
+    if (hasFlashcards || hasReferences) {
       return currentPath;
     }
 
@@ -252,7 +252,7 @@ export function findDeckDirectory(startPath = process.cwd()) {
 }
 
 export function validateDeckStructure(deckPath) {
-  const required = ['flashcards', 'guides', 'references'];
+  const required = ['flashcards', 'references'];
   const missing = [];
 
   for (const folder of required) {
@@ -284,116 +284,110 @@ export function listPDFsInReferences(deckPath) {
 
 // ==================== Guides Loading ====================
 
+const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/thomasrribeiro/flashcards/main/templates/guides';
+
 /**
- * Load guides from deck's guides/ folder
- * @param {string} deckPath - Path to deck directory
+ * Load guides from the public flashcards GitHub repository
+ * Guides are always fetched fresh to ensure users have the latest version
  * @param {string|string[]} templates - Optional subject-specific template(s) (e.g., 'physics' or ['physics', 'chemistry'])
- * @returns {Object} { content, files, warning }
+ * @returns {Promise<Object>} { content, files, warning }
  */
-export function loadGuides(deckPath, templates = null) {
-  const guidesPath = join(deckPath, 'guides');
+export async function loadGuides(templates = null) {
+  // Normalize templates to array
+  const templateList = templates
+    ? (Array.isArray(templates) ? templates : [templates])
+    : [];
 
-  if (!existsSync(guidesPath)) {
-    return {
-      content: '',
-      files: [],
-      warning: 'No guides/ folder found. Using minimal context.'
-    };
+  // Build list of guide files to fetch
+  // Always include general.md first
+  const filesToFetch = ['general.md'];
+
+  // Add subject-specific templates
+  for (const template of templateList) {
+    const templateFile = `${template}.md`;
+    if (!filesToFetch.includes(templateFile)) {
+      filesToFetch.push(templateFile);
+    }
   }
 
-  try {
-    const allFiles = readdirSync(guidesPath).filter(f => f.endsWith('.md'));
+  let content = '';
+  const loadedFiles = [];
+  const warnings = [];
 
-    if (allFiles.length === 0) {
-      return {
-        content: '',
-        files: [],
-        warning: 'No guide files found in guides/ folder.'
-      };
-    }
+  for (const filename of filesToFetch) {
+    try {
+      const url = `${GITHUB_RAW_BASE}/${filename}`;
+      const response = await fetch(url);
 
-    // Normalize templates to array
-    const templateList = templates
-      ? (Array.isArray(templates) ? templates : [templates])
-      : [];
+      if (response.ok) {
+        const guideContent = await response.text();
+        const guideName = filename.replace('.md', '');
 
-    // Determine which files to load:
-    // - Always load general.md if it exists
-    // - If templates specified, also load each {template}.md
-    const filesToLoad = [];
+        // Add section marker
+        content += `\n\n# GUIDE: ${guideName.toUpperCase()} (${filename})\n\n`;
+        content += guideContent;
 
-    // Always include general.md first
-    if (allFiles.includes('general.md')) {
-      filesToLoad.push('general.md');
-    }
-
-    // Include subject-specific templates if specified and exist
-    for (const template of templateList) {
-      const templateFile = `${template}.md`;
-      if (allFiles.includes(templateFile) && !filesToLoad.includes(templateFile)) {
-        filesToLoad.push(templateFile);
+        loadedFiles.push(filename);
+      } else if (response.status === 404) {
+        warnings.push(`Guide not found: ${filename}`);
+      } else {
+        warnings.push(`Failed to fetch ${filename}: HTTP ${response.status}`);
       }
+    } catch (error) {
+      warnings.push(`Failed to fetch ${filename}: ${error.message}`);
     }
+  }
 
-    // If no templates specified and no general.md, load all guides
-    if (filesToLoad.length === 0) {
-      filesToLoad.push(...allFiles.sort());
-    }
-
-    let content = '';
-    const loadedFiles = [];
-
-    for (const file of filesToLoad) {
-      const filePath = join(guidesPath, file);
-      const guideContent = readFileSync(filePath, 'utf-8');
-      const guideName = file.replace('.md', '');
-
-      // Add section marker
-      content += `\n\n# GUIDE: ${guideName.toUpperCase()} (guides/${file})\n\n`;
-      content += guideContent;
-
-      loadedFiles.push(file);
-    }
-
-    return {
-      content,
-      files: loadedFiles,
-      warning: null
-    };
-  } catch (error) {
+  if (loadedFiles.length === 0) {
     return {
       content: '',
       files: [],
-      warning: `Error loading guides: ${error.message}`
+      warning: warnings.length > 0 ? warnings.join('; ') : 'No guides could be loaded'
     };
   }
+
+  return {
+    content,
+    files: loadedFiles,
+    warning: warnings.length > 0 ? warnings.join('; ') : null
+  };
 }
 
-// ==================== MineRU Content Loading ====================
+// ==================== Source Content Loading ====================
 
 /**
- * Load content from a MineRU output directory
- * @param {string} mineruDir - Path to MineRU output directory
+ * Load content from a parsed source directory (e.g., from PDF processing)
+ * @param {string} sourceDir - Path to source directory containing content.json and images/
  * @param {boolean} verbose - Enable verbose logging
  * @returns {Object} { content: Array, imagesDir: string, baseName: string }
  */
-export function loadMineRUContent(mineruDir, verbose = false) {
-  // Find the content_list.json file
-  const files = readdirSync(mineruDir);
-  const contentListFile = files.find(f => f.endsWith('_content_list.json'));
-
+export function loadSourceContent(sourceDir, verbose = false) {
+  // Find content.json (new format) or *_content_list.json (legacy format)
+  const files = readdirSync(sourceDir);
+  let contentListFile = files.find(f => f === 'content.json');
   if (!contentListFile) {
-    throw new Error(`No *_content_list.json file found in ${mineruDir}`);
+    contentListFile = files.find(f => f.endsWith('_content_list.json'));
   }
 
-  const contentListPath = join(mineruDir, contentListFile);
-  const imagesDir = join(mineruDir, 'images');
+  if (!contentListFile) {
+    throw new Error(`No content.json or *_content_list.json file found in ${sourceDir}`);
+  }
 
-  // Extract base name (e.g., "1_units_physical_quantities_vectors" from "1_units_physical_quantities_vectors_content_list.json")
-  const baseName = contentListFile.replace('_content_list.json', '');
+  const contentListPath = join(sourceDir, contentListFile);
+  const imagesDir = join(sourceDir, 'images');
+
+  // Extract base name:
+  // - For content.json (new format), use folder name
+  // - For *_content_list.json (legacy format), strip suffix
+  let baseName;
+  if (contentListFile === 'content.json') {
+    baseName = basename(sourceDir);
+  } else {
+    baseName = contentListFile.replace('_content_list.json', '');
+  }
 
   if (verbose) {
-    console.log(`[DEBUG] Loading MineRU content from: ${contentListPath}`);
+    console.log(`[DEBUG] Loading source content from: ${contentListPath}`);
     console.log(`[DEBUG] Images directory: ${imagesDir}`);
     console.log(`[DEBUG] Base name: ${baseName}`);
   }
@@ -424,11 +418,11 @@ export function loadMineRUContent(mineruDir, verbose = false) {
 }
 
 /**
- * Convert MineRU content array to formatted text for Claude
- * @param {Array} content - MineRU content_list.json array
+ * Convert source content array to formatted text for Claude
+ * @param {Array} content - Source content.json array
  * @returns {string} Formatted text representation
  */
-export function formatMineRUContentForClaude(content) {
+export function formatSourceContentForClaude(content) {
   let result = '';
   let currentPage = -1;
 
@@ -495,8 +489,8 @@ export function formatMineRUContentForClaude(content) {
 }
 
 /**
- * Extract list of all image paths from MineRU content
- * @param {Array} content - MineRU content_list.json array
+ * Extract list of all image paths from source content
+ * @param {Array} content - Source content.json array
  * @returns {Array} List of image paths with metadata
  */
 export function extractImageList(content) {
@@ -513,8 +507,8 @@ export function extractImageList(content) {
 // ==================== JSON Chunking for Large Documents ====================
 
 /**
- * Split MineRU content array into chunks by page boundaries
- * @param {Array} content - Full content_list.json array
+ * Split source content array into chunks by page boundaries
+ * @param {Array} content - Full content.json array
  * @param {number} maxCharsPerChunk - Target max chars per chunk (default: 120000)
  * @returns {Array<{content: Array, startPage: number, endPage: number}>}
  */
@@ -572,7 +566,7 @@ export function chunkContentByPages(content, maxCharsPerChunk = 120000) {
 
 /**
  * Estimate formatted size of a single content block
- * @param {Object} block - Content block from MineRU
+ * @param {Object} block - Content block from source
  * @returns {string} Formatted text representation
  */
 function formatBlockForSize(block) {
@@ -614,34 +608,76 @@ function formatBlockForSize(block) {
 }
 
 /**
- * Generate TOML frontmatter deterministically from CLI options
- * @param {Object} options - { order, tags, prerequisites }
+ * Get git commit hash from the flashcards CLI repository
+ * This captures the version of the CLI tool used to generate flashcards,
+ * allowing reproducibility by checking out the same commit from
+ * https://github.com/thomasrribeiro/flashcards
+ * @returns {string} Git commit hash (short form) or empty string if not available
+ */
+export function getFlashcardsRepoCommit() {
+  try {
+    // Get the directory containing this file (bin/lib/), go up two levels to repo root
+    // bin/lib/claude-client.js -> bin/lib -> bin -> repo root
+    const filePath = new URL(import.meta.url).pathname;
+    const cliRepoPath = dirname(dirname(dirname(filePath)));
+    const commit = execSync('git rev-parse --short HEAD', {
+      encoding: 'utf-8',
+      cwd: cliRepoPath,
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim();
+    return commit;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Generate TOML frontmatter for flashcard files
+ * Includes ordering/metadata fields and generation info for reproducibility
+ * @param {Object} options - Frontmatter options
+ * @param {number} options.order - Order number for sorting
+ * @param {string[]} options.tags - Tags for categorization
+ * @param {string[]} options.prereqs - Prerequisite flashcard files
+ * @param {Object} options.generation - Generation metadata object
  * @returns {string} TOML frontmatter block
  */
 export function generateFrontmatter(options = {}) {
-  const { order = 1, tags = [], prerequisites = [] } = options;
+  const { order, tags = [], prereqs = [], generation = null } = options;
 
-  const tagsStr = tags.length > 0
-    ? `[${tags.map(t => `"${t}"`).join(', ')}]`
-    : '[]';
+  let frontmatter = '+++\n';
 
-  const prereqsStr = prerequisites.length > 0
-    ? `[${prerequisites.map(p => `"${p}"`).join(', ')}]`
-    : '[]';
+  // Add ordering/metadata fields if provided
+  if (order !== undefined) {
+    frontmatter += `order = ${order}\n`;
+  }
+  if (tags.length > 0) {
+    frontmatter += `tags = [${tags.map(t => `"${t}"`).join(', ')}]\n`;
+  }
+  if (prereqs.length > 0) {
+    frontmatter += `prereqs = [${prereqs.map(p => `"${p}"`).join(', ')}]\n`;
+  }
 
-  return `+++
-order = ${order}
-tags = ${tagsStr}
-prerequisites = ${prereqsStr}
-+++
-
+  // Add generation metadata if provided
+  if (generation) {
+    frontmatter += `
+[generation]
+source = "${generation.source || ''}"
+images_dir = "${generation.imagesDir || ''}"
+generated_at = "${generation.generatedAt || new Date().toISOString()}"
+flashcards_commit = "${generation.flashcardsCommit || getFlashcardsRepoCommit()}"
+model = "${generation.model || ''}"
+guides = [${(generation.guides || []).map(g => `"${g}"`).join(', ')}]
 `;
+  }
+
+  frontmatter += '+++\n\n';
+  return frontmatter;
 }
 
 /**
  * Prepend TOML frontmatter to flashcard content
  * @param {string} flashcards - Flashcard markdown content (without frontmatter)
- * @param {Object} options - { order, tags, prerequisites }
+ * @param {Object} options - Frontmatter options (order, tags, prereqs, generation)
  * @returns {string} Flashcards with frontmatter prepended
  */
 export function prependFrontmatter(flashcards, options = {}) {
@@ -669,6 +705,257 @@ function stripFrontmatter(markdown) {
   }
 
   return result.trim();
+}
+
+/**
+ * Parse TOML frontmatter from flashcard markdown file
+ * Supports both old format (with cli_version, git_commit, [generation.options])
+ * and new simplified format (with flashcards_commit only)
+ * @param {string} filePath - Path to flashcard .md file
+ * @returns {Object} { frontmatter: Object, content: string }
+ */
+export function parseFrontmatter(filePath) {
+  const markdown = readFileSync(filePath, 'utf-8');
+
+  // Extract frontmatter block
+  const frontmatterMatch = markdown.match(/^\+\+\+([\s\S]*?)\+\+\+/);
+  if (!frontmatterMatch) {
+    return { frontmatter: {}, content: markdown };
+  }
+
+  const frontmatterText = frontmatterMatch[1];
+  const content = markdown.replace(/^\+\+\+[\s\S]*?\+\+\+\s*/, '');
+
+  // Simple TOML parser for our specific format
+  const frontmatter = {};
+
+  // Parse top-level keys (old format - still supported for backwards compatibility)
+  const orderMatch = frontmatterText.match(/^order\s*=\s*(\d+)/m);
+  if (orderMatch) frontmatter.order = parseInt(orderMatch[1]);
+
+  const tagsMatch = frontmatterText.match(/^tags\s*=\s*\[(.*?)\]/m);
+  if (tagsMatch) {
+    frontmatter.tags = tagsMatch[1].split(',').map(t => t.trim().replace(/"/g, '')).filter(Boolean);
+  }
+
+  const prereqsMatch = frontmatterText.match(/^prerequisites\s*=\s*\[(.*?)\]/m);
+  if (prereqsMatch) {
+    frontmatter.prerequisites = prereqsMatch[1].split(',').map(p => p.trim().replace(/"/g, '')).filter(Boolean);
+  }
+
+  // Parse [generation] section
+  const generationMatch = frontmatterText.match(/\[generation\]([\s\S]*?)(?=\[generation\.options\]|$)/);
+  if (generationMatch) {
+    frontmatter.generation = {};
+    const genText = generationMatch[1];
+
+    const sourceMatch = genText.match(/source\s*=\s*"([^"]*)"/);
+    if (sourceMatch) frontmatter.generation.source = sourceMatch[1];
+
+    const imagesDirMatch = genText.match(/images_dir\s*=\s*"([^"]*)"/);
+    if (imagesDirMatch) frontmatter.generation.imagesDir = imagesDirMatch[1];
+
+    const generatedAtMatch = genText.match(/generated_at\s*=\s*"([^"]*)"/);
+    if (generatedAtMatch) frontmatter.generation.generatedAt = generatedAtMatch[1];
+
+    // New format: flashcards_commit
+    const flashcardsCommitMatch = genText.match(/flashcards_commit\s*=\s*"([^"]*)"/);
+    if (flashcardsCommitMatch) frontmatter.generation.flashcardsCommit = flashcardsCommitMatch[1];
+
+    // Old format: cli_version (for backwards compatibility)
+    const cliVersionMatch = genText.match(/cli_version\s*=\s*"([^"]*)"/);
+    if (cliVersionMatch) frontmatter.generation.cliVersion = cliVersionMatch[1];
+
+    // Old format: git_commit (for backwards compatibility)
+    const gitCommitMatch = genText.match(/git_commit\s*=\s*"([^"]*)"/);
+    if (gitCommitMatch) frontmatter.generation.gitCommit = gitCommitMatch[1];
+
+    const modelMatch = genText.match(/model\s*=\s*"([^"]*)"/);
+    if (modelMatch) frontmatter.generation.model = modelMatch[1];
+
+    const guidesMatch = genText.match(/guides\s*=\s*\[(.*?)\]/);
+    if (guidesMatch) {
+      frontmatter.generation.guides = guidesMatch[1].split(',').map(g => g.trim().replace(/"/g, '')).filter(Boolean);
+    }
+
+    const guidesHashMatch = genText.match(/guides_hash\s*=\s*"([^"]*)"/);
+    if (guidesHashMatch) frontmatter.generation.guidesHash = guidesHashMatch[1];
+  }
+
+  // Parse [generation.options] section (old format - for backwards compatibility)
+  const optionsMatch = frontmatterText.match(/\[generation\.options\]([\s\S]*?)$/);
+  if (optionsMatch && frontmatter.generation) {
+    frontmatter.generation.options = {};
+    const optText = optionsMatch[1];
+
+    const templateMatch = optText.match(/template\s*=\s*\[(.*?)\]/);
+    if (templateMatch) {
+      frontmatter.generation.options.template = templateMatch[1].split(',').map(t => t.trim().replace(/"/g, '')).filter(Boolean);
+    }
+
+    const optOrderMatch = optText.match(/order\s*=\s*(\d+)/);
+    if (optOrderMatch) frontmatter.generation.options.order = parseInt(optOrderMatch[1]);
+
+    const optTagsMatch = optText.match(/tags\s*=\s*\[(.*?)\]/);
+    if (optTagsMatch) {
+      frontmatter.generation.options.tags = optTagsMatch[1].split(',').map(t => t.trim().replace(/"/g, '')).filter(Boolean);
+    }
+
+    const optPrereqsMatch = optText.match(/prereqs\s*=\s*\[(.*?)\]/);
+    if (optPrereqsMatch) {
+      frontmatter.generation.options.prereqs = optPrereqsMatch[1].split(',').map(p => p.trim().replace(/"/g, '')).filter(Boolean);
+    }
+  }
+
+  return { frontmatter, content };
+}
+
+/**
+ * Build the prompt that would be sent to Claude
+ * @param {string} contentText - Formatted document content
+ * @param {string} guidesContext - Loaded guides content
+ * @param {Array} imageList - Available images
+ * @param {Object} options - { outputName, order, tags, chunkInfo }
+ * @returns {string} The complete prompt
+ */
+export function buildPrompt(contentText, guidesContext, imageList, options = {}) {
+  const { outputName = 'flashcards', chunkInfo } = options;
+
+  // Build guide instructions
+  const guideInstructions = guidesContext && guidesContext.length > 0
+    ? `CRITICAL: Follow ALL principles in these guides EXACTLY.
+
+${guidesContext}
+
+=== END OF GUIDES ===
+
+You MUST follow every principle above. Key reminders:
+- Start with # Chapter/Topic Title, then use ## Section headers
+- NO --- separators between cards - just blank lines
+- Cover ALL sections comprehensively
+- DEFINE concepts before referencing them (sequential learning)
+
+**CRITICAL - END-OF-CHAPTER PROBLEMS**:
+The document likely includes "Exercises" and "Problems" sections at the end (numbered like 1.1, 1.2, ..., 1.21, etc.).
+These are ESSENTIAL practice material - convert 10-15 representative problems into P:/S: cards.
+Include problems with figures (E1.21, E1.22, etc.) - reference the figure in the solution.
+DO NOT SKIP the end-of-chapter problems section!`
+    : 'Follow research-based spaced repetition principles for flashcard creation.';
+
+  // Add chunk context information for multi-chunk processing
+  const chunkContext = chunkInfo
+    ? `\n\n## Document Context\nThis is chunk ${chunkInfo.current} of ${chunkInfo.total} (pages ${chunkInfo.startPage}-${chunkInfo.endPage}).
+${chunkInfo.isLast
+  ? 'This is the FINAL chunk - it likely contains the end-of-chapter Exercises and Problems sections. DO NOT SKIP these - convert 10-15 problems into P:/S: cards!'
+  : 'More content follows in subsequent chunks.'}
+Continue creating flashcards for this section, maintaining the same quality and format.`
+    : '';
+
+  // Build image instructions
+  let imageInstructions = '';
+  if (imageList && imageList.length > 0) {
+    const labeledFigures = imageList.filter(img => img.caption);
+    const unlabeledCount = imageList.length - labeledFigures.length;
+
+    const figureList = labeledFigures.slice(0, 50).map(img => {
+      const filename = img.path.split('/').pop();
+      return `- ${filename}: ${img.caption}`;
+    }).join('\n');
+
+    imageInstructions = `\n\n## Available Figures
+
+Reference syntax: ![Description](../sources/${outputName}/images/filename.jpg)
+
+Labeled figures:
+${figureList || '(none)'}
+${labeledFigures.length > 50 ? `\n... and ${labeledFigures.length - 50} more labeled figures` : ''}
+${unlabeledCount > 0 ? `\n(Plus ${unlabeledCount} unlabeled figures available)` : ''}
+
+**IMPORTANT: Include figures liberally.**  Add figures when they:
+- Illustrate concepts being tested (diagrams, graphs, systems)
+- Are referenced in the source text (e.g., "as shown in Figure 1.11")
+- Show relationships that are hard to describe in words
+- Provide visual examples that reinforce understanding
+
+When in doubt, include the figure. Visual learners benefit significantly from diagrams.`;
+  }
+
+  const frontmatterInstruction = 'Do NOT include TOML frontmatter (+++). Start directly with the # Chapter/Topic Title header.';
+
+  return `${guideInstructions}${chunkContext}${imageInstructions}
+
+<document_content>
+${contentText}
+</document_content>
+
+Generate flashcards from the document content above, following ALL principles in the guides. ${frontmatterInstruction}`;
+}
+
+/**
+ * Reconstruct the prompt that was used to generate flashcards
+ * @param {string} flashcardPath - Path to flashcard .md file
+ * @param {string} deckPath - Path to deck directory (unused, kept for backwards compatibility)
+ * @returns {Promise<Object>} { prompt, metadata, warnings }
+ */
+export async function reconstructPrompt(flashcardPath, deckPath) {
+  const warnings = [];
+
+  // 1. Parse TOML frontmatter from flashcard file
+  const { frontmatter } = parseFrontmatter(flashcardPath);
+
+  if (!frontmatter.generation) {
+    return {
+      prompt: null,
+      metadata: null,
+      warnings: ['No [generation] metadata found in flashcard file. Cannot reconstruct prompt.']
+    };
+  }
+
+  const gen = frontmatter.generation;
+
+  // 2. Load source content from generation.source
+  const sourcePath = join(deckPath, gen.source);
+  if (!existsSync(sourcePath)) {
+    warnings.push(`Source file not found: ${gen.source}`);
+    return { prompt: null, metadata: gen, warnings };
+  }
+
+  // Support both content.json (new format) and *_content_list.json (old format)
+  let content;
+  if (sourcePath.endsWith('.json')) {
+    content = JSON.parse(readFileSync(sourcePath, 'utf-8'));
+  } else {
+    // Assume it's a directory, find content.json or *_content_list.json
+    const files = readdirSync(sourcePath);
+    const contentFile = files.find(f => f === 'content.json' || f.endsWith('_content_list.json'));
+    if (!contentFile) {
+      warnings.push(`No content file found in: ${gen.source}`);
+      return { prompt: null, metadata: gen, warnings };
+    }
+    content = JSON.parse(readFileSync(join(sourcePath, contentFile), 'utf-8'));
+  }
+
+  const contentText = formatSourceContentForClaude(content);
+
+  // 3. Load guides (fetched fresh from GitHub)
+  const guidesContext = await loadGuides(gen.guides?.map(g => g.replace('.md', '')));
+
+  // 4. Extract image list
+  const imageList = extractImageList(content);
+
+  // 5. Reconstruct the prompt
+  const outputName = basename(flashcardPath, '.md');
+  const prompt = buildPrompt(contentText, guidesContext.content, imageList, {
+    outputName,
+    order: gen.options?.order,
+    tags: gen.options?.tags
+  });
+
+  return {
+    prompt,
+    metadata: gen,
+    warnings
+  };
 }
 
 // ==================== Claude Code CLI Integration ====================
@@ -731,7 +1018,7 @@ Continue creating flashcards for this section, maintaining the same quality and 
 
     imageInstructions = `\n\n## Available Figures
 
-Reference syntax: ![Description](figures/${outputName}/filename.jpg)
+Reference syntax: ![Description](../sources/${outputName}/images/filename.jpg)
 
 Labeled figures:
 ${figureList || '(none)'}
@@ -932,19 +1219,19 @@ Generate flashcards from the document content above, following ALL principles in
   });
 }
 
-// ==================== Claude API with MineRU ====================
+// ==================== Claude API with Source Content ====================
 
 // Maximum content size before chunking is needed (leave room for guides and instructions)
 const MAX_CONTENT_SIZE_FOR_CHUNKING = 120000;
 
 /**
  * Process large documents in chunks, aggregating results
- * @param {string} mineruDir - MineRU output directory
+ * @param {string} sourceDir - Source directory with content.json and images/
  * @param {string} guidesContext - Loaded guides
  * @param {Object} options - Generation options
  * @returns {Object} Aggregated {flashcards, usedImages, chunkCount}
  */
-async function callClaudeWithChunkedMineRU(mineruDir, guidesContext, options = {}) {
+async function callClaudeWithChunkedSource(sourceDir, guidesContext, options = {}) {
   const {
     model = 'claude-sonnet-4-5-20250514',
     verbose = false,
@@ -955,8 +1242,8 @@ async function callClaudeWithChunkedMineRU(mineruDir, guidesContext, options = {
     outputName = 'flashcards'
   } = options;
 
-  // Load MineRU content
-  const { content, imagesDir, baseName } = loadMineRUContent(mineruDir, verbose);
+  // Load source content
+  const { content, imagesDir, baseName } = loadSourceContent(sourceDir, verbose);
 
   // Extract full image list (available to all chunks)
   const fullImageList = extractImageList(content);
@@ -974,7 +1261,7 @@ async function callClaudeWithChunkedMineRU(mineruDir, guidesContext, options = {
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
-    const chunkContent = formatMineRUContentForClaude(chunk.content);
+    const chunkContent = formatSourceContentForClaude(chunk.content);
     const chunkImageList = extractImageList(chunk.content);
 
     console.log(`\n⏳ Processing chunk ${i + 1}/${chunks.length} (pages ${chunk.startPage + 1}-${chunk.endPage + 1})...`);
@@ -1040,13 +1327,13 @@ async function callClaudeWithChunkedMineRU(mineruDir, guidesContext, options = {
 }
 
 /**
- * Generate flashcards from MineRU content using Claude
- * @param {string} mineruDir - Path to MineRU output directory
+ * Generate flashcards from parsed source content using Claude
+ * @param {string} sourceDir - Path to source directory with content.json and images/
  * @param {string} guidesContext - Loaded guides content
  * @param {Object} options - Generation options
  * @returns {Object} { flashcards, usage, usedImages }
  */
-export async function callClaudeWithMineRU(mineruDir, guidesContext, options = {}) {
+export async function callClaudeWithSource(sourceDir, guidesContext, options = {}) {
   const {
     apiKey,
     model = 'claude-sonnet-4-5-20250514',
@@ -1059,11 +1346,11 @@ export async function callClaudeWithMineRU(mineruDir, guidesContext, options = {
     outputName = 'flashcards'
   } = options;
 
-  // Load MineRU content
-  const { content, imagesDir, baseName } = loadMineRUContent(mineruDir, verbose);
+  // Load source content
+  const { content, imagesDir, baseName } = loadSourceContent(sourceDir, verbose);
 
   // Format content for Claude
-  const contentText = formatMineRUContentForClaude(content);
+  const contentText = formatSourceContentForClaude(content);
 
   // Extract image list
   const imageList = extractImageList(content);
@@ -1079,7 +1366,7 @@ export async function callClaudeWithMineRU(mineruDir, guidesContext, options = {
   // Check if content is too large and needs chunking (only for Claude Code CLI)
   if (useClaudeCode && contentText.length > MAX_CONTENT_SIZE_FOR_CHUNKING) {
     console.log(`\x1b[33m📊 Content size: ${Math.round(contentText.length / 1000)}K chars (exceeds ${Math.round(MAX_CONTENT_SIZE_FOR_CHUNKING / 1000)}K limit)\x1b[0m`);
-    return callClaudeWithChunkedMineRU(mineruDir, guidesContext, options);
+    return callClaudeWithChunkedSource(sourceDir, guidesContext, options);
   }
 
   // If using Claude Code CLI, delegate to that
@@ -1124,7 +1411,7 @@ export async function callClaudeWithMineRU(mineruDir, guidesContext, options = {
     imageInstructions = `\n\n## Available Figures
 
 The document contains ${imageList.length} figures. When creating flashcards, reference relevant figures using:
-![Description](figures/${finalOutputName}/filename.jpg)
+![Description](sources/${finalOutputName}/images/filename.jpg)
 
 Available images:
 ${imageList.slice(0, 50).map(img => `- ${img.path}${img.caption ? `: ${img.caption}` : ''}`).join('\n')}
@@ -1200,15 +1487,16 @@ Generate flashcards from the document content above, following ALL principles in
 /**
  * Extract list of images used in flashcard content
  * @param {string} flashcards - Generated flashcard markdown
- * @param {Array} imageList - Available images from MineRU
+ * @param {Array} imageList - Available images from source
  * @returns {Array} List of used image paths
  */
 function extractUsedImages(flashcards, imageList) {
   const usedImages = [];
 
   // Find all image references in the flashcard content
-  // Pattern: ![...](figures/outputName/filename.jpg) or ![...](images/filename.jpg)
-  const imageRefPattern = /!\[[^\]]*\]\((?:figures\/[^\/]+\/|images\/)([^)]+)\)/g;
+  // Pattern: ![...](sources/outputName/images/filename.jpg) or ![...](figures/outputName/filename.jpg) or ![...](images/filename.jpg)
+  // Match image references with optional ../ prefix for relative paths from flashcards/ directory
+  const imageRefPattern = /!\[[^\]]*\]\((?:\.\.\/)?(?:sources\/[^\/]+\/images\/|figures\/[^\/]+\/|images\/)([^)]+)\)/g;
   let match;
 
   while ((match = imageRefPattern.exec(flashcards)) !== null) {
@@ -1225,7 +1513,7 @@ function extractUsedImages(flashcards, imageList) {
 
 // Legacy function for backwards compatibility - throws helpful error
 export async function callClaudeWithPDF(pdfPath, guidesContext, options = {}) {
-  throw new Error('PDF input is no longer supported. Please use MineRU to preprocess your PDF first, then use callClaudeWithMineRU().');
+  throw new Error('PDF input is no longer supported. Please use "flashcards process" to preprocess your PDF first, then use callClaudeWithSource().');
 }
 
 // ==================== Figure Enhancement (Stage 2) ====================
@@ -1494,10 +1782,15 @@ export function validateFlashcards(markdownText) {
       warnings.push(`Line ${currentLine}: Unclosed cloze deletion bracket`);
     }
 
-    // Check for absolute image paths
-    if (line.includes('](') && line.includes('figures/')) {
-      if (!line.includes('../figures/')) {
-        warnings.push(`Line ${currentLine}: Image path should be relative (../figures/...)`);
+    // Check for image paths - they should be relative from flashcards/ directory
+    if (line.includes('](') && (line.includes('figures/') || line.includes('sources/'))) {
+      // For sources/ paths, they should be relative from flashcards/ like ../sources/name/images/
+      if (line.includes('sources/') && !line.includes('../sources/')) {
+        warnings.push(`Line ${currentLine}: Source image path should be relative (../sources/...)`);
+      }
+      // For legacy figures/ paths, they should be ../figures/
+      if (line.includes('figures/') && !line.includes('../figures/')) {
+        warnings.push(`Line ${currentLine}: Legacy figure path should be relative (../figures/...)`);
       }
     }
   }
@@ -1513,3 +1806,10 @@ export function validateFlashcards(markdownText) {
     errors
   };
 }
+
+// ==================== Backwards Compatibility Aliases ====================
+// These aliases allow existing code to continue working with the old function names
+
+export const loadMineRUContent = loadSourceContent;
+export const formatMineRUContentForClaude = formatSourceContentForClaude;
+export const callClaudeWithMineRU = callClaudeWithSource;

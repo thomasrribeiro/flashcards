@@ -4,7 +4,6 @@ import { Command } from 'commander';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve, basename } from 'path';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync, statSync } from 'fs';
-import { homedir } from 'os';
 import * as readline from 'readline';
 import * as claudeClient from './lib/claude-client.js';
 
@@ -23,8 +22,7 @@ program
   .command('create')
   .description('Create a new flashcard deck repository')
   .argument('<name>', 'Name of the deck (e.g., intro-mechanics)')
-  .option('--path <path>', 'Custom path for the deck (default: public/collection/<name>)')
-  .option('--template <template>', 'Copy subject-specific template (e.g., physics, chemistry)')
+  .option('--path <path>', 'Custom path for the deck (default: current directory)')
   .action((name, options) => {
     createDeck(name, options);
   });
@@ -40,9 +38,11 @@ program
 
 function createDeck(name, options) {
   // Determine deck path
+  // Default: create in current directory (e.g., ./test/)
+  // With --path: create in specified path (e.g., --path ~/decks creates ~/decks/test/)
   const basePath = options.path
-    ? resolve(process.cwd(), options.path)
-    : resolve(FLASHCARDS_ROOT, 'public', 'collection', name);
+    ? resolve(process.cwd(), options.path, name)
+    : resolve(process.cwd(), name);
 
   // Check if directory already exists
   if (existsSync(basePath)) {
@@ -69,13 +69,11 @@ function createDeck(name, options) {
     mkdirSync(join(basePath, 'flashcards'), { recursive: true });
     mkdirSync(join(basePath, 'references'), { recursive: true });
     mkdirSync(join(basePath, 'figures'), { recursive: true });
-    mkdirSync(join(basePath, 'guides'), { recursive: true });
 
     console.log('\x1b[32m✓\x1b[0m Created directory structure:');
     console.log('  - flashcards/   (markdown flashcard files)');
     console.log('  - references/   (source PDFs and textbooks, gitignored)');
     console.log('  - figures/      (extracted images and diagrams)');
-    console.log('  - guides/       (flashcard writing guides for Claude)');
     console.log();
   } catch (error) {
     console.error(`\x1b[31mError creating directories: ${error.message}\x1b[0m`);
@@ -97,40 +95,6 @@ function createDeck(name, options) {
     }
   } catch (error) {
     console.error(`\x1b[31mError creating README.md: ${error.message}\x1b[0m`);
-  }
-
-  // Copy general guide (always included)
-  try {
-    const generalGuidePath = join(FLASHCARDS_ROOT, 'templates', 'guides', 'general.md');
-    if (existsSync(generalGuidePath)) {
-      const generalGuide = readFileSync(generalGuidePath, 'utf-8');
-      const guide = generalGuide
-        .replace(/{SUBJECT_NAME}/g, subjectName)
-        .replace(/{DATE}/g, currentDate);
-      writeFileSync(join(basePath, 'guides', 'general.md'), guide);
-      console.log('\x1b[32m✓\x1b[0m Created guides/general.md (universal SRS principles)');
-    } else {
-      console.log('\x1b[33m⚠\x1b[0m Template not found: templates/guides/general.md');
-    }
-  } catch (error) {
-    console.error(`\x1b[31mError creating guides/general.md: ${error.message}\x1b[0m`);
-  }
-
-  // Copy subject-specific guide if --template flag is provided
-  if (options.template) {
-    try {
-      const templatePath = join(FLASHCARDS_ROOT, 'templates', 'guides', `${options.template}.md`);
-      if (existsSync(templatePath)) {
-        const templateContent = readFileSync(templatePath, 'utf-8');
-        writeFileSync(join(basePath, 'guides', `${options.template}.md`), templateContent);
-        console.log(`\x1b[32m✓\x1b[0m Created guides/${options.template}.md (subject-specific strategies)`);
-        console.log(`   \x1b[90m(Provides ${subjectName}-specific flashcard strategies for Claude)\x1b[0m`);
-      } else {
-        console.log(`\x1b[33m⚠\x1b[0m Subject template not found: templates/guides/${options.template}.md (skipping)`);
-      }
-    } catch (error) {
-      console.error(`\x1b[31mError copying subject guide: ${error.message}\x1b[0m`);
-    }
   }
 
   // Create .gitignore
@@ -164,9 +128,6 @@ A: To demonstrate the flashcard format. Delete this file and create your own!
 
 C: Flashcards use [Q:/A:] for questions, [C:] for cloze deletions, and [P:/S:] for methodology.
 
-Q: Where can I find flashcard writing guidelines?
-A: See guides/general.md for universal SRS principles, and guides/ for subject-specific strategies.
-
 Q: What is the difference between Q:/A: and P:/S: cards?
 A: Q:/A: is for simple questions with direct answers. P:/S: is for teaching problem-solving methodology using the ISAE framework (Identify, Set Up, Approach, Evaluate) with variables only, not numerical computation.
 
@@ -192,36 +153,20 @@ A: Q:/A: is for simple questions with direct answers. P:/S: is for teaching prob
   console.log('📝 Next steps:');
   console.log(`  1. cd ${basePath}`);
   console.log('  2. Add source PDFs to references/');
-  console.log('  3. Extract figures (if using PDFs):');
-  console.log('     Get extract_figures_from_pdf.py from:');
-  console.log('     https://github.com/thomasrribeiro/flashcards/blob/main/scripts/extract_figures_from_pdf.py');
-  console.log('  4. Create flashcards in flashcards/*.md');
-  console.log('  5. Read guides/general.md for universal flashcard best practices');
-  if (options.template) {
-    console.log(`  6. Read guides/${options.template}.md for ${subjectName}-specific strategies`);
-  }
+  console.log('  3. Process PDFs: flashcards process references/<pdf-file> --output <name>');
+  console.log('  4. Generate flashcards: flashcards generate sources/<name> --output <name>');
+  console.log('     (Use --template physics for subject-specific guidance)');
+  console.log('  5. Review and edit flashcards/*.md');
   console.log();
 
-  // Only show GitHub instructions if not in public/collection
-  if (!basePath.includes('public/collection')) {
-    console.log('🔗 To push to GitHub organization (optional):');
-    console.log(`  1. Create repo 'thomasrribeiro-flashcards/${name}' on GitHub`);
-    console.log(`  2. cd ${basePath}`);
-    console.log(`  3. git init`);
-    console.log(`  4. git add .`);
-    console.log(`  5. git commit -m "Initial commit: ${subjectName} flashcards"`);
-    console.log(`  6. git remote add origin git@github.com:thomasrribeiro-flashcards/${name}.git`);
-    console.log('  7. git push -u origin master');
-    console.log();
-  }
+  console.log('🔗 To push to GitHub (optional):');
+  console.log(`  git init && git add . && git commit -m "Initial commit"`);
+  console.log(`  git remote add origin git@github.com:YOUR_ORG/${name}.git`);
+  console.log('  git push -u origin master');
+  console.log();
 
   console.log('🚀 To use with flashcards app:');
-  if (basePath.includes('public/collection')) {
-    console.log('  Your deck is already in public/collection/ and will be available in the app');
-    console.log('  Run: npm run process-submodules');
-  } else {
-    console.log('  Add this repository as a deck in the flashcards app');
-  }
+  console.log('  Add this repository as a deck in the flashcards app');
   console.log();
   console.log('📖 Happy studying!');
 }
@@ -241,7 +186,6 @@ function addCard(deckPath, cardName) {
     console.log();
     console.log('A deck must contain:');
     console.log('  flashcards/  - Markdown flashcard files');
-    console.log('  guides/      - Flashcard writing guides');
     console.log('  references/  - Source PDFs');
     console.log();
     process.exit(1);
@@ -671,45 +615,145 @@ async function authLogin() {
   rl.close();
 }
 
-// ==================== Generate Command ====================
+// ==================== Show-Prompt Command ====================
 
 program
-  .command('generate <mineru-dir>')
-  .description('Generate flashcards from MineRU-processed PDF output (run from within deck directory)')
-  .option('--output <name>', 'Output filename (default: derived from MineRU input)')
-  .option('--model <model>', 'Claude model to use', 'claude-sonnet-4-5-20250514')
-  .option('--api-key <key>', 'Override stored API key')
+  .command('show-prompt <flashcard-file>')
+  .description('Reconstruct and display the prompt used to generate a flashcard file')
   .option('--deck <path>', 'Deck path (auto-detect from cwd if not specified)')
-  .option('--prereqs <files...>', 'Prerequisite files relative to CWD (space-separated)')
-  .option('--order <number>', 'Order number for TOML frontmatter (e.g., 1 for Chapter 1)', parseInt)
-  .option('--tags <tags...>', 'Tags for TOML frontmatter (space-separated, e.g., vectors kinematics)')
-  .option('--template <subjects...>', 'Subject-specific guide templates (space-separated, e.g., physics chemistry)')
-  .option('--verbose', 'Show detailed progress and prompt')
-  .action(async (mineruDir, options) => {
-    await generateFlashcards(mineruDir, options);
+  .option('--output <file>', 'Write prompt to file instead of stdout')
+  .action(async (flashcardFile, options) => {
+    await showPrompt(flashcardFile, options);
   });
 
-async function generateFlashcards(mineruDirInput, options) {
-  console.log('\x1b[34m🤖 AI Flashcard Generation (MineRU)\x1b[0m');
+async function showPrompt(flashcardFileInput, options) {
+  console.log('\x1b[34m📝 Prompt Reconstruction\x1b[0m');
   console.log('━'.repeat(50));
   console.log();
 
   try {
-    // Step 1: Get API key or OAuth token
-    let apiKey = options.apiKey;
-    if (!apiKey) {
-      apiKey = await claudeClient.getAccessToken();
-      if (!apiKey) {
-        console.log('\x1b[31m❌ Not authenticated\x1b[0m');
+    // Step 1: Find deck directory
+    let deckPath = options.deck;
+    if (!deckPath) {
+      deckPath = claudeClient.findDeckDirectory();
+      if (!deckPath) {
+        console.log('\x1b[31m❌ Not in a flashcard deck directory\x1b[0m');
         console.log();
-        console.log('Run: \x1b[36mflashcards auth\x1b[0m');
+        console.log('Specify deck path: \x1b[36m--deck <path>\x1b[0m');
         console.log();
+        process.exit(1);
+      }
+    } else {
+      deckPath = resolve(deckPath);
+    }
+
+    // Step 2: Resolve flashcard file path
+    const flashcardPath = resolve(flashcardFileInput);
+    if (!existsSync(flashcardPath)) {
+      // Try relative to flashcards/ directory
+      const altPath = join(deckPath, 'flashcards', flashcardFileInput);
+      if (existsSync(altPath)) {
+        flashcardFileInput = altPath;
+      } else {
+        console.log(`\x1b[31m❌ Flashcard file not found: ${flashcardFileInput}\x1b[0m`);
         process.exit(1);
       }
     }
 
-    // Step 2: Find deck directory
-    let deckPath = options.deck;
+    const resolvedPath = existsSync(flashcardPath) ? flashcardPath : join(deckPath, 'flashcards', flashcardFileInput);
+
+    console.log(`📂 Deck: ${deckPath}`);
+    console.log(`📄 File: ${resolvedPath}`);
+    console.log();
+
+    // Step 3: Reconstruct the prompt (guides are fetched fresh from GitHub)
+    const result = await claudeClient.reconstructPrompt(resolvedPath, deckPath);
+
+    // Show warnings
+    if (result.warnings.length > 0) {
+      console.log('\x1b[33m⚠  Warnings:\x1b[0m');
+      result.warnings.forEach(w => console.log(`   ${w}`));
+      console.log();
+    }
+
+    if (!result.prompt) {
+      console.log('\x1b[31m❌ Could not reconstruct prompt\x1b[0m');
+      process.exit(1);
+    }
+
+    // Show metadata
+    if (result.metadata) {
+      console.log('\x1b[36m📋 Generation Metadata:\x1b[0m');
+      console.log(`   Source: ${result.metadata.source}`);
+      console.log(`   Generated: ${result.metadata.generatedAt}`);
+      if (result.metadata.flashcardsCommit) {
+        console.log(`   Flashcards Commit: ${result.metadata.flashcardsCommit}`);
+      }
+      if (result.metadata.model) {
+        console.log(`   Model: ${result.metadata.model}`);
+      }
+      console.log(`   Guides: ${result.metadata.guides?.join(', ') || '(none)'}`);
+      console.log();
+    }
+
+    // Output prompt
+    if (options.output) {
+      writeFileSync(options.output, result.prompt, 'utf-8');
+      console.log(`\x1b[32m✓ Prompt written to: ${options.output}\x1b[0m`);
+      console.log(`   Size: ${result.prompt.length} characters`);
+    } else {
+      console.log('\x1b[36m━'.repeat(50) + '\x1b[0m');
+      console.log('\x1b[36mReconstructed Prompt:\x1b[0m');
+      console.log('\x1b[36m━'.repeat(50) + '\x1b[0m');
+      console.log();
+      console.log(result.prompt);
+      console.log();
+      console.log('\x1b[36m━'.repeat(50) + '\x1b[0m');
+      console.log(`\x1b[90mPrompt size: ${result.prompt.length} characters\x1b[0m`);
+    }
+
+  } catch (error) {
+    console.log(`\x1b[31m❌ Error: ${error.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
+
+// ==================== Process Command ====================
+
+program
+  .command('process <pdf-path>')
+  .description('Process a PDF and prepare it for flashcard generation')
+  .option('--output <name>', 'Output name for the source (default: derived from PDF filename)')
+  .option('--deck <path>', 'Deck path (auto-detect from cwd if not specified)')
+  .option('--keep-temp', 'Keep temporary processing output (default: clean up)')
+  .option('--force', 'Force reprocessing even if existing output is found')
+  .option('--use-existing', 'Automatically use existing temp output if found')
+  .option('--verbose', 'Show detailed progress')
+  .option('-b, --backend <engine>', 'PDF processing backend engine', 'vlm-mlx-engine')
+  .option('-m, --method <method>', 'PDF processing method', 'ocr')
+  .option('-l, --lang <lang>', 'Document language', 'en')
+  .action(async (pdfPath, options) => {
+    await processPDF(pdfPath, options);
+  });
+
+async function processPDF(pdfPathInput, options) {
+  const { execSync, spawn } = await import('child_process');
+  const { tmpdir } = await import('os');
+  const { rmSync } = await import('fs');
+
+  console.log('\x1b[34m📄 PDF Processing\x1b[0m');
+  console.log('━'.repeat(50));
+  console.log();
+
+  // Track state for error recovery
+  let tempDir = null;
+  let processingCompleted = false;
+  let deckPath = null;
+  let outputName = null;
+
+  try {
+    // Step 1: Find deck directory
+    deckPath = options.deck;
     if (!deckPath) {
       deckPath = claudeClient.findDeckDirectory();
       if (!deckPath) {
@@ -729,55 +773,482 @@ async function generateFlashcards(mineruDirInput, options) {
       deckPath = resolve(deckPath);
     }
 
-    // Step 3: Validate deck structure
-    const validation = claudeClient.validateDeckStructure(deckPath);
-    if (!validation.valid) {
-      console.log(`\x1b[31m❌ Invalid deck structure\x1b[0m`);
-      console.log();
-      console.log(`Missing folders: ${validation.missing.join(', ')}`);
-      console.log();
+    // Step 2: Resolve PDF path
+    const pdfPath = resolve(pdfPathInput);
+    if (!existsSync(pdfPath)) {
+      console.log(`\x1b[31m❌ PDF not found: ${pdfPathInput}\x1b[0m`);
       process.exit(1);
     }
 
-    // Step 4: Validate MineRU output directory
-    const mineruDir = resolve(mineruDirInput);
-    if (!existsSync(mineruDir)) {
-      console.log(`\x1b[31m❌ MineRU output directory not found: ${mineruDirInput}\x1b[0m`);
-      console.log();
-      console.log('Run MineRU first to process your PDF:');
-      console.log('  magic-pdf -p your-file.pdf -o output-dir');
-      console.log();
-      process.exit(1);
+    // Step 3: Check if PDF processor (mineru or magic-pdf) is installed
+    let processorCmd = 'mineru';
+    try {
+      execSync('which mineru', { stdio: 'ignore' });
+    } catch {
+      try {
+        execSync('which magic-pdf', { stdio: 'ignore' });
+        processorCmd = 'magic-pdf';
+      } catch {
+        console.log('\x1b[31m❌ PDF processor not found\x1b[0m');
+        console.log();
+        console.log('Install a PDF processor:');
+        console.log('  pip install magic-pdf');
+        console.log();
+        console.log('Or see: https://github.com/opendatalab/MinerU');
+        console.log();
+        process.exit(1);
+      }
     }
 
-    // Check for content_list.json
-    const mineruFiles = readdirSync(mineruDir);
-    const contentListFile = mineruFiles.find(f => f.endsWith('_content_list.json'));
+    // Step 4: Determine output name
+    const pdfBasename = basename(pdfPath, '.pdf').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    outputName = options.output || pdfBasename;
+
+    console.log(`📂 Deck: ${deckPath}`);
+    console.log(`📄 PDF: ${pdfPath}`);
+    console.log(`📝 Output: sources/${outputName}/`);
+    console.log();
+
+    // Step 4b: Check if source already exists in deck
+    const existingSourceDir = join(deckPath, 'sources', outputName);
+    const existingContentJson = join(existingSourceDir, 'content.json');
+    if (existsSync(existingContentJson)) {
+      console.log('\x1b[32m✓ Source already exists!\x1b[0m');
+      console.log(`   ${existingSourceDir}/`);
+      console.log();
+      console.log('To regenerate, delete the existing source first:');
+      console.log(`   rm -rf ${existingSourceDir}`);
+      console.log();
+      console.log('Or proceed directly to flashcard generation:');
+      console.log(`   \x1b[36mflashcards generate sources/${outputName} --output ${outputName}\x1b[0m`);
+      console.log();
+      process.exit(0);
+    }
+
+    // Step 4c: Check for existing temp directories from previous runs
+    const tempBase = tmpdir();
+    const existingTempDirs = readdirSync(tempBase)
+      .filter(d => d.startsWith('mineru-'))
+      .map(d => join(tempBase, d))
+      .filter(d => {
+        try {
+          return statSync(d).isDirectory();
+        } catch {
+          return false;
+        }
+      });
+
+    // Helper to find content_list.json in a directory tree
+    const findContentListInDir = (dir, maxDepth = 3) => {
+      if (maxDepth <= 0) return null;
+      try {
+        const files = readdirSync(dir);
+        // Check current directory
+        const contentFile = files.find(f => f.endsWith('_content_list.json'));
+        if (contentFile) return { dir, file: contentFile };
+        // Check subdirectories
+        for (const subdir of files) {
+          const subdirPath = join(dir, subdir);
+          try {
+            if (statSync(subdirPath).isDirectory()) {
+              const result = findContentListInDir(subdirPath, maxDepth - 1);
+              if (result) return result;
+            }
+          } catch {
+            // Skip inaccessible directories
+          }
+        }
+      } catch {
+        // Skip inaccessible directories
+      }
+      return null;
+    };
+
+    // Check each temp directory for matching PDF output
+    for (const existingTemp of existingTempDirs) {
+      const found = findContentListInDir(existingTemp);
+      if (found) {
+        // Check if this temp dir contains output for our PDF
+        const tempContents = readdirSync(existingTemp);
+        const matchesPdf = tempContents.some(d =>
+          d.toLowerCase().includes(pdfBasename.replace(/_/g, '')) ||
+          pdfBasename.includes(d.toLowerCase().replace(/[^a-z0-9]/g, ''))
+        );
+
+        if (matchesPdf) {
+          console.log('\x1b[33m⚠  Found existing output from previous run!\x1b[0m');
+          console.log(`   ${existingTemp}`);
+          console.log();
+
+          const imagesDir = join(found.dir, 'images');
+
+          // If --use-existing, automatically copy the files
+          if (options.useExisting) {
+            console.log('\x1b[32m✓ Using existing output (--use-existing)\x1b[0m');
+            console.log();
+
+            // Copy files to sources directory
+            const sourcesDir = join(deckPath, 'sources', outputName);
+            const imagesDestDir = join(sourcesDir, 'images');
+            mkdirSync(imagesDestDir, { recursive: true });
+
+            // Copy content_list.json → content.json
+            copyFileSync(join(found.dir, found.file), join(sourcesDir, 'content.json'));
+            console.log('✓ Copied content.json');
+
+            // Copy images
+            if (existsSync(imagesDir)) {
+              const imageFiles = readdirSync(imagesDir).filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
+              for (const imgFile of imageFiles) {
+                copyFileSync(join(imagesDir, imgFile), join(imagesDestDir, imgFile));
+              }
+              console.log(`✓ Copied ${imageFiles.length} images`);
+            }
+
+            console.log();
+            console.log('\x1b[32m━'.repeat(50) + '\x1b[0m');
+            console.log(`\x1b[32m✓ Source recovered from temp!\x1b[0m`);
+            console.log('\x1b[32m━'.repeat(50) + '\x1b[0m');
+            console.log();
+            console.log(`📁 Source created: sources/${outputName}/`);
+            console.log();
+            console.log('📝 Next step - generate flashcards:');
+            console.log(`   \x1b[36mflashcards generate sources/${outputName} --output ${outputName}\x1b[0m`);
+            console.log();
+            process.exit(0);
+          }
+
+          console.log('This appears to be output for your PDF. Options:');
+          console.log();
+          console.log('1. Use existing output (recommended):');
+          console.log(`   \x1b[36mflashcards process ${pdfPathInput} --use-existing\x1b[0m`);
+          console.log();
+          console.log('2. Or copy manually:');
+          console.log(`   mkdir -p ${join(deckPath, 'sources', outputName, 'images')}`);
+          console.log(`   cp ${join(found.dir, found.file)} ${join(deckPath, 'sources', outputName, 'content.json')}`);
+          if (existsSync(imagesDir)) {
+            console.log(`   cp ${imagesDir}/* ${join(deckPath, 'sources', outputName, 'images/')}`);
+          }
+          console.log();
+          console.log('3. To reprocess from scratch:');
+          console.log(`   \x1b[36mflashcards process ${pdfPathInput} --force\x1b[0m`);
+          console.log();
+
+          if (!options.force) {
+            process.exit(0);
+          }
+          console.log('\x1b[33m--force specified, reprocessing...\x1b[0m');
+          console.log();
+        }
+      }
+    }
+
+    // Step 5: Create temp directory for processing output
+    tempDir = join(tmpdir(), `mineru-${Date.now()}`);
+    mkdirSync(tempDir, { recursive: true });
+
+    if (options.verbose) {
+      console.log(`[DEBUG] Temp dir: ${tempDir}`);
+    }
+
+    // Step 6: Run PDF processor
+    console.log(`⏳ Running PDF processor (${processorCmd})... this may take a few minutes`);
+    console.log();
+
+    // Build processor arguments with configurable options
+    // Defaults: -b vlm-mlx-engine -m ocr -l en
+    const processorArgs = processorCmd === 'mineru'
+      ? ['-p', pdfPath, '-o', tempDir, '-b', options.backend, '-m', options.method, '-l', options.lang]
+      : ['-p', pdfPath, '-o', tempDir];  // magic-pdf has different arg format
+
+    if (options.verbose) {
+      console.log(`[DEBUG] Command: ${processorCmd} ${processorArgs.join(' ')}`);
+    }
+
+    await new Promise((resolve, reject) => {
+      const proc = spawn(processorCmd, processorArgs, {
+        stdio: options.verbose ? 'inherit' : 'pipe'
+      });
+
+      proc.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`PDF processor failed with exit code ${code}`));
+        } else {
+          resolve();
+        }
+      });
+
+      proc.on('error', (err) => {
+        reject(new Error(`Failed to run PDF processor: ${err.message}`));
+      });
+    });
+
+    console.log('\x1b[32m✓ PDF processing complete\x1b[0m');
+    console.log();
+    processingCompleted = true;  // Mark that processing finished - preserve temp on subsequent errors
+
+    // Step 7: Find the processor output directory
+    // Processor creates different structures based on version/backend:
+    // - Newer: <temp>/<pdf-name>/<method>/ (e.g., .../chapter1/vlm/)
+    // - Older: <temp>/<method>/<pdf-name>/ (e.g., .../ocr/chapter1/)
+    const tempContents = readdirSync(tempDir);
+    let processorOutputDir = tempDir;
+
+    // Helper to find content_list.json in a directory
+    const hasContentList = (dir) => {
+      try {
+        return readdirSync(dir).some(f => f.endsWith('_content_list.json'));
+      } catch {
+        return false;
+      }
+    };
+
+    // Strategy 1: Check <temp>/<pdf-name>/<method>/ structure (newer versions with VLM)
+    // e.g., /tmp/mineru-xxx/1_units_physical_quantities_vectors/vlm/
+    for (const pdfSubdir of tempContents) {
+      const pdfSubdirPath = join(tempDir, pdfSubdir);
+      if (statSync(pdfSubdirPath).isDirectory()) {
+        // Check for method subdirectories (vlm, ocr, auto, txt)
+        for (const method of ['vlm', 'ocr', 'auto', 'txt']) {
+          const methodPath = join(pdfSubdirPath, method);
+          if (existsSync(methodPath) && statSync(methodPath).isDirectory() && hasContentList(methodPath)) {
+            processorOutputDir = methodPath;
+            break;
+          }
+        }
+        if (processorOutputDir !== tempDir) break;
+
+        // Also check if content is directly in the pdf subdirectory
+        if (hasContentList(pdfSubdirPath)) {
+          processorOutputDir = pdfSubdirPath;
+          break;
+        }
+      }
+    }
+
+    // Strategy 2: Check <temp>/<method>/<pdf-name>/ structure (older versions)
+    if (processorOutputDir === tempDir) {
+      for (const method of ['vlm', 'ocr', 'auto', 'txt']) {
+        const methodPath = join(tempDir, method);
+        if (existsSync(methodPath) && statSync(methodPath).isDirectory()) {
+          const methodContents = readdirSync(methodPath);
+          const pdfSubdir = methodContents.find(d => {
+            const p = join(methodPath, d);
+            return statSync(p).isDirectory() && hasContentList(p);
+          });
+          if (pdfSubdir) {
+            processorOutputDir = join(methodPath, pdfSubdir);
+            break;
+          }
+        }
+      }
+    }
+
+    // Strategy 3: Check if content is directly in temp (fallback)
+    if (processorOutputDir === tempDir && hasContentList(tempDir)) {
+      // Content is directly in temp dir
+    } else if (processorOutputDir === tempDir) {
+      // Last resort: find any subdirectory with content_list.json
+      const pdfSubdir = tempContents.find(d => {
+        const p = join(tempDir, d);
+        return statSync(p).isDirectory() && hasContentList(p);
+      });
+      if (pdfSubdir) {
+        processorOutputDir = join(tempDir, pdfSubdir);
+      }
+    }
+
+    if (options.verbose) {
+      console.log(`[DEBUG] Processor output dir: ${processorOutputDir}`);
+    }
+
+    // Step 8: Find content_list.json
+    const outputFiles = readdirSync(processorOutputDir);
+    const contentListFile = outputFiles.find(f => f.endsWith('_content_list.json'));
+
     if (!contentListFile) {
-      console.log(`\x1b[31m❌ No *_content_list.json found in: ${mineruDir}\x1b[0m`);
+      console.log('\x1b[31m❌ Could not find content output\x1b[0m');
+      console.log(`   Expected *_content_list.json in: ${processorOutputDir}`);
+      console.log(`   Found: ${outputFiles.join(', ') || '(empty)'}`);
       console.log();
-      console.log('This directory does not appear to be a valid MineRU output.');
-      console.log('Expected files: *_content_list.json, images/');
+      console.log('\x1b[33m⚠  Processing output preserved at:\x1b[0m');
+      console.log(`   ${tempDir}`);
+      console.log();
+      console.log('To manually recover, find the content_list.json and run:');
+      console.log(`   mkdir -p ${join(deckPath, 'sources', outputName, 'images')}`);
+      console.log(`   cp <path-to-content_list.json> ${join(deckPath, 'sources', outputName, 'content.json')}`);
+      console.log(`   cp <path-to-images>/* ${join(deckPath, 'sources', outputName, 'images/')}`);
+      console.log();
+      console.log('Then generate flashcards:');
+      console.log(`   \x1b[36mflashcards generate sources/${outputName} --output ${outputName}\x1b[0m`);
+      process.exit(1);
+    }
+
+    // Step 9: Create sources directory and copy files
+    const sourcesDir = join(deckPath, 'sources', outputName);
+    const imagesDestDir = join(sourcesDir, 'images');
+
+    console.log('📁 Creating sources directory...');
+
+    if (existsSync(sourcesDir)) {
+      console.log(`\x1b[33m⚠  Overwriting existing: sources/${outputName}/\x1b[0m`);
+    }
+
+    mkdirSync(imagesDestDir, { recursive: true });
+
+    // Copy content_list.json → content.json
+    const srcContentList = join(processorOutputDir, contentListFile);
+    const destContentJson = join(sourcesDir, 'content.json');
+    copyFileSync(srcContentList, destContentJson);
+    console.log(`✓ Copied content.json`);
+
+    // Copy images directory
+    const srcImagesDir = join(processorOutputDir, 'images');
+    if (existsSync(srcImagesDir)) {
+      const imageFiles = readdirSync(srcImagesDir).filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
+      for (const imgFile of imageFiles) {
+        copyFileSync(join(srcImagesDir, imgFile), join(imagesDestDir, imgFile));
+      }
+      console.log(`✓ Copied ${imageFiles.length} images`);
+    } else {
+      console.log('   (no images found)');
+    }
+
+    // Step 10: Clean up temp directory
+    if (!options.keepTemp) {
+      rmSync(tempDir, { recursive: true, force: true });
+      if (options.verbose) {
+        console.log(`[DEBUG] Cleaned up temp dir`);
+      }
+    } else {
+      console.log(`   Temp files kept at: ${tempDir}`);
+    }
+
+    console.log();
+    console.log('\x1b[32m━'.repeat(50) + '\x1b[0m');
+    console.log(`\x1b[32m✓ PDF processed successfully!\x1b[0m`);
+    console.log('\x1b[32m━'.repeat(50) + '\x1b[0m');
+    console.log();
+    console.log(`📁 Source created: sources/${outputName}/`);
+    console.log();
+    console.log('📝 Next step - generate flashcards:');
+    console.log(`   \x1b[36mflashcards generate sources/${outputName} --output ${outputName}\x1b[0m`);
+    console.log();
+
+  } catch (error) {
+    console.log(`\x1b[31m❌ Error: ${error.message}\x1b[0m`);
+    if (options.verbose) {
+      console.error(error);
+    }
+
+    // If processing completed but we failed afterward, preserve the output
+    if (processingCompleted && tempDir) {
+      console.log();
+      console.log('\x1b[33m⚠  Processing output preserved at:\x1b[0m');
+      console.log(`   ${tempDir}`);
+      console.log();
+      if (deckPath && outputName) {
+        console.log('To manually recover, find the content_list.json and run:');
+        console.log(`   mkdir -p ${join(deckPath, 'sources', outputName, 'images')}`);
+        console.log(`   cp <path-to-content_list.json> ${join(deckPath, 'sources', outputName, 'content.json')}`);
+        console.log(`   cp <path-to-images>/* ${join(deckPath, 'sources', outputName, 'images/')}`);
+        console.log();
+        console.log('Then generate flashcards:');
+        console.log(`   \x1b[36mflashcards generate sources/${outputName} --output ${outputName}\x1b[0m`);
+      }
+    }
+
+    process.exit(1);
+  }
+}
+
+// ==================== Generate Command ====================
+
+program
+  .command('generate <source-dir>')
+  .description('Generate flashcards from processed source content')
+  .option('--output <name>', 'Output filename (default: derived from source input)')
+  .option('--model <model>', 'Claude model to use', 'claude-sonnet-4-5-20250514')
+  .option('--api-key <key>', 'Override stored API key')
+  .option('--prereqs <files...>', 'Prerequisite files (space-separated)')
+  .option('--order <number>', 'Order number for TOML frontmatter (e.g., 1 for Chapter 1)', parseInt)
+  .option('--tags <tags...>', 'Tags for TOML frontmatter (space-separated, e.g., vectors kinematics)')
+  .option('--template <subjects...>', 'Subject-specific guide templates (space-separated, e.g., physics chemistry)')
+  .option('--verbose', 'Show detailed progress and prompt')
+  .action(async (sourceDir, options) => {
+    await generateFlashcards(sourceDir, options);
+  });
+
+async function generateFlashcards(sourceDirInput, options) {
+  console.log('\x1b[34m🤖 AI Flashcard Generation\x1b[0m');
+  console.log('━'.repeat(50));
+  console.log();
+
+  try {
+    // Step 1: Get API key or OAuth token
+    let apiKey = options.apiKey;
+    if (!apiKey) {
+      apiKey = await claudeClient.getAccessToken();
+      if (!apiKey) {
+        console.log('\x1b[31m❌ Not authenticated\x1b[0m');
+        console.log();
+        console.log('Run: \x1b[36mflashcards auth\x1b[0m');
+        console.log();
+        process.exit(1);
+      }
+    }
+
+    // Step 2: Output directory is ./flashcards/ in current working directory
+    const outputDir = join(process.cwd(), 'flashcards');
+
+    // Create flashcards directory if it doesn't exist
+    if (!existsSync(outputDir)) {
+      mkdirSync(outputDir, { recursive: true });
+      console.log(`✓ Created flashcards/ directory`);
+    }
+
+    // Step 3: Validate source directory
+    const sourceDir = resolve(sourceDirInput);
+    if (!existsSync(sourceDir)) {
+      console.log(`\x1b[31m❌ Source directory not found: ${sourceDirInput}\x1b[0m`);
+      console.log();
+      console.log('Process your PDF first:');
+      console.log('  flashcards process your-file.pdf --output chapter1');
+      console.log();
+      process.exit(1);
+    }
+
+    // Check for content.json (new format) or *_content_list.json (legacy format)
+    const sourceFiles = readdirSync(sourceDir);
+    let contentListFile = sourceFiles.find(f => f === 'content.json');
+    if (!contentListFile) {
+      contentListFile = sourceFiles.find(f => f.endsWith('_content_list.json'));
+    }
+    if (!contentListFile) {
+      console.log(`\x1b[31m❌ No content.json or *_content_list.json found in: ${sourceDir}\x1b[0m`);
+      console.log();
+      console.log('This directory does not appear to be a valid source.');
+      console.log('Expected files: content.json (or *_content_list.json), images/');
       console.log();
       process.exit(1);
     }
 
     // Check for images directory
-    const imagesDir = join(mineruDir, 'images');
+    const imagesDir = join(sourceDir, 'images');
     const hasImages = existsSync(imagesDir);
     let imageCount = 0;
     if (hasImages) {
       imageCount = readdirSync(imagesDir).filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f)).length;
     }
 
-    console.log(`📂 MineRU input: ${mineruDir}`);
+    console.log(`📂 Source: ${sourceDir}`);
     console.log(`   Content: ${contentListFile}`);
     console.log(`   Images: ${imageCount} found`);
     console.log();
 
-    // Step 5: Load guides (with optional subject-specific template)
-    console.log('📚 Loading flashcard writing guides...');
-    const guides = claudeClient.loadGuides(deckPath, options.template);
+    // Step 5: Load guides from GitHub (with optional subject-specific template)
+    console.log('📚 Fetching flashcard writing guides from GitHub...');
+    const guides = await claudeClient.loadGuides(options.template);
 
     if (guides.warning) {
       console.log(`\x1b[33m⚠  ${guides.warning}\x1b[0m`);
@@ -822,7 +1293,14 @@ async function generateFlashcards(mineruDirInput, options) {
     }
 
     // Step 6: Determine output name
-    const baseName = contentListFile.replace('_content_list.json', '');
+    // If content.json (new format), use folder name; otherwise strip _content_list.json suffix
+    let baseName;
+    if (contentListFile === 'content.json') {
+      // Use the folder name (e.g., sources/1_units_physical_quantities_vectors → 1_units_physical_quantities_vectors)
+      baseName = basename(sourceDir);
+    } else {
+      baseName = contentListFile.replace('_content_list.json', '');
+    }
     const outputName = options.output || baseName;
 
     console.log(`🤖 Model: ${options.model}`);
@@ -838,7 +1316,7 @@ async function generateFlashcards(mineruDirInput, options) {
     console.log(`⏳ Generating flashcards... (this may take 1-3 minutes)`);
     console.log();
 
-    const result = await claudeClient.callClaudeWithMineRU(mineruDir, guides.content, {
+    const result = await claudeClient.callClaudeWithSource(sourceDir, guides.content, {
       apiKey: useClaudeCode ? null : apiKey,
       model: options.model,
       verbose: options.verbose,
@@ -846,7 +1324,6 @@ async function generateFlashcards(mineruDirInput, options) {
       prerequisiteFilenames,
       order: options.order,
       tags: options.tags,
-      deckPath,
       outputName
     });
 
@@ -867,57 +1344,65 @@ async function generateFlashcards(mineruDirInput, options) {
       console.log();
     }
 
-    // Step 9: Copy used images to figures directory
+    // Step 9: Determine source path (for new sources/ structure)
     const finalOutputName = result.outputName || outputName;
-    const figuresOutputDir = join(deckPath, 'figures', finalOutputName);
 
-    if (result.usedImages && result.usedImages.length > 0 && result.imagesDir) {
-      console.log(`🖼️  Copying ${result.usedImages.length} used image(s) to figures/${finalOutputName}/`);
+    // Compute relative source path for frontmatter
+    // Check if sourceDir is within current directory (sources/ structure) or external
+    const cwd = process.cwd();
+    const relSourceDir = sourceDir.startsWith(cwd)
+      ? sourceDir.replace(cwd + '/', '')
+      : sourceDirInput;
 
-      // Create figures output directory
-      if (!existsSync(figuresOutputDir)) {
-        mkdirSync(figuresOutputDir, { recursive: true });
-      }
+    // Determine source content path
+    let sourceContentPath;
+    if (existsSync(join(sourceDir, 'content.json'))) {
+      sourceContentPath = join(relSourceDir, 'content.json');
+    } else {
+      sourceContentPath = join(relSourceDir, contentListFile);
+    }
 
-      // Copy each used image
-      for (const imgPath of result.usedImages) {
-        const srcPath = join(mineruDir, imgPath);
-        const destFilename = basename(imgPath);
-        const destPath = join(figuresOutputDir, destFilename);
+    // Determine images directory path
+    const imagesPath = existsSync(join(sourceDir, 'images'))
+      ? join(relSourceDir, 'images')
+      : '';
 
-        if (existsSync(srcPath)) {
-          copyFileSync(srcPath, destPath);
-          if (options.verbose) {
-            console.log(`   ✓ ${destFilename}`);
-          }
-        } else if (options.verbose) {
-          console.log(`   ⚠ Not found: ${imgPath}`);
-        }
-      }
+    if (result.usedImages && result.usedImages.length > 0) {
+      console.log(`🖼️  ${result.usedImages.length} image(s) referenced from ${relSourceDir}/images/`);
       console.log();
     }
 
-    // Step 10: Add TOML frontmatter and save flashcards
+    // Step 10: Add TOML frontmatter with generation metadata and save flashcards
     const outputFilename = `${finalOutputName}.md`;
-    const finalOutputPath = join(deckPath, 'flashcards', outputFilename);
+    const finalOutputPath = join(outputDir, outputFilename);
 
-    // Add deterministic TOML frontmatter based on CLI options
+    // Build simplified generation metadata for reproducibility
+    const generationMetadata = {
+      source: sourceContentPath,
+      imagesDir: imagesPath,
+      generatedAt: new Date().toISOString(),
+      flashcardsCommit: claudeClient.getFlashcardsRepoCommit(),
+      model: useClaudeCode ? 'claude-code-cli' : options.model,
+      guides: guides.files
+    };
+
+    // Add TOML frontmatter with order, tags, prereqs, and generation metadata
     const finalContent = claudeClient.prependFrontmatter(result.flashcards, {
-      order: options.order || 1,
+      order: options.order,
       tags: options.tags || [],
-      prerequisites: prerequisiteFilenames
+      prereqs: prerequisiteFilenames,
+      generation: generationMetadata
     });
 
     console.log('💾 Preparing to save flashcards...');
     if (options.verbose) {
       console.log(`[DEBUG] CWD: ${process.cwd()}`);
-      console.log(`[DEBUG] deckPath: ${deckPath}`);
+      console.log(`[DEBUG] outputDir: ${outputDir}`);
       console.log(`[DEBUG] finalOutputPath: ${finalOutputPath}`);
       console.log(`[DEBUG] Content length: ${finalContent.length} chars`);
     }
 
-    // Ensure output directory exists
-    const outputDir = dirname(finalOutputPath);
+    // Ensure output directory exists (already created earlier, but just in case)
     if (!existsSync(outputDir)) {
       mkdirSync(outputDir, { recursive: true });
     }
@@ -940,7 +1425,7 @@ async function generateFlashcards(mineruDirInput, options) {
     console.log(`\x1b[32m✓ Generated ${validationResult.cardCount} flashcards → flashcards/${outputFilename}${chunkSuffix}\x1b[0m`);
 
     if (result.usedImages && result.usedImages.length > 0) {
-      console.log(`\x1b[32m✓ Copied ${result.usedImages.length} figures → figures/${finalOutputName}/\x1b[0m`);
+      console.log(`\x1b[32m✓ Referenced ${result.usedImages.length} figures from ${relSourceDir}/images/\x1b[0m`);
     }
 
     if (useClaudeCode) {
@@ -981,7 +1466,7 @@ async function generateFlashcards(mineruDirInput, options) {
     } else if (error.message.includes('Invalid API key')) {
       console.log('💡 Run: \x1b[36mflashcards auth login\x1b[0m');
     } else if (error.message.includes('too large')) {
-      console.log('💡 Try processing a smaller document with MineRU');
+      console.log('💡 Try processing a smaller document');
     }
     console.log();
     process.exit(1);

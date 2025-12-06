@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2025-12-01T01:32:54.066Z",
+  "generatedAt": "2025-12-06T19:38:51.481Z",
   "repoCount": 2,
-  "fileCount": 16,
+  "fileCount": 18,
   "repos": [
     {
       "name": "example",
@@ -24,7 +24,9 @@
       "name": "test",
       "files": [
         "flashcards/1_units_physical_quantities_vectors.md",
-        "flashcards/2_motion_along_a_straight_line.md",
+        "flashcards/1_units_physical_quantities_vectors_complete.md",
+        "flashcards/1_units_physical_quantities_vectors_old.md",
+        "flashcards/2_motion_along_a_straight_line_old.md",
         "flashcards/chapter_1.md",
         "flashcards/out.md"
       ]
