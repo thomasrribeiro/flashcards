@@ -330,16 +330,37 @@ export async function clearReviewsByDeck(deckId) {
  */
 export async function refreshDeck(deckId, folder = null) {
     if (!currentUser) {
-        // For localStorage mode, just clear reviews for this deck
-        console.log('[Storage] Refreshing deck in localStorage mode');
-        const cardsInDeck = cardsCache.filter(c =>
-            c.deckName === deckId || c.source?.repo === deckId
-        );
+        // For localStorage mode, clear reviews for matching cards
+        console.log('[Storage] Refreshing deck in localStorage mode', { deckId, folder });
+
+        // Filter cards by deck AND optionally by folder/file path
+        const cardsInDeck = cardsCache.filter(c => {
+            // Must match deck
+            if (c.deckName !== deckId && c.source?.repo !== deckId) {
+                return false;
+            }
+
+            // If folder filter specified, card's source.file must match
+            if (folder) {
+                const cardPath = c.source?.file || '';
+                // Normalize paths (remove flashcards/ prefix if present)
+                const normalizedCardPath = cardPath.startsWith('flashcards/') ? cardPath.substring(11) : cardPath;
+                const normalizedFolder = folder.startsWith('flashcards/') ? folder.substring(11) : folder;
+
+                // Exact match (for file) or folder prefix match
+                if (normalizedCardPath === normalizedFolder) return true;
+                if (normalizedCardPath.startsWith(normalizedFolder + '/')) return true;
+                return false;
+            }
+
+            return true;
+        });
+
         const cardHashes = cardsInDeck.map(c => c.hash);
         const beforeCount = reviewsCache.length;
         reviewsCache = reviewsCache.filter(r => !cardHashes.includes(r.cardHash));
         const deleted = beforeCount - reviewsCache.length;
-        console.log(`[Storage] Refreshed deck - deleted ${deleted} review(s) from localStorage`);
+        console.log(`[Storage] Refreshed deck - deleted ${deleted} review(s) from localStorage (matched ${cardsInDeck.length} cards)`);
 
         // Save to localStorage
         try {

@@ -8,6 +8,7 @@ import { parseDeck } from './parser.js';
 import { hashCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories } from './github-client.js';
 import { githubAuth } from './github-auth.js';
+import { startSession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
 
 /**
  * Initialize the application
@@ -235,10 +236,12 @@ function createDeckCard(deck) {
     reviewBtn.className = 'card-review-btn';
     reviewBtn.title = 'Review';
     reviewBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review">`;
-    reviewBtn.onclick = (e) => {
+    reviewBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        window.location.href = `app.html?deck=${encodeURIComponent(deck.id)}`;
+        // Navigate into deck first, then start study session for entire deck
+        await navigateToDeck(deck, [], true);
+        startStudySession(deck.id, null, 'all');
     };
     btnContainer.appendChild(reviewBtn);
 
@@ -671,6 +674,8 @@ let currentDeck = null;
 let currentPath = [];
 let folderHierarchy = null;
 let allReviewsCache = null; // Cache for reviews during navigation
+let isInStudySession = false; // Track if we're in study mode
+let currentStudyFile = null; // The file being studied (for breadcrumb)
 
 /**
  * Restore navigation state from URL parameters
@@ -679,11 +684,15 @@ async function restoreNavigationFromURL() {
     const url = new URL(window.location);
     const deckId = url.searchParams.get('deck');
     const pathParam = url.searchParams.get('path');
+    const studyParam = url.searchParams.get('study');
+    const fileParam = url.searchParams.get('file');
 
     console.log('[Navigation] restoreNavigationFromURL called:', {
         fullURL: window.location.href,
         deckId,
         pathParam,
+        studyParam,
+        fileParam,
         historyLength: history.length
     });
 
@@ -698,6 +707,26 @@ async function restoreNavigationFromURL() {
             const path = pathParam ? pathParam.split('/') : [];
             // Use updateHistory=false since we're restoring, not navigating
             await navigateToDeck(deck, path, false);
+
+            // If study session was active, restore it
+            if (studyParam === 'true' && fileParam) {
+                console.log('[Navigation] Restoring study session for file:', fileParam);
+                const displayName = fileParam.split('/').pop().replace('.md', '');
+                isInStudySession = true;
+                currentStudyFile = displayName;
+
+                const topicsGrid = document.getElementById('topics-grid');
+                const studyArea = document.getElementById('study-area');
+                const sessionComplete = document.getElementById('session-complete');
+
+                topicsGrid.classList.add('hidden');
+                studyArea.classList.remove('hidden');
+                sessionComplete.classList.add('hidden');
+
+                setupStudyEventListeners();
+                updateDeckBreadcrumb();
+                await startSession(deck.id, fileParam, onSessionComplete);
+            }
         } else {
             console.log('[Navigation] Deck not found!');
         }
@@ -712,6 +741,22 @@ async function restoreNavigationFromURL() {
 async function handlePopState(event) {
     const state = event.state;
 
+    // If we're in a study session and navigating away, clean up
+    if (isInStudySession) {
+        isInStudySession = false;
+        currentStudyFile = null;
+        cleanupStudySession();
+        removeStudyEventListeners();
+
+        // Hide study UI
+        const topicsGrid = document.getElementById('topics-grid');
+        const studyArea = document.getElementById('study-area');
+        const sessionComplete = document.getElementById('session-complete');
+        studyArea.classList.add('hidden');
+        sessionComplete.classList.add('hidden');
+        topicsGrid.classList.remove('hidden');
+    }
+
     if (state && state.deck) {
         // Find the deck object
         const allDecks = await getAllDecks();
@@ -719,8 +764,30 @@ async function handlePopState(event) {
 
         if (deck) {
             const path = state.path || [];
-            // Use updateHistory=false to avoid pushing duplicate history entry
-            await navigateToDeck(deck, path, false);
+
+            // Check if we're navigating to a study session
+            if (state.study && state.file) {
+                // First navigate to the deck/path
+                await navigateToDeck(deck, path, false);
+                // Then start study session (without pushing history)
+                isInStudySession = true;
+                currentStudyFile = state.file.replace('.md', '');
+
+                const topicsGrid = document.getElementById('topics-grid');
+                const studyArea = document.getElementById('study-area');
+                const sessionComplete = document.getElementById('session-complete');
+
+                topicsGrid.classList.add('hidden');
+                studyArea.classList.remove('hidden');
+                sessionComplete.classList.add('hidden');
+
+                setupStudyEventListeners();
+                updateDeckBreadcrumb();
+                await startSession(deck.id, state.file, onSessionComplete);
+            } else {
+                // Use updateHistory=false to avoid pushing duplicate history entry
+                await navigateToDeck(deck, path, false);
+            }
         }
     } else {
         // No deck in state - show home view
@@ -854,7 +921,13 @@ function updateDeckBreadcrumb() {
     const homeSpan = document.createElement('span');
     if (currentDeck) {
         homeSpan.className = 'breadcrumb-segment breadcrumb-clickable';
-        homeSpan.onclick = () => exitDeckNavigation();
+        homeSpan.onclick = () => {
+            if (isInStudySession) {
+                // Skip render since we're navigating away entirely
+                exitStudySession(true);
+            }
+            exitDeckNavigation();
+        };
     } else {
         homeSpan.className = 'breadcrumb-segment current';
     }
@@ -866,14 +939,19 @@ function updateDeckBreadcrumb() {
         // Separator
         breadcrumb.appendChild(createBreadcrumbSeparator());
 
-        // Deck name (clickable if we're in a subfolder)
+        // Deck name (clickable if we're in a subfolder or study session)
         const repoName = currentDeck.id.split('/').pop();
         const deckSegment = document.createElement('span');
-        const isDeckClickable = currentPath.length > 0;
+        const isDeckClickable = currentPath.length > 0 || isInStudySession;
         deckSegment.className = 'breadcrumb-segment' + (isDeckClickable ? ' breadcrumb-clickable' : ' current');
         deckSegment.textContent = repoName;
         if (isDeckClickable) {
-            deckSegment.onclick = () => navigateToPath([]);
+            deckSegment.onclick = () => {
+                if (isInStudySession) {
+                    exitStudySession();
+                }
+                navigateToPath([]);
+            };
         }
         breadcrumb.appendChild(deckSegment);
 
@@ -881,15 +959,29 @@ function updateDeckBreadcrumb() {
         currentPath.forEach((folder, index) => {
             breadcrumb.appendChild(createBreadcrumbSeparator());
             const segment = document.createElement('span');
-            const isLast = index === currentPath.length - 1;
+            const isLast = index === currentPath.length - 1 && !isInStudySession;
             const isClickable = !isLast;
             segment.className = 'breadcrumb-segment' + (isClickable ? ' breadcrumb-clickable' : ' current');
             segment.textContent = folder;
             if (isClickable) {
-                segment.onclick = () => navigateToPath(currentPath.slice(0, index + 1));
+                segment.onclick = () => {
+                    if (isInStudySession) {
+                        exitStudySession();
+                    }
+                    navigateToPath(currentPath.slice(0, index + 1));
+                };
             }
             breadcrumb.appendChild(segment);
         });
+
+        // If in study session, add the filename as the last segment
+        if (isInStudySession && currentStudyFile) {
+            breadcrumb.appendChild(createBreadcrumbSeparator());
+            const fileSegment = document.createElement('span');
+            fileSegment.className = 'breadcrumb-segment current';
+            fileSegment.textContent = currentStudyFile;
+            breadcrumb.appendChild(fileSegment);
+        }
     }
 }
 
@@ -961,10 +1053,163 @@ function exitDeckNavigation() {
     const url = new URL(window.location);
     url.searchParams.delete('deck');
     url.searchParams.delete('path');
+    url.searchParams.delete('study');
+    url.searchParams.delete('file');
     // Use pushState so this becomes a new history entry
     history.pushState({}, '', url);
 
     loadRepositories();
+}
+
+/**
+ * Start an inline study session
+ */
+async function startStudySession(deckId, fileFilter, displayFileName) {
+    isInStudySession = true;
+    currentStudyFile = displayFileName;
+
+    // Update URL with study state
+    const url = new URL(window.location);
+    url.searchParams.set('study', 'true');
+    url.searchParams.set('file', fileFilter);
+    history.pushState({
+        deck: currentDeck.id,
+        path: [...currentPath],
+        study: true,
+        file: fileFilter
+    }, '', url);
+
+    // Update breadcrumb to show filename
+    updateDeckBreadcrumb();
+
+    // Hide topics grid, show study area
+    const topicsGrid = document.getElementById('topics-grid');
+    const studyArea = document.getElementById('study-area');
+    const sessionComplete = document.getElementById('session-complete');
+
+    topicsGrid.classList.add('hidden');
+    studyArea.classList.remove('hidden');
+    sessionComplete.classList.add('hidden');
+
+    // Setup event listeners for study session
+    setupStudyEventListeners();
+
+    // Callback when current card changes - update breadcrumb with file name
+    const onCardChange = (card) => {
+        if (card && card.source?.file) {
+            // Extract filename without extension from card's source
+            const filePath = card.source.file;
+            const fileName = filePath.split('/').pop().replace('.md', '');
+            currentStudyFile = fileName;
+            updateDeckBreadcrumb();
+        }
+    };
+
+    // Start the session
+    await startSession(deckId, fileFilter, onSessionComplete, onCardChange);
+}
+
+/**
+ * Exit study session and return to folder view
+ * @param {boolean} skipRender - If true, skip rendering (used when navigating away entirely)
+ */
+async function exitStudySession(skipRender = false) {
+    isInStudySession = false;
+    currentStudyFile = null;
+
+    // Cleanup study session state
+    cleanupStudySession();
+
+    // Remove study listeners
+    removeStudyEventListeners();
+
+    // Hide study area, show topics grid
+    const topicsGrid = document.getElementById('topics-grid');
+    const studyArea = document.getElementById('study-area');
+    const sessionComplete = document.getElementById('session-complete');
+
+    studyArea.classList.add('hidden');
+    sessionComplete.classList.add('hidden');
+    topicsGrid.classList.remove('hidden');
+
+    // If skipping render, just cleanup and return (used when navigating to home)
+    if (skipRender) {
+        return;
+    }
+
+    // Update URL - remove study params but keep deck/path
+    const url = new URL(window.location);
+    url.searchParams.delete('study');
+    url.searchParams.delete('file');
+    history.pushState({ deck: currentDeck.id, path: [...currentPath] }, '', url);
+
+    // Update breadcrumb (removes filename)
+    updateDeckBreadcrumb();
+
+    // Refresh reviews cache to get updated progress from study session
+    allReviewsCache = await getAllReviews();
+
+    // Refresh the folder view to show updated progress
+    renderCurrentLevel();
+}
+
+/**
+ * Called when study session is complete
+ */
+function onSessionComplete() {
+    const studyArea = document.getElementById('study-area');
+    const sessionComplete = document.getElementById('session-complete');
+
+    studyArea.classList.add('hidden');
+    sessionComplete.classList.remove('hidden');
+}
+
+/**
+ * Setup event listeners for study mode
+ */
+function setupStudyEventListeners() {
+    // Reveal button
+    const revealBtn = document.getElementById('reveal-btn');
+    if (revealBtn) {
+        revealBtn.onclick = revealAnswer;
+    }
+
+    // Grade buttons
+    document.querySelectorAll('.grade-btn').forEach(btn => {
+        btn.onclick = () => {
+            const grade = parseInt(btn.dataset.grade);
+            gradeCard(grade);
+        };
+    });
+
+    // Keyboard listener
+    document.addEventListener('keydown', handleStudyKeydown);
+}
+
+/**
+ * Remove study event listeners
+ */
+function removeStudyEventListeners() {
+    document.removeEventListener('keydown', handleStudyKeydown);
+}
+
+/**
+ * Handle keyboard events during study session
+ */
+function handleStudyKeydown(event) {
+    if (!isInStudySession) return;
+
+    const state = getState();
+
+    if (event.code === 'Space') {
+        event.preventDefault();
+        if (!state.isRevealed) {
+            revealAnswer();
+        }
+    } else if (state.isRevealed && GradeKeys[event.key]) {
+        event.preventDefault();
+        gradeCard(GradeKeys[event.key]);
+    }
 }
 
 /**
@@ -1102,9 +1347,9 @@ function createFolderCard(folderName, folderContent, allReviews) {
     reviewBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        // Build folder path for filtering
+        // Build folder path for filtering and start inline study session
         const folderPath = [...currentPath, folderName].join('/');
-        window.location.href = `app.html?deck=${encodeURIComponent(currentDeck.id)}&folder=${encodeURIComponent(folderPath)}`;
+        startStudySession(currentDeck.id, folderPath, folderName);
     };
     btnContainer.appendChild(reviewBtn);
 
@@ -1160,8 +1405,9 @@ function createSubdeckCard(subdeck) {
     card.className = 'project-card file-card';
     card.style.cursor = 'pointer'; // File cards are clickable to start review
     card.onclick = () => {
-        // Navigate to app.html with file filter (use fullPath which includes folder structure)
-        window.location.href = `app.html?deck=${encodeURIComponent(subdeck.deckId)}&file=${encodeURIComponent(subdeck.fullPath)}`;
+        // Start inline study session (no page navigation)
+        const displayName = subdeck.fileName.replace('.md', '');
+        startStudySession(subdeck.deckId, subdeck.fullPath, displayName);
     };
 
     // Extract just the filename from the path

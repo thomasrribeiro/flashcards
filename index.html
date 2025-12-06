@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flashcards - Thomas</title>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <link rel="stylesheet" href="./style.css">
     <link rel="stylesheet" href="./src/auth-modal.css">
 </head>
@@ -42,9 +43,9 @@
                     </h3>
                     <div class="collapsible-content" id="getting-started-content">
                         <ol>
-                            <li>Click <img src="./icons/gavel.png" alt="gavel" style="height: 1em; vertical-align: middle;"> on the example deck</li>
+                            <li>Click <img src="./icons/gavel.png" alt="gavel" style="height: 1em; vertical-align: middle;"> to review</li>
                             <li>Rate your recall</li>
-                            <li>Come back daily to review scheduled cards</li>
+                            <li>Come back daily to review flashcards</li>
                         </ol>
                     </div>
 
@@ -111,6 +112,51 @@
                 <div id="topics-grid" class="projects-grid">
                     <!-- Topics will be loaded dynamically -->
                     <div class="loading">Loading topics...</div>
+                </div>
+
+                <!-- Study Session (hidden by default) -->
+                <div id="study-area" class="study-area hidden">
+                    <div class="study-progress project-stats">
+                        <span class="progress-label">Progress:</span>
+                        <div class="progress-bar-container">
+                            <div id="study-progress-fill" class="progress-bar-fill" style="width: 0%"></div>
+                        </div>
+                        <span id="study-progress-percent" class="progress-percent">0%</span>
+                    </div>
+
+                    <div class="card-container">
+                        <div id="card-front" class="card-content"></div>
+                        <div id="card-back" class="card-content hidden"></div>
+                    </div>
+
+                    <div id="reveal-prompt" class="action-prompt">
+                        <button id="reveal-btn" class="btn-reveal">Reveal</button>
+                        <div class="hint"><kbd>space</kbd> or click</div>
+                    </div>
+
+                    <div id="grade-buttons" class="grade-buttons hidden">
+                        <button class="grade-btn grade-again" data-grade="1">
+                            <kbd>1</kbd>
+                            <span>Again</span>
+                        </button>
+                        <button class="grade-btn grade-hard" data-grade="2">
+                            <kbd>2</kbd>
+                            <span>Hard</span>
+                        </button>
+                        <button class="grade-btn grade-good" data-grade="3">
+                            <kbd>3</kbd>
+                            <span>Good</span>
+                        </button>
+                        <button class="grade-btn grade-easy" data-grade="4">
+                            <kbd>4</kbd>
+                            <span>Easy</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="session-complete" class="session-complete hidden">
+                    <h2>Session Complete!</h2>
+                    <p>Great work! All cards have been reviewed.</p>
                 </div>
             </main>
         </div>

@@ -647,14 +647,9 @@ body {
     opacity: 0.7;
 }
 
-.study-stats {
-    font-size: 14px;
-    color: var(--black);
-}
-
-.study-stats .separator {
-    margin: 0 10px;
-    opacity: 0.3;
+.study-progress {
+    margin-top: 20px;
+    margin-bottom: 20px;
 }
 
 .study-area {
@@ -1435,7 +1430,7 @@ kbd {
     /* No special styling needed - inherits from .project-card */
 }
 
-/* File Cards - remove hover shadow to indicate they're not clickable */
-.file-card:hover {
-    box-shadow: none;
+/* File Cards - now clickable, inherit hover from .project-card */
+.file-card {
+    /* No special styling needed - inherits from .project-card */
 }
