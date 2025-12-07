@@ -1170,7 +1170,7 @@ program
   .option('--output <name>', 'Output filename (default: derived from source input)')
   .option('--model <model>', 'Claude model to use', 'claude-sonnet-4-5-20250514')
   .option('--api-key <key>', 'Override stored API key')
-  .option('--prereqs <files...>', 'Prerequisite files (space-separated)')
+  .option('--prereqs <refs...>', 'Prerequisite flashcard files (space-separated). Local: "chapter_1.md", Remote: "github:owner/repo/branch/path.md" or GitHub URL')
   .option('--order <number>', 'Order number for TOML frontmatter (e.g., 1 for Chapter 1)', parseInt)
   .option('--tags <tags...>', 'Tags for TOML frontmatter (space-separated, e.g., vectors kinematics)')
   .option('--template <subjects...>', 'Subject-specific guide templates (space-separated, e.g., physics chemistry)')
@@ -1277,18 +1277,24 @@ async function generateFlashcards(sourceDirInput, options) {
     }
     console.log();
 
-    // Step 5.5: Validate prerequisite filenames (if specified)
+    // Step 5.5: Collect prerequisite references (if specified)
     const prerequisiteFilenames = [];
 
     if (options.prereqs && options.prereqs.length > 0) {
-      console.log('📋 Validating prerequisite files...');
+      console.log('📋 Prerequisites specified:');
 
-      for (const prereqFile of options.prereqs) {
-        prerequisiteFilenames.push(prereqFile);
-        console.log(`✓ Will add to frontmatter: ${prereqFile}`);
+      for (const prereqRef of options.prereqs) {
+        prerequisiteFilenames.push(prereqRef);
+        // Determine type for display
+        const isRemote = prereqRef.startsWith('github:') ||
+                        prereqRef.includes('github.com') ||
+                        prereqRef.includes('raw.githubusercontent.com');
+        const typeLabel = isRemote ? '🌐 remote' : '📁 local';
+        console.log(`   ${typeLabel}: ${prereqRef}`);
       }
 
-      console.log(`✓ ${prerequisiteFilenames.length} prerequisite(s) will be added to TOML frontmatter`);
+      console.log(`\n   Prerequisites will be loaded and injected into Claude's context.`);
+      console.log(`   Chained dependencies will be resolved automatically.`);
       console.log();
     }
 
@@ -1316,6 +1322,9 @@ async function generateFlashcards(sourceDirInput, options) {
     console.log(`⏳ Generating flashcards... (this may take 1-3 minutes)`);
     console.log();
 
+    // Determine deck path (the directory containing flashcards/, sources/, etc.)
+    const deckPath = process.cwd();
+
     const result = await claudeClient.callClaudeWithSource(sourceDir, guides.content, {
       apiKey: useClaudeCode ? null : apiKey,
       model: options.model,
@@ -1324,7 +1333,8 @@ async function generateFlashcards(sourceDirInput, options) {
       prerequisiteFilenames,
       order: options.order,
       tags: options.tags,
-      outputName
+      outputName,
+      deckPath
     });
 
     // Step 8: Validate flashcards

@@ -350,12 +350,18 @@ function setupEventListeners() {
         });
     });
 
-    // Search handler
+    // Search handler - context-aware (decks at home, folders/files inside a deck)
     const searchInput = document.getElementById('search-input');
 
     if (searchInput) {
         searchInput.addEventListener('input', () => {
-            loadRepositories();
+            if (currentDeck) {
+                // Inside a deck - filter folders and files
+                renderCurrentLevel();
+            } else {
+                // At home - filter decks
+                loadRepositories();
+            }
         });
     }
 }
@@ -741,6 +747,12 @@ async function restoreNavigationFromURL() {
 async function handlePopState(event) {
     const state = event.state;
 
+    // Clear search on any navigation
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
     // If we're in a study session and navigating away, clean up
     if (isInStudySession) {
         isInStudySession = false;
@@ -764,6 +776,7 @@ async function handlePopState(event) {
 
         if (deck) {
             const path = state.path || [];
+
 
             // Check if we're navigating to a study session
             if (state.study && state.file) {
@@ -795,6 +808,7 @@ async function handlePopState(event) {
         currentPath = [];
         folderHierarchy = null;
         allReviewsCache = null;
+
         await loadRepositories();
     }
 }
@@ -874,6 +888,14 @@ async function navigateToDeck(deck, path = [], updateHistory = true) {
         // When user navigates to app.html and presses back, they return to this URL
         history.pushState({ deck: deck.id, path: [...path] }, '', url);
         console.log('[Navigation] historyLength after:', history.length);
+    }
+
+    // Show search bar (keep same placeholder)
+    const controlsBar = document.getElementById('controls-bar');
+    const searchInput = document.getElementById('search-input');
+    controlsBar.classList.remove('hidden');
+    if (searchInput) {
+        searchInput.value = ''; // Clear search when navigating
     }
 
     // Get all cards for this deck and group by file
@@ -1008,16 +1030,29 @@ function renderCurrentLevel() {
         return;
     }
 
-    // Show folders first
+    // Get search term for filtering
+    const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
+
+    // Show folders first (filtered by search)
     const sortedFolders = Object.keys(content.folders).sort();
     for (const folderName of sortedFolders) {
+        // Filter by search term
+        if (searchTerm && !folderName.toLowerCase().includes(searchTerm)) {
+            continue;
+        }
         const folderCard = createFolderCard(folderName, content.folders[folderName], allReviewsCache);
         grid.appendChild(folderCard);
     }
 
-    // Then show files
+    // Then show files (filtered by search)
     const sortedFiles = Object.keys(content.files).sort();
     for (const fileName of sortedFiles) {
+        // Filter by search term (match filename without .md)
+        const displayName = fileName.replace('.md', '');
+        if (searchTerm && !displayName.toLowerCase().includes(searchTerm)) {
+            continue;
+        }
+
         const cards = content.files[fileName];
         const fileReviews = allReviewsCache.filter(r => {
             const card = cards.find(c => c.hash === r.cardHash);
@@ -1038,6 +1073,11 @@ function renderCurrentLevel() {
         const subdeckCard = createSubdeckCard(subdeckData);
         grid.appendChild(subdeckCard);
     }
+
+    // Show message if no results after filtering
+    if (grid.children.length === 0 && searchTerm) {
+        grid.innerHTML = '<div class="loading">No matches found</div>';
+    }
 }
 
 /**
@@ -1048,6 +1088,12 @@ function exitDeckNavigation() {
     currentPath = [];
     folderHierarchy = null;
     allReviewsCache = null;
+
+    // Clear search input
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.value = '';
+    }
 
     // Clear URL parameters and add to history
     const url = new URL(window.location);
@@ -1218,6 +1264,12 @@ function handleStudyKeydown(event) {
 function navigateToFolder(folderName) {
     currentPath.push(folderName);
 
+    // Clear search when navigating to a folder
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
     // Update URL to persist navigation state
     const url = new URL(window.location);
     url.searchParams.set('path', currentPath.join('/'));
@@ -1234,6 +1286,12 @@ function navigateToFolder(folderName) {
  */
 function navigateToPath(targetPath) {
     currentPath = [...targetPath];
+
+    // Clear search when navigating via breadcrumb
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.value = '';
+    }
 
     // Update URL to persist navigation state
     const url = new URL(window.location);

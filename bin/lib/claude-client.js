@@ -4,6 +4,7 @@ import { join, resolve, dirname, basename } from 'path';
 import { homedir } from 'os';
 import { createHash, randomBytes } from 'crypto';
 import { execSync } from 'child_process';
+import { loadPrerequisites } from './prerequisites.js';
 
 const CONFIG_DIR = join(homedir(), '.flashcards');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
@@ -738,9 +739,12 @@ export function parseFrontmatter(filePath) {
     frontmatter.tags = tagsMatch[1].split(',').map(t => t.trim().replace(/"/g, '')).filter(Boolean);
   }
 
-  const prereqsMatch = frontmatterText.match(/^prerequisites\s*=\s*\[(.*?)\]/m);
-  if (prereqsMatch) {
-    frontmatter.prerequisites = prereqsMatch[1].split(',').map(p => p.trim().replace(/"/g, '')).filter(Boolean);
+  // Support both 'prereqs' (new format) and 'prerequisites' (old format)
+  const prereqsMatch = frontmatterText.match(/^prereqs\s*=\s*\[(.*?)\]/m);
+  const prerequisitesMatch = frontmatterText.match(/^prerequisites\s*=\s*\[(.*?)\]/m);
+  const prereqMatch = prereqsMatch || prerequisitesMatch;
+  if (prereqMatch) {
+    frontmatter.prereqs = prereqMatch[1].split(',').map(p => p.trim().replace(/"/g, '')).filter(Boolean);
   }
 
   // Parse [generation] section
@@ -819,7 +823,7 @@ export function parseFrontmatter(filePath) {
  * @returns {string} The complete prompt
  */
 export function buildPrompt(contentText, guidesContext, imageList, options = {}) {
-  const { outputName = 'flashcards', chunkInfo } = options;
+  const { outputName = 'flashcards', chunkInfo, prerequisiteContent } = options;
 
   // Build guide instructions
   const guideInstructions = guidesContext && guidesContext.length > 0
@@ -882,7 +886,10 @@ When in doubt, include the figure. Visual learners benefit significantly from di
 
   const frontmatterInstruction = 'Do NOT include TOML frontmatter (+++). Start directly with the # Chapter/Topic Title header.';
 
-  return `${guideInstructions}${chunkContext}${imageInstructions}
+  // Build prerequisite section if we have prerequisites
+  const prereqSection = prerequisiteContent ? `\n\n${prerequisiteContent}\n` : '';
+
+  return `${guideInstructions}${chunkContext}${imageInstructions}${prereqSection}
 
 <document_content>
 ${contentText}
@@ -963,6 +970,13 @@ export async function reconstructPrompt(flashcardPath, deckPath) {
 async function callClaudeCodeCLI(contentText, guidesContext, imageList, options = {}) {
   const { verbose, deckPath, prerequisiteFilenames = [], outputName = 'flashcards', chunkInfo } = options;
   const { spawn } = await import('child_process');
+
+  // Load prerequisites if specified
+  let prerequisiteContent = '';
+  if (prerequisiteFilenames && prerequisiteFilenames.length > 0) {
+    const { content } = await loadPrerequisites(prerequisiteFilenames, deckPath, verbose);
+    prerequisiteContent = content;
+  }
 
   // Get the guides directory path
   const guidesDir = join(deckPath, 'guides');
@@ -1062,7 +1076,10 @@ When in doubt, include the figure. Visual learners benefit significantly from di
   // Claude should NOT output TOML frontmatter - we add it deterministically after generation
   const frontmatterInstruction = 'Do NOT include TOML frontmatter (+++). Start directly with the # Chapter/Topic Title header.';
 
-  const promptText = `${guideInstructions}${chunkContext}${imageInstructions}
+  // Build prerequisite section if we have prerequisites
+  const prereqSection = prerequisiteContent ? `\n\n${prerequisiteContent}\n` : '';
+
+  const promptText = `${guideInstructions}${chunkContext}${imageInstructions}${prereqSection}
 
 <document_content>
 ${truncatedContent}
@@ -1397,6 +1414,13 @@ export async function callClaudeWithSource(sourceDir, guidesContext, options = {
     throw new Error('API key is required');
   }
 
+  // Load prerequisites if specified (for direct API path)
+  let prerequisiteContent = '';
+  if (prerequisiteFilenames && prerequisiteFilenames.length > 0 && deckPath) {
+    const { content } = await loadPrerequisites(prerequisiteFilenames, deckPath, verbose);
+    prerequisiteContent = content;
+  }
+
   // Initialize Anthropic client with API key
   const client = new Anthropic({ apiKey });
 
@@ -1420,10 +1444,13 @@ ${imageList.length > 50 ? `\n... and ${imageList.length - 50} more images` : ''}
 IMPORTANT: Only reference figures that genuinely enhance understanding.`;
   }
 
+  // Build prerequisite section if we have prerequisites
+  const prereqSection = prerequisiteContent ? `\n\n${prerequisiteContent}` : '';
+
   // Prepare system prompt
   const systemPrompt = `You are an expert flashcard creator.
 
-${guidesContext}${tomlInstructions}${imageInstructions}
+${guidesContext}${tomlInstructions}${imageInstructions}${prereqSection}
 
 Generate flashcards from the document content below, following ALL principles in the guides above.`;
 
