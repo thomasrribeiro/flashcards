@@ -4,8 +4,6 @@
 
 > **Foundation**: Based on cognitive science research, SuperMemo's 20 Rules of Formulating Knowledge, and 2025 spaced repetition best practices.
 
-> **IMPORTANT**: **Read ALL markdown files in the `guides/` directory** before creating flashcards. This directory often contains subject-specific guides (e.g., `physics.md`, `chemistry.md`, `history.md`) that are **complementary to this general.md file**. These subject-specific guides add crucial {DECK_NAME}-specific strategies, common patterns, and pitfalls to avoid that build upon the universal principles described here.
-
 
 ## Card Format Types
 
@@ -13,9 +11,7 @@
 - **Q:/A:** - Essential for conceptual depth and "why" questions
 - **P:/S:** - Critical for methodology - don't skip procedures!
 
-**Target distribution: Aim for an even distrivtion across all three types**.
-
-### C: Cloze Deletion ⭐ FASTEST TO CREATE
+### C: Cloze Deletion
 
 **Use for**: Definitions, formulas, relationships, fill-in-the-blank facts
 
@@ -242,12 +238,12 @@ If $P_c < P_e$ (binding):
 
 **DO NOT stop generating cards prematurely.** You must create a comprehensive deck that covers:
 
-✅ **ALL sections from source material** - If the PDF has sections 1.1, 1.2, 1.3, etc., create flashcards for EVERY section. Skipping sections creates knowledge gaps!
+✅ **ALL sections from source material** - Skipping sections creates knowledge gaps!
 ✅ **ALL worked examples** - Convert each one to a P:/S: card using the IPEE framework
-✅ **ALL end-of-chapter problems** - These are CRITICAL! Scan the PDF for "Problems", "Exercises", or "Practice Questions" sections (usually at the end of chapters) and create P:/S: cards from each problem set
+✅ **ALL end-of-chapter problems** - These are CRITICAL! Scan the for "Problems", "Exercises", or "Practice Questions" sections (usually at the end of chapters) and create P:/S: cards from each problem set
 ✅ **All key concepts** - Ensure C: and Q:/A: cards cover definitions, formulas, and conceptual understanding
 
-**⚠️ Section Coverage Check**: Before finishing, verify you've covered ALL numbered sections in the source document. Missing sections = incomplete learning.
+**⚠️ Section Coverage Check**: Before finishing, verify you've covered ALL sections in the source document. Missing sections = incomplete learning.
 
 ## Flashcard Continuity & Sequential Learning
 
@@ -275,33 +271,57 @@ A: Galileo's theory has a range of validity: it applies only when air resistance
 
 **Rule**: Before ANY flashcard references a concept, that concept must appear in an earlier flashcard in the same file.
 
+### Cross-File Prerequisites
+
+When prerequisite flashcards are provided (in the `<prerequisite_flashcards>` section), you may freely reference concepts covered in those files without re-explaining them.
+
+**How prerequisites work:**
+- Prerequisites are loaded automatically from local files or remote GitHub repositories
+- They are **ordered by depth**: most foundational concepts appear first
+- Chained dependencies are resolved recursively (if chapter_2.md depends on chapter_1.md, both are loaded)
+- Each prerequisite file's content is included so you can see exactly what concepts are already covered
+
+**Guidelines for using prerequisites:**
+- ✅ Assume the reader has **mastered** all prerequisite content
+- ✅ Reference prerequisite concepts naturally (e.g., "Using the definition of momentum...")
+- ✅ Build on established foundations without repeating them
+- ✅ Introduce **new connections** between prerequisite concepts and new material
+- ✅ Use prerequisite terminology directly without re-defining it
+- ❌ Do NOT repeat definitions already covered in prerequisites
+- ❌ Do NOT re-explain foundational concepts (they're in the prerequisites)
+- ❌ Do NOT create "review" cards for prerequisite material
+
+**Example - WITHOUT prerequisites:**
+```markdown
+# Must define momentum first (no prerequisites available):
+C: [Momentum] is defined as $\vec{p} = m\vec{v}$, where $m$ is mass and $\vec{v}$ is velocity.
+
+Q: What is the SI unit of momentum?
+A: kg·m/s (kilogram meters per second)
+
+# THEN you can build on it:
+Q: How does the impulse-momentum theorem relate force to momentum change?
+A: The impulse (force × time) equals the change in momentum: $\vec{J} = \Delta\vec{p} = \vec{F}\Delta t$
+```
+
+**Example - WITH prerequisites (chapter_1.md already defines momentum):**
+```markdown
+# Skip the definition - go straight to new material:
+Q: How does the impulse-momentum theorem relate force to momentum change?
+A: The impulse (force × time) equals the change in momentum: $\vec{J} = \Delta\vec{p} = \vec{F}\Delta t$
+
+Q: Why is impulse useful for analyzing collisions?
+A: During collisions, force varies rapidly, but impulse ($\int \vec{F}\,dt$) equals the total momentum change regardless of the force profile.
+```
+
+**Scanning prerequisites for covered concepts:**
+Before creating cards, scan the `<prerequisite_flashcards>` section to identify:
+1. **Definitions** already established (don't repeat these)
+2. **Formulas** already introduced (can reference without derivation)
+3. **Concepts** you can build upon (create connections, not repetitions)
+4. **Terminology** you can use directly (no need to define again)
+
 ## Technical File Format Requirements
-
-**TOML Frontmatter** (REQUIRED at the top of EVERY file):
-```toml
-+++
-order = <integer>
-tags = [<comma-separated-strings>]
-prerequisites = [<list-of-prerequisite-filenames>]
-+++
-```
-
-**Field definitions**:
-- **order**: Integer for deck ordering (e.g., `1` for Chapter 1, `2` for Chapter 2, or infer from source material numbering)
-- **tags**: Array of relevant topic tags from content (e.g., `["kinematics", "vectors", "measurement"]`)
-- **prerequisites**: Array of prerequisite .md filenames needed for context (e.g., `["0_intro.md", "basics.md"]`)
-  - Include prerequisites provided via CLI flag
-  - Add additional prerequisites based on content analysis
-  - Use empty array `[]` if no prerequisites
-
-**Example frontmatter**:
-```toml
-+++
-order = 1
-tags = ["units", "measurement", "vectors", "dimensional-analysis"]
-prerequisites = []
-+++
-```
 
 **File Organization**:
 - ✅ **DO**: Use markdown headers to organize sections
@@ -317,7 +337,7 @@ prerequisites = []
 - ❌ **DON'T**: Use `---` separators between cards. Just use blank lines.
 - ✅ **DO**: Start IMMEDIATELY with the chapter/topic header followed by flashcards
 - ✅ **DO**: End with the last flashcard - no trailing text
-- ✅ **DO**: Use `## Section Name` headers to organize cards by topic (e.g., `## 1.1 The Nature of Physics`)
+- ✅ **DO**: Use `## Section Name` headers to organize cards by topic
 
 **Output**: Return ONLY the flashcards organized with markdown headers - nothing else.
 
@@ -592,7 +612,6 @@ A: Can justify harming individuals for collective benefit (tyranny of the majori
 
 When creating flashcards for a new topic:
 
-- [ ] **Check for subject-specific guide** - Read `[subject].md` if it exists in this directory
 - [ ] **Understand first** - Read, comprehend, explain to yourself
 - [ ] **Build the basics** - Create foundational concept cards even if "obvious"
 - [ ] **Identify key concepts** - What are the 3-5 core ideas?

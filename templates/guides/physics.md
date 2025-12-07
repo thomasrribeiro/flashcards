@@ -1,6 +1,6 @@
 # Physics Flashcard Writing Guide
 
-> **Purpose**: This guide provides physics-specific strategies for creating highly effective spaced repetition flashcards. For universal SRS principles and card formats, see [CLAUDE.md](CLAUDE.md).
+> **Purpose**: This guide provides physics-specific strategies for creating highly effective spaced repetition flashcards.
 
 > **Foundation**: Based on physics education research (PER), active recall studies, and proven problem-solving frameworks.
 
@@ -48,34 +48,36 @@ All physics problem-solving follows the **IPEE** framework:
 
 ---
 
-## Card Type Distribution for Physics
+## Card Type Coverage for Physics
 
-**Target distribution** for comprehensive physics coverage:
-- **~33% Cloze (C:)** - Definitions, formulas, relationships, key facts
-- **~33% Q:/A:** - Conceptual understanding, "why", "when to use", comparisons
-- **~33% P:/S:** - Problem-solving methodology and systematic procedures
+- C: (Cloze) – anchor core facts and symbols so later cards aren’t ambiguous
+- Q:/A: – drive conceptual “why/when” reasoning so the learner can choose the right model
+- P:/S: – encode full IPEE workflows so students can actually solve problems
 
-**⚠️ CRITICAL**: Physics requires **equal balance** of all three card types. Create a **P:/S: card for EVERY major procedure or algorithm**. Don't skip methodologies just because they seem "obvious" - the systematic approach is what students struggle with most.
+**Guidance**:
+- Every chapter needs all three types; if a concept lacks a fact card, a concept card, and a method card where appropriate, fill those gaps.
+- Treat P:/S: cards as the backbone of physics decks. For any major procedure, worked example, or end-of-chapter problem type, create a P:/S: that walks the learner through the method with variables only. Bias toward including more of these rather than fewer—they are what convert knowledge into solvable skills.
+- Cloze cards should appear whenever a formula, definition, or variable set is introduced, so later P:/S: cards can reference well-defined symbols.
+- Q:/A: cards should follow foundational clozes to explain why the concept matters, when it applies, and how to distinguish it from similar ideas.
 
-**Don't**: Create P:/S: cards for simple lookups or single-step operations that are better as C: or Q:/A: cards.
+**Reminder**: Don’t pad the deck with single-step “plug-in” P:/S: cards that belong as clozes or simple Q:/A:. Use P:/S: for structured multi-step reasoning; favor them whenever a learner would otherwise struggle to reproduce a procedure unaided.
 
 ---
 
 ## Mining Problems from Source Material
 
-**⚠️ KEY STRATEGY**: When reading a physics textbook or chapter, actively look for:
+**⚠️ KEY STRATEGY**: Actively look for:
 
 ### **1. Worked Examples Throughout the Chapter**
-- Look for highlighted boxes labeled "Example N.N" with step-by-step solutions
+- Look for worked examples with step-by-step solutions
 - These demonstrate expert problem-solving methodology
 - Convert each worked example into a P:/S: card using the IPEE framework
 - Replace specific numbers with variables (e.g., "mass = 5 kg" → "mass $m$")
 
 ### **2. End-of-Chapter Problem Sets** ⭐⭐⭐ **CRITICAL - DO NOT SKIP**
-- **MANDATORY**: Scan the PDF for "Problems", "Exercises", or "Practice Questions" sections at the end of chapters
+- **MANDATORY**: Scan for "Problems", "Exercises", or "Practice Questions" sections at the end of chapters
 - These problems are specifically designed to test chapter concepts through application and synthesis
-- **Create P:/S: cards for AS MANY problems as possible** - aim for at least 10-20 problems from each problem set
-- Look for problems marked with difficulty indicators (★, ★★, ★★★) - these often require multi-step methodology
+- Look for problems marked with difficulty indicators these often require multi-step methodology
 - End-of-chapter problems are often the most valuable cards in the entire deck because they test real problem-solving ability
 
 ### **3. How to Convert Problems to P:/S: Cards**
