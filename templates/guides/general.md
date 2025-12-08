@@ -234,6 +234,63 @@ If $P_c < P_e$ (binding):
 - Non-price rationing emerges (queues, favoritism, black markets)
 ```
 
+### Figure and Diagram Cards
+
+**When source material contains figures, diagrams, or visual elements**, create cards that encode visual understanding. Research on dual-coding theory shows that combining verbal and visual information significantly improves retention.
+
+**Types of figure-based cards:**
+
+1. **Description cards** - Ask learner to describe key features of a referenced figure
+2. **Interpretation cards** - Test understanding of what the visual represents
+3. **Prediction cards** - Given partial visual information, what follows?
+
+**How to reference figures:**
+```markdown
+# Reference the figure using relative path from flashcards/ directory:
+Q: In the free-body diagram (../sources/chapter_2/images/abc123.jpg), what forces act on the block on an inclined plane?
+A: Weight ($mg$) pointing straight down, normal force ($N$) perpendicular to surface, and friction ($f$) parallel to surface opposing motion.
+
+Q: Looking at Figure 3.2 (../sources/chapter_3/images/def456.jpg), what does the slope of a position-time graph represent?
+A: Velocity. Steeper slope = faster motion; horizontal line = stationary; negative slope = moving backward.
+```
+
+**Best practices for figure cards:**
+- ✅ **DO**: Describe what to look for ("the slope", "the intersection point", "the shaded region")
+- ✅ **DO**: Ask about relationships shown visually ("How does X change as Y increases?")
+- ✅ **DO**: Test graph/diagram literacy ("What does this axis represent?")
+- ✅ **DO**: Create "translate between representations" cards (graph ↔ equation ↔ words)
+- ❌ **DON'T**: Ask questions answerable without looking at the figure
+- ❌ **DON'T**: Reference figures that aren't essential to understanding
+
+**Examples across subjects:**
+```markdown
+# Economics - supply/demand graph:
+Q: In a supply-demand diagram, what happens to equilibrium when demand shifts right?
+A: Price increases, quantity increases. The new intersection point is up and to the right.
+
+# Biology - cell diagram:
+Q: Looking at the cell membrane diagram, why is it called a "fluid mosaic"?
+A: "Fluid" because phospholipids move laterally; "mosaic" because proteins are scattered throughout like tiles.
+
+# Chemistry - orbital diagram:
+Q: In the molecular orbital diagram for O₂, why is oxygen paramagnetic?
+A: Two unpaired electrons in the π* antibonding orbitals (visible as single arrows in separate orbitals).
+
+# History - map:
+Q: Examining the map of trade routes, why did Constantinople's location make it wealthy?
+A: Controlled the strait between Europe and Asia; all east-west trade by land or sea passed through.
+```
+
+**Representational translation cards** (especially valuable):
+```markdown
+# Physics - connect representations:
+Q: If a velocity-time graph shows a horizontal line above the x-axis, what does the corresponding position-time graph look like?
+A: A straight line with positive slope (constant positive velocity = position increasing linearly).
+
+Q: The equation $x(t) = 5 + 3t - 2t^2$ describes motion. Sketch the shape of the position-time graph.
+A: Downward-opening parabola (negative $t^2$ coefficient), starting at $x=5$, rising briefly then falling.
+```
+
 ## ⚠️ CRITICAL: Complete Coverage Required
 
 **DO NOT stop generating cards prematurely.** You must create a comprehensive deck that covers:
@@ -367,6 +424,31 @@ A: It's the first principle that survives radical skepticism - even if everythin
 # THEN:
 C: Descartes' foundational principle is ["Cogito, ergo sum"] ("I think, therefore I am").
 ```
+
+**Anticipation questions (pretesting):**
+Research shows that attempting to answer a question *before* learning the material improves later retention—even when the initial answer is wrong. Before introducing a complex derivation, proof, or multi-step explanation, add a Q:/A: card that asks the learner to **predict** the approach or result.
+
+```markdown
+# Before a derivation - ask learner to anticipate:
+Q: Before deriving kinetic energy, predict: if you double an object's speed, how should its kinetic energy change?
+A: It should quadruple (energy goes as $v^2$, so $2^2 = 4$).
+
+# Before a proof - prime the reasoning:
+Q: To prove the Pythagorean theorem, what geometric insight might help?
+A: Arrange four identical right triangles around a square; compare areas to show $a^2 + b^2 = c^2$.
+
+# Before explaining a phenomenon:
+Q: Why might hot air rise? Predict before reading the explanation.
+A: Hot air is less dense than cold air, so buoyancy pushes it upward (like a bubble in water).
+```
+
+**When to use anticipation questions:**
+- Before dense derivations or proofs
+- Before explaining counterintuitive results
+- Before multi-step problem-solving methods
+- When the source material builds toward a "reveal"
+
+**Why it works:** Generating a prediction—even an incorrect one—creates a "knowledge gap" that the brain actively tries to fill. The subsequent explanation sticks better because it resolves that gap.
 
 ### 2. **Minimum Information Principle** 🎯
 **Keep cards EXTREMELY simple.** One card should test ONE atomic piece of knowledge.
