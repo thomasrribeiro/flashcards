@@ -729,9 +729,9 @@ program
   .option('--force', 'Force reprocessing even if existing output is found')
   .option('--use-existing', 'Automatically use existing temp output if found')
   .option('--verbose', 'Show detailed progress')
-  .option('-b, --backend <engine>', 'PDF processing backend engine', 'vlm-mlx-engine')
-  .option('-m, --method <method>', 'PDF processing method', 'ocr')
-  .option('-l, --lang <lang>', 'Document language', 'en')
+  .option('-b, --backend <engine>', 'PDF processing backend: pipeline, vlm-transformers, vlm-vllm-engine, vlm-lmdeploy-engine, vlm-http-client, vlm-mlx-engine', 'vlm-mlx-engine')
+  .option('-m, --method <method>', 'PDF processing method: auto, txt, ocr', 'ocr')
+  .option('-l, --lang <lang>', 'Document language: ch, ch_server, ch_lite, en, korean, japan, chinese_cht, ta, te, ka, th, el, latin, arabic, east_slavic, cyrillic, devanagari', 'en')
   .action(async (pdfPath, options) => {
     await processPDF(pdfPath, options);
   });

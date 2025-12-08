@@ -285,7 +285,7 @@ export function listPDFsInReferences(deckPath) {
 
 // ==================== Guides Loading ====================
 
-const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/thomasrribeiro/flashcards/main/templates/guides';
+const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/thomasrribeiro/flashcards/master/templates/guides';
 
 /**
  * Load guides from the public flashcards GitHub repository

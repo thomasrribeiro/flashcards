@@ -6,14 +6,64 @@ Spaced repetition flashcards for **{SUBJECT_NAME}** compatible with the [flashca
 
 ```
 .
-├── flashcards/          # Markdown flashcard files (Q:/A:, C:, P:/S: formats)
-├── sources/             # Parsed document content for LLM generation (tracked in git)
-│   └── chapter_name/
+├── flashcards/          # Markdown flashcard files
+│   └── example.md
+├── sources/             # Parsed references
+│   └── example/
 │       ├── content.json # Document content
 │       └── images/      # Extracted figures
-├── references/          # Source PDFs and textbooks (gitignored)
-└── README.md            # This file
+├── references/
+│   └── example.pdf
+└── README.md
 ```
+
+## 🚀 Quick Start: Generate Flashcards from PDFs
+
+### Step 1: Set Up Authentication
+
+```bash
+flashcards auth
+```
+
+### Step 2: Add Your Reference
+
+```bash
+cp /path/to/example.pdf references/
+```
+
+### Step 3: Process reference → Structured Content
+
+```bash
+flashcards process references/example.pdf
+```
+
+This extracts text and figures into `sources/example/`:
+- `content.json` — parsed document structure
+- `images/` — extracted figures
+
+### Step 4: Generate Flashcards
+
+```bash
+flashcards generate sources/example
+```
+
+Options:
+```bash
+--template <subject>    # Use subject-specific writing guide (physics, chemistry, etc.)
+--prereqs <file.md>     # Reference prior flashcards for continuity
+--order <number>        # Set order in TOML frontmatter
+--tags <tag1> <tag2>    # Add topic tags
+```
+
+## 📋 CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `flashcards auth` | Set up authentication |
+| `flashcards process <pdf> --output <name>` | Extract PDF content to sources/ |
+| `flashcards generate <source> --output <name>` | Generate flashcards from source |
+| `flashcards show-prompt <file>` | Reconstruct generation prompt |
+| `flashcards create <name>` | Create a new deck |
 
 ## 🎯 Using These Flashcards
 
@@ -23,67 +73,36 @@ Spaced repetition flashcards for **{SUBJECT_NAME}** compatible with the [flashca
 
 ### Adding as a Deck
 
-```bash
-# In the flashcards app, add this repository as a GitHub deck
-# Or clone locally and add as a local collection
-```
+In the flashcards app, add this repository URL as a GitHub deck, or clone locally and add as a local collection.
 
 ## ✍️ Contributing
 
 Contributions welcome! Follow these guidelines:
 
-### Quick Start
-1. Fork this repository
-2. Create flashcards following the [universal SRS principles](https://github.com/thomasrribeiro/flashcards/blob/main/templates/guides/general.md)
-3. Submit a pull request
-
 ### Flashcard Quality Guidelines
 - **One concept per card** (atomicity)
 - **Use appropriate format**:
-  - `C:` for cloze deletions
-  - `Q:/A:` for questions and answers
-  - `P:/S:` for problems with step-by-step solutions (ISAE framework)
+  - `C:` for cloze deletions (facts, formulas)
+  - `Q:/A:` for questions and answers (concepts, "why" questions)
+  - `P:/S:` for problems with step-by-step solutions (IPEE framework)
 - **Self-contained cards**: Each card should make sense on its own
-- **Include context**: Don't assume prior card knowledge
+- **Define variables**: Every formula must define its symbols
 
-See the [flashcards repository](https://github.com/thomasrribeiro/flashcards) for universal SRS principles.
-
-## 📚 Reference Materials
-
-Source materials are stored in `references/` (gitignored for copyright reasons).
-
-### Expected Materials
-- [List textbooks or resources for this subject]
-
-### Adding References
-```bash
-# Add your textbooks to references/
-cp /path/to/textbook.pdf references/
-```
+See the [general writing guide](https://github.com/thomasrribeiro/flashcards/blob/master/templates/guides/general.md) for comprehensive principles.
 
 ## 📂 Figure References
 
-Figures are stored in `sources/<chapter>/images/` and referenced from flashcards using relative paths:
+Figures are stored in `sources/<name>/images/` and referenced from flashcards using relative paths:
 
 ```markdown
 Q: What does this diagram show?
 
-![Description](../sources/chapter_name/images/figure.jpg)
+![Diagram description](../sources/example/images/abc123.jpg)
 
-A: [Answer]
+A: [Description of what the diagram illustrates]
 ```
 
 Since flashcard files are in `flashcards/`, use `../sources/` to navigate up one directory.
-
-**Note:** Figures are extracted automatically when processing PDFs.
-Run `flashcards process` to parse PDFs, then `flashcards generate` to create flashcards.
-
-## 📖 Writing Guidelines
-
-Flashcard writing guides are fetched automatically from the main [flashcards repository](https://github.com/thomasrribeiro/flashcards) when generating cards:
-
-- **Universal SRS principles**: [general.md](https://github.com/thomasrribeiro/flashcards/blob/main/templates/guides/general.md)
-- **Subject-specific guides**: Use `--template <subject>` (e.g., `--template physics`) when running `flashcards generate`
 
 ## 🔗 Related Repositories
 
