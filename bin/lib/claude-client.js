@@ -978,13 +978,8 @@ async function callClaudeCodeCLI(contentText, guidesContext, imageList, options 
     prerequisiteContent = content;
   }
 
-  // Get the guides directory path
-  const guidesDir = join(deckPath, 'guides');
-
-  // List available guide files
-  const guideFiles = existsSync(guidesDir)
-    ? readdirSync(guidesDir).filter(f => f.endsWith('.md'))
-    : [];
+  // Note: Guides are fetched from GitHub and included directly in guidesContext
+  // No local guides directory is needed anymore
 
   // Include guide content directly in prompt (don't rely on Claude choosing to read files)
   // This guarantees Claude sees the guide content
@@ -1093,16 +1088,15 @@ Generate flashcards from the document content above, following ALL principles in
 
   return new Promise((resolve, reject) => {
     // Use Claude Code CLI with --print for non-interactive mode
-    // Use --add-dir to give Claude access to read the guides
+    // Guides are fetched from GitHub and included directly in the prompt
     // Pipe the prompt through stdin to avoid command line length limits
-    const args = ['--add-dir', guidesDir, '--print', '--dangerously-skip-permissions'];
+    const args = ['--print', '--dangerously-skip-permissions'];
 
     if (verbose) {
-      console.log(`[DEBUG] Spawning claude with guides access from: ${guidesDir}`);
+      console.log(`[DEBUG] Spawning claude CLI`);
       if (prerequisiteFilenames.length > 0) {
         console.log(`[DEBUG] Prerequisites (metadata only): ${prerequisiteFilenames.join(', ')}`);
       }
-      console.log(`[DEBUG] Available guides: ${guideFiles.join(', ')}`);
       console.log(`[DEBUG] Available images: ${imageList?.length || 0}`);
     }
 
