@@ -68,12 +68,12 @@ function createDeck(name, options) {
   try {
     mkdirSync(join(basePath, 'flashcards'), { recursive: true });
     mkdirSync(join(basePath, 'references'), { recursive: true });
-    mkdirSync(join(basePath, 'figures'), { recursive: true });
+    mkdirSync(join(basePath, 'sources'), { recursive: true });
 
     console.log('\x1b[32m✓\x1b[0m Created directory structure:');
     console.log('  - flashcards/   (markdown flashcard files)');
     console.log('  - references/   (source PDFs and textbooks, gitignored)');
-    console.log('  - figures/      (extracted images and diagrams)');
+    console.log('  - sources/      (processed PDF content and images)');
     console.log();
   } catch (error) {
     console.error(`\x1b[31mError creating directories: ${error.message}\x1b[0m`);

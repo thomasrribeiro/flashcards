@@ -291,6 +291,99 @@ Q: The equation $x(t) = 5 + 3t - 2t^2$ describes motion. Sketch the shape of the
 A: Downward-opening parabola (negative $t^2$ coefficient), starting at $x=5$, rising briefly then falling.
 ```
 
+### Figure Verification: Avoiding Mismatches
+
+**Critical limitation:** When generating flashcards from processed documents, you receive figure CAPTIONS but cannot see the actual IMAGES. This creates a significant risk of mismatching figures with content.
+
+#### The Caption Interpretation Problem
+
+Figure captions often:
+1. **Cover multiple concepts** - "Figure 1.10: Vector equality and negation" might show equality on the left and negation on the right, but you cannot know which is which
+2. **Use broad descriptions** - "Properties of vectors" could mean any of several different diagrams
+3. **Reference a whole section** - A single figure may illustrate an entire worked example, not a specific concept
+
+#### The Verification Checklist
+
+Before adding ANY figure reference to a flashcard, verify ALL of these:
+
+- [ ] **Explicit text reference**: Does the source text say "as shown in Figure X.Y" SPECIFICALLY for the concept in this card?
+- [ ] **Caption specificity**: Does the caption describe EXACTLY what your card tests (not a broader or related topic)?
+- [ ] **Single-concept match**: If the caption mentions multiple concepts, are you certain which one the figure shows?
+- [ ] **Same context**: Is the figure referenced in the same section/paragraph as the concept you're testing?
+
+**If ANY checkbox is uncertain, DO NOT include the figure.**
+
+#### Handling Multi-Concept Captions
+
+Many figures cover related concepts together. Example:
+
+**Problematic caption:**
+> "Figure 1.10: The meaning of vectors that have the same magnitude and the same or opposite direction."
+
+This figure likely shows BOTH:
+- Vector equality (same magnitude AND same direction)
+- Vector negation (same magnitude, opposite direction)
+
+**If creating a card about vector equality ONLY:**
+
+❌ WRONG approach (risky):
+```markdown
+Q: When are two vectors equal?
+A: When they have the same magnitude AND direction.
+![Vector equality](../sources/.../fig1_10.jpg)
+```
+Problem: Figure might prominently show negation, confusing the learner.
+
+✅ CORRECT approach (no uncertain figure):
+```markdown
+Q: When are two vectors equal?
+A: When they have the same magnitude AND the same direction. Two vectors can be equal even if they start from different points.
+```
+
+✅ ALSO CORRECT (reference without embedding):
+```markdown
+Q: When are two vectors equal?
+A: When they have the same magnitude AND direction. (See Figure 1.10 for visual examples of equal and opposite vectors.)
+```
+
+#### When Figures ARE Safe to Include
+
+Include figures confidently when:
+
+1. **Explicit single-concept reference:**
+   - Source says: "Figure 3.2 shows a velocity-time graph for constant acceleration."
+   - Card tests: velocity-time graphs for constant acceleration
+   - Result: ✅ SAFE to include
+
+2. **Problem-specific figures:**
+   - Source says: "In Problem 1.21 (Figure P1.21), a block slides down an incline..."
+   - Card is specifically about Problem 1.21
+   - Result: ✅ SAFE to include
+
+3. **Unambiguous visual content:**
+   - Free-body diagrams showing one specific force configuration
+   - Circuit diagrams showing one specific circuit
+   - Coordinate system setups
+
+#### Verbal Alternatives to Uncertain Figures
+
+When a figure might be mismatched, describe the visual concept verbally:
+
+Instead of:
+```markdown
+Q: How do you find the resultant of two perpendicular vectors?
+![Vector diagram](../sources/.../uncertain_figure.jpg)
+A: Use the Pythagorean theorem.
+```
+
+Use:
+```markdown
+Q: How do you find the resultant of two perpendicular vectors?
+A: Use the Pythagorean theorem: $R = \sqrt{A^2 + B^2}$. Visualize: if $\vec{A}$ points right and $\vec{B}$ points up, the resultant $\vec{R}$ is the diagonal from the origin to the tip of $\vec{B}$.
+```
+
+The verbal description is ALWAYS accurate; an uncertain figure might not be.
+
 ## ⚠️ CRITICAL: Complete Coverage Required
 
 **DO NOT stop generating cards prematurely.** You must create a comprehensive deck that covers:
