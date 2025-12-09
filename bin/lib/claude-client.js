@@ -993,10 +993,10 @@ ${chunkInfo.isLast ? 'This is the FINAL chunk.' : 'More content follows in subse
     const hasImageAccess = imagesDir && existsSync(imagesDir);
 
     const imageAccessNote = hasImageAccess
-      ? `**Include figures generously!** You have access to view images at: ${imagesDir}/<filename>
+      ? `**Aim to include figures in most cards.** You can view images at: ${imagesDir}/<filename>
 
-If a caption seems ambiguous, just read the image to check - then include it if relevant. Figures greatly enhance learning.`
-      : `**Important:** Include figures when the caption clearly matches your card's concept. Be cautious with multi-concept captions you cannot verify.`;
+For each card, actively look for a relevant figure. If unsure about a caption, read the image to verify. Figures dramatically improve retention - use them liberally.`
+      : `**Aim to include figures in most cards.** For each card, actively look for a relevant figure. Figures dramatically improve retention - use them liberally.`;
 
     imageInstructions = `\n\n## Available Figures
 

@@ -293,35 +293,28 @@ A: Downward-opening parabola (negative $t^2$ coefficient), starting at $x=5$, ri
 
 ### Using Figures Effectively
 
-**Include figures generously** - visual aids significantly enhance learning and retention.
+**Aim to include a figure in most cards.** Visual aids dramatically improve retention - research shows images can increase recall by 65% compared to text alone.
 
-#### When to Include Figures
+#### Active Figure Selection
 
-✅ **Include figures when:**
-- The source text references a specific figure for a concept
-- The caption clearly relates to your card's topic
-- Diagrams, graphs, or illustrations would aid understanding
-- Problem figures (e.g., "Figure P1.21") accompany problem cards
+For each card you create:
+1. **Scan the figure list** for relevant images
+2. **Match by topic** - if your card discusses vectors, look for vector figures
+3. **Include liberally** - when in doubt, include the figure
+
+#### Figure Placement
+
+- **Q/A cards**: Place figure in the answer after the text explanation
+- **Cloze cards**: Place figure after the cloze text
+- **Problem cards**: Include the problem's figure (e.g., "Figure P1.21") in the question
 
 #### Visual Verification (When Available)
 
-If you have access to the images directory, you can **read image files directly** to see what they show. This is useful when:
-- A caption mentions multiple concepts (e.g., "Vector equality and negation")
-- You want to confirm the figure matches your specific card
+If you have access to the images directory, you can read image files directly to confirm what they show. Useful for ambiguous captions.
 
-Simply read the image, check it's relevant, and include it.
+#### Reusing Figures
 
-#### Multi-Concept Figures
-
-When a figure covers multiple related concepts, you can still include it - just ensure your card's answer provides context:
-
-```markdown
-Q: When are two vectors equal?
-A: When they have the same magnitude AND direction.
-![Vector relationships](../sources/.../fig1_10.jpg)
-```
-
-The figure showing both equality and negation is fine here - the answer text clarifies what to focus on.
+The same figure can appear in multiple related cards - this reinforces visual learning. Don't hesitate to reference a figure in several cards if it's relevant to each.
 
 ## ⚠️ CRITICAL: Complete Coverage Required
 
