@@ -721,9 +721,9 @@ async function showPrompt(flashcardFileInput, options) {
 // ==================== Process Command ====================
 
 program
-  .command('process <pdf-path>')
-  .description('Process a PDF and prepare it for flashcard generation')
-  .option('--output <name>', 'Output name for the source (default: derived from PDF filename)')
+  .command('process <path>')
+  .description('Process a PDF (or all PDFs in a directory) and prepare for flashcard generation')
+  .option('--output <name>', 'Output name for the source (default: derived from PDF filename). Ignored when processing a directory.')
   .option('--deck <path>', 'Deck path (auto-detect from cwd if not specified)')
   .option('--keep-temp', 'Keep temporary processing output (default: clean up)')
   .option('--force', 'Force reprocessing even if existing output is found')
@@ -732,8 +732,67 @@ program
   .option('-b, --backend <engine>', 'PDF processing backend: pipeline, vlm-transformers, vlm-vllm-engine, vlm-lmdeploy-engine, vlm-http-client, vlm-mlx-engine', 'vlm-mlx-engine')
   .option('-m, --method <method>', 'PDF processing method: auto, txt, ocr', 'ocr')
   .option('-l, --lang <lang>', 'Document language: ch, ch_server, ch_lite, en, korean, japan, chinese_cht, ta, te, ka, th, el, latin, arabic, east_slavic, cyrillic, devanagari', 'en')
-  .action(async (pdfPath, options) => {
-    await processPDF(pdfPath, options);
+  .action(async (inputPath, options) => {
+    const resolvedPath = resolve(inputPath);
+
+    // Check if input is a directory
+    if (existsSync(resolvedPath) && statSync(resolvedPath).isDirectory()) {
+      // Find all PDFs in the directory
+      const pdfFiles = readdirSync(resolvedPath)
+        .filter(f => f.toLowerCase().endsWith('.pdf'))
+        .map(f => join(resolvedPath, f))
+        .sort();
+
+      if (pdfFiles.length === 0) {
+        console.log(`\x1b[31m❌ No PDF files found in: ${inputPath}\x1b[0m`);
+        process.exit(1);
+      }
+
+      console.log(`\x1b[34m📁 Batch Processing: ${pdfFiles.length} PDFs\x1b[0m`);
+      console.log('━'.repeat(50));
+      console.log();
+
+      for (const pdfFile of pdfFiles) {
+        console.log(`\x1b[34m▶ Processing: ${basename(pdfFile)}\x1b[0m`);
+        console.log();
+      }
+      console.log();
+
+      let successful = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      for (let i = 0; i < pdfFiles.length; i++) {
+        const pdfFile = pdfFiles[i];
+        console.log(`\x1b[34m[${ i + 1}/${pdfFiles.length}] Processing: ${basename(pdfFile)}\x1b[0m`);
+        console.log('─'.repeat(50));
+
+        try {
+          // Don't use --output for batch processing (derive from filename)
+          const batchOptions = { ...options, output: undefined, _batchMode: true };
+          await processPDF(pdfFile, batchOptions);
+          successful++;
+        } catch (err) {
+          if (err.message === 'SKIPPED') {
+            skipped++;
+          } else {
+            console.log(`\x1b[31m❌ Failed: ${err.message}\x1b[0m`);
+            failed++;
+          }
+        }
+        console.log();
+      }
+
+      console.log('━'.repeat(50));
+      console.log(`\x1b[34m📊 Batch Complete\x1b[0m`);
+      console.log(`   ✓ Successful: ${successful}`);
+      if (skipped > 0) console.log(`   ⊘ Skipped (already exist): ${skipped}`);
+      if (failed > 0) console.log(`   ✗ Failed: ${failed}`);
+      console.log();
+    } else {
+      // Single PDF processing
+      await processPDF(inputPath, options);
+    }
   });
 
 async function processPDF(pdfPathInput, options) {
@@ -812,17 +871,12 @@ async function processPDF(pdfPathInput, options) {
     // Step 4b: Check if source already exists in deck
     const existingSourceDir = join(deckPath, 'sources', outputName);
     const existingContentJson = join(existingSourceDir, 'content.json');
-    if (existsSync(existingContentJson)) {
-      console.log('\x1b[32m✓ Source already exists!\x1b[0m');
+    if (existsSync(existingContentJson) && !options.force) {
+      console.log('\x1b[32m✓ Source already exists - skipping\x1b[0m');
       console.log(`   ${existingSourceDir}/`);
       console.log();
-      console.log('To regenerate, delete the existing source first:');
-      console.log(`   rm -rf ${existingSourceDir}`);
-      console.log();
-      console.log('Or proceed directly to flashcard generation:');
-      console.log(`   \x1b[36mflashcards generate sources/${outputName} --output ${outputName}\x1b[0m`);
-      console.log();
-      process.exit(0);
+      // Throw special error for batch processing to track skips
+      throw new Error('SKIPPED');
     }
 
     // Step 4c: Check for existing temp directories from previous runs
@@ -915,7 +969,13 @@ async function processPDF(pdfPathInput, options) {
             console.log('📝 Next step - generate flashcards:');
             console.log(`   \x1b[36mflashcards generate sources/${outputName} --output ${outputName}\x1b[0m`);
             console.log();
-            process.exit(0);
+            return; // Success - recovered from temp
+          }
+
+          // In batch mode, auto-use existing temp output
+          if (options._batchMode) {
+            console.log('\x1b[33m⚠  Found temp output, use --use-existing to recover\x1b[0m');
+            throw new Error('SKIPPED');
           }
 
           console.log('This appears to be output for your PDF. Options:');
