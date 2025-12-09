@@ -947,7 +947,7 @@ export async function reconstructPrompt(flashcardPath, deckPath) {
 // ==================== Claude Code CLI Integration ====================
 
 async function callClaudeCodeCLI(contentText, guidesContext, imageList, options = {}) {
-  const { verbose, deckPath, prerequisiteFilenames = [], outputName = 'flashcards', chunkInfo } = options;
+  const { verbose, deckPath, prerequisiteFilenames = [], outputName = 'flashcards', chunkInfo, imagesDir } = options;
   const { spawn } = await import('child_process');
 
   // Load prerequisites if specified
@@ -989,6 +989,18 @@ ${chunkInfo.isLast ? 'This is the FINAL chunk.' : 'More content follows in subse
       return `- ${filename}: ${img.caption}`;
     }).join('\n');
 
+    // Check if Claude has access to images directory for visual verification
+    const hasImageAccess = imagesDir && existsSync(imagesDir);
+
+    const imageAccessNote = hasImageAccess
+      ? `**You have access to the images directory.** When a caption is ambiguous or covers multiple concepts:
+1. Use the Read tool to view the actual image file at: ${imagesDir}/<filename>
+2. Verify the image matches your card's specific concept
+3. Only include if it clearly enhances understanding
+
+Follow the figure verification guidelines in the guide.`
+      : `**Important:** Follow the figure verification guidelines in the guide when including figures. You cannot see actual images—only captions—so be cautious with multi-concept captions.`;
+
     imageInstructions = `\n\n## Available Figures
 
 Reference syntax: ![Description](../sources/${outputName}/images/filename.jpg)
@@ -998,7 +1010,7 @@ ${figureList || '(none)'}
 ${labeledFigures.length > 50 ? `\n... and ${labeledFigures.length - 50} more labeled figures` : ''}
 ${unlabeledCount > 0 ? `\n(Plus ${unlabeledCount} unlabeled figures available)` : ''}
 
-**Important:** Follow the figure verification guidelines in the guide when including figures. You cannot see actual images—only captions—so be cautious with multi-concept captions.`;
+${imageAccessNote}`;
   }
 
   // Truncate content if too large for Claude CLI (keep under 150K chars to leave room for guides and instructions)
@@ -1050,12 +1062,20 @@ Generate flashcards from the document content above, following ALL principles in
     // Pipe the prompt through stdin to avoid command line length limits
     const args = ['--print', '--dangerously-skip-permissions'];
 
+    // Add images directory access so Claude can visually verify figures before including them
+    if (imagesDir && existsSync(imagesDir)) {
+      args.push('--add-dir', imagesDir);
+    }
+
     if (verbose) {
       console.log(`[DEBUG] Spawning claude CLI`);
       if (prerequisiteFilenames.length > 0) {
         console.log(`[DEBUG] Prerequisites (metadata only): ${prerequisiteFilenames.join(', ')}`);
       }
       console.log(`[DEBUG] Available images: ${imageList?.length || 0}`);
+      if (imagesDir && existsSync(imagesDir)) {
+        console.log(`[DEBUG] Images directory added: ${imagesDir}`);
+      }
     }
 
     const claude = spawn('claude', args, {
@@ -1347,7 +1367,8 @@ export async function callClaudeWithSource(sourceDir, guidesContext, options = {
       prerequisiteFilenames,
       order,
       tags,
-      outputName: finalOutputName
+      outputName: finalOutputName,
+      imagesDir
     });
 
     // Extract used images from the flashcard content

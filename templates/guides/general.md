@@ -346,6 +346,22 @@ Q: When are two vectors equal?
 A: When they have the same magnitude AND direction. (See Figure 1.10 for visual examples of equal and opposite vectors.)
 ```
 
+#### Visual Verification
+
+When you have access to the images directory (indicated in the prompt), you can **read image files directly** to verify their content before including them.
+
+**When to read an image:**
+- Caption mentions multiple concepts
+- Caption is vague or generic
+- You're uncertain if the figure matches your specific card
+
+**How to verify:**
+1. Read the image file using the Read tool
+2. Examine what the figure actually shows
+3. Include only if it clearly matches your card's concept
+
+This visual verification eliminates guesswork and ensures figure-flashcard alignment.
+
 #### When Figures ARE Safe to Include
 
 Include figures confidently when:
