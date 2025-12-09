@@ -291,114 +291,37 @@ Q: The equation $x(t) = 5 + 3t - 2t^2$ describes motion. Sketch the shape of the
 A: Downward-opening parabola (negative $t^2$ coefficient), starting at $x=5$, rising briefly then falling.
 ```
 
-### Figure Verification: Avoiding Mismatches
+### Using Figures Effectively
 
-**Critical limitation:** When generating flashcards from processed documents, you receive figure CAPTIONS but cannot see the actual IMAGES. This creates a significant risk of mismatching figures with content.
+**Include figures generously** - visual aids significantly enhance learning and retention.
 
-#### The Caption Interpretation Problem
+#### When to Include Figures
 
-Figure captions often:
-1. **Cover multiple concepts** - "Figure 1.10: Vector equality and negation" might show equality on the left and negation on the right, but you cannot know which is which
-2. **Use broad descriptions** - "Properties of vectors" could mean any of several different diagrams
-3. **Reference a whole section** - A single figure may illustrate an entire worked example, not a specific concept
+✅ **Include figures when:**
+- The source text references a specific figure for a concept
+- The caption clearly relates to your card's topic
+- Diagrams, graphs, or illustrations would aid understanding
+- Problem figures (e.g., "Figure P1.21") accompany problem cards
 
-#### The Verification Checklist
+#### Visual Verification (When Available)
 
-Before adding ANY figure reference to a flashcard, verify ALL of these:
+If you have access to the images directory, you can **read image files directly** to see what they show. This is useful when:
+- A caption mentions multiple concepts (e.g., "Vector equality and negation")
+- You want to confirm the figure matches your specific card
 
-- [ ] **Explicit text reference**: Does the source text say "as shown in Figure X.Y" SPECIFICALLY for the concept in this card?
-- [ ] **Caption specificity**: Does the caption describe EXACTLY what your card tests (not a broader or related topic)?
-- [ ] **Single-concept match**: If the caption mentions multiple concepts, are you certain which one the figure shows?
-- [ ] **Same context**: Is the figure referenced in the same section/paragraph as the concept you're testing?
+Simply read the image, check it's relevant, and include it.
 
-**If ANY checkbox is uncertain, DO NOT include the figure.**
+#### Multi-Concept Figures
 
-#### Handling Multi-Concept Captions
+When a figure covers multiple related concepts, you can still include it - just ensure your card's answer provides context:
 
-Many figures cover related concepts together. Example:
-
-**Problematic caption:**
-> "Figure 1.10: The meaning of vectors that have the same magnitude and the same or opposite direction."
-
-This figure likely shows BOTH:
-- Vector equality (same magnitude AND same direction)
-- Vector negation (same magnitude, opposite direction)
-
-**If creating a card about vector equality ONLY:**
-
-❌ WRONG approach (risky):
 ```markdown
 Q: When are two vectors equal?
 A: When they have the same magnitude AND direction.
-![Vector equality](../sources/.../fig1_10.jpg)
-```
-Problem: Figure might prominently show negation, confusing the learner.
-
-✅ CORRECT approach (no uncertain figure):
-```markdown
-Q: When are two vectors equal?
-A: When they have the same magnitude AND the same direction. Two vectors can be equal even if they start from different points.
+![Vector relationships](../sources/.../fig1_10.jpg)
 ```
 
-✅ ALSO CORRECT (reference without embedding):
-```markdown
-Q: When are two vectors equal?
-A: When they have the same magnitude AND direction. (See Figure 1.10 for visual examples of equal and opposite vectors.)
-```
-
-#### Visual Verification
-
-When you have access to the images directory (indicated in the prompt), you can **read image files directly** to verify their content before including them.
-
-**When to read an image:**
-- Caption mentions multiple concepts
-- Caption is vague or generic
-- You're uncertain if the figure matches your specific card
-
-**How to verify:**
-1. Read the image file using the Read tool
-2. Examine what the figure actually shows
-3. Include only if it clearly matches your card's concept
-
-This visual verification eliminates guesswork and ensures figure-flashcard alignment.
-
-#### When Figures ARE Safe to Include
-
-Include figures confidently when:
-
-1. **Explicit single-concept reference:**
-   - Source says: "Figure 3.2 shows a velocity-time graph for constant acceleration."
-   - Card tests: velocity-time graphs for constant acceleration
-   - Result: ✅ SAFE to include
-
-2. **Problem-specific figures:**
-   - Source says: "In Problem 1.21 (Figure P1.21), a block slides down an incline..."
-   - Card is specifically about Problem 1.21
-   - Result: ✅ SAFE to include
-
-3. **Unambiguous visual content:**
-   - Free-body diagrams showing one specific force configuration
-   - Circuit diagrams showing one specific circuit
-   - Coordinate system setups
-
-#### Verbal Alternatives to Uncertain Figures
-
-When a figure might be mismatched, describe the visual concept verbally:
-
-Instead of:
-```markdown
-Q: How do you find the resultant of two perpendicular vectors?
-![Vector diagram](../sources/.../uncertain_figure.jpg)
-A: Use the Pythagorean theorem.
-```
-
-Use:
-```markdown
-Q: How do you find the resultant of two perpendicular vectors?
-A: Use the Pythagorean theorem: $R = \sqrt{A^2 + B^2}$. Visualize: if $\vec{A}$ points right and $\vec{B}$ points up, the resultant $\vec{R}$ is the diagonal from the origin to the tip of $\vec{B}$.
-```
-
-The verbal description is ALWAYS accurate; an uncertain figure might not be.
+The figure showing both equality and negation is fine here - the answer text clarifies what to focus on.
 
 ## ⚠️ CRITICAL: Complete Coverage Required
 

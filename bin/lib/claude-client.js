@@ -993,13 +993,10 @@ ${chunkInfo.isLast ? 'This is the FINAL chunk.' : 'More content follows in subse
     const hasImageAccess = imagesDir && existsSync(imagesDir);
 
     const imageAccessNote = hasImageAccess
-      ? `**You have access to the images directory.** When a caption is ambiguous or covers multiple concepts:
-1. Use the Read tool to view the actual image file at: ${imagesDir}/<filename>
-2. Verify the image matches your card's specific concept
-3. Only include if it clearly enhances understanding
+      ? `**Include figures generously!** You have access to view images at: ${imagesDir}/<filename>
 
-Follow the figure verification guidelines in the guide.`
-      : `**Important:** Follow the figure verification guidelines in the guide when including figures. You cannot see actual images—only captions—so be cautious with multi-concept captions.`;
+If a caption seems ambiguous, just read the image to check - then include it if relevant. Figures greatly enhance learning.`
+      : `**Important:** Include figures when the caption clearly matches your card's concept. Be cautious with multi-concept captions you cannot verify.`;
 
     imageInstructions = `\n\n## Available Figures
 
