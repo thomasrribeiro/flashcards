@@ -737,11 +737,11 @@ program
 
     // Check if input is a directory
     if (existsSync(resolvedPath) && statSync(resolvedPath).isDirectory()) {
-      // Find all PDFs in the directory
+      // Find all PDFs in the directory with natural sorting (1, 2, 10 not 1, 10, 2)
       const pdfFiles = readdirSync(resolvedPath)
         .filter(f => f.toLowerCase().endsWith('.pdf'))
         .map(f => join(resolvedPath, f))
-        .sort();
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
       if (pdfFiles.length === 0) {
         console.log(`\x1b[31m❌ No PDF files found in: ${inputPath}\x1b[0m`);
