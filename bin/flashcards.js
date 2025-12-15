@@ -1432,9 +1432,12 @@ async function generateFlashcards(sourceDirInput, options) {
       sourceContentPath = join(relSourceDir, contentListFile);
     }
 
-    // Determine images directory path
+    // Determine images and figures directory paths
     const imagesPath = existsSync(join(sourceDir, 'images'))
       ? join(relSourceDir, 'images')
+      : '';
+    const figuresPath = existsSync(join(sourceDir, 'figures'))
+      ? join(relSourceDir, 'figures')
       : '';
 
     if (result.usedImages && result.usedImages.length > 0) {
@@ -1450,6 +1453,7 @@ async function generateFlashcards(sourceDirInput, options) {
     const generationMetadata = {
       source: sourceContentPath,
       imagesDir: imagesPath,
+      figuresDir: figuresPath,  // Prefer figures/ over images/ when available
       generatedAt: new Date().toISOString(),
       flashcardsCommit: claudeClient.getFlashcardsRepoCommit(),
       model: useClaudeCode ? 'claude-code-cli' : options.model,

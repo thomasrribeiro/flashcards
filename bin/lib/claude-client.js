@@ -403,18 +403,82 @@ export function loadSourceContent(sourceDir, verbose = false) {
     console.log(`[DEBUG] Found ${imageBlocks.length} image blocks`);
   }
 
-  // Check if images directory exists
+  // Check if images directory exists (for context from content.json)
   const hasImages = existsSync(imagesDir);
   if (verbose && hasImages) {
     const imageCount = readdirSync(imagesDir).filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f)).length;
     console.log(`[DEBUG] Images directory contains ${imageCount} images`);
   }
 
+  // Check if figures directory exists (manually curated high-quality figures)
+  const figuresDir = join(sourceDir, 'figures');
+  const hasFigures = existsSync(figuresDir);
+  if (verbose && hasFigures) {
+    const figureCount = readdirSync(figuresDir).filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f)).length;
+    console.log(`[DEBUG] Figures directory contains ${figureCount} figures`);
+  }
+
   return {
     content,
     imagesDir: hasImages ? imagesDir : null,
+    figuresDir: hasFigures ? figuresDir : null,
     baseName,
     contentListPath
+  };
+}
+
+/**
+ * Load and organize figures from a figures/ directory
+ * Figures are numbered (1.png, 2.png) and may have multi-part variants (10-1.png, 10-2.png)
+ * @param {string} figuresDir - Path to figures directory
+ * @returns {Object} { figures: Array, grouped: Object }
+ */
+export function loadFiguresList(figuresDir) {
+  if (!figuresDir || !existsSync(figuresDir)) {
+    return { figures: [], grouped: {} };
+  }
+
+  const files = readdirSync(figuresDir)
+    .filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
+
+  // Parse figure numbers and sort naturally
+  const parsed = files.map(f => {
+    const match = f.match(/^(\d+)(?:-(\d+))?\.(\w+)$/);
+    if (match) {
+      return {
+        filename: f,
+        base: parseInt(match[1], 10),
+        part: match[2] ? parseInt(match[2], 10) : null,
+        ext: match[3]
+      };
+    }
+    // Non-numeric files go at the end
+    return { filename: f, base: Infinity, part: null, ext: '' };
+  });
+
+  // Sort by base number, then by part number
+  parsed.sort((a, b) => {
+    if (a.base !== b.base) return a.base - b.base;
+    if (a.part === null && b.part === null) return 0;
+    if (a.part === null) return -1;
+    if (b.part === null) return 1;
+    return a.part - b.part;
+  });
+
+  // Group multi-part figures
+  const grouped = {};
+  for (const fig of parsed) {
+    if (fig.base !== Infinity) {
+      if (!grouped[fig.base]) {
+        grouped[fig.base] = [];
+      }
+      grouped[fig.base].push(fig.filename);
+    }
+  }
+
+  return {
+    figures: parsed.map(p => p.filename),
+    grouped
   };
 }
 
@@ -663,7 +727,7 @@ export function generateFrontmatter(options = {}) {
     frontmatter += `
 [generation]
 source = "${generation.source || ''}"
-images_dir = "${generation.imagesDir || ''}"
+${generation.figuresDir ? `figures_dir = "${generation.figuresDir}"` : `images_dir = "${generation.imagesDir || ''}"`}
 generated_at = "${generation.generatedAt || new Date().toISOString()}"
 flashcards_commit = "${generation.flashcardsCommit || getFlashcardsRepoCommit()}"
 model = "${generation.model || ''}"
@@ -947,7 +1011,7 @@ export async function reconstructPrompt(flashcardPath, deckPath) {
 // ==================== Claude Code CLI Integration ====================
 
 async function callClaudeCodeCLI(contentText, guidesContext, imageList, options = {}) {
-  const { verbose, deckPath, prerequisiteFilenames = [], outputName = 'flashcards', chunkInfo, imagesDir } = options;
+  const { verbose, deckPath, prerequisiteFilenames = [], outputName = 'flashcards', chunkInfo, imagesDir, figuresDir, figuresList } = options;
   const { spawn } = await import('child_process');
 
   // Load prerequisites if specified
@@ -976,38 +1040,38 @@ ${guidesContext}
 ${chunkInfo.isLast ? 'This is the FINAL chunk.' : 'More content follows in subsequent chunks.'}`
     : '';
 
-  // Build image instructions if we have images
-  let imageInstructions = '';
-  if (imageList && imageList.length > 0) {
-    // Separate labeled (with captions) and unlabeled figures
-    const labeledFigures = imageList.filter(img => img.caption);
-    const unlabeledCount = imageList.length - labeledFigures.length;
+  // Build figure instructions - prefer figures/ directory over images/
+  let figureInstructions = '';
+  if (figuresDir && figuresList && figuresList.figures.length > 0) {
+    // Use manually curated figures from figures/ directory
+    const { figures, grouped } = figuresList;
 
-    // Build figure list showing filename: caption
-    const figureList = labeledFigures.slice(0, 50).map(img => {
-      const filename = img.path.split('/').pop();
-      return `- ${filename}: ${img.caption}`;
-    }).join('\n');
+    // Build figure list with multi-part grouping info
+    const figureListText = figures.map(f => `- ${f}`).join('\n');
 
-    // Check if Claude has access to images directory for visual verification
-    const hasImageAccess = imagesDir && existsSync(imagesDir);
+    // Identify multi-part figures for the instructions
+    const multiPartGroups = Object.entries(grouped)
+      .filter(([, parts]) => parts.length > 1)
+      .map(([base, parts]) => `  - Figure ${base}: ${parts.join(', ')}`)
+      .join('\n');
 
-    const imageAccessNote = hasImageAccess
-      ? `**Aim to include figures in most cards.** You can view images at: ${imagesDir}/<filename>
+    figureInstructions = `\n\n## Available Figures
 
-For each card, actively look for a relevant figure. If unsure about a caption, read the image to verify. Figures dramatically improve retention - use them liberally.`
-      : `**Aim to include figures in most cards.** For each card, actively look for a relevant figure. Figures dramatically improve retention - use them liberally.`;
+Reference syntax: ![Description](../sources/${outputName}/figures/filename.png)
 
-    imageInstructions = `\n\n## Available Figures
+Figures (numbered by order of appearance in source):
+${figureListText}
+${multiPartGroups ? `\n**Multi-part figures** (include ALL parts together on same card):\n${multiPartGroups}` : ''}
 
-Reference syntax: ![Description](../sources/${outputName}/images/filename.jpg)
+**Aim to include figures in most cards.** You can view figures at: ${figuresDir}/<filename>
 
-Labeled figures:
-${figureList || '(none)'}
-${labeledFigures.length > 50 ? `\n... and ${labeledFigures.length - 50} more labeled figures` : ''}
-${unlabeledCount > 0 ? `\n(Plus ${unlabeledCount} unlabeled figures available)` : ''}
-
-${imageAccessNote}`;
+Figures are high-quality manually curated images. Use them liberally - for each card, actively look for a relevant figure. Read figures to verify content when helpful.`;
+  } else if (imageList && imageList.length > 0) {
+    // No figures/ directory - just note that images exist but shouldn't be referenced
+    // (images from content.json are kept for text context only)
+    figureInstructions = `\n\n## Note on Images
+The source contains extracted images in images/ but no curated figures/ directory.
+Do NOT include image references in flashcards - focus on text content only.`;
   }
 
   // Truncate content if too large for Claude CLI (keep under 150K chars to leave room for guides and instructions)
@@ -1041,7 +1105,7 @@ ${imageAccessNote}`;
   // Build prerequisite section if we have prerequisites
   const prereqSection = prerequisiteContent ? `\n\n${prerequisiteContent}\n` : '';
 
-  const promptText = `${guideInstructions}${chunkContext}${imageInstructions}${prereqSection}
+  const promptText = `${guideInstructions}${chunkContext}${figureInstructions}${prereqSection}
 
 <document_content>
 ${truncatedContent}
@@ -1059,9 +1123,10 @@ Generate flashcards from the document content above, following ALL principles in
     // Pipe the prompt through stdin to avoid command line length limits
     const args = ['--print', '--dangerously-skip-permissions'];
 
-    // Add images directory access so Claude can visually verify figures before including them
-    if (imagesDir && existsSync(imagesDir)) {
-      args.push('--add-dir', imagesDir);
+    // Add figures directory access so Claude can visually verify figures before including them
+    // Prefer figures/ over images/ (figures are manually curated high-quality images)
+    if (figuresDir && existsSync(figuresDir)) {
+      args.push('--add-dir', figuresDir);
     }
 
     if (verbose) {
@@ -1069,9 +1134,9 @@ Generate flashcards from the document content above, following ALL principles in
       if (prerequisiteFilenames.length > 0) {
         console.log(`[DEBUG] Prerequisites (metadata only): ${prerequisiteFilenames.join(', ')}`);
       }
-      console.log(`[DEBUG] Available images: ${imageList?.length || 0}`);
-      if (imagesDir && existsSync(imagesDir)) {
-        console.log(`[DEBUG] Images directory added: ${imagesDir}`);
+      console.log(`[DEBUG] Available figures: ${figuresList?.figures?.length || 0}`);
+      if (figuresDir && existsSync(figuresDir)) {
+        console.log(`[DEBUG] Figures directory added: ${figuresDir}`);
       }
     }
 
@@ -1333,17 +1398,23 @@ export async function callClaudeWithSource(sourceDir, guidesContext, options = {
   } = options;
 
   // Load source content
-  const { content, imagesDir, baseName } = loadSourceContent(sourceDir, verbose);
+  const { content, imagesDir, figuresDir, baseName } = loadSourceContent(sourceDir, verbose);
 
   // Format content for Claude
   const contentText = formatSourceContentForClaude(content);
 
-  // Extract image list
+  // Extract image list (for context from content.json)
   const imageList = extractImageList(content);
+
+  // Load figures list if figures/ directory exists
+  const figuresList = figuresDir ? loadFiguresList(figuresDir) : null;
 
   if (verbose) {
     console.log(`[DEBUG] Formatted content: ${contentText.length} chars`);
-    console.log(`[DEBUG] Available images: ${imageList.length}`);
+    console.log(`[DEBUG] Available images (context): ${imageList.length}`);
+    if (figuresList) {
+      console.log(`[DEBUG] Available figures: ${figuresList.figures.length}`);
+    }
   }
 
   // Use the outputName or fall back to baseName
@@ -1365,7 +1436,9 @@ export async function callClaudeWithSource(sourceDir, guidesContext, options = {
       order,
       tags,
       outputName: finalOutputName,
-      imagesDir
+      imagesDir,
+      figuresDir,
+      figuresList
     });
 
     // Extract used images from the flashcard content
@@ -1375,6 +1448,7 @@ export async function callClaudeWithSource(sourceDir, guidesContext, options = {
       ...result,
       usedImages,
       imagesDir,
+      figuresDir,
       baseName,
       outputName: finalOutputName
     };
@@ -1780,14 +1854,14 @@ export function validateFlashcards(markdownText) {
     }
 
     // Check for image paths - they should be relative from flashcards/ directory
-    if (line.includes('](') && (line.includes('figures/') || line.includes('sources/'))) {
-      // For sources/ paths, they should be relative from flashcards/ like ../sources/name/images/
+    if (line.includes('](') && (line.includes('figures/') || line.includes('sources/') || line.includes('images/'))) {
+      // For sources/ paths, they should be relative from flashcards/ like ../sources/name/images/ or ../sources/name/figures/
       if (line.includes('sources/') && !line.includes('../sources/')) {
-        warnings.push(`Line ${currentLine}: Source image path should be relative (../sources/...)`);
+        warnings.push(`Line ${currentLine}: Source path should be relative (../sources/...)`);
       }
-      // For legacy figures/ paths, they should be ../figures/
-      if (line.includes('figures/') && !line.includes('../figures/')) {
-        warnings.push(`Line ${currentLine}: Legacy figure path should be relative (../figures/...)`);
+      // For standalone figures/ paths (not inside sources/), they should be ../figures/
+      if (line.includes('figures/') && !line.includes('../sources/') && !line.includes('../figures/')) {
+        warnings.push(`Line ${currentLine}: Figure path should be relative (../figures/... or ../sources/.../figures/...)`);
       }
     }
   }

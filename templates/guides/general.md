@@ -102,9 +102,11 @@ A: Assimilation: minority culture fully adopts dominant culture. Acculturation: 
 
 ### P:/S: Problem and Solution Roadmap
 
-**Use for**: Teaching problem-solving **methodology** and **systematic approach**, NOT numerical computation
+**Use for**: Teaching problem-solving **methodology** and **systematic approach** using the IPEE framework.
 
-**⚠️ CRITICAL**: P:/S: cards use **VARIABLES or general principles**, never specific numbers. The goal is to learn reasoning steps and methodology.
+**When to use numerical values vs variables:**
+- **Numerical values**: For drilling procedural fluency (arithmetic, computation practice)
+- **Variables**: For teaching generalizable methodology and reasoning patterns
 
 **Framework**: **IPEE (Identify, Plan, Execute, Evaluate)** - universal framework for ALL subjects
 
@@ -295,22 +297,26 @@ A: Downward-opening parabola (negative $t^2$ coefficient), starting at $x=5$, ri
 
 **Aim to include a figure in most cards.** Visual aids dramatically improve retention - research shows images can increase recall by 65% compared to text alone.
 
+#### Figure Numbering Convention
+
+Figures are numbered by their order of appearance in the source document:
+- `1.png`, `2.png`, `3.png` ... - Single figures
+- `10-1.png`, `10-2.png` - Multi-part figures (same logical figure split across pages)
+
+**Multi-part figures:** When you see figures like `10-1.png` and `10-2.png`, these are parts of the same figure and should be included together on the same card.
+
 #### Active Figure Selection
 
 For each card you create:
-1. **Scan the figure list** for relevant images
-2. **Match by topic** - if your card discusses vectors, look for vector figures
+1. **Scan the figure list** for relevant images by number
+2. **Read figures** to verify they match your card's content
 3. **Include liberally** - when in doubt, include the figure
 
 #### Figure Placement
 
 - **Q/A cards**: Place figure in the answer after the text explanation
 - **Cloze cards**: Place figure after the cloze text
-- **Problem cards**: Include the problem's figure (e.g., "Figure P1.21") in the question
-
-#### Visual Verification (When Available)
-
-If you have access to the images directory, you can read image files directly to confirm what they show. Useful for ambiguous captions.
+- **Problem cards**: Include the problem's figure in the question
 
 #### Reusing Figures
 
