@@ -1055,17 +1055,34 @@ ${chunkInfo.isLast ? 'This is the FINAL chunk.' : 'More content follows in subse
       .map(([base, parts]) => `  - Figure ${base}: ${parts.join(', ')}`)
       .join('\n');
 
-    figureInstructions = `\n\n## Available Figures
+    figureInstructions = `\n\n## Figure-First Flashcard Creation
 
-Reference syntax: ![Description](../sources/${outputName}/figures/filename.png)
+**CRITICAL: You MUST view each figure file before referencing it. Figure numbers do NOT correspond to textbook figure numbers.**
 
-Figures (numbered by order of appearance in source):
+Figures directory: ${figuresDir}/
 ${figureListText}
-${multiPartGroups ? `\n**Multi-part figures** (include ALL parts together on same card):\n${multiPartGroups}` : ''}
+${multiPartGroups ? `\n**Multi-part figures** (include ALL parts together):\n${multiPartGroups}` : ''}
 
-**Aim to include figures in most cards.** You can view figures at: ${figuresDir}/<filename>
+### MANDATORY Workflow:
+1. **READ the figure file** using the Read tool before writing any card that references it
+2. **Describe what you actually see** in the figure - specific numbers, steps, diagrams
+3. **Match the card content to the figure content exactly**
+4. Use the figure's exact values in your P:/S: problems
 
-Figures are high-quality manually curated images. Use them liberally - for each card, actively look for a relevant figure. Read figures to verify content when helpful.`;
+### Reference syntax:
+![Accurate description of what figure shows](../sources/${outputName}/figures/filename.png)
+
+### WRONG (guessing from context):
+- Don't assume 1.png is a number line just because text mentions number lines
+- Don't assume figure content based on surrounding text
+
+### CORRECT (view first, then write):
+1. Read 37.png → See it shows "43 - 26" with borrowing steps
+2. Create P:/S: card: "Subtract: 43 - 26"
+3. Solution matches the EXACT steps shown in the figure
+4. Reference: ![Subtraction 43-26 with borrowing](../sources/${outputName}/figures/37.png)
+
+**If a figure shows a worked example, the flashcard MUST use those same numbers.**`;
   } else if (imageList && imageList.length > 0) {
     // No figures/ directory - just note that images exist but shouldn't be referenced
     // (images from content.json are kept for text context only)
@@ -1293,11 +1310,14 @@ async function callClaudeWithChunkedSource(sourceDir, guidesContext, options = {
     outputName = 'flashcards'
   } = options;
 
-  // Load source content
-  const { content, imagesDir, baseName } = loadSourceContent(sourceDir, verbose);
+  // Load source content (including figuresDir for manually curated figures)
+  const { content, imagesDir, figuresDir, baseName } = loadSourceContent(sourceDir, verbose);
 
   // Extract full image list (available to all chunks)
   const fullImageList = extractImageList(content);
+
+  // Load figures list if figures/ directory exists (for all chunks to use)
+  const figuresList = figuresDir ? loadFiguresList(figuresDir) : null;
 
   // Use the outputName or fall back to baseName
   const finalOutputName = outputName || baseName;
@@ -1334,6 +1354,9 @@ async function callClaudeWithChunkedSource(sourceDir, guidesContext, options = {
         order,
         tags,
         outputName: finalOutputName,
+        imagesDir,
+        figuresDir,
+        figuresList,
         chunkInfo: {
           current: i + 1,
           total: chunks.length,
@@ -1367,6 +1390,7 @@ async function callClaudeWithChunkedSource(sourceDir, guidesContext, options = {
     flashcards: allFlashcards,
     usedImages: [...new Set(allUsedImages)], // Dedupe
     imagesDir,
+    figuresDir,
     baseName,
     outputName: finalOutputName,
     chunkCount: chunks.length,
