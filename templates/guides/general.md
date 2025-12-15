@@ -297,30 +297,105 @@ A: Downward-opening parabola (negative $t^2$ coefficient), starting at $x=5$, ri
 
 **Aim to include a figure in most cards.** Visual aids dramatically improve retention - research shows images can increase recall by 65% compared to text alone.
 
-#### Figure Numbering Convention
+#### Figure Naming
 
-Figures are numbered by their order of appearance in the source document:
-- `1.png`, `2.png`, `3.png` ... - Single figures
-- `10-1.png`, `10-2.png` - Multi-part figures (same logical figure split across pages)
+Figures use descriptive names:
+- Single figures: `addition-example.png`, `number-line.png`, `force-diagram.png`
+- Multi-part figures: common prefix + `-1`, `-2` suffix: `base-10-blocks-1.png`, `base-10-blocks-2.png`
 
-**Multi-part figures:** When you see figures like `10-1.png` and `10-2.png`, these are parts of the same figure and should be included together on the same card.
+**Multi-part figures:** When figures share a common prefix with `-1`, `-2` suffixes (e.g., `base-10-blocks-1.png` and `base-10-blocks-2.png`), these are parts of the same figure and should be included together on the same card.
 
 #### Active Figure Selection
 
 For each card you create:
-1. **Scan the figure list** for relevant images by number
+1. **Scan the figure list** for relevant images
 2. **Read figures** to verify they match your card's content
 3. **Include liberally** - when in doubt, include the figure
 
 #### Figure Placement
 
-- **Q/A cards**: Place figure in the answer after the text explanation
-- **Cloze cards**: Place figure after the cloze text
-- **Problem cards**: Include the problem's figure in the question
+**Place figures BEFORE the answer/solution to provide visual context for thinking:**
+
+- **Q/A cards**: Place figure RIGHT AFTER the question (before `A:`) so the learner sees it while thinking
+- **Problem cards**: Place figure RIGHT AFTER `P:` (before `S:`) so it's part of the problem statement
+- **Cloze cards**: Place figure after the cloze text (since there's no separate answer section)
+
+**Examples:**
+```markdown
+# Q/A - figure appears BEFORE answer:
+Q: What forces act on the block?
+
+![Free body diagram](../sources/chapter_1/figures/free-body-diagram.png)
+
+A: Weight pointing down, normal force perpendicular to surface...
+
+# P/S - figure appears WITH problem:
+P: Add: $43 + 26$
+
+![Addition with regrouping](../sources/chapter_1/figures/addition-with-regrouping.png)
+
+S:
+**IDENTIFY**: Two-digit addition with carrying
+...
+```
+
+**Why:** When reviewing, the figure should be visible WHILE thinking about the answer, not revealed afterward.
 
 #### Reusing Figures
 
 The same figure can appear in multiple related cards - this reinforces visual learning. Don't hesitate to reference a figure in several cards if it's relevant to each.
+
+### Using the Figure Catalog
+
+When a **Figure Catalog** is provided below the guides, it contains pre-analyzed metadata for each figure:
+
+| Field | Description |
+|-------|-------------|
+| **Type** | `worked_example`, `diagram`, `table`, `concept_illustration`, or `decorative` |
+| **Shows** | Comprehensive description including specific values/data |
+| **Use as** | Suggested card type |
+
+**Workflow for each figure type:**
+
+1. **`worked_example`**: Create P:/S: card using the content from the description
+   - The "Shows" field contains the specific problem/values to use
+   - Your solution steps should match what the figure shows
+
+2. **`diagram`/`concept_illustration`**: Create Q:/A: or C: card
+   - Ask about what the visual represents
+   - Test understanding of the concept shown
+
+3. **`table`/`chart`**: Create Q:/A: card
+   - Ask about interpreting or recalling the data
+
+4. **`decorative`**: Skip entirely (chapter headers, stock photos)
+
+**Example:**
+If the catalog shows:
+```
+### addition-carrying.png
+- Type: worked_example
+- Shows: Step-by-step addition showing 1,683 + 479 = 2,162 with carrying
+- Use as: P:/S: card for multi-digit addition
+```
+
+Create:
+```markdown
+P: Add: $1,683 + 479$
+
+![Addition with carrying](../sources/<source_name>/figures/addition-carrying.png)
+
+S:
+**IDENTIFY**: Multi-digit addition with carrying
+**EXECUTE**:
+- Ones: 3 + 9 = 12, write 2 carry 1
+- Tens: 8 + 7 + 1 = 16, write 6 carry 1
+- Hundreds: 6 + 4 + 1 = 11, write 1 carry 1
+- Thousands: 1 + 0 + 1 = 2
+**EVALUATE**: $1,683 + 479 = 2,162$ ✓
+```
+
+**The catalog's Shows field is the source of truth for worked examples.**
 
 ## ⚠️ CRITICAL: Complete Coverage Required
 
@@ -414,9 +489,24 @@ Before creating cards, scan the `<prerequisite_flashcards>` section to identify:
 **File Organization**:
 - ✅ **DO**: Use markdown headers to organize sections
   - `# Chapter Title` or `# Topic Name` as the main header
-  - `## Section Name` or `## Subtopic` to group related flashcards
+  - `## Section Name` to group related flashcards
+  - **NUMBER your subheaders** to match source material sections (e.g., `## 1.2 Place Value` not just `## Place Value`)
   - Headers provide visual structure WITHOUT interfering with flashcard parsing
 - ✅ **DO**: Use LaTeX for ALL math: `$x^2$` (inline), `$$E=mc^2$$` (display)
+
+**Example header structure:**
+```markdown
+# Chapter 3: Fractions
+
+## 3.1 Introduction to Fractions
+
+C: A [fraction] represents a part of a whole...
+
+## 3.2 Equivalent Fractions
+
+Q: When are two fractions equivalent?
+A: When they represent the same value...
+```
 
 **Critical Output Rules**:
 - ❌ **DON'T**: Add preambles, introductions, or explanations before flashcards

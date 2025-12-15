@@ -429,7 +429,7 @@ export function loadSourceContent(sourceDir, verbose = false) {
 
 /**
  * Load and organize figures from a figures/ directory
- * Figures are numbered (1.png, 2.png) and may have multi-part variants (10-1.png, 10-2.png)
+ * Figures can have any descriptive name. Multi-part figures use -N suffix (e.g., base-10-blocks-1.png, base-10-blocks-2.png)
  * @param {string} figuresDir - Path to figures directory
  * @returns {Object} { figures: Array, grouped: Object }
  */
@@ -439,45 +439,32 @@ export function loadFiguresList(figuresDir) {
   }
 
   const files = readdirSync(figuresDir)
-    .filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
+    .filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f))
+    .sort(); // Alphabetical sort
 
-  // Parse figure numbers and sort naturally
-  const parsed = files.map(f => {
-    const match = f.match(/^(\d+)(?:-(\d+))?\.(\w+)$/);
-    if (match) {
-      return {
-        filename: f,
-        base: parseInt(match[1], 10),
-        part: match[2] ? parseInt(match[2], 10) : null,
-        ext: match[3]
-      };
-    }
-    // Non-numeric files go at the end
-    return { filename: f, base: Infinity, part: null, ext: '' };
-  });
-
-  // Sort by base number, then by part number
-  parsed.sort((a, b) => {
-    if (a.base !== b.base) return a.base - b.base;
-    if (a.part === null && b.part === null) return 0;
-    if (a.part === null) return -1;
-    if (b.part === null) return 1;
-    return a.part - b.part;
-  });
-
-  // Group multi-part figures
+  // Group multi-part figures by detecting -N suffix pattern
   const grouped = {};
-  for (const fig of parsed) {
-    if (fig.base !== Infinity) {
-      if (!grouped[fig.base]) {
-        grouped[fig.base] = [];
+  for (const filename of files) {
+    // Match pattern: anything-N.ext where N is a digit
+    const match = filename.match(/^(.+)-(\d+)\.[^.]+$/);
+    if (match) {
+      const base = match[1];
+      if (!grouped[base]) {
+        grouped[base] = [];
       }
-      grouped[fig.base].push(fig.filename);
+      grouped[base].push(filename);
+    }
+  }
+
+  // Only keep groups with 2+ parts (single files aren't multi-part)
+  for (const base of Object.keys(grouped)) {
+    if (grouped[base].length < 2) {
+      delete grouped[base];
     }
   }
 
   return {
-    figures: parsed.map(p => p.filename),
+    figures: files,
     grouped
   };
 }
@@ -1046,43 +1033,115 @@ ${chunkInfo.isLast ? 'This is the FINAL chunk.' : 'More content follows in subse
     // Use manually curated figures from figures/ directory
     const { figures, grouped } = figuresList;
 
-    // Build figure list with multi-part grouping info
-    const figureListText = figures.map(f => `- ${f}`).join('\n');
+    // Check for manifest file (pre-analyzed figure descriptions)
+    const manifestPath = join(figuresDir, 'manifest.json');
+    let manifest = null;
+    if (existsSync(manifestPath)) {
+      try {
+        manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+        if (verbose) console.log(`[DEBUG] Loaded figure manifest with ${Object.keys(manifest).length} entries`);
+      } catch (e) {
+        if (verbose) console.log(`[DEBUG] Could not load manifest: ${e.message}`);
+      }
+    }
 
     // Identify multi-part figures for the instructions
     const multiPartGroups = Object.entries(grouped)
       .filter(([, parts]) => parts.length > 1)
-      .map(([base, parts]) => `  - Figure ${base}: ${parts.join(', ')}`)
+      .map(([base, parts]) => `  - ${base}: ${parts.join(', ')}`)
       .join('\n');
 
-    figureInstructions = `\n\n## Figure-First Flashcard Creation
+    if (manifest && Object.keys(manifest).length > 0) {
+      // Use manifest-based instructions (more reliable - figures pre-analyzed)
+      // Build detailed figure catalog from manifest
+      const usableFigures = [];
+      const decorativeFigures = [];
 
-**CRITICAL: You MUST view each figure file before referencing it. Figure numbers do NOT correspond to textbook figure numbers.**
+      for (const filename of figures) {
+        const entry = manifest[filename];
+        if (entry) {
+          if (entry.type === 'decorative') {
+            decorativeFigures.push(filename);
+          } else {
+            usableFigures.push({
+              filename,
+              type: entry.type,
+              description: entry.description,
+              suggestion: entry.flashcard_suggestion
+            });
+          }
+        } else {
+          // Figure not in manifest - include as unknown
+          usableFigures.push({
+            filename,
+            type: 'unknown',
+            description: '(not analyzed - view figure to determine content)',
+            suggestion: null
+          });
+        }
+      }
+
+      // Format usable figures as a detailed catalog
+      const figureCatalog = usableFigures.map(f => {
+        let entry = `### ${f.filename}`;
+        entry += `\n- **Type:** ${f.type}`;
+        entry += `\n- **Shows:** ${f.description}`;
+        if (f.suggestion) {
+          entry += `\n- **Use as:** ${f.suggestion}`;
+        }
+        return entry;
+      }).join('\n\n');
+
+      figureInstructions = `\n\n## Figure Catalog
+
+**${usableFigures.length} figures available** (${decorativeFigures.length} decorative skipped). Create a card for each usable figure.
+
+Reference syntax: \`![Description](../sources/${outputName}/figures/filename.png)\`
+${multiPartGroups ? `\n**Multi-part figures** (include ALL parts on same card):\n${multiPartGroups}` : ''}
+${decorativeFigures.length > 0 ? `\n**Skip decorative:** ${decorativeFigures.join(', ')}` : ''}
+
+${figureCatalog}
+
+Follow the **"Using the Figure Catalog"** section in the guide above for how to create cards from each figure type.`;
+
+    } else {
+      // No manifest - use original instructions (requires Claude to read figures)
+      const figureListText = figures.map(f => `- ${f}`).join('\n');
+
+      figureInstructions = `\n\n## FIGURES: Use Almost ALL of Them!
+
+**⚠️ You have ${figuresList.figures.length} high-quality figures. USE MOST OF THEM (aim for 80%+).**
 
 Figures directory: ${figuresDir}/
 ${figureListText}
 ${multiPartGroups ? `\n**Multi-part figures** (include ALL parts together):\n${multiPartGroups}` : ''}
 
-### MANDATORY Workflow:
-1. **READ the figure file** using the Read tool before writing any card that references it
-2. **Describe what you actually see** in the figure - specific numbers, steps, diagrams
-3. **Match the card content to the figure content exactly**
-4. Use the figure's exact values in your P:/S: problems
+### ⚠️ CRITICAL: READ BEFORE REFERENCE
+**You MUST use the Read tool to view a figure BEFORE including it in any flashcard.**
+
+Figure filenames do NOT indicate their content:
+- A figure named "addition-example.png" might show subtraction
+- A figure named "fig-3-7.png" might not relate to section 3.7
+- NEVER assume content from filename - ALWAYS read the file first
+
+### Workflow for EACH figure:
+1. Use Read tool: Read ${figuresDir}/<filename>
+2. See what it actually contains (e.g., "1,683 + 479 = 2,162 with carrying steps")
+3. Create a P:/S: card with THAT EXACT problem: "P: Add: $1,683 + 479$"
+4. Solution steps must match the figure
+5. Add reference: ![Accurate description](../sources/${outputName}/figures/<filename>)
 
 ### Reference syntax:
-![Accurate description of what figure shows](../sources/${outputName}/figures/filename.png)
+![Accurate description of figure content](../sources/${outputName}/figures/<filename>)
 
-### WRONG (guessing from context):
-- Don't assume 1.png is a number line just because text mentions number lines
-- Don't assume figure content based on surrounding text
+### What to do:
+- Read each figure file in the list above
+- Skip decorative images (chapter headers, stock photos)
+- For each worked example figure: create matching P:/S: card
+- For each diagram/chart: create Q:/A: or C: card
 
-### CORRECT (view first, then write):
-1. Read 37.png → See it shows "43 - 26" with borrowing steps
-2. Create P:/S: card: "Subtract: 43 - 26"
-3. Solution matches the EXACT steps shown in the figure
-4. Reference: ![Subtraction 43-26 with borrowing](../sources/${outputName}/figures/37.png)
-
-**If a figure shows a worked example, the flashcard MUST use those same numbers.**`;
+**DO NOT add a figure reference unless you have READ that specific figure file and verified its content.**`;
+    }
   } else if (imageList && imageList.length > 0) {
     // No figures/ directory - just note that images exist but shouldn't be referenced
     // (images from content.json are kept for text context only)
@@ -1212,21 +1271,20 @@ Generate flashcards from the document content above, following ALL principles in
         console.log(`[DEBUG] First 200 chars: ${flashcards.substring(0, 200)}`);
       }
 
-      // Extract from ANY markdown code block (try multiple patterns)
-      if (flashcards.includes('```')) {
-        // Try ```markdown first
-        let match = flashcards.match(/```markdown\s*([\s\S]*?)\s*```/);
+      // Extract from markdown code block ONLY if the entire output is wrapped in one
+      // Don't extract if content already looks like flashcards (has Q:/C:/P: prefixes)
+      const hasFlashcardPrefixes = /^(Q:|C:|P:|#)/m.test(flashcards);
+
+      if (flashcards.includes('```') && !hasFlashcardPrefixes) {
+        // Only extract if output starts with ``` (Claude wrapped entire response)
+        // Use greedy match to get content between FIRST ``` and LAST ```
+        let match = flashcards.match(/^```(?:markdown)?\s*([\s\S]*)\s*```\s*$/);
         if (match) {
           flashcards = match[1].trim();
-          if (verbose) console.log('[DEBUG] Extracted from ```markdown block');
-        } else {
-          // Try plain ``` block
-          match = flashcards.match(/```\s*([\s\S]*?)\s*```/);
-          if (match) {
-            flashcards = match[1].trim();
-            if (verbose) console.log('[DEBUG] Extracted from ``` block');
-          }
+          if (verbose) console.log('[DEBUG] Extracted from wrapping code block');
         }
+      } else if (verbose && flashcards.includes('```')) {
+        console.log('[DEBUG] Skipping code block extraction - content has flashcard prefixes');
       }
 
       // Remove common preambles that Claude might add

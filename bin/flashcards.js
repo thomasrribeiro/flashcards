@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve, basename } from 'path';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync, statSync, renameSync } from 'fs';
 import * as readline from 'readline';
 import * as claudeClient from './lib/claude-client.js';
 
@@ -239,36 +239,101 @@ function addCard(deckPath, cardName) {
     process.exit(1);
   }
 }
-// ==================== Rename Figures Command ====================
+
+// ==================== Analyze Figures Command ====================
+
+/**
+ * Generate a slug from description text.
+ * @param {string} description - Figure description
+ * @param {number} maxLength - Maximum slug length (default 40)
+ * @returns {string} Slug (e.g., "step-by-step-addition-showing-1683")
+ */
+function descriptionToSlug(description, maxLength = 40) {
+  if (!description) return '';
+
+  return description
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric with hyphens
+    .replace(/^-+|-+$/g, '')       // Trim leading/trailing hyphens
+    .slice(0, maxLength)           // Limit length
+    .replace(/-+$/, '');           // Trim trailing hyphen if cut mid-word
+}
+
+/**
+ * Detect multi-part figure groups from filenames.
+ * Multi-part figures have pattern: base-N.ext (e.g., "6-1.png", "6-2.png")
+ * @param {string[]} filenames - List of filenames
+ * @returns {Object} Map of base -> [filenames] for groups with 2+ parts
+ */
+function detectMultiPartGroups(filenames) {
+  const grouped = {};
+
+  for (const filename of filenames) {
+    // Match pattern: anything-N.ext where N is a digit
+    const match = filename.match(/^(.+)-(\d+)\.[^.]+$/);
+    if (match) {
+      const base = match[1];
+      if (!grouped[base]) grouped[base] = [];
+      grouped[base].push({ filename, partNum: parseInt(match[2], 10) });
+    }
+  }
+
+  // Only keep groups with 2+ parts, sorted by part number
+  const multiPartGroups = {};
+  for (const [base, parts] of Object.entries(grouped)) {
+    if (parts.length >= 2) {
+      multiPartGroups[base] = parts.sort((a, b) => a.partNum - b.partNum);
+    }
+  }
+
+  return multiPartGroups;
+}
+
+/**
+ * Build a lookup for which files belong to multi-part groups.
+ * @param {Object} multiPartGroups - Output from detectMultiPartGroups
+ * @returns {Map<string, {base: string, partNum: number}>} filename -> group info
+ */
+function buildMultiPartLookup(multiPartGroups) {
+  const lookup = new Map();
+  for (const [base, parts] of Object.entries(multiPartGroups)) {
+    for (const { filename, partNum } of parts) {
+      lookup.set(filename, { base, partNum });
+    }
+  }
+  return lookup;
+}
 
 program
-  .command('rename-figures <folder-path>')
-  .description('Rename all figures in a folder with descriptive names based on their content')
-  .option('--dry-run', 'Preview renaming without actually renaming files')
+  .command('analyze-figures <figures-dir>')
+  .description('Analyze figures, generate manifest, and rename files with descriptive names')
   .option('--verbose', 'Show detailed progress')
-  .action(async (folderPath, options) => {
-    await renameFigures(folderPath, options);
+  .option('--force', 'Recompute even if manifest.json already exists')
+  .option('--batch-size <n>', 'Number of figures to process in each Claude call', parseInt)
+  .option('--no-rename', 'Skip renaming files (only generate manifest)')
+  .action(async (figuresDir, options) => {
+    await analyzeFigures(figuresDir, options);
   });
 
-async function renameFigures(folderPath, options = {}) {
-  const { dryRun = false, verbose = false } = options;
+async function analyzeFigures(figuresDirInput, options = {}) {
+  const { verbose = false, force = false, batchSize = 20, rename = true } = options;
 
-  console.log('\x1b[34m🖼️  Figure Renaming\x1b[0m');
+  console.log('\x1b[34m🔍 Figure Analysis\x1b[0m');
   console.log('━'.repeat(50));
   console.log();
 
-  // Resolve folder path
-  const resolvedPath = resolve(process.cwd(), folderPath);
+  // Resolve figures directory path
+  const figuresDir = resolve(process.cwd(), figuresDirInput);
 
-  // Validate folder exists
-  if (!existsSync(resolvedPath)) {
-    console.error(`\x1b[31m❌ Error: Folder not found: ${resolvedPath}\x1b[0m`);
+  // Validate directory exists
+  if (!existsSync(figuresDir)) {
+    console.error(`\x1b[31m❌ Error: Directory not found: ${figuresDir}\x1b[0m`);
     process.exit(1);
   }
 
-  const stats = statSync(resolvedPath);
+  const stats = statSync(figuresDir);
   if (!stats.isDirectory()) {
-    console.error(`\x1b[31m❌ Error: Path is not a directory: ${resolvedPath}\x1b[0m`);
+    console.error(`\x1b[31m❌ Error: Path is not a directory: ${figuresDir}\x1b[0m`);
     process.exit(1);
   }
 
@@ -282,217 +347,334 @@ async function renameFigures(folderPath, options = {}) {
 
   const useClaudeCode = apiKey === 'USE_CLAUDE_CODE_CLI';
 
-  console.log(`📁 Scanning folder: ${resolvedPath}`);
+  console.log(`📁 Figures directory: ${figuresDir}`);
   console.log();
 
-  // Find all image files recursively
-  const imageFiles = [];
-  function scanDirectory(dir) {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        scanDirectory(fullPath);
-      } else if (entry.isFile()) {
-        const ext = entry.name.toLowerCase().split('.').pop();
-        if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
-          imageFiles.push(fullPath);
-        }
-      }
-    }
-  }
-
-  scanDirectory(resolvedPath);
+  // Find all image files (non-recursive, just the figures directory)
+  const imageFiles = readdirSync(figuresDir)
+    .filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f))
+    .sort((a, b) => {
+      // Sort numerically by extracting leading numbers
+      const numA = parseInt(a.match(/^(\d+)/)?.[1] || '0');
+      const numB = parseInt(b.match(/^(\d+)/)?.[1] || '0');
+      return numA - numB;
+    });
 
   if (imageFiles.length === 0) {
     console.log('\x1b[33m⚠️  No image files found\x1b[0m');
     return;
   }
 
-  console.log(`Found ${imageFiles.length} image(s)`);
-  if (dryRun) {
-    console.log('\x1b[33m[DRY RUN MODE - No files will be renamed]\x1b[0m');
-  }
-  console.log();
+  console.log(`Found ${imageFiles.length} figure(s)`);
 
-  // Process each image
-  const renamings = [];
-  for (let i = 0; i < imageFiles.length; i++) {
-    const imagePath = imageFiles[i];
-    const relativePath = imagePath.replace(resolvedPath + '/', '');
+  // Step 1: Detect multi-part groups DETERMINISTICALLY from filenames
+  const multiPartGroups = detectMultiPartGroups(imageFiles);
+  const multiPartLookup = buildMultiPartLookup(multiPartGroups);
 
-    console.log(`[${i + 1}/${imageFiles.length}] Analyzing: ${relativePath}`);
-
-    try {
-      // Read image as base64
-      const imageBuffer = readFileSync(imagePath);
-      const imageBase64 = imageBuffer.toString('base64');
-      const ext = imagePath.toLowerCase().split('.').pop();
-      const mediaType = ext === 'png' ? 'image/png' :
-                       ext === 'gif' ? 'image/gif' :
-                       ext === 'webp' ? 'image/webp' : 'image/jpeg';
-
-      // Analyze image with Claude
-      let newName;
-      if (useClaudeCode) {
-        // Use Claude Code CLI with --add-dir to give access to the image
-        const { execSync } = await import('child_process');
-        const imageDir = dirname(imagePath);
-        const imageFilename = basename(imagePath);
-
-        if (verbose) {
-          console.log(`   [DEBUG] imageDir: ${imageDir}`);
-          console.log(`   [DEBUG] imageFilename: ${imageFilename}`);
-        }
-
-        const prompt = `Look at the image file "${imageFilename}" and provide a short, descriptive filename (lowercase, underscores for spaces, no extension). Focus on what the image shows (e.g., "force_diagram", "velocity_graph", "circuit_schematic"). Return ONLY the filename, nothing else.`;
-
-        // Build command with proper quoting
-        const cmd = `claude --add-dir "${imageDir}" --print --dangerously-skip-permissions '${prompt.replace(/'/g, "'\\''")}'`;
-
-        if (verbose) {
-          console.log(`   [DEBUG] Running: ${cmd.substring(0, 100)}...`);
-        }
-
-        let stdout;
-        try {
-          stdout = execSync(cmd, {
-            encoding: 'utf-8',
-            timeout: 60000,
-            maxBuffer: 1024 * 1024
-          });
-        } catch (error) {
-          throw new Error(`Claude CLI failed: ${error.message}`);
-        }
-
-        newName = stdout.trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9_]/g, '_')
-          .replace(/_+/g, '_')
-          .replace(/^_|_$/g, '');
-
-        // Check for error messages (AI couldn't process the image)
-        if (newName.includes('cannot') || newName.includes('error') || newName.includes('unable') || newName.includes('sorry')) {
-          console.log(`   \x1b[33m⚠️  AI could not analyze image, skipping\x1b[0m`);
-          continue;
-        }
-
-        // Enforce maximum filename length
-        const maxLength = 200;
-        if (newName.length > maxLength) {
-          newName = newName.substring(0, maxLength).replace(/_+$/, '');
-          console.log(`   \x1b[33m⚠️  Name too long, truncated to ${maxLength} chars\x1b[0m`);
-        }
-      } else {
-        // Use API
-        const Anthropic = (await import('@anthropic-ai/sdk')).default;
-        const client = new Anthropic({ apiKey });
-
-        const response = await client.messages.create({
-          model: 'claude-sonnet-4-5-20250514',
-          max_tokens: 100,
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: mediaType,
-                  data: imageBase64
-                }
-              },
-              {
-                type: 'text',
-                text: 'Analyze this image and provide a short, descriptive filename (lowercase, underscores for spaces, no extension). Focus on what the image shows (e.g., "force_diagram", "velocity_graph", "circuit_schematic"). Return ONLY the filename, nothing else.'
-              }
-            ]
-          }]
-        });
-
-        newName = response.content
-          .filter(block => block.type === 'text')
-          .map(block => block.text.trim())
-          .join('')
-          .toLowerCase()
-          .replace(/[^a-z0-9_]/g, '_')
-          .replace(/_+/g, '_')
-          .replace(/^_|_$/g, '');
-      }
-
-      // Ensure we have a valid name
-      if (!newName || newName.length === 0) {
-        console.log(`   \x1b[33m⚠️  Could not generate name, skipping\x1b[0m`);
-        continue;
-      }
-
-      // Check for error messages (AI couldn't process the image)
-      if (newName.includes('cannot') || newName.includes('error') || newName.includes('unable') || newName.includes('sorry')) {
-        console.log(`   \x1b[33m⚠️  AI could not analyze image, skipping\x1b[0m`);
-        continue;
-      }
-
-      // Enforce maximum filename length (255 bytes is filesystem limit, use 200 to be safe)
-      const maxLength = 200;
-      if (newName.length > maxLength) {
-        newName = newName.substring(0, maxLength);
-        // Remove any trailing underscores after truncation
-        newName = newName.replace(/_+$/, '');
-        console.log(`   \x1b[33m⚠️  Name too long, truncated to ${maxLength} chars\x1b[0m`);
-      }
-
-      // Build new path
-      const dir = dirname(imagePath);
-      const newPath = join(dir, `${newName}.${ext}`);
-
-      // Check if new path already exists
-      if (existsSync(newPath) && newPath !== imagePath) {
-        console.log(`   \x1b[33m⚠️  Target exists: ${newName}.${ext} - skipping\x1b[0m`);
-        continue;
-      }
-
-      renamings.push({ oldPath: imagePath, newPath, newName: `${newName}.${ext}` });
-      console.log(`   \x1b[32m→\x1b[0m ${newName}.${ext}`);
-
-    } catch (error) {
-      console.log(`   \x1b[31m❌ Error: ${error.message}\x1b[0m`);
-      if (verbose) {
-        console.error(error);
-      }
+  if (Object.keys(multiPartGroups).length > 0) {
+    console.log(`Detected ${Object.keys(multiPartGroups).length} multi-part figure group(s):`);
+    for (const [base, parts] of Object.entries(multiPartGroups)) {
+      console.log(`   ${base}: ${parts.map(p => p.filename).join(', ')}`);
     }
   }
-
-  console.log();
-  console.log('━'.repeat(50));
   console.log();
 
-  if (renamings.length === 0) {
-    console.log('\x1b[33mNo files to rename\x1b[0m');
+  // Check for existing manifest
+  const manifestPath = join(figuresDir, 'manifest.json');
+  let existingManifest = {};
+  if (existsSync(manifestPath) && !force) {
+    try {
+      existingManifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+      console.log(`📋 Found existing manifest with ${Object.keys(existingManifest).length} entries`);
+
+      // Find figures that need analysis
+      const newFigures = imageFiles.filter(f => !existingManifest[f]);
+      if (newFigures.length === 0) {
+        console.log('\x1b[32m✓ All figures already analyzed\x1b[0m');
+        console.log(`  Manifest: ${manifestPath}`);
+        console.log('  Use --force to recompute');
+        return;
+      }
+      console.log(`   ${newFigures.length} new figure(s) to analyze`);
+      console.log();
+    } catch (e) {
+      console.log('\x1b[33m⚠️  Could not parse existing manifest, will regenerate\x1b[0m');
+      existingManifest = {};
+    }
+  } else if (force && existsSync(manifestPath)) {
+    console.log('📋 --force specified, recomputing all figures');
+    console.log();
+  }
+
+  // Filter to only figures that need analysis (all if force)
+  const figuresToAnalyze = force ? imageFiles : imageFiles.filter(f => !existingManifest[f]);
+
+  if (figuresToAnalyze.length === 0) {
+    console.log('\x1b[32m✓ All figures already analyzed\x1b[0m');
     return;
   }
 
-  // Show summary
-  console.log(`\x1b[32m✓ Generated ${renamings.length} new name(s)\x1b[0m`);
-  console.log();
+  // Process figures in batches using Claude
+  const manifest = { ...existingManifest };
+  const totalBatches = Math.ceil(figuresToAnalyze.length / batchSize);
 
-  if (!dryRun) {
-    // Actually rename files
-    console.log('Renaming files...');
-    for (const { oldPath, newPath } of renamings) {
-      try {
-        const fs = await import('fs');
-        fs.renameSync(oldPath, newPath);
-        if (verbose) {
-          console.log(`  ✓ ${basename(oldPath)} → ${basename(newPath)}`);
+  for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+    const batchStart = batchIdx * batchSize;
+    const batchEnd = Math.min(batchStart + batchSize, figuresToAnalyze.length);
+    const batchFigures = figuresToAnalyze.slice(batchStart, batchEnd);
+
+    console.log(`[Batch ${batchIdx + 1}/${totalBatches}] Analyzing ${batchFigures.length} figures...`);
+
+    try {
+      if (useClaudeCode) {
+        // Use Claude Code CLI with --add-dir to give access to figures
+        const { execSync } = await import('child_process');
+
+        const figureListStr = batchFigures.join(', ');
+        const prompt = `Analyze each of these figures in the current directory and describe what they show.
+
+Figures to analyze: ${figureListStr}
+
+For EACH figure, provide a JSON object with:
+- "filename": the exact filename
+- "type": one of "worked_example", "diagram", "chart", "table", "concept_illustration", "decorative", "other"
+- "description": comprehensive description including what the figure shows AND any specific values/data (e.g., "Step-by-step addition showing 1,683 + 479 = 2,162 with carrying")
+- "flashcard_suggestion": brief suggestion for how to use this in a flashcard (e.g., "P:/S: card asking to solve 1,683 + 479") or null if decorative
+
+Return ONLY a JSON array of these objects, no other text. Example:
+[
+  {"filename": "37.png", "type": "worked_example", "description": "Step-by-step addition showing 1,683 + 479 = 2,162 with carrying", "flashcard_suggestion": "P:/S: card: Add 1,683 + 479"},
+  {"filename": "38.png", "type": "decorative", "description": "Chapter header image of a calculator", "flashcard_suggestion": null}
+]`;
+
+        const result = execSync(
+          `claude --add-dir "${figuresDir}" -p "${prompt.replace(/"/g, '\\"')}"`,
+          {
+            encoding: 'utf-8',
+            maxBuffer: 50 * 1024 * 1024,
+            timeout: 300000 // 5 minutes per batch
+          }
+        ).trim();
+
+        // Parse JSON from result
+        let jsonMatch = result.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const batchResults = JSON.parse(jsonMatch[0]);
+          for (const item of batchResults) {
+            if (item.filename && batchFigures.includes(item.filename)) {
+              manifest[item.filename] = {
+                type: item.type || 'other',
+                description: item.description || '',
+                flashcard_suggestion: item.flashcard_suggestion || null
+              };
+              if (verbose) {
+                console.log(`   ✓ ${item.filename}: ${item.type} - ${item.description?.substring(0, 50)}...`);
+              }
+            }
+          }
+        } else {
+          console.log(`\x1b[33m⚠️  Could not parse batch ${batchIdx + 1} results\x1b[0m`);
+          if (verbose) console.log(`   Raw result: ${result.substring(0, 200)}...`);
         }
-      } catch (error) {
-        console.error(`  \x1b[31m❌ Failed to rename ${basename(oldPath)}: ${error.message}\x1b[0m`);
+      } else {
+        // Use Claude API with vision
+        const messages = [];
+        const content = [];
+
+        // Add images to the message
+        for (const figureFile of batchFigures) {
+          const imagePath = join(figuresDir, figureFile);
+          const imageBuffer = readFileSync(imagePath);
+          const imageBase64 = imageBuffer.toString('base64');
+          const ext = figureFile.toLowerCase().split('.').pop();
+          const mediaType = ext === 'png' ? 'image/png' :
+                           ext === 'gif' ? 'image/gif' :
+                           ext === 'webp' ? 'image/webp' : 'image/jpeg';
+
+          content.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: imageBase64
+            }
+          });
+          content.push({
+            type: 'text',
+            text: `[Image: ${figureFile}]`
+          });
+        }
+
+        content.push({
+          type: 'text',
+          text: `Analyze each of the ${batchFigures.length} figures shown above.
+
+For EACH figure (${batchFigures.join(', ')}), provide a JSON object with:
+- "filename": the exact filename
+- "type": one of "worked_example", "diagram", "chart", "table", "concept_illustration", "decorative", "other"
+- "description": comprehensive description including what the figure shows AND any specific values/data
+- "flashcard_suggestion": brief suggestion for how to use this in a flashcard or null if decorative
+
+Return ONLY a JSON array of these objects, no other text.`
+        });
+
+        messages.push({ role: 'user', content });
+
+        const response = await claudeClient.callClaudeAPI(apiKey, {
+          model: 'claude-sonnet-4-5-20250514',
+          max_tokens: 4096,
+          messages
+        });
+
+        const resultText = response.content[0].text;
+        let jsonMatch = resultText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const batchResults = JSON.parse(jsonMatch[0]);
+          for (const item of batchResults) {
+            if (item.filename) {
+              manifest[item.filename] = {
+                type: item.type || 'other',
+                description: item.description || '',
+                flashcard_suggestion: item.flashcard_suggestion || null
+              };
+              if (verbose) {
+                console.log(`   ✓ ${item.filename}: ${item.type}`);
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`\x1b[31m❌ Error processing batch ${batchIdx + 1}: ${error.message}\x1b[0m`);
+      if (verbose) console.error(error);
+    }
+
+    // Save manifest after each batch (in case of interruption)
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    console.log(`   Saved progress (${Object.keys(manifest).length} total entries)`);
+  }
+
+  console.log();
+  console.log('\x1b[32m✨ Figure analysis complete!\x1b[0m');
+  console.log(`   Manifest saved: ${manifestPath}`);
+  console.log(`   Total figures: ${Object.keys(manifest).length}`);
+
+  // Summary by type
+  const typeCounts = {};
+  for (const entry of Object.values(manifest)) {
+    typeCounts[entry.type] = (typeCounts[entry.type] || 0) + 1;
+  }
+  console.log('   By type:');
+  for (const [type, count] of Object.entries(typeCounts).sort((a, b) => b[1] - a[1])) {
+    console.log(`     - ${type}: ${count}`);
+  }
+
+  // Step 2: Rename files DETERMINISTICALLY
+  if (rename) {
+    console.log();
+    console.log('\x1b[34m📝 Renaming figures...\x1b[0m');
+
+    // Track used filenames to handle collisions
+    const usedFilenames = new Set();
+    const renamedManifest = {};
+    let renameCount = 0;
+    let skipCount = 0;
+
+    // For multi-part groups, we need to use description from FIRST part for ALL parts
+    // First pass: collect base descriptions for multi-part groups
+    const groupBaseDescriptions = {};
+    for (const [base, parts] of Object.entries(multiPartGroups)) {
+      // Use description from the first part (lowest part number)
+      const firstPart = parts[0];
+      if (manifest[firstPart.filename]) {
+        groupBaseDescriptions[base] = manifest[firstPart.filename].description;
       }
     }
-    console.log();
-    console.log('\x1b[32m✨ Renaming complete!\x1b[0m');
-  } else {
-    console.log('\x1b[90m(Use without --dry-run to actually rename files)\x1b[0m');
+
+    // Process files in deterministic order (sorted by original filename)
+    const sortedFilenames = Object.keys(manifest).sort((a, b) => {
+      const numA = parseInt(a.match(/^(\d+)/)?.[1] || '0');
+      const numB = parseInt(b.match(/^(\d+)/)?.[1] || '0');
+      return numA - numB;
+    });
+
+    for (const oldFilename of sortedFilenames) {
+      const entry = manifest[oldFilename];
+      const ext = oldFilename.split('.').pop();
+
+      // Check if file still exists (might have been renamed in previous run)
+      const oldPath = join(figuresDir, oldFilename);
+      if (!existsSync(oldPath)) {
+        if (verbose) console.log(`   ⚠️  Skip ${oldFilename}: file not found`);
+        skipCount++;
+        continue;
+      }
+
+      // Determine the base slug for this file
+      let baseSlug;
+      let partSuffix = '';
+
+      const multiPartInfo = multiPartLookup.get(oldFilename);
+      if (multiPartInfo) {
+        // This is part of a multi-part group - use group's base description
+        const groupDescription = groupBaseDescriptions[multiPartInfo.base];
+        baseSlug = descriptionToSlug(groupDescription || entry.description);
+        partSuffix = `-${multiPartInfo.partNum}`;
+      } else {
+        // Single figure - use its own description
+        baseSlug = descriptionToSlug(entry.description);
+      }
+
+      if (!baseSlug) {
+        // Can't generate slug, keep original
+        renamedManifest[oldFilename] = entry;
+        usedFilenames.add(oldFilename);
+        skipCount++;
+        continue;
+      }
+
+      // Generate new filename with collision handling
+      let newFilename = `${baseSlug}${partSuffix}.${ext}`;
+      let collisionCounter = 0;
+
+      while (usedFilenames.has(newFilename) || (existsSync(join(figuresDir, newFilename)) && newFilename !== oldFilename)) {
+        collisionCounter++;
+        newFilename = `${baseSlug}${partSuffix}-${collisionCounter}.${ext}`;
+      }
+
+      if (newFilename === oldFilename) {
+        // No rename needed
+        renamedManifest[oldFilename] = entry;
+        usedFilenames.add(oldFilename);
+        skipCount++;
+        continue;
+      }
+
+      const newPath = join(figuresDir, newFilename);
+
+      try {
+        renameSync(oldPath, newPath);
+        renamedManifest[newFilename] = {
+          ...entry,
+          original_filename: oldFilename
+        };
+        usedFilenames.add(newFilename);
+        renameCount++;
+        if (verbose) console.log(`   ✓ ${oldFilename} → ${newFilename}`);
+      } catch (err) {
+        console.log(`   \x1b[31m❌ Failed to rename ${oldFilename}: ${err.message}\x1b[0m`);
+        renamedManifest[oldFilename] = entry;
+        usedFilenames.add(oldFilename);
+        skipCount++;
+      }
+    }
+
+    // Save updated manifest with new filenames
+    writeFileSync(manifestPath, JSON.stringify(renamedManifest, null, 2));
+
+    console.log(`   Renamed: ${renameCount} files`);
+    if (skipCount > 0) console.log(`   Skipped: ${skipCount} files`);
+    console.log(`   Updated manifest saved`);
   }
 }
 
