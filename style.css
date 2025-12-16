@@ -305,6 +305,7 @@ body {
     margin-bottom: 12px;
     gap: 2px;
     flex-wrap: wrap;
+    max-width: 640px; /* 2x sidebar width (320px) */
 }
 
 .deck-breadcrumb.hidden {
@@ -650,6 +651,7 @@ body {
 .study-progress {
     margin-top: 20px;
     margin-bottom: 20px;
+    max-width: 640px; /* 2x sidebar width (320px) */
 }
 
 .study-area {
@@ -662,6 +664,7 @@ body {
     padding: 40px;
     margin-bottom: 30px;
     min-height: 300px;
+    max-width: 640px; /* 2x sidebar width (320px) */
 }
 
 .card-content {
@@ -859,6 +862,7 @@ kbd {
     gap: 15px;
     justify-content: center;
     margin-top: 30px;
+    max-width: 640px; /* 2x sidebar width (320px) */
 }
 
 .grade-buttons.hidden {
@@ -954,6 +958,7 @@ kbd {
     flex-direction: column;
     align-items: center;
     gap: 16px;
+    max-width: 640px; /* 2x sidebar width (320px) */
 }
 
 .action-prompt .hint {

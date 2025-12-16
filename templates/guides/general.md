@@ -332,32 +332,50 @@ For each card you create:
 
 #### Figure Placement
 
-**Place figures BEFORE the answer/solution to provide visual context for thinking:**
+**⚠️ CRITICAL: Figure placement depends on what the figure shows!**
 
-- **Q/A cards**: Place figure RIGHT AFTER the question (before `A:`) so the learner sees it while thinking
-- **Problem cards**: Place figure RIGHT AFTER `P:` (before `S:`) so it's part of the problem statement
-- **Cloze cards**: Place figure after the cloze text (since there's no separate answer section)
+**Two types of figures:**
+1. **Problem setup figures** - Show the problem context (diagrams, shapes, data) → Place WITH the question
+2. **Worked solution figures** - Show the answer/steps → Place AFTER the answer/solution
 
-**Examples:**
+**Rules:**
+- **If figure shows the ANSWER or SOLUTION STEPS**: Place AFTER `A:` or at the END of `S:` section
+- **If figure shows only the PROBLEM SETUP** (no answer visible): Place with `Q:` or `P:`
+
+❌ **WRONG - reveals the answer:**
 ```markdown
-# Q/A - figure appears BEFORE answer:
-Q: What forces act on the block?
-
-![Free body diagram](../sources/chapter_1/figures/free-body-diagram.png)
-
-A: Weight pointing down, normal force perpendicular to surface...
-
-# P/S - figure appears WITH problem:
 P: Add: $43 + 26$
 
-![Addition with regrouping](../sources/chapter_1/figures/addition-with-regrouping.png)
+![Step-by-step addition showing 43 + 26 = 69](../sources/chapter_1/figures/addition-example.png)
+
+S:
+**IDENTIFY**: Two-digit addition...
+```
+**Problem**: The figure shows "= 69" which reveals the answer before the student thinks!
+
+✅ **CORRECT - figure placement based on content:**
+```markdown
+# Figure shows PROBLEM ONLY (no answer) → place with question:
+Q: What is the perimeter of this triangle?
+
+![Triangle with sides 3, 4, 5](../sources/chapter_1/figures/triangle-345.png)
+
+A: $3 + 4 + 5 = 12$ units
+
+# Figure shows WORKED SOLUTION → place AFTER answer:
+P: Add: $43 + 26$
 
 S:
 **IDENTIFY**: Two-digit addition with carrying
-...
+**EXECUTE**:
+- Ones: $3 + 6 = 9$
+- Tens: $4 + 2 = 6$
+**EVALUATE**: $43 + 26 = 69$ ✓
+
+![Step-by-step addition](../sources/chapter_1/figures/addition-43-26.png)
 ```
 
-**Why:** When reviewing, the figure should be visible WHILE thinking about the answer, not revealed afterward.
+**Quick test**: Look at the figure - does it show the answer? If yes, place it AFTER the answer section.
 
 #### Reusing Figures
 
