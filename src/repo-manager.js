@@ -20,13 +20,13 @@ export async function loadRepository(repoString) {
     const repoInfo = await githubClient.getRepository(owner, repo);
     console.log(`[RepoManager] Repo info fetched: ${repoInfo.full_name}`);
 
-    // Fetch all markdown files
-    console.log('[RepoManager] Fetching markdown files...');
-    const markdownFiles = await githubClient.getMarkdownFiles(owner, repo);
-    console.log(`[RepoManager] Found ${markdownFiles.length} markdown files`);
+    // Fetch all markdown files from flashcards/ folder only
+    console.log('[RepoManager] Fetching markdown files from flashcards/...');
+    const markdownFiles = await githubClient.getMarkdownFiles(owner, repo, 'flashcards');
+    console.log(`[RepoManager] Found ${markdownFiles.length} markdown files in flashcards/`);
 
     if (markdownFiles.length === 0) {
-        throw new Error(`No markdown files found in ${owner}/${repo}`);
+        throw new Error(`No markdown files found in ${owner}/${repo}/flashcards/. Repos must have a flashcards/ folder.`);
     }
 
     // Parse cards from each file - ONE deck per repo

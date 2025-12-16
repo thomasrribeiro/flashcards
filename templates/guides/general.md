@@ -246,14 +246,32 @@ If $P_c < P_e$ (binding):
 2. **Interpretation cards** - Test understanding of what the visual represents
 3. **Prediction cards** - Given partial visual information, what follows?
 
-**How to reference figures:**
+**How to include figures in cards:**
+
+⚠️ **CRITICAL**: Images must be placed AFTER the Q: or P: line (not before) to display with the question. Use markdown image syntax.
+
 ```markdown
-# Reference the figure using relative path from flashcards/ directory:
-Q: In the free-body diagram (../sources/chapter_2/images/abc123.jpg), what forces act on the block on an inclined plane?
+# Image displayed WITH the question (correct):
+Q: What forces act on the block on this inclined plane?
+
+![Free body diagram](../sources/chapter_2/figures/free-body-diagram.png)
+
 A: Weight ($mg$) pointing straight down, normal force ($N$) perpendicular to surface, and friction ($f$) parallel to surface opposing motion.
 
-Q: Looking at Figure 3.2 (../sources/chapter_3/images/def456.jpg), what does the slope of a position-time graph represent?
+Q: What does the slope of this position-time graph represent?
+
+![Position-time graph](../sources/chapter_3/figures/position-time-graph.png)
+
 A: Velocity. Steeper slope = faster motion; horizontal line = stationary; negative slope = moving backward.
+```
+
+❌ **DON'T** put images BEFORE the Q: line - they won't display with the card:
+```markdown
+# WRONG - image won't show with question:
+![Diagram](../sources/example/figures/diagram.png)
+
+Q: What does this diagram show?
+A: ...
 ```
 
 **Best practices for figure cards:**

@@ -143,28 +143,28 @@ export async function getAuthenticatedUser() {
 
 /**
  * Check if a repository contains valid flashcard markdown files
- * Returns true if repo has at least one .md file with Q:/A:/C: format
+ * Returns true if repo has a flashcards/ folder with at least one .md file with Q:/A:/C:/P: format
  */
 export async function hasFlashcardContent(owner, repo) {
     try {
-        // Get markdown files from the repo
-        const markdownFiles = await getMarkdownFiles(owner, repo);
+        // Only look in flashcards/ folder
+        const markdownFiles = await getMarkdownFiles(owner, repo, 'flashcards');
 
         if (markdownFiles.length === 0) {
-            console.log(`[GitHub Client] ${owner}/${repo}: No markdown files found`);
+            console.log(`[GitHub Client] ${owner}/${repo}: No markdown files found in flashcards/ folder`);
             return false;
         }
 
-        console.log(`[GitHub Client] ${owner}/${repo}: Found ${markdownFiles.length} markdown files`);
+        console.log(`[GitHub Client] ${owner}/${repo}: Found ${markdownFiles.length} markdown files in flashcards/`);
 
-        // Check each markdown file for Q:/A:/C: format
+        // Check each markdown file for Q:/A:/C:/P: format
         // We check all files (not just the first) to be more thorough
         for (const file of markdownFiles) {
             try {
                 const content = await getFileContent(owner, repo, file.path);
 
-                // Simple regex check for Q:, A:, or C: patterns
-                const hasFlashcardFormat = /^[QAC]:\s/m.test(content);
+                // Simple regex check for Q:, A:, C:, or P: patterns
+                const hasFlashcardFormat = /^[QACP]:\s/m.test(content);
 
                 if (hasFlashcardFormat) {
                     console.log(`[GitHub Client] ${owner}/${repo}: Found flashcard format in ${file.path}`);
@@ -176,7 +176,7 @@ export async function hasFlashcardContent(owner, repo) {
             }
         }
 
-        console.log(`[GitHub Client] ${owner}/${repo}: No flashcard format found in any markdown files`);
+        console.log(`[GitHub Client] ${owner}/${repo}: No flashcard format found in flashcards/ folder`);
         return false;
     } catch (error) {
         console.warn(`[GitHub Client] Could not check ${owner}/${repo}:`, error.message);

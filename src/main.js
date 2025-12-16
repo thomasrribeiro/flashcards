@@ -73,7 +73,18 @@ async function loadUserRepos() {
 
     console.log(`[Main] Loading ${repos.length} repos from D1:`, repos.map(r => r.id));
 
-    for (const repo of repos) {
+    const grid = document.getElementById('topics-grid');
+
+    for (let i = 0; i < repos.length; i++) {
+        const repo = repos[i];
+        // Extract display name (last part of owner/repo)
+        const displayName = repo.id.split('/').pop();
+
+        // Update loading status with specific deck name and progress
+        if (grid) {
+            grid.innerHTML = `<div class="loading">Loading ${displayName}... (${i + 1}/${repos.length})</div>`;
+        }
+
         try {
             await loadRepository(repo.id);
             console.log(`[Main] Loaded repo: ${repo.id}`);
@@ -532,7 +543,7 @@ async function handleAddRepository() {
         const hasFlashcards = await hasFlashcardContent(owner, repo);
 
         if (!hasFlashcards) {
-            alert(`Repository "${repoString}" does not contain any markdown files with Q:/A:/C: format flashcards. Please check the repository and try again.`);
+            alert(`Repository "${repoString}" must have a flashcards/ folder containing markdown files with Q:/A:/C:/P: format. Please check the repository structure and try again.`);
             addBtn.textContent = originalText;
             addBtn.disabled = false;
             input.disabled = false;
@@ -598,8 +609,17 @@ export async function loadLocalCollectionRepos() {
         const index = await indexResponse.json();
         console.log(`[Main] Found ${index.repos.length} repos in collection`);
 
+        const grid = document.getElementById('topics-grid');
+
         // Load each repo from the index
-        for (const repoInfo of index.repos) {
+        for (let i = 0; i < index.repos.length; i++) {
+            const repoInfo = index.repos[i];
+
+            // Update loading status with specific deck name and progress
+            if (grid) {
+                grid.innerHTML = `<div class="loading">Loading ${repoInfo.name}... (${i + 1}/${index.repos.length})</div>`;
+            }
+
             await loadLocalRepo(repoInfo);
         }
 

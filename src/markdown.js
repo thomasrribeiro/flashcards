@@ -27,7 +27,7 @@ renderer.image = function(href, title, text) {
         // For local decks: collection/deck-name/figures/...
         // For GitHub repos: owner/repo/figures/...
         const deckName = currentCardContext.deckName;
-        const filePath = currentCardContext.filePath || '';
+        const filePath = currentCardContext.source?.file || '';
 
         if (deckName.startsWith('local/')) {
             // Local deck: collection/deck-name/relative-path
@@ -43,10 +43,17 @@ renderer.image = function(href, title, text) {
             // Normalize path (resolve ../ and ./)
             src = normalizePath(fullPath);
         } else {
-            // GitHub repo: use same pattern
+            // GitHub repo: use raw.githubusercontent.com URL
+            // deckName is like "owner/repo", filePath is like "flashcards/file.md"
+            const [owner, repo] = deckName.split('/');
             const fileDir = filePath.substring(0, filePath.lastIndexOf('/'));
-            const fullPath = `collection/${deckName}/${fileDir}/${href}`;
-            src = normalizePath(fullPath);
+
+            // Build full path and normalize (resolve ../)
+            const fullPath = `${fileDir}/${href}`;
+            const normalizedPath = normalizePath(fullPath);
+
+            // Use raw.githubusercontent.com with main branch
+            src = `https://raw.githubusercontent.com/${owner}/${repo}/main/${normalizedPath}`;
         }
     }
     // Fallback to topics directory (legacy)
@@ -86,6 +93,11 @@ marked.setOptions({
 /**
  * Render LaTeX math using KaTeX
  * Supports inline $...$ and display $$...$$
+ *
+ * Pattern requirements for inline math:
+ * - Must start with $ followed by non-whitespace
+ * - Must end with non-whitespace followed by $
+ * - This prevents matching currency like "$100 bills"
  */
 function renderMath(text) {
     // Display math ($$...$$)
@@ -102,7 +114,22 @@ function renderMath(text) {
     });
 
     // Inline math ($...$)
-    text = text.replace(/\$([^\$\n]+?)\$/g, (match, math) => {
+    // Pattern: $ + non-whitespace + content + non-whitespace + $
+    // This prevents matching "$100 bills" as LaTeX
+    text = text.replace(/\$([^\s$][^$\n]*?[^\s$])\$/g, (match, math) => {
+        try {
+            return katex.renderToString(math.trim(), {
+                displayMode: false,
+                throwOnError: false,
+                output: 'html'
+            });
+        } catch (e) {
+            return `<span class="katex-error">${e.message}</span>`;
+        }
+    });
+
+    // Also handle single-character math like $x$ or $5$
+    text = text.replace(/\$([^\s$])\$/g, (match, math) => {
         try {
             return katex.renderToString(math.trim(), {
                 displayMode: false,
