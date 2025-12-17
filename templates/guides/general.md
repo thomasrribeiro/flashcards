@@ -377,6 +377,35 @@ S:
 
 **Quick test**: Look at the figure - does it show the answer? If yes, place it AFTER the answer section.
 
+#### ⚠️ MANDATORY: Answer-Check Protocol
+
+**Before placing ANY figure, you MUST complete this checklist:**
+
+1. **What answer is the question asking for?**
+   - Identify the specific value, result, or conclusion the student must determine
+
+2. **Does the figure reveal this answer?**
+   - Read the figure's catalog description carefully
+   - Look for: "= [result]", "resulting in [answer]", final values, completed solutions
+   - If the description contains the answer → figure reveals it
+
+3. **Make your placement decision:**
+   - **Answer revealed** → Place AFTER `A:` or at END of `S:` section
+   - **No answer shown** (setup only) → Place WITH `Q:` or `P:` section
+
+**Example analysis:**
+
+| Figure Description | Question | Contains Answer? | Placement |
+|-------------------|----------|------------------|-----------|
+| "Step-by-step solution showing [X] = [Y]" | "Solve [X]" | YES - shows "= [Y]" | AFTER solution |
+| "Diagram showing [setup details]" | "Find [something]" | NO - setup only | WITH question |
+| "Worked example resulting in [answer]" | "Calculate [problem]" | YES - shows result | AFTER solution |
+
+**Key patterns that reveal answers:**
+- `= [number]` or `= [result]`
+- "resulting in", "final answer", "solution is"
+- Completed calculations or derivations
+
 #### Reusing Figures
 
 The same figure can appear in multiple related cards - this reinforces visual learning. Don't hesitate to reference a figure in several cards if it's relevant to each.
@@ -396,6 +425,7 @@ When a **Figure Catalog** is provided below the guides, it contains pre-analyzed
 1. **`worked_example`**: Create P:/S: card using the content from the description
    - The "Shows" field contains the specific problem/values to use
    - Your solution steps should match what the figure shows
+   - **⚠️ IMPORTANT: Place the figure AFTER the S: section** (since worked_example figures contain the answer)
 
 2. **`diagram`/`concept_illustration`**: Create Q:/A: or C: card
    - Ask about what the visual represents
@@ -415,11 +445,9 @@ If the catalog shows:
 - Use as: P:/S: card for multi-digit addition
 ```
 
-Create:
+Create (note: figure placed AFTER solution since it shows the answer):
 ```markdown
 P: Add: $1,683 + 479$
-
-![Addition with carrying](../sources/<source_name>/figures/addition-carrying.png)
 
 S:
 **IDENTIFY**: Multi-digit addition with carrying
@@ -429,6 +457,8 @@ S:
 - Hundreds: 6 + 4 + 1 = 11, write 1 carry 1
 - Thousands: 1 + 0 + 1 = 2
 **EVALUATE**: $1,683 + 479 = 2,162$ ✓
+
+![Addition with carrying](../sources/<source_name>/figures/addition-carrying.png)
 ```
 
 **The catalog's Shows field is the source of truth for worked examples.**
