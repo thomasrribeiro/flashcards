@@ -60,23 +60,40 @@ export function getRetrievability(card, now = new Date()) {
 }
 
 /**
+ * Coerce a FSRS card's date fields to Date objects.
+ * Cards deserialized from JSON/localStorage/D1 have string dates.
+ */
+export function rehydrateFsrsCard(card) {
+    if (!card) return card;
+    return {
+        ...card,
+        due: card.due instanceof Date ? card.due : new Date(card.due),
+        last_review: card.last_review
+            ? (card.last_review instanceof Date ? card.last_review : new Date(card.last_review))
+            : undefined
+    };
+}
+
+/**
  * Check if a card is due for review
- * @param {Object} card - FSRS card object
+ * @param {Object} card - FSRS card object (due may be Date or ISO string)
  * @param {Date} now - Current time
  * @returns {boolean}
  */
 export function isDue(card, now = new Date()) {
-    return card.due <= now;
+    const due = card.due instanceof Date ? card.due : new Date(card.due);
+    return due <= now;
 }
 
 /**
  * Get days until card is due
- * @param {Object} card - FSRS card object
+ * @param {Object} card - FSRS card object (due may be Date or ISO string)
  * @param {Date} now - Current time
  * @returns {number} - Days (can be negative if overdue)
  */
 export function getDaysUntilDue(card, now = new Date()) {
-    const diffMs = card.due - now;
+    const due = card.due instanceof Date ? card.due : new Date(card.due);
+    const diffMs = due - now;
     return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 

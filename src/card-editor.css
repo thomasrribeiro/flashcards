@@ -1,0 +1,391 @@
+/**
+ * Card Editor Styles
+ */
+
+/* Card Editor Modal - larger than other modals */
+.card-editor-content {
+    width: 90vw;
+    max-width: 1000px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Card Type Tabs */
+.card-type-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--black);
+    background: var(--light-gray);
+}
+
+.card-type-tab {
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--black);
+    opacity: 0.6;
+    transition: opacity 0.2s, border-color 0.2s;
+}
+
+.card-type-tab:hover {
+    opacity: 0.8;
+}
+
+.card-type-tab.active {
+    opacity: 1;
+    border-bottom-color: var(--gold);
+    font-weight: 600;
+}
+
+/* Editor Layout - Two Pane */
+.editor-layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.editor-pane {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    border-right: 1px solid #e0e0e0;
+}
+
+.preview-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--light-gray);
+}
+
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #666;
+}
+
+.preview-toggle {
+    padding: 4px 12px;
+    background: var(--white);
+    border: 1px solid var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.preview-toggle:hover {
+    background: var(--black);
+    color: var(--white);
+}
+
+.preview-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.preview-placeholder {
+    color: #999;
+    font-style: italic;
+}
+
+.preview-error {
+    color: #c00;
+    font-size: 12px;
+}
+
+/* Form Groups */
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.form-textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: vertical;
+    background: var(--white);
+}
+
+.form-textarea:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(245, 200, 66, 0.3);
+}
+
+.form-textarea::placeholder {
+    color: #999;
+    font-size: 13px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    background: var(--white);
+}
+
+.form-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(245, 200, 66, 0.3);
+}
+
+.form-hint {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #666;
+}
+
+.form-error {
+    padding: 10px 15px;
+    margin: 0 20px 15px;
+    background: #fff0f0;
+    border: 1px solid #ffcccc;
+    color: #c00;
+    font-size: 13px;
+}
+
+.form-info {
+    padding: 12px 15px;
+    background: rgba(245, 200, 66, 0.1);
+    border-left: 3px solid var(--gold);
+    font-size: 13px;
+    margin-bottom: 16px;
+}
+
+.form-info p {
+    margin: 0;
+}
+
+/* Cloze-specific styles */
+.cloze-hint {
+    font-weight: normal;
+    color: #666;
+    margin-left: 8px;
+    font-size: 11px;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.cloze-toolbar {
+    position: absolute;
+    background: var(--black);
+    padding: 4px;
+    border-radius: 4px;
+    z-index: 100;
+    margin-top: -40px;
+}
+
+.cloze-toolbar-btn {
+    padding: 6px 12px;
+    background: var(--gold);
+    border: none;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+.cloze-toolbar-btn:hover {
+    background: #e0b83a;
+}
+
+.cloze-count {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #666;
+}
+
+/* File path group */
+.file-path-group {
+    padding: 0 20px;
+    margin-bottom: 0;
+}
+
+.file-path-group label {
+    font-size: 11px;
+}
+
+.file-path-group .form-input {
+    font-size: 12px;
+    padding: 8px 10px;
+}
+
+/* Modal Footer */
+.card-editor-content .modal-footer {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+    border-top: 1px solid var(--black);
+    gap: 10px;
+}
+
+.footer-spacer {
+    flex: 1;
+}
+
+.btn-danger {
+    padding: 10px 20px;
+    background: #fff0f0;
+    color: #c00;
+    border: 1px solid #c00;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.btn-danger:hover {
+    background: #c00;
+    color: var(--white);
+}
+
+.btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Preview content styles */
+.preview-content .preview-question,
+.preview-content .preview-problem {
+    margin-bottom: 0;
+}
+
+.preview-content .answer-separator {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px dashed #ccc;
+}
+
+.preview-content .cloze {
+    background: var(--gold);
+    color: var(--black);
+    padding: 2px 8px;
+    border-radius: 2px;
+}
+
+.preview-content .cloze-reveal {
+    background: var(--gold);
+    color: var(--black);
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-weight: 700;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .card-editor-content {
+        width: 95vw;
+        max-height: 95vh;
+    }
+
+    .editor-layout {
+        flex-direction: column;
+    }
+
+    .editor-pane {
+        border-right: none;
+        border-bottom: 1px solid #e0e0e0;
+        max-height: 50vh;
+    }
+
+    .preview-pane {
+        max-height: 40vh;
+    }
+
+    .card-type-tabs {
+        overflow-x: auto;
+    }
+}
+
+/* Deck Creator and Folder Creator specific styles */
+.deck-creator-content,
+.folder-creator-content {
+    width: 90vw;
+    max-width: 450px;
+}
+
+/* Action bar for New Card / New Folder buttons */
+.deck-action-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.btn-action {
+    padding: 8px 16px;
+    background: var(--white);
+    color: var(--black);
+    border: 1px solid var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.btn-action:hover {
+    background: var(--black);
+    color: var(--white);
+}
+
+.btn-action .icon {
+    font-size: 14px;
+}
+
+/* Edit button on cards */
+.card-edit-btn {
+    width: 32px;
+    height: 32px;
+    padding: 6px;
+    background: var(--white);
+    border: 1px solid var(--black);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    transition: opacity 0.15s ease;
+}
+
+.card-edit-btn:hover {
+    opacity: 0.6;
+}
+
+.card-edit-btn img,
+.card-edit-btn svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}

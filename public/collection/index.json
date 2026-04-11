@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-01-05T20:40:10.037Z",
-  "repoCount": 2,
-  "fileCount": 18,
+  "generatedAt": "2026-04-11T03:59:43.335Z",
+  "repoCount": 1,
+  "fileCount": 12,
   "repos": [
     {
       "name": "example",
@@ -18,17 +18,6 @@
         "flashcards/mathematics.md",
         "flashcards/physics.md",
         "flashcards/sports.md"
-      ]
-    },
-    {
-      "name": "test",
-      "files": [
-        "flashcards/1_units_physical_quantities_vectors.md",
-        "flashcards/1_units_physical_quantities_vectors_complete.md",
-        "flashcards/1_units_physical_quantities_vectors_old.md",
-        "flashcards/2_motion_along_a_straight_line_old.md",
-        "flashcards/chapter_1.md",
-        "flashcards/out.md"
       ]
     }
   ]

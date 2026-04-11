@@ -5,5 +5,4 @@ public/data/
 *.log
 .env
 
-public/collection/test/
 public/collection/index.json

@@ -47,8 +47,23 @@ class GitHubAuth {
         const username = urlParams.get('user');
         const name = urlParams.get('name');
         const avatar = urlParams.get('avatar');
+        const returnedState = urlParams.get('state');
 
         if (githubToken && username) {
+            // Verify CSRF state parameter
+            const storedState = sessionStorage.getItem('oauth_state');
+            sessionStorage.removeItem('oauth_state');
+
+            if (storedState && returnedState !== storedState) {
+                console.error('[GitHub Auth] OAuth state mismatch — possible CSRF attack');
+                // Clear the URL and bail out
+                history.replaceState({}, '', window.location.pathname);
+                return;
+            }
+
+            // Clear token from URL immediately before any async work
+            history.replaceState({}, '', window.location.pathname);
+
             const user = {
                 username,
                 name: name || username,
@@ -71,8 +86,7 @@ class GitHubAuth {
             await initDB();
 
             // Reload page to refresh UI and content
-            // Clean URL by redirecting to root
-            window.location.href = window.location.pathname;
+            window.location.reload();
         }
     }
 
@@ -96,9 +110,14 @@ class GitHubAuth {
             return;
         }
 
+        // Generate a random CSRF state and store in sessionStorage
+        const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+            .map(b => b.toString(16).padStart(2, '0')).join('');
+        sessionStorage.setItem('oauth_state', state);
+
         // Redirect to GitHub OAuth
         const redirectUri = `${WORKER_URL}/auth/github/callback`;
-        window.location.href = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=repo&redirect_uri=${encodeURIComponent(redirectUri)}`;
+        window.location.href = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=repo&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     }
 
     logout() {

@@ -4,6 +4,8 @@
  * Only review state (FSRS) is persisted to D1 via worker API
  */
 
+import { State } from './fsrs-client.js';
+
 // Get worker URL from environment
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 
@@ -11,6 +13,10 @@ const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 let cardsCache = [];
 let reposCache = [];
 let reviewsCache = []; // Local cache of reviews fetched from D1
+let reposListCache = null; // Cached list from D1 (avoids duplicate fetches in same session)
+
+// Track which repo IDs fully loaded in this session (for safe orphan cleanup)
+let fullyLoadedRepos = new Set();
 
 // Current user info (set after GitHub auth)
 let currentUser = null;
@@ -81,11 +87,8 @@ export async function initDB() {
             throw new Error(`Failed to ensure user: ${response.statusText} - ${errorText}`);
         }
 
-        // Load all reviews from D1
-        await loadReviewsFromD1();
-
-        // Load user's repos from D1
-        await loadReposFromD1();
+        // Load reviews and repo list in parallel — neither depends on the other
+        await Promise.all([loadReviewsFromD1(), loadReposFromD1()]);
 
         console.log('[Storage] D1 initialized successfully');
     } catch (error) {
@@ -97,7 +100,13 @@ export async function initDB() {
  * Load all repos from D1 for current user
  */
 export async function loadReposFromD1() {
-    if (!currentUser) return;
+    if (!currentUser) return [];
+
+    // Return cached list if already fetched this session
+    if (reposListCache !== null) {
+        console.log(`[Storage] loadReposFromD1: returning ${reposListCache.length} cached repos`);
+        return reposListCache;
+    }
 
     try {
         const userId = currentUser.github_id || currentUser.id;
@@ -110,8 +119,8 @@ export async function loadReposFromD1() {
         const { repos } = await response.json();
         console.log(`[Storage] Loaded ${repos.length} repos from D1:`, repos.map(r => r.repo_id));
 
-        // Return repo IDs so they can be loaded by main.js
-        return repos.map(r => ({ id: r.repo_id, owner: r.owner, name: r.repo_name }));
+        reposListCache = repos.map(r => ({ id: r.repo_id, owner: r.owner, name: r.repo_name }));
+        return reposListCache;
     } catch (error) {
         console.error('[Storage] Failed to load repos from D1:', error);
         return [];
@@ -174,12 +183,21 @@ async function loadReviewsFromD1(mergeWithLocalStorage = true) {
 }
 
 /**
+ * Mark a repo as having fully loaded (used by orphan cleanup safety gate)
+ */
+export function markRepoLoaded(repoId) {
+    fullyLoadedRepos.add(repoId);
+}
+
+/**
  * Clear all data
  */
 export async function clearLocalStorage() {
     cardsCache = [];
     reposCache = [];
     reviewsCache = [];
+    reposListCache = null;
+    fullyLoadedRepos = new Set();
     currentUser = null;
     return Promise.resolve();
 }
@@ -446,6 +464,8 @@ export async function saveRepoMetadata(repo) {
             } else {
                 const result = await response.json();
                 console.log(`[Storage] Repo synced to D1: ${result.cardsRegistered} cards registered`);
+                // Invalidate list cache so the new repo appears in future loadReposFromD1 calls
+                reposListCache = null;
             }
         } catch (error) {
             console.error('[Storage] Error syncing repo to D1:', error);
@@ -525,6 +545,9 @@ export async function removeRepo(repoId) {
         }
     }
 
+    // Invalidate the repos-list cache so a subsequent loadReposFromD1 re-fetches
+    reposListCache = null;
+
     // Remove from local caches
     reposCache = reposCache.filter(r => r.id !== repoId);
 
@@ -562,7 +585,8 @@ export async function getStats() {
     const allReviews = await getAllReviews();
 
     const dueReviews = allReviews.filter(r => new Date(r.fsrsCard.due) <= now);
-    const newCards = allReviews.filter(r => r.fsrsCard.state === 0);
+    // State.New === 0 in ts-fsrs; use the constant to be explicit
+    const newCards = allReviews.filter(r => r.fsrsCard.state === State.New);
 
     return Promise.resolve({
         totalCards: cardsCache.length,
@@ -635,8 +659,10 @@ export async function getAllSubjects() {
 }
 
 /**
- * Clean up orphaned reviews (reviews for cards that no longer exist)
- * Returns count of orphaned reviews removed
+ * Clean up orphaned reviews (reviews for cards that no longer exist).
+ * Only considers reviews from repos that fully loaded this session to avoid
+ * deleting valid reviews when a repo failed to load due to a transient error.
+ * Returns count of orphaned reviews removed.
  */
 export async function cleanupOrphanedReviews() {
     if (!currentUser) {
@@ -644,30 +670,54 @@ export async function cleanupOrphanedReviews() {
         return 0;
     }
 
-    // Find reviews for hashes that don't exist in current cards
-    const cardHashes = new Set(cardsCache.map(c => c.hash));
-    const orphanedReviews = reviewsCache.filter(r => !cardHashes.has(r.cardHash));
+    if (fullyLoadedRepos.size === 0) {
+        console.log('[Storage] No fully-loaded repos yet — skipping orphan cleanup');
+        return 0;
+    }
+
+    // Only look at cards from repos that successfully loaded
+    const loadedCardHashes = new Set(
+        cardsCache
+            .filter(c => fullyLoadedRepos.has(c.source?.repo || c.deckName))
+            .map(c => c.hash)
+    );
+
+    // Only flag reviews whose repo is in our fully-loaded set
+    const orphanedReviews = reviewsCache.filter(r => {
+        const card = cardsCache.find(c => c.hash === r.cardHash);
+        const repoId = card?.source?.repo || card?.deckName || r.cardHash;
+        if (!fullyLoadedRepos.has(repoId)) {
+            return false; // don't touch reviews from repos we didn't load
+        }
+        return !loadedCardHashes.has(r.cardHash);
+    });
 
     if (orphanedReviews.length === 0) {
         console.log('[Storage] No orphaned reviews found');
         return 0;
     }
 
+    // Safety threshold: never delete more than 20% of all reviews at once
+    const threshold = Math.ceil(reviewsCache.length * 0.20);
+    if (orphanedReviews.length > threshold) {
+        console.warn(`[Storage] Orphan cleanup would remove ${orphanedReviews.length} reviews (>${threshold} threshold). Skipping to be safe.`);
+        return 0;
+    }
+
     console.log(`[Storage] Found ${orphanedReviews.length} orphaned reviews`);
-    console.log('[Storage] Orphaned hashes:', orphanedReviews.map(r => r.cardHash));
 
     // Remove from local cache
-    reviewsCache = reviewsCache.filter(r => cardHashes.has(r.cardHash));
+    const orphanedHashes = new Set(orphanedReviews.map(r => r.cardHash));
+    reviewsCache = reviewsCache.filter(r => !orphanedHashes.has(r.cardHash));
 
     // Remove from D1
     try {
         const userId = currentUser.github_id || currentUser.id;
-        const orphanedHashes = orphanedReviews.map(r => r.cardHash);
 
         const response = await fetch(`${WORKER_URL}/api/reviews/cleanup`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, cardHashes: orphanedHashes })
+            body: JSON.stringify({ userId, cardHashes: [...orphanedHashes] })
         });
 
         if (!response.ok) {

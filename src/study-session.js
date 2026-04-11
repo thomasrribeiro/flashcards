@@ -83,6 +83,67 @@ function renderStepLabel(label) {
 }
 
 /**
+ * Start a drill-all session: pool cards from every deck and shuffle them.
+ * Uses the normal FSRS scheduling path so reviews still count.
+ */
+export async function startDrillSession(onComplete, onCardChange, options = {}) {
+    const { maxCards = 50, subject = null } = options;
+
+    state = {
+        currentCardIndex: 0,
+        dueCards: [],
+        totalCards: 0,
+        reviewedCards: 0,
+        reviewedCount: 0,
+        isRevealed: false,
+        currentCard: null,
+        currentFsrsCard: null,
+        currentStepIndex: 0,
+        solutionSteps: [],
+        deckId: '__drill-all__',
+        fileFilter: null,
+        onComplete,
+        onCardChange
+    };
+
+    const allCards = await getAllCards();
+    const allReviews = await getAllReviews();
+    const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
+
+    // Filter by subject if provided
+    let filteredCards = allCards;
+    if (subject !== null) {
+        filteredCards = allCards.filter(card => {
+            const cardSubject = (card.deckMetadata?.subject && card.deckMetadata.subject.trim())
+                ? card.deckMetadata.subject.trim().toLowerCase()
+                : 'misc';
+            return cardSubject === subject;
+        });
+    }
+
+    // Shuffle all cards with Fisher-Yates
+    const pool = [...filteredCards];
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+
+    const picked = pool.slice(0, maxCards);
+    const cardsToStudy = picked.map(card => {
+        const review = reviewMap.get(card.hash);
+        const fsrsCard = review ? review.fsrsCard : createCard();
+        return { card, fsrsCard, cardHash: card.hash };
+    });
+
+    state.dueCards = cardsToStudy;
+    state.totalCards = cardsToStudy.length;
+    state.reviewedCards = 0;
+
+    updateStats();
+    showNextCard();
+}
+
+/**
  * Start a study session
  * @param {string} deckId - The deck ID
  * @param {string} fileFilter - Optional file path filter
@@ -124,7 +185,7 @@ export async function startSession(deckId, fileFilter, onComplete, onCardChange)
 async function loadDueCards(deckId, fileFilter) {
     // Get ALL cards for this deck
     const allCards = await getAllCards();
-    let deckCards = allCards.filter(card => card.deckName === deckId);
+    let deckCards = allCards.filter(card => card.deckName === deckId || card.source?.repo === deckId);
 
     console.log(`[StudySession] Total cards in deck ${deckId}: ${deckCards.length}`);
 
@@ -337,12 +398,12 @@ export function revealAnswer() {
  * Grade the current card
  */
 export async function gradeCard(grade) {
-    if (!state.isRevealed) return;
+    if (!state.isRevealed || !state.currentCard) return;
 
     // Review the card
     const result = reviewCard(state.currentFsrsCard, grade, new Date());
 
-    console.log(`[StudySession] Graded card ${state.currentCard.hash.substring(0, 8)} with grade ${grade}`);
+    console.log(`[StudySession] Graded card ${state.currentCard.hash?.substring(0, 8)} with grade ${grade}`);
     console.log(`[StudySession] New due date: ${result.card.due}`);
 
     // Save updated FSRS state

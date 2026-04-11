@@ -5,7 +5,7 @@
 import { parseDeck } from './parser.js';
 import { hashCard } from './hasher.js';
 import * as githubClient from './github-client.js';
-import { saveCards, getAllCards, saveRepoMetadata, getRepoMetadata, getAllRepos } from './storage.js';
+import { saveCards, getAllCards, saveRepoMetadata, getRepoMetadata, getAllRepos, markRepoLoaded } from './storage.js';
 
 /**
  * Load cards from a GitHub repository
@@ -20,9 +20,23 @@ export async function loadRepository(repoString) {
     const repoInfo = await githubClient.getRepository(owner, repo);
     console.log(`[RepoManager] Repo info fetched: ${repoInfo.full_name}`);
 
-    // Fetch all markdown files from flashcards/ folder only
+    // Detect transferred/renamed repos: GitHub's REST API follows redirects transparently,
+    // so a successful 200 can still come from a different full_name than we asked for.
+    // Treat this like a 404 so the caller auto-evicts the stale D1 entry instead of
+    // creating a duplicate deck under the old path.
+    const requested = `${owner}/${repo}`.toLowerCase();
+    const actual = (repoInfo.full_name || '').toLowerCase();
+    if (actual && actual !== requested) {
+        const err = new Error(`Repository ${requested} has moved to ${repoInfo.full_name}`);
+        err.status = 404;
+        err.movedTo = repoInfo.full_name;
+        throw err;
+    }
+
+    // Fetch all markdown files from flashcards/ folder only.
+    // Pass default_branch to avoid a redundant getRepository call inside getMarkdownFiles.
     console.log('[RepoManager] Fetching markdown files from flashcards/...');
-    const markdownFiles = await githubClient.getMarkdownFiles(owner, repo, 'flashcards');
+    const markdownFiles = await githubClient.getMarkdownFiles(owner, repo, 'flashcards', repoInfo.default_branch);
     console.log(`[RepoManager] Found ${markdownFiles.length} markdown files in flashcards/`);
 
     if (markdownFiles.length === 0) {
@@ -40,18 +54,32 @@ export async function loadRepository(repoString) {
     // Aggregate metadata from files
     let deckMetadata = {
         order: null,
-        tags: []
+        tags: [],
+        subject: null,
+        topic: null
     };
 
     // Sort files by path (respects 01_, 02_ prefixes)
     const sortedFiles = [...markdownFiles].sort((a, b) => a.path.localeCompare(b.path));
     console.log('[RepoManager] File processing order:', sortedFiles.map(f => f.path));
 
-    for (const file of sortedFiles) {
+    // Fetch all file contents in parallel (SHA enables localStorage cache hits)
+    const fileContents = await Promise.all(
+        sortedFiles.map(async (file) => {
+            try {
+                const content = await githubClient.getFileContent(owner, repo, file.path, file.sha);
+                return { file, content, ok: true };
+            } catch (error) {
+                console.error(`[RepoManager] Error fetching ${file.path}:`, error);
+                return { file, content: null, ok: false };
+            }
+        })
+    );
+
+    for (const { file, content, ok } of fileContents) {
+        if (!ok) continue;
         try {
-            console.log(`[RepoManager] Processing file: ${file.path}`);
-            const content = await githubClient.getFileContent(owner, repo, file.path);
-            console.log(`[RepoManager] File content length: ${content.length} chars`);
+            console.log(`[RepoManager] Processing file: ${file.path} (${content.length} chars)`);
 
             const { cards, metadata } = parseDeck(content, file.path);
             console.log(`[RepoManager] Parsed ${cards.length} cards from ${file.path}`);
@@ -63,8 +91,15 @@ export async function loadRepository(repoString) {
             if (metadata.tags?.length > 0) {
                 deckMetadata.tags = [...new Set([...deckMetadata.tags, ...metadata.tags])];
             }
+            // Take first non-null subject/topic we encounter (usually chapter 1)
+            if (deckMetadata.subject === null && metadata.subject) {
+                deckMetadata.subject = metadata.subject;
+            }
+            if (deckMetadata.topic === null && metadata.topic) {
+                deckMetadata.topic = metadata.topic;
+            }
 
-            // Add repository source and metadata to each card
+            // Add repository source; deckMetadata is attached after aggregation below
             const cardsWithMeta = cards.map(card => {
                 const hash = hashCard(card);
                 return {
@@ -76,7 +111,6 @@ export async function loadRepository(repoString) {
                         sha: file.sha
                     },
                     deckName: deckId,
-                    deckMetadata: metadata,
                     id: `${deckId}#${hash}`
                 };
             });
@@ -93,19 +127,18 @@ export async function loadRepository(repoString) {
     console.log(`[RepoManager] Total parsed: ${allCards.length} cards from ${totalFiles} files`);
     console.log(`[RepoManager] Single deck ID: ${deckId}`);
 
-    // Save repository metadata
-    console.log('[RepoManager] Saving repository metadata...');
+    // Save consolidated repo+deck metadata in a single call
+    console.log('[RepoManager] Saving repository/deck metadata...');
     const repoData = githubClient.createRepoData(repoInfo, markdownFiles);
-    await saveRepoMetadata(repoData);
-    console.log('[RepoManager] Repository metadata saved:', repoData.id);
-
-    // Save single deck metadata for the entire repository
-    console.log('[RepoManager] Saving deck metadata...');
     const deck = {
+        ...repoData,
         id: deckId,
         name: repoInfo.name,
+        description: repoInfo.description || '',
         order: deckMetadata.order,
         tags: deckMetadata.tags,
+        subject: deckMetadata.subject || null,
+        topic: deckMetadata.topic || null,
         repo: `${owner}/${repo}`,
         cardCount: allCards.length,
         fileCount: totalFiles,
@@ -114,17 +147,25 @@ export async function loadRepository(repoString) {
     await saveRepoMetadata(deck);
     console.log(`[RepoManager] Saved deck metadata for: ${deck.id}`);
 
+    // Attach the final aggregated deckMetadata to all cards
+    const aggregatedMeta = { order: deckMetadata.order, tags: deckMetadata.tags,
+        subject: deckMetadata.subject || null, topic: deckMetadata.topic || null };
+    const cardsWithDeckMeta = allCards.map(c => ({ ...c, deckMetadata: aggregatedMeta }));
+
     // Save cards to storage
     console.log('[RepoManager] Saving cards to storage...');
-    await saveCards(allCards);
-    console.log(`[RepoManager] ${allCards.length} cards saved to storage`);
+    await saveCards(cardsWithDeckMeta);
+    console.log(`[RepoManager] ${cardsWithDeckMeta.length} cards saved to storage`);
+
+    // Mark repo as fully loaded so orphan cleanup can safely include it
+    markRepoLoaded(deckId);
 
     console.log(`=== [RepoManager] Load complete for ${repoString} ===\n`);
 
     return {
-        repository: repoData,
+        repository: deck,
         deck,
-        cards: allCards,
+        cards: cardsWithDeckMeta,
         filesProcessed: totalFiles
     };
 }
@@ -191,40 +232,3 @@ export async function getRepoStats(repoId) {
     };
 }
 
-/**
- * Load default example repository
- */
-export async function loadDefaultRepo() {
-    // For now, use a simple example
-    const exampleCards = [
-        {
-            type: 'basic',
-            content: {
-                question: 'What is spaced repetition?',
-                answer: 'A learning technique that presents information at gradually increasing intervals.'
-            }
-        },
-        {
-            type: 'basic',
-            content: {
-                question: 'How do you add a new repository?',
-                answer: 'Enter the GitHub repository in the format "owner/repository" and click the + button.'
-            }
-        },
-        {
-            type: 'cloze',
-            content: {
-                text: 'The FSRS algorithm adapts to your [personal memory patterns].',
-                cloze: 'personal memory patterns'
-            }
-        }
-    ].map(card => ({
-        ...card,
-        hash: hashCard(card),
-        deckName: 'example',
-        source: { repo: 'local', file: 'example.md' }
-    }));
-
-    await saveCards(exampleCards);
-    return exampleCards;
-}

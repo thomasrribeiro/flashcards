@@ -92,7 +92,8 @@ async function fetchPrereqContent(prereqRef) {
     return { content, prereqs };
   }
 
-  // Remote fetch
+  // Remote fetch — warn so the user can verify the URL before content is injected into the prompt
+  console.warn(`\x1b[33m⚠  Fetching remote prerequisite: ${prereqRef.url}\x1b[0m`);
   try {
     const response = await fetch(prereqRef.url);
     if (!response.ok) {

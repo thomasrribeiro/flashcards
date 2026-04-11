@@ -19,6 +19,27 @@ body {
     background: var(--white);
 }
 
+/* Global clickable element cursor fix */
+button,
+[role="button"],
+.btn-github-login,
+.btn-logout,
+.btn-primary,
+.btn-cancel,
+.btn-reveal,
+.add-repo-btn,
+.grade-btn,
+.modal-close,
+.card-delete-btn,
+.card-reset-btn,
+.card-review-btn,
+.collapsible-header,
+.breadcrumb-clickable,
+.breadcrumb-segment[onclick],
+a[href] {
+    cursor: pointer;
+}
+
 .container {
     max-width: 100%;
     margin: 0;
@@ -37,6 +58,7 @@ body {
     display: flex;
     justify-content: flex-start;
     margin-bottom: 20px;
+    margin-top: 20px;
 }
 
 .btn-github-login {
@@ -183,9 +205,14 @@ body {
     height: 0;
     border-style: solid;
     display: inline-block;
-    transition: transform 0.2s;
+    transition: transform 0.2s, border-color 0.15s ease;
     border-width: 4px 0 4px 7px;
     border-color: transparent transparent transparent var(--gold);
+    cursor: pointer;
+}
+
+.collapsible-header:hover .toggle-icon {
+    border-color: transparent transparent transparent #f8d96b;
 }
 
 .collapsible-header[data-section] .toggle-icon {
@@ -365,6 +392,7 @@ body {
     transition: opacity 0.3s ease;
     display: flex;
     align-items: center;
+    cursor: pointer;
 }
 
 .social-icons a:hover {
@@ -472,6 +500,10 @@ body {
 .add-repo-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.create-deck-btn {
+    margin-left: 5px;
 }
 
 
@@ -601,7 +633,9 @@ body {
     align-items: center;
     justify-content: center;
     font-family: 'IBM Plex Mono', monospace;
+    transition: opacity 0.15s ease;
 }
+
 
 .card-delete-btn {
     font-size: 24px;
@@ -620,6 +654,60 @@ body {
     font-size: 14px;
     color: var(--black);
     padding: 20px;
+}
+
+.evicted-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 0 0 16px 0;
+    padding: 12px 16px;
+    background: #fff8e1;
+    border: 1px solid #e6c86b;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #5a4300;
+}
+
+.evicted-notice-body {
+    flex: 1;
+}
+
+.evicted-notice-body strong {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.evicted-notice-body ul {
+    margin: 0 0 6px 18px;
+    padding: 0;
+}
+
+.evicted-notice-body code {
+    background: rgba(0, 0, 0, 0.06);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.evicted-notice-hint {
+    margin: 4px 0 0 0;
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.evicted-notice-dismiss {
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    line-height: 1;
+    color: #5a4300;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+.evicted-notice-dismiss:hover {
+    color: #000;
 }
 
 /* Study Interface */
@@ -884,13 +972,6 @@ kbd {
     min-width: 100px;
 }
 
-.grade-btn:hover {
-    background: var(--light-gray);
-}
-
-.grade-btn:active {
-    transform: translateY(1px);
-}
 
 .grade-btn kbd {
     background: var(--black);
@@ -949,9 +1030,6 @@ kbd {
     transition: opacity 0.2s ease;
 }
 
-.btn-reveal:hover {
-    opacity: 0.8;
-}
 
 .action-prompt {
     display: flex;
@@ -1283,7 +1361,10 @@ kbd {
 
 /* Filter and Sort Controls */
 .controls-bar {
-    display: inline-block;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
     margin-bottom: 30px;
     margin-top: 20px;
 }
@@ -1298,6 +1379,39 @@ kbd {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 12px;
     width: 320px;
+}
+
+.category-filter {
+    padding: 10px 15px;
+    border: 1px solid var(--black);
+    background: var(--white);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    min-width: 160px;
+}
+
+.category-filter:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+}
+
+.drill-all-btn {
+    padding: 8px 10px;
+    background: var(--black);
+    color: var(--white);
+    border: 1px solid var(--black);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+
+.drill-all-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .search-input:focus {

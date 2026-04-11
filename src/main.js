@@ -8,7 +8,13 @@ import { parseDeck } from './parser.js';
 import { hashCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories } from './github-client.js';
 import { githubAuth } from './github-auth.js';
-import { startSession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
+import { startSession, startDrillSession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
+
+// Card editor imports
+import { initDeckCreator, openDeckCreator } from './deck-creator.js';
+import { initFolderCreator, openFolderCreator } from './folder-creator.js';
+import { initCardEditor, openCardEditorCreate, openCardEditorEdit } from './card-editor.js';
+import './card-editor.css';
 
 /**
  * Initialize the application
@@ -47,6 +53,11 @@ async function init() {
         // Setup repo input if authenticated
         if (githubAuth.isAuthenticated()) {
             await setupRepoInput();
+
+            // Initialize card editor components
+            initDeckCreator(onDeckCreated);
+            initFolderCreator(onFolderCreated);
+            initCardEditor(onCardSaved);
         }
 
         // Handle browser back/forward navigation
@@ -63,7 +74,7 @@ async function init() {
  */
 async function loadUserRepos() {
     const { loadReposFromD1 } = await import('./storage.js');
-    const { loadRepository } = await import('./repo-manager.js');
+    const { loadRepository, removeRepository } = await import('./repo-manager.js');
 
     const repos = await loadReposFromD1();
     if (!repos || repos.length === 0) {
@@ -74,30 +85,75 @@ async function loadUserRepos() {
     console.log(`[Main] Loading ${repos.length} repos from D1:`, repos.map(r => r.id));
 
     const grid = document.getElementById('topics-grid');
+    const total = repos.length;
+    let loaded = 0;
+    const failedRepos = [];
+    const evicted = [];
 
-    for (let i = 0; i < repos.length; i++) {
-        const repo = repos[i];
-        // Extract display name (last part of owner/repo)
+    const renderProgress = () => {
+        if (!grid) return;
+        grid.innerHTML = `<div class="loading">Loading your decks… (${loaded}/${total})</div>`;
+    };
+    renderProgress();
+
+    // Load all repos in parallel — each repo already parallelises its own file fetches
+    await Promise.all(repos.map(async (repo) => {
         const displayName = repo.id.split('/').pop();
-
-        // Update loading status with specific deck name and progress
-        if (grid) {
-            grid.innerHTML = `<div class="loading">Loading ${displayName}... (${i + 1}/${repos.length})</div>`;
-        }
-
         try {
             await loadRepository(repo.id);
             console.log(`[Main] Loaded repo: ${repo.id}`);
         } catch (error) {
-            console.error(`[Main] Failed to load repo ${repo.id}:`, error);
+            if (error.status === 404) {
+                // Repo is gone or has moved — silently evict the stale D1 entry
+                const reason = error.movedTo ? `moved to ${error.movedTo}` : 'not found';
+                console.warn(`[Main] Auto-removed stale repo ${repo.id} (${reason})`);
+                evicted.push({ id: repo.id, name: displayName, movedTo: error.movedTo || null });
+                try { await removeRepository(repo.id); } catch (e) { /* best-effort */ }
+            } else {
+                // Transient failure (rate limit, auth, network) — keep the row, show placeholder
+                console.error(`[Main] Failed to load repo ${repo.id}:`, error);
+                failedRepos.push({ id: repo.id, name: displayName, error: error.message });
+            }
+        } finally {
+            loaded++;
+            renderProgress();
         }
-    }
+    }));
+
+    // Stash broken repos and evictions so loadRepositories can surface them
+    window.__failedRepos = failedRepos;
+    window.__evictedRepos = evicted;
 
     // Clean up orphaned reviews after loading all repos
     const { cleanupOrphanedReviews } = await import('./storage.js');
     const cleaned = await cleanupOrphanedReviews();
     if (cleaned > 0) {
         console.log(`[Main] Cleaned up ${cleaned} orphaned reviews`);
+    }
+}
+
+/**
+ * Populate the category filter dropdown from available deck subjects.
+ * Preserves the current selection if still valid.
+ */
+function populateCategoryFilter(decks) {
+    const select = document.getElementById('category-filter');
+    if (!select) return;
+
+    const subjects = [...new Set(
+        decks.map(d => d.subject).filter(s => typeof s === 'string' && s.trim())
+    )].sort((a, b) => a.localeCompare(b));
+
+    const prev = select.value;
+
+    select.innerHTML = '<option value="">All categories</option>' +
+        subjects.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+
+    // Restore prior selection if it still exists among available subjects
+    if (prev && subjects.includes(prev)) {
+        select.value = prev;
+    } else {
+        select.value = '';
     }
 }
 
@@ -145,34 +201,62 @@ async function loadRepositories() {
         // Show controls when there are decks
         controlsBar.classList.remove('hidden');
 
-        // Apply search filter
         const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
-        let filteredDecks = displayDecks.filter(deck => {
-            // Search by the displayed repo name (last part of local/name or owner/repo)
-            const displayName = deck.id.split('/').pop();
-            return displayName.toLowerCase().includes(searchTerm);
-        });
+        const breadcrumb = document.getElementById('deck-breadcrumb');
 
-        // Display decks directly (no grouping, no headers)
-        for (const deck of filteredDecks) {
-            const deckCards = allCards.filter(c => c.deckName === deck.id);
-            const deckReviews = allReviews.filter(r => {
-                const card = deckCards.find(c => c.hash === r.cardHash);
-                return !!card;
-            });
+        // Global search: bypass category navigation, show all matching decks flat
+        if (searchTerm && !currentDeck) {
+            if (breadcrumb) breadcrumb.classList.add('hidden');
 
-            // Create deck card with review info
-            const deckWithReviews = {
-                ...deck,
-                cards: deckCards,
-                reviews: new Map(deckReviews.map(r => [r.cardHash, r]))
-            };
+            const filtered = displayDecks.filter(deck =>
+                deck.id.split('/').pop().toLowerCase().includes(searchTerm)
+            );
 
-            const card = createDeckCard(deckWithReviews);
-            grid.appendChild(card);
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div class="loading">No decks match your search.</div>';
+            } else {
+                for (const deck of filtered) {
+                    const deckCards = allCards.filter(c => c.deckName === deck.id);
+                    const deckReviews = allReviews.filter(r => deckCards.some(c => c.hash === r.cardHash));
+                    grid.appendChild(createDeckCard({
+                        ...deck,
+                        cards: deckCards,
+                        reviews: new Map(deckReviews.map(r => [r.cardHash, r]))
+                    }));
+                }
+            }
+            return;
         }
 
-        // Show breadcrumb (displays "~ / home" on initial load)
+        if (currentCategory === null) {
+            // HOME LEVEL: render category cards
+            _renderCategoryGrid(displayDecks, allCards, allReviews, searchTerm, grid);
+        } else {
+            // CATEGORY LEVEL: render deck cards for the current category
+            const filteredDecks = displayDecks.filter(deck => {
+                const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim().toLowerCase() : 'misc';
+                return subject === currentCategory;
+            });
+
+            for (const deck of filteredDecks) {
+                const deckCards = allCards.filter(c => c.deckName === deck.id);
+                const deckReviews = allReviews.filter(r => deckCards.some(c => c.hash === r.cardHash));
+                grid.appendChild(createDeckCard({
+                    ...deck,
+                    cards: deckCards,
+                    reviews: new Map(deckReviews.map(r => [r.cardHash, r]))
+                }));
+            }
+
+            // Render placeholders for repos that failed to load
+            const failedRepos = window.__failedRepos || [];
+            for (const failed of failedRepos) {
+                grid.appendChild(createFailedRepoCard(failed));
+            }
+
+            renderEvictedNotice();
+        }
+
         updateDeckBreadcrumb();
 
     } catch (error) {
@@ -183,6 +267,207 @@ async function loadRepositories() {
             </div>
         `;
     }
+}
+
+/**
+ * Render the home-level category grid
+ */
+function _renderCategoryGrid(displayDecks, allCards, allReviews, searchTerm, grid) {
+    // Group decks by subject
+    const categoryMap = new Map();
+    for (const deck of displayDecks) {
+        const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim().toLowerCase() : 'misc';
+        if (!categoryMap.has(subject)) categoryMap.set(subject, []);
+        categoryMap.get(subject).push(deck);
+    }
+
+    // Named categories alphabetically, misc last
+    const sorted = [...categoryMap.keys()].sort((a, b) => {
+        if (a === 'misc') return 1;
+        if (b === 'misc') return -1;
+        return a.localeCompare(b);
+    });
+
+    const filtered = searchTerm
+        ? sorted.filter(name => name.toLowerCase().includes(searchTerm))
+        : sorted;
+
+    if (filtered.length === 0) {
+        grid.innerHTML = '<div class="loading">No categories match your search.</div>';
+        return;
+    }
+
+    for (const categoryName of filtered) {
+        grid.appendChild(createCategoryCard(categoryName, categoryMap.get(categoryName), allCards, allReviews));
+    }
+
+    // Failed/evicted repos show at home level in Misc area
+    renderEvictedNotice();
+    updateDeckBreadcrumb();
+}
+
+/**
+ * Create a category folder card (aggregate of all decks in that category)
+ */
+function createCategoryCard(categoryName, decks, allCards, allReviews) {
+    let totalCards = 0;
+    let reviewedCards = 0;
+    let dueCards = 0;
+    const now = new Date();
+
+    for (const deck of decks) {
+        const deckCards = allCards.filter(c => c.deckName === deck.id);
+        totalCards += deckCards.length;
+
+        const deckReviews = allReviews.filter(r => deckCards.some(c => c.hash === r.cardHash));
+        reviewedCards += deckReviews.length;
+
+        const newCount = deckCards.length - deckReviews.length;
+        dueCards += newCount;
+        deckReviews.forEach(r => {
+            if (new Date(r.fsrsCard.due) <= now) dueCards++;
+        });
+    }
+
+    const progressPercent = totalCards > 0 ? Math.round((reviewedCards / totalCards) * 100) : 0;
+    const deckCount = decks.length;
+    const description = `${deckCount} deck${deckCount !== 1 ? 's' : ''} · ${totalCards} card${totalCards !== 1 ? 's' : ''}`;
+
+    const card = document.createElement('div');
+    card.className = 'project-card';
+    card.style.cursor = 'pointer';
+    card.onclick = () => navigateToCategory(categoryName);
+
+    const btnContainer = document.createElement('div');
+    btnContainer.className = 'card-buttons';
+
+    // Reset all decks in category
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'card-reset-btn';
+    resetBtn.title = 'Reset progress for all decks in this category';
+    resetBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset">`;
+    resetBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm(`Reset all ${totalCards} card${totalCards !== 1 ? 's' : ''} in "${categoryName}"? This marks everything as new.`)) {
+            for (const deck of decks) await resetDeck(deck.id);
+            await loadRepositories();
+        }
+    };
+    btnContainer.appendChild(resetBtn);
+
+    // Drill cards in this category
+    const drillBtn = document.createElement('button');
+    drillBtn.className = 'card-review-btn';
+    drillBtn.title = `Drill cards in ${categoryName}`;
+    drillBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Drill">`;
+    drillBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        startDrillAllSession(categoryName);
+    };
+    btnContainer.appendChild(drillBtn);
+
+    // Remove all decks in category from collection (auth only, non-local)
+    const isAuthenticated = localStorage.getItem('github_user') !== null;
+    const allGitHub = decks.every(d => !d.id.startsWith('local/'));
+    if (isAuthenticated && allGitHub) {
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'card-delete-btn';
+        removeBtn.title = `Remove all decks in "${categoryName}" from your collection`;
+        removeBtn.innerHTML = '×';
+        removeBtn.onclick = async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (confirm(`Remove all ${deckCount} deck${deckCount !== 1 ? 's' : ''} in "${categoryName}" from your collection?\n\nThis does NOT delete the GitHub repositories.`)) {
+                for (const deck of decks) await removeRepository(deck.id);
+                await loadRepositories();
+            }
+        };
+        btnContainer.appendChild(removeBtn);
+    }
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'project-content';
+    contentDiv.innerHTML = `
+        <h3 class="project-title">${escapeHtml(categoryName)}</h3>
+        <p class="project-description">${escapeHtml(description)}</p>
+        <div class="project-stats">
+            <span class="progress-label">Progress:</span>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" style="width: ${progressPercent}%"></div>
+            </div>
+            <span class="progress-percent">${progressPercent}%</span>
+        </div>
+    `;
+
+    card.appendChild(btnContainer);
+    card.appendChild(contentDiv);
+    return card;
+}
+
+/**
+ * Navigate into a category folder
+ */
+function navigateToCategory(categoryName) {
+    currentCategory = categoryName;
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+
+    const url = new URL(window.location);
+    url.searchParams.set('category', categoryName);
+    url.searchParams.delete('deck');
+    url.searchParams.delete('path');
+    history.pushState({ category: categoryName }, '', url);
+
+    updateDeckBreadcrumb();
+    loadRepositories();
+}
+
+/**
+ * Exit category view back to home (category grid)
+ */
+function exitCategoryNavigation() {
+    currentCategory = null;
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+
+    const url = new URL(window.location);
+    url.searchParams.delete('category');
+    url.searchParams.delete('deck');
+    url.searchParams.delete('path');
+    url.searchParams.delete('study');
+    url.searchParams.delete('file');
+    history.pushState({}, '', url);
+
+    updateDeckBreadcrumb();
+    loadRepositories();
+}
+
+/**
+ * Exit deck view back to the category's deck list (stay inside category)
+ */
+function exitToCategoryView() {
+    currentDeck = null;
+    currentPath = [];
+    folderHierarchy = null;
+    allReviewsCache = null;
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+
+    const url = new URL(window.location);
+    url.searchParams.delete('deck');
+    url.searchParams.delete('path');
+    url.searchParams.delete('study');
+    url.searchParams.delete('file');
+    if (currentCategory) url.searchParams.set('category', currentCategory);
+    history.pushState({ category: currentCategory }, '', url);
+
+    updateDeckBreadcrumb();
+    loadRepositories();
 }
 
 /**
@@ -261,38 +546,19 @@ function createDeckCard(deck) {
     if (isAuthenticated) {
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'card-delete-btn';
-        deleteBtn.title = 'Delete this deck';
+        deleteBtn.title = 'Remove from collection';
         deleteBtn.innerHTML = '×';
         deleteBtn.onclick = async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (confirm(`Delete deck "${displayName}"? This cannot be undone.`)) {
+
+            if (confirm(`Remove "${displayName}" from your collection?`)) {
                 try {
-                    // Delete locally
-                    console.log(`[Main] Deleting deck ${deck.id} locally`);
-                    const beforeRepos = await getAllRepos();
-                    console.log(`[Main] Repos BEFORE deletion:`, beforeRepos.length, beforeRepos.map(r => r.id));
-
                     await removeRepository(deck.id);
-
-                    const afterRepos = await getAllRepos();
-                    console.log(`[Main] Repos AFTER deletion:`, afterRepos.length, afterRepos.map(r => r.id));
-                    console.log('[Main] Deck deleted locally');
-
-                    // Verify the deck was actually removed
-                    const stillExists = afterRepos.find(r => r.id === deck.id);
-                    if (stillExists) {
-                        console.error('[Main] ERROR: Deck still exists after deletion!', stillExists);
-                    } else {
-                        console.log('[Main] Verified: Deck successfully removed from local cache');
-                    }
-
-                    // Re-render the UI instead of reloading
-                    console.log('[Main] Re-rendering UI after deletion');
                     await loadRepositories();
                 } catch (error) {
-                    console.error('[Main] Error deleting deck:', error);
-                    alert(`Failed to delete deck: ${error.message}`);
+                    console.error('[Main] Error removing deck:', error);
+                    alert(`Failed to remove deck: ${error.message}`);
                 }
             }
         };
@@ -324,11 +590,95 @@ function createDeckCard(deck) {
 }
 
 /**
+ * Create a placeholder card for a repo that failed to load (non-404 error)
+ */
+function createFailedRepoCard(failed) {
+    const card = document.createElement('div');
+    card.className = 'project-card';
+
+    const btnContainer = document.createElement('div');
+    btnContainer.className = 'card-buttons';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'card-delete-btn';
+    deleteBtn.title = 'Remove from list';
+    deleteBtn.innerHTML = '×';
+    deleteBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm(`Remove "${failed.name}" from your list? The deck failed to load and will stop appearing.`)) {
+            try {
+                await removeRepository(failed.id);
+                window.__failedRepos = (window.__failedRepos || []).filter(r => r.id !== failed.id);
+                await loadRepositories();
+            } catch (err) {
+                alert(`Failed to remove: ${err.message}`);
+            }
+        }
+    };
+    btnContainer.appendChild(deleteBtn);
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'project-content';
+    contentDiv.innerHTML = `
+        <h3 class="project-title">${escapeHtml(failed.name)}</h3>
+        <p class="project-description" style="color:#c00">Failed to load</p>
+    `;
+
+    card.appendChild(btnContainer);
+    card.appendChild(contentDiv);
+    return card;
+}
+
+/**
+ * Render a dismissible notice above the grid listing repos that were auto-evicted
+ * (either deleted on GitHub or transferred to a new owner/org).
+ */
+function renderEvictedNotice() {
+    const evicted = window.__evictedRepos || [];
+    if (evicted.length === 0) return;
+
+    const grid = document.getElementById('topics-grid');
+    if (!grid) return;
+
+    // Avoid stacking notices if this function runs multiple times
+    const existing = document.getElementById('evicted-notice');
+    if (existing) existing.remove();
+
+    const notice = document.createElement('div');
+    notice.id = 'evicted-notice';
+    notice.className = 'evicted-notice';
+
+    const items = evicted.map(r => {
+        if (r.movedTo) return `<li><code>${escapeHtml(r.id)}</code> → <code>${escapeHtml(r.movedTo)}</code></li>`;
+        return `<li><code>${escapeHtml(r.id)}</code></li>`;
+    }).join('');
+
+    notice.innerHTML = `
+        <div class="evicted-notice-body">
+            <strong>Removed ${evicted.length} deck${evicted.length !== 1 ? 's' : ''} that could no longer be loaded:</strong>
+            <ul>${items}</ul>
+            <p class="evicted-notice-hint">These were transferred or deleted. Re-add them from their new location if needed.</p>
+        </div>
+        <button class="evicted-notice-dismiss" title="Dismiss">×</button>
+    `;
+
+    notice.querySelector('.evicted-notice-dismiss').addEventListener('click', () => {
+        window.__evictedRepos = [];
+        notice.remove();
+    });
+
+    grid.parentNode.insertBefore(notice, grid);
+    window.__evictedRepos = [];
+}
+
+/**
  * Set up event listeners
  */
 function setupEventListeners() {
     const addBtn = document.getElementById('add-repo-btn');
     const repoInput = document.getElementById('github-repo-input');
+    const createDeckBtn = document.getElementById('create-deck-btn');
 
     // Add repository when + button is clicked
     if (addBtn) {
@@ -342,6 +692,11 @@ function setupEventListeners() {
                 handleAddRepository();
             }
         });
+    }
+
+    // Create Deck button
+    if (createDeckBtn) {
+        createDeckBtn.addEventListener('click', () => openDeckCreator());
     }
 
     // Collapsible sections
@@ -374,6 +729,12 @@ function setupEventListeners() {
                 loadRepositories();
             }
         });
+    }
+
+    // Drill-all: start a random shuffled session across all loaded decks
+    const drillAllBtn = document.getElementById('drill-all-btn');
+    if (drillAllBtn) {
+        drillAllBtn.addEventListener('click', () => startDrillAllSession());
     }
 }
 
@@ -510,6 +871,58 @@ function updateSelectedItem(items, index) {
 }
 
 /**
+ * Callback when a new deck is created
+ */
+async function onDeckCreated(deckId) {
+    console.log(`[Main] New deck created: ${deckId}`);
+    try {
+        // Load the new repository
+        await loadRepository(deckId);
+        // Reload the display
+        await loadRepositories();
+    } catch (error) {
+        console.error('[Main] Error loading new deck:', error);
+        alert(`Deck created but failed to load: ${error.message}`);
+    }
+}
+
+/**
+ * Callback when a folder is created
+ */
+async function onFolderCreated(deckId, folderPath) {
+    console.log(`[Main] Folder created: ${deckId}/${folderPath}`);
+    try {
+        // Reload the repository to get updated structure
+        await loadRepository(deckId);
+        // Refresh the current view
+        if (currentDeck && currentDeck.id === deckId) {
+            await navigateToDeck(currentDeck, currentPath, false);
+        }
+    } catch (error) {
+        console.error('[Main] Error refreshing after folder creation:', error);
+    }
+}
+
+/**
+ * Callback when a card is saved
+ */
+async function onCardSaved(deckId, filePath) {
+    console.log(`[Main] Card saved: ${deckId}/${filePath}`);
+    try {
+        // Reload the repository to get updated cards
+        await loadRepository(deckId);
+        // Refresh the current view
+        if (currentDeck && currentDeck.id === deckId) {
+            await navigateToDeck(currentDeck, currentPath, false);
+        } else {
+            await loadRepositories();
+        }
+    } catch (error) {
+        console.error('[Main] Error refreshing after card save:', error);
+    }
+}
+
+/**
  * Handle adding a new repository
  */
 async function handleAddRepository() {
@@ -540,7 +953,24 @@ async function handleAddRepository() {
 
         // Check if repository contains flashcard content
         console.log(`[Main] Validating ${repoString} for flashcard content...`);
-        const hasFlashcards = await hasFlashcardContent(owner, repo);
+        let hasFlashcards;
+        try {
+            hasFlashcards = await hasFlashcardContent(owner, repo);
+        } catch (accessError) {
+            if (accessError.status === 404) {
+                alert(`Repository "${repoString}" was not found or is not accessible.\n\nIf this repo lives in an organization, the flashcards OAuth app may not have access to that org. Grant access at:\nhttps://github.com/organizations/${owner}/settings/oauth_application_policy`);
+            } else if (accessError.status === 403) {
+                alert(`Access denied to "${repoString}". Check the OAuth app's org permissions, or wait if this is a rate limit.`);
+            } else if (accessError.status === 401) {
+                alert(`Authentication failed. Please log out and log back in.`);
+            } else {
+                alert(`Failed to check repository: ${accessError.message}`);
+            }
+            addBtn.textContent = originalText;
+            addBtn.disabled = false;
+            input.disabled = false;
+            return;
+        }
 
         if (!hasFlashcards) {
             alert(`Repository "${repoString}" must have a flashcards/ folder containing markdown files with Q:/A:/C:/P: format. Please check the repository structure and try again.`);
@@ -696,12 +1126,14 @@ async function loadLocalRepo(repoInfo) {
 }
 
 // Deck navigation state (inline breadcrumb navigation)
+let currentCategory = null; // The currently selected category folder (null = at home level)
 let currentDeck = null;
 let currentPath = [];
 let folderHierarchy = null;
 let allReviewsCache = null; // Cache for reviews during navigation
 let isInStudySession = false; // Track if we're in study mode
 let currentStudyFile = null; // The file being studied (for breadcrumb)
+let isDrillAll = false; // Track if we're in a cross-deck drill-all session
 
 /**
  * Restore navigation state from URL parameters
@@ -712,6 +1144,7 @@ async function restoreNavigationFromURL() {
     const pathParam = url.searchParams.get('path');
     const studyParam = url.searchParams.get('study');
     const fileParam = url.searchParams.get('file');
+    const categoryParam = url.searchParams.get('category');
 
     console.log('[Navigation] restoreNavigationFromURL called:', {
         fullURL: window.location.href,
@@ -719,6 +1152,7 @@ async function restoreNavigationFromURL() {
         pathParam,
         studyParam,
         fileParam,
+        categoryParam,
         historyLength: history.length
     });
 
@@ -727,6 +1161,7 @@ async function restoreNavigationFromURL() {
         const allDecks = await getAllDecks();
         console.log('[Navigation] Looking for deck:', deckId, 'in', allDecks.map(d => d.id));
         const deck = allDecks.find(d => d.id === deckId);
+        currentCategory = categoryParam || null;
 
         if (deck) {
             console.log('[Navigation] Found deck, restoring navigation');
@@ -756,6 +1191,9 @@ async function restoreNavigationFromURL() {
         } else {
             console.log('[Navigation] Deck not found!');
         }
+    } else if (categoryParam) {
+        currentCategory = categoryParam;
+        await loadRepositories();
     } else {
         console.log('[Navigation] No deck in URL, showing home');
     }
@@ -793,6 +1231,7 @@ async function handlePopState(event) {
         // Find the deck object
         const allDecks = await getAllDecks();
         const deck = allDecks.find(d => d.id === state.deck);
+        currentCategory = state.category || null;
 
         if (deck) {
             const path = state.path || [];
@@ -824,6 +1263,7 @@ async function handlePopState(event) {
         }
     } else {
         // No deck in state - show home view
+        currentCategory = state?.category || null;
         currentDeck = null;
         currentPath = [];
         folderHierarchy = null;
@@ -906,7 +1346,7 @@ async function navigateToDeck(deck, path = [], updateHistory = true) {
         console.log('[Navigation] pushState:', url.toString(), 'historyLength before:', history.length);
         // Use pushState to create a new history entry
         // When user navigates to app.html and presses back, they return to this URL
-        history.pushState({ deck: deck.id, path: [...path] }, '', url);
+        history.pushState({ deck: deck.id, path: [...path], category: currentCategory }, '', url);
         console.log('[Navigation] historyLength after:', history.length);
     }
 
@@ -946,42 +1386,62 @@ async function navigateToDeck(deck, path = [], updateHistory = true) {
  */
 function updateDeckBreadcrumb() {
     const breadcrumb = document.getElementById('deck-breadcrumb');
-
-    // Always show breadcrumb
     breadcrumb.classList.remove('hidden');
     breadcrumb.innerHTML = '';
 
-    // Add "~ /" prefix like the main breadcrumb
     const tildeSpan = document.createElement('span');
     tildeSpan.className = 'breadcrumb-separator';
     tildeSpan.textContent = '~';
     breadcrumb.appendChild(tildeSpan);
-
     breadcrumb.appendChild(createBreadcrumbSeparator());
 
-    // "home" segment - clickable if we're inside a deck, current otherwise
+    // "home" segment
     const homeSpan = document.createElement('span');
-    if (currentDeck) {
-        homeSpan.className = 'breadcrumb-segment breadcrumb-clickable';
+    const homeClickable = currentDeck !== null || currentCategory !== null || isDrillAll;
+    homeSpan.className = 'breadcrumb-segment' + (homeClickable ? ' breadcrumb-clickable' : ' current');
+    homeSpan.textContent = 'home';
+    if (homeClickable) {
         homeSpan.onclick = () => {
-            if (isInStudySession) {
-                // Skip render since we're navigating away entirely
-                exitStudySession(true);
+            if (isDrillAll) {
+                exitStudySession();
+                return;
             }
+            if (isInStudySession) exitStudySession(true);
             exitDeckNavigation();
         };
-    } else {
-        homeSpan.className = 'breadcrumb-segment current';
     }
-    homeSpan.textContent = 'home';
     breadcrumb.appendChild(homeSpan);
 
-    // If we're inside a deck, show deck name and path
-    if (currentDeck) {
-        // Separator
+    // Drill-all tail
+    if (isDrillAll && !currentDeck) {
         breadcrumb.appendChild(createBreadcrumbSeparator());
+        const drillSegment = document.createElement('span');
+        drillSegment.className = 'breadcrumb-segment current';
+        drillSegment.textContent = 'drill all';
+        breadcrumb.appendChild(drillSegment);
+        return;
+    }
 
-        // Deck name (clickable if we're in a subfolder or study session)
+    // Category segment (if inside a category)
+    if (currentCategory) {
+        breadcrumb.appendChild(createBreadcrumbSeparator());
+        const catSegment = document.createElement('span');
+        // Clickable if we're also inside a deck
+        const catClickable = currentDeck !== null;
+        catSegment.className = 'breadcrumb-segment' + (catClickable ? ' breadcrumb-clickable' : ' current');
+        catSegment.textContent = currentCategory;
+        if (catClickable) {
+            catSegment.onclick = () => {
+                if (isInStudySession) exitStudySession(true);
+                exitToCategoryView();
+            };
+        }
+        breadcrumb.appendChild(catSegment);
+    }
+
+    // Deck segment (if inside a deck)
+    if (currentDeck) {
+        breadcrumb.appendChild(createBreadcrumbSeparator());
         const repoName = currentDeck.id.split('/').pop();
         const deckSegment = document.createElement('span');
         const isDeckClickable = currentPath.length > 0 || isInStudySession;
@@ -989,9 +1449,7 @@ function updateDeckBreadcrumb() {
         deckSegment.textContent = repoName;
         if (isDeckClickable) {
             deckSegment.onclick = () => {
-                if (isInStudySession) {
-                    exitStudySession();
-                }
+                if (isInStudySession) exitStudySession();
                 navigateToPath([]);
             };
         }
@@ -1002,21 +1460,17 @@ function updateDeckBreadcrumb() {
             breadcrumb.appendChild(createBreadcrumbSeparator());
             const segment = document.createElement('span');
             const isLast = index === currentPath.length - 1 && !isInStudySession;
-            const isClickable = !isLast;
-            segment.className = 'breadcrumb-segment' + (isClickable ? ' breadcrumb-clickable' : ' current');
+            segment.className = 'breadcrumb-segment' + (!isLast ? ' breadcrumb-clickable' : ' current');
             segment.textContent = folder;
-            if (isClickable) {
+            if (!isLast) {
                 segment.onclick = () => {
-                    if (isInStudySession) {
-                        exitStudySession();
-                    }
+                    if (isInStudySession) exitStudySession();
                     navigateToPath(currentPath.slice(0, index + 1));
                 };
             }
             breadcrumb.appendChild(segment);
         });
 
-        // If in study session, add the filename as the last segment
         if (isInStudySession && currentStudyFile) {
             breadcrumb.appendChild(createBreadcrumbSeparator());
             const fileSegment = document.createElement('span');
@@ -1105,6 +1559,7 @@ function renderCurrentLevel() {
  */
 function exitDeckNavigation() {
     currentDeck = null;
+    currentCategory = null;
     currentPath = [];
     folderHierarchy = null;
     allReviewsCache = null;
@@ -1176,12 +1631,44 @@ async function startStudySession(deckId, fileFilter, displayFileName) {
 }
 
 /**
+ * Start a drill-all session (random cards pooled across every loaded deck)
+ * @param {string|null} subject - Optional category subject filter
+ */
+async function startDrillAllSession(subject = null) {
+    const allCards = await getAllCards();
+    if (allCards.length === 0) {
+        alert('No cards loaded. Add a deck first.');
+        return;
+    }
+
+    isInStudySession = true;
+    isDrillAll = true;
+    currentStudyFile = subject ? `drill ${subject.toLowerCase()}` : 'drill all';
+
+    const topicsGrid = document.getElementById('topics-grid');
+    const studyArea = document.getElementById('study-area');
+    const sessionComplete = document.getElementById('session-complete');
+
+    topicsGrid.classList.add('hidden');
+    studyArea.classList.remove('hidden');
+    sessionComplete.classList.add('hidden');
+
+    updateDeckBreadcrumb();
+    setupStudyEventListeners();
+
+    await startDrillSession(onSessionComplete, () => {}, { maxCards: 50, subject });
+}
+
+/**
  * Exit study session and return to folder view
  * @param {boolean} skipRender - If true, skip rendering (used when navigating away entirely)
  */
 async function exitStudySession(skipRender = false) {
+    const wasDrillAll = isDrillAll;
+
     isInStudySession = false;
     currentStudyFile = null;
+    isDrillAll = false;
 
     // Cleanup study session state
     cleanupStudySession();
@@ -1200,6 +1687,13 @@ async function exitStudySession(skipRender = false) {
 
     // If skipping render, just cleanup and return (used when navigating to home)
     if (skipRender) {
+        return;
+    }
+
+    // Drill-all runs from the home level with no currentDeck — always return home
+    if (wasDrillAll || !currentDeck) {
+        updateDeckBreadcrumb();
+        await loadRepositories();
         return;
     }
 
@@ -1295,7 +1789,7 @@ function navigateToFolder(folderName) {
     url.searchParams.set('path', currentPath.join('/'));
     console.log('[Navigation] navigateToFolder pushState:', url.toString());
     // Use pushState to create a new history entry for folder navigation
-    history.pushState({ deck: currentDeck.id, path: [...currentPath] }, '', url);
+    history.pushState({ deck: currentDeck.id, path: [...currentPath], category: currentCategory }, '', url);
 
     updateDeckBreadcrumb();
     renderCurrentLevel();
@@ -1321,7 +1815,7 @@ function navigateToPath(targetPath) {
         url.searchParams.delete('path');
     }
     // Use pushState to create a new history entry for breadcrumb navigation
-    history.pushState({ deck: currentDeck.id, path: [...currentPath] }, '', url);
+    history.pushState({ deck: currentDeck.id, path: [...currentPath], category: currentCategory }, '', url);
 
     updateDeckBreadcrumb();
     renderCurrentLevel();
@@ -1514,9 +2008,6 @@ function createSubdeckCard(subdeck) {
         }
     };
     btnContainer.appendChild(resetBtn);
-
-    // No gavel button - clicking the card starts review
-    // No delete button for files - managed via git
 
     // Calculate progress percentage (cards reviewed at least once)
     const progressPercent = totalCards > 0 ? Math.round((reviewedCards / totalCards) * 100) : 0;

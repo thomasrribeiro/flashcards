@@ -37,17 +37,19 @@ class ParserError extends Error {
 function extractFrontmatter(text) {
     const lines = text.split('\n');
 
-    // Check if file starts with frontmatter delimiter
-    if (lines.length === 0 || lines[0].trim() !== '---') {
-        return [{ order: null, tags: [] }, text];
+    // Accept either YAML-style (---) or TOML-style (+++) delimiters
+    const first = lines[0]?.trim();
+    const delimiter = first === '+++' ? '+++' : first === '---' ? '---' : null;
+    if (delimiter === null) {
+        return [{ order: null, tags: [], name: null, subject: null, topic: null }, text];
     }
 
-    // Find closing delimiter
+    // Find closing delimiter (must match opening)
     let closingIdx = -1;
     const frontmatterLines = [];
 
     for (let i = 1; i < lines.length; i++) {
-        if (lines[i].trim() === '---') {
+        if (lines[i].trim() === delimiter) {
             closingIdx = i;
             break;
         }
@@ -55,15 +57,30 @@ function extractFrontmatter(text) {
     }
 
     if (closingIdx === -1) {
-        throw new Error("Frontmatter opening '---' found but no closing '---'");
+        throw new Error(`Frontmatter opening '${delimiter}' found but no closing '${delimiter}'`);
     }
 
     // Parse TOML (simple key=value format)
     const metadata = {
         order: null,
-        tags: []
+        tags: [],
+        name: null,
+        subject: null,
+        topic: null
     };
     const frontmatterStr = frontmatterLines.join('\n');
+
+    // Parse string fields (name, subject, topic)
+    const stringFields = ['name', 'subject', 'topic'];
+    for (const field of stringFields) {
+        // Matches: field = "value" or field = value
+        const re = new RegExp(`${field}\\s*=\\s*"([^"]*)"`, 'i');
+        const reUnquoted = new RegExp(`${field}\\s*=\\s*([^"\\[\\]\\n]+)`, 'i');
+        const m = frontmatterStr.match(re) || frontmatterStr.match(reUnquoted);
+        if (m) {
+            metadata[field] = m[1].trim();
+        }
+    }
 
     // Parse order (numeric)
     const orderMatch = frontmatterStr.match(/order\s*=\s*(\d+)/);
@@ -220,24 +237,38 @@ export class Parser {
     }
 
     /**
-     * Parse all cards in the given text
+     * Parse all cards in the given text.
+     * Returns { cards, warnings } — parse errors skip the bad card and continue.
      */
     parse(text) {
         const cards = [];
+        const warnings = [];
         let state = { type: State.INITIAL };
         const lines = text.split('\n');
         const lastLine = lines.length === 0 ? 0 : lines.length - 1;
 
         for (let lineNum = 0; lineNum < lines.length; lineNum++) {
             const line = readLine(lines[lineNum]);
-            state = this.parseLine(state, line, lineNum, cards);
+            try {
+                state = this.parseLine(state, line, lineNum, cards);
+            } catch (err) {
+                warnings.push(err.message || String(err));
+                console.warn(`[Parser] Skipping malformed card: ${err.message}`);
+                // Reset to initial state so we can try to parse the next card
+                state = { type: State.INITIAL };
+            }
         }
 
-        this.finalize(state, lastLine, cards);
+        try {
+            this.finalize(state, lastLine, cards);
+        } catch (err) {
+            warnings.push(err.message || String(err));
+            console.warn(`[Parser] Skipping incomplete trailing card: ${err.message}`);
+        }
 
         // Remove duplicates by hash
         const seen = new Set();
-        return cards.filter(card => {
+        const deduped = cards.filter(card => {
             const hash = this.hashCard(card);
             if (seen.has(hash)) {
                 return false;
@@ -245,6 +276,9 @@ export class Parser {
             seen.add(hash);
             return true;
         });
+
+        deduped.warnings = warnings;
+        return deduped;
     }
 
     parseLine(state, line, lineNum, cards) {

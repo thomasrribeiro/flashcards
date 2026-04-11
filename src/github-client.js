@@ -44,14 +44,14 @@ export async function getRepository(owner, repo) {
             console.error('[GitHub Client] Could not parse error response');
         }
 
-        if (response.status === 404) {
-            throw new Error(`Repository ${owner}/${repo} not found`);
-        } else if (response.status === 401) {
-            throw new Error(`Authentication failed. Please log in with GitHub.`);
-        } else if (response.status === 403) {
-            throw new Error(`Access denied. Rate limit or permissions issue.`);
-        }
-        throw new Error(errorMessage);
+        const err = (() => {
+            if (response.status === 404) return new Error(`Repository ${owner}/${repo} not found`);
+            if (response.status === 401) return new Error(`Authentication failed. Please log in with GitHub.`);
+            if (response.status === 403) return new Error(`Access denied. Rate limit or permissions issue.`);
+            return new Error(errorMessage);
+        })();
+        err.status = response.status;
+        throw err;
     }
 
     const data = await response.json();
@@ -60,55 +60,64 @@ export async function getRepository(owner, repo) {
 }
 
 /**
- * Recursively fetch all markdown files from a repository
+ * Fetch all markdown files under a path prefix using the Git Trees API.
+ * One request replaces the previous N+1 recursive contents/ crawl.
+ *
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} path - Directory prefix to filter (default: 'flashcards')
+ * @param {string|null} treeRef - Branch name or commit SHA; if null, fetched from repo info.
  */
-export async function getMarkdownFiles(owner, repo, path = '') {
-    const url = path
-        ? `${GITHUB_API}/repos/${owner}/${repo}/contents/${path}`
-        : `${GITHUB_API}/repos/${owner}/${repo}/contents`;
+export async function getMarkdownFiles(owner, repo, path = 'flashcards', treeRef = null) {
+    // Resolve the tree ref from the default branch if not supplied.
+    if (!treeRef) {
+        const repoInfo = await getRepository(owner, repo);
+        treeRef = repoInfo.default_branch || 'main';
+    }
 
-    const response = await fetch(url, {
-        headers: getAuthHeaders()
-    });
+    const url = `${GITHUB_API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(treeRef)}?recursive=1`;
+    const response = await fetch(url, { headers: getAuthHeaders() });
 
     if (!response.ok) {
-        if (response.status === 404) {
-            return [];
-        }
-        throw new Error(`Failed to fetch repository contents: ${response.statusText}`);
+        if (response.status === 404) return [];
+        const err = new Error(`Failed to fetch repository tree: ${response.statusText}`);
+        err.status = response.status;
+        throw err;
     }
 
-    const contents = await response.json();
+    const data = await response.json();
 
-    // Handle single file response
-    if (!Array.isArray(contents)) {
-        return contents.name.endsWith('.md') ? [contents] : [];
+    if (data.truncated) {
+        console.warn(`[GitHub Client] Tree response truncated for ${owner}/${repo} — very large repo; some files may be missing`);
     }
 
-    const markdownFiles = [];
-
-    for (const item of contents) {
-        if (item.type === 'file' && item.name.endsWith('.md')) {
-            markdownFiles.push(item);
-        } else if (item.type === 'dir' && !item.name.startsWith('.')) {
-            // Recursively fetch subdirectories (skip hidden directories)
-            // Limit depth to prevent excessive API calls
-            if (path.split('/').length < 3) {
-                const subFiles = await getMarkdownFiles(owner, repo, item.path);
-                markdownFiles.push(...subFiles);
-            }
-        }
-    }
-
-    return markdownFiles;
+    // Filter to the requested path prefix (.md files only)
+    const prefix = path ? `${path}/` : '';
+    return data.tree
+        .filter(item => item.type === 'blob' && item.path.startsWith(prefix) && item.path.endsWith('.md'))
+        .map(item => ({
+            path: item.path,
+            sha: item.sha,
+            size: item.size,
+            name: item.path.split('/').pop()
+        }));
 }
 
 /**
- * Fetch the content of a file from GitHub
+ * Fetch the content of a file from GitHub.
+ * If sha is provided, content is cached in localStorage by SHA (content-addressed —
+ * same SHA always means same bytes, so the cache never goes stale).
  */
-export async function getFileContent(owner, repo, path) {
+export async function getFileContent(owner, repo, path, sha = null) {
+    if (sha) {
+        try {
+            const cached = localStorage.getItem(`gh_blob_${sha}`);
+            if (cached !== null) return cached;
+        } catch (e) { /* localStorage unavailable */ }
+    }
+
     const headers = getAuthHeaders();
-    headers['Accept'] = 'application/vnd.github.v3.raw'; // Override to get raw content
+    headers['Accept'] = 'application/vnd.github.v3.raw';
 
     const response = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/contents/${path}`, {
         headers
@@ -118,7 +127,15 @@ export async function getFileContent(owner, repo, path) {
         throw new Error(`Failed to fetch file content: ${response.statusText}`);
     }
 
-    return await response.text();
+    const text = await response.text();
+
+    if (sha) {
+        try {
+            localStorage.setItem(`gh_blob_${sha}`, text);
+        } catch (e) { /* quota exceeded — skip caching */ }
+    }
+
+    return text;
 }
 
 /**
@@ -142,66 +159,64 @@ export async function getAuthenticatedUser() {
 }
 
 /**
- * Check if a repository contains valid flashcard markdown files
- * Returns true if repo has a flashcards/ folder with at least one .md file with Q:/A:/C:/P: format
+ * Check if a repository contains valid flashcard markdown files.
+ * Uses the trees API (one request) then reads only the first .md file to verify format.
+ *
+ * Throws on access errors (404, 403, 401) so the caller can distinguish
+ * "repo not accessible" from "repo accessible but no flashcard content".
+ * Returns false only when the repo was reachable but lacked a valid flashcards/ folder.
  */
 export async function hasFlashcardContent(owner, repo) {
-    try {
-        // Only look in flashcards/ folder
-        const markdownFiles = await getMarkdownFiles(owner, repo, 'flashcards');
+    // Let access errors propagate — caller needs to tell 404 apart from "no flashcards/ folder"
+    const markdownFiles = await getMarkdownFiles(owner, repo, 'flashcards');
 
-        if (markdownFiles.length === 0) {
-            console.log(`[GitHub Client] ${owner}/${repo}: No markdown files found in flashcards/ folder`);
-            return false;
-        }
-
-        console.log(`[GitHub Client] ${owner}/${repo}: Found ${markdownFiles.length} markdown files in flashcards/`);
-
-        // Check each markdown file for Q:/A:/C:/P: format
-        // We check all files (not just the first) to be more thorough
-        for (const file of markdownFiles) {
-            try {
-                const content = await getFileContent(owner, repo, file.path);
-
-                // Simple regex check for Q:, A:, C:, or P: patterns
-                const hasFlashcardFormat = /^[QACP]:\s/m.test(content);
-
-                if (hasFlashcardFormat) {
-                    console.log(`[GitHub Client] ${owner}/${repo}: Found flashcard format in ${file.path}`);
-                    return true;
-                }
-            } catch (fileError) {
-                console.warn(`[GitHub Client] Could not read ${file.path}:`, fileError.message);
-                continue;
-            }
-        }
-
-        console.log(`[GitHub Client] ${owner}/${repo}: No flashcard format found in flashcards/ folder`);
-        return false;
-    } catch (error) {
-        console.warn(`[GitHub Client] Could not check ${owner}/${repo}:`, error.message);
+    if (markdownFiles.length === 0) {
+        console.log(`[GitHub Client] ${owner}/${repo}: No markdown files found in flashcards/ folder`);
         return false;
     }
+
+    console.log(`[GitHub Client] ${owner}/${repo}: Found ${markdownFiles.length} markdown files in flashcards/`);
+
+    // Check only the first file to verify format — avoids burning rate limit on large repos
+    const first = markdownFiles[0];
+    const content = await getFileContent(owner, repo, first.path);
+    const hasFormat = /^[QACP]:\s/m.test(content);
+    if (hasFormat) {
+        console.log(`[GitHub Client] ${owner}/${repo}: Flashcard format confirmed in ${first.path}`);
+        return true;
+    }
+
+    console.log(`[GitHub Client] ${owner}/${repo}: No flashcard format found in flashcards/ folder`);
+    return false;
 }
 
 /**
- * Get repositories for the authenticated user
+ * Get all repositories for the authenticated user (walks Link-header pagination).
  */
-export async function getUserRepositories(page = 1, perPage = 100) {
-    const url = `${GITHUB_API}/user/repos?sort=pushed&per_page=${perPage}&page=${page}`;
-    console.log('[GitHub Client] Fetching user repositories');
+export async function getUserRepositories() {
+    const allRepos = [];
+    let url = `${GITHUB_API}/user/repos?sort=pushed&per_page=100&page=1`;
 
-    const headers = getAuthHeaders();
-    const response = await fetch(url, { headers });
+    while (url) {
+        console.log(`[GitHub Client] Fetching user repositories: ${url}`);
+        const response = await fetch(url, { headers: getAuthHeaders() });
 
-    if (!response.ok) {
-        console.error(`[GitHub Client] Failed to get repositories: ${response.status}`);
-        throw new Error('Failed to get user repositories');
+        if (!response.ok) {
+            console.error(`[GitHub Client] Failed to get repositories: ${response.status}`);
+            throw new Error('Failed to get user repositories');
+        }
+
+        const repos = await response.json();
+        allRepos.push(...repos);
+        console.log(`[GitHub Client] Fetched ${repos.length} repositories (total so far: ${allRepos.length})`);
+
+        // Follow Link: <url>; rel="next" header for subsequent pages
+        const link = response.headers.get('Link') || '';
+        const nextMatch = link.match(/<([^>]+)>;\s*rel="next"/);
+        url = nextMatch ? nextMatch[1] : null;
     }
 
-    const repos = await response.json();
-    console.log(`[GitHub Client] Fetched ${repos.length} repositories`);
-    return repos;
+    return allRepos;
 }
 
 /**

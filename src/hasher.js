@@ -8,6 +8,15 @@ import { blake3 } from '@noble/hashes/blake3';
 const encoder = new TextEncoder();
 
 /**
+ * Normalise a string before hashing so that identical content produces
+ * the same hash regardless of platform line endings or Unicode form.
+ * Matches the canonical form expected by the Rust hashcards implementation.
+ */
+function normalizeText(s) {
+    return s.replace(/\r\n/g, '\n').normalize('NFC');
+}
+
+/**
  * Create a BLAKE3 hash from card content
  * Returns hex string representation
  */
@@ -16,16 +25,18 @@ export function hashCard(card) {
 
     if (card.type === 'basic') {
         hasher.update(encoder.encode('Basic'));
-        hasher.update(encoder.encode(card.content.question));
-        hasher.update(encoder.encode(card.content.answer));
+        hasher.update(encoder.encode(normalizeText(card.content.question)));
+        hasher.update(encoder.encode(normalizeText(card.content.answer)));
     } else if (card.type === 'problem') {
         hasher.update(encoder.encode('Problem'));
-        hasher.update(encoder.encode(card.content.problem));
-        hasher.update(encoder.encode(card.content.solution));
+        hasher.update(encoder.encode(normalizeText(card.content.problem)));
+        hasher.update(encoder.encode(normalizeText(card.content.solution)));
     } else if (card.type === 'cloze') {
         hasher.update(encoder.encode('Cloze'));
-        hasher.update(encoder.encode(card.content.text));
-        // Convert start/end to little-endian bytes
+        hasher.update(encoder.encode(normalizeText(card.content.text)));
+        // Rust stores start/end as u64 (8 bytes, little-endian).
+        // All byte positions fit in u32 in practice, so the upper 4 bytes
+        // remain zero — matching u64::to_le_bytes() for values < 2^32.
         const startBytes = new Uint8Array(8);
         const endBytes = new Uint8Array(8);
         new DataView(startBytes.buffer).setUint32(0, card.content.start, true);
@@ -50,7 +61,7 @@ export function familyHash(card) {
 
     const hasher = blake3.create({});
     hasher.update(encoder.encode('Cloze'));
-    hasher.update(encoder.encode(card.content.text));
+    hasher.update(encoder.encode(normalizeText(card.content.text)));
 
     const hash = hasher.digest();
     return bytesToHex(hash);

@@ -7,7 +7,6 @@
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <link rel="stylesheet" href="./style.css">
-    <link rel="stylesheet" href="./src/auth-modal.css">
 </head>
 <body>
     <div class="yellow-header"></div>
@@ -43,24 +42,24 @@
                     </h3>
                     <div class="collapsible-content" id="getting-started-content">
                         <ol>
-                            <li>Click <img src="./icons/gavel.png" alt="gavel" style="height: 1em; vertical-align: middle;"> to review</li>
+                            <li>Click <img src="./icons/gavel.png" alt="gavel" style="height: 1em; vertical-align: middle;"> to review a deck</li>
                             <li>Rate your recall</li>
-                            <li>Come back daily to review flashcards</li>
+                            <li>Come back for daily review</li>
                         </ol>
                     </div>
 
                     <p class="tip">
-                        <strong>Pro tip:</strong> Consistency beats intensity: 10 minutes daily is better than 2 hours weekly.
+                        <strong>Pro tip:</strong> Consistency beats intensity. Review daily for stronger recall
                     </p>
 
                     <h3 class="collapsible-header" data-section="saving-progress">
                         <span class="toggle-icon"></span>
-                        Saving Progress
+                        Creating your own deck
                     </h3>
                     <div class="collapsible-content hidden" id="saving-progress-content">
                         <ol>
-                            <li>Login with GitHub (create an <a href="https://github.com" target="_blank" rel="noopener noreferrer">account</a> if you don't have one)</li>
-                            <li>Add a valid repository (c.f. <a href="https://github.com/thomasrribeiro/flashcards" target="_blank" rel="noopener noreferrer">flashcards</a> for more info)</li>
+                            <li>Login via <a href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                            <li>Create a deck or add a valid repository (c.f. <a href="https://github.com/thomasrribeiro/flashcards" target="_blank" rel="noopener noreferrer">flashcards</a> for more info)</li>
                             <li>Start learning!</li>
                         </ol>
                     </div>
@@ -68,7 +67,7 @@
             </aside>
 
             <main class="main-content">
-                <h2 class="section-title">Collection</h2>
+                <!-- <h2 class="section-title">Collection</h2> -->
 
                 <div class="auth-header">
                     <button class="btn-github-login" id="btn-github-login">
@@ -104,6 +103,9 @@
                         placeholder="Search decks..."
                         autocomplete="off"
                     />
+<button id="drill-all-btn" class="drill-all-btn" title="Review all">
+                        <img src="./icons/gavel.png" alt="Drill all" style="width:16px;height:16px;filter:invert(1);">
+                    </button>
                 </div>
 
                 <!-- Deck Navigation Breadcrumb -->
@@ -163,6 +165,5 @@
     </div>
 
     <script type="module" src="./src/main.js"></script>
-    <script type="module" src="./src/github-auth.js"></script>
 </body>
 </html>

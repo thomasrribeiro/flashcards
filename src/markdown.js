@@ -5,6 +5,19 @@
 
 import { marked } from 'marked';
 import katex from 'katex';
+import DOMPurify from 'dompurify';
+
+// Allow MathML tags produced by KaTeX, plus aria/style attributes it needs
+const PURIFY_CONFIG = {
+    ADD_TAGS: [
+        'math', 'mrow', 'mi', 'mn', 'mo', 'mfrac', 'msup', 'msub',
+        'msubsup', 'mover', 'munder', 'munderover', 'mtable', 'mtr',
+        'mtd', 'menclose', 'mspace', 'mtext', 'merror', 'msqrt',
+        'mroot', 'semantics', 'annotation'
+    ],
+    ADD_ATTR: ['aria-hidden', 'encoding', 'xmlns'],
+    FORCE_BODY: false
+};
 
 /**
  * Configure marked renderer
@@ -52,8 +65,8 @@ renderer.image = function(href, title, text) {
             const fullPath = `${fileDir}/${href}`;
             const normalizedPath = normalizePath(fullPath);
 
-            // Use raw.githubusercontent.com with main branch
-            src = `https://raw.githubusercontent.com/${owner}/${repo}/main/${normalizedPath}`;
+            // Use raw.githubusercontent.com with HEAD (resolves to the repo's default branch)
+            src = `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${normalizedPath}`;
         }
     }
     // Fallback to topics directory (legacy)
@@ -165,10 +178,9 @@ export function markdownToHtml(markdown) {
     // First render LaTeX
     const withMath = renderMath(markdown);
 
-    // Then render markdown
+    // Then render markdown and sanitize to prevent XSS
     const html = marked.parse(withMath);
-
-    return html;
+    return DOMPurify.sanitize(html, PURIFY_CONFIG);
 }
 
 /**
@@ -177,7 +189,7 @@ export function markdownToHtml(markdown) {
 export function markdownToHtmlInline(markdown) {
     const withMath = renderMath(markdown);
     const html = marked.parseInline(withMath);
-    return html;
+    return DOMPurify.sanitize(html, PURIFY_CONFIG);
 }
 
 /**

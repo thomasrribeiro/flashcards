@@ -22,21 +22,20 @@ npm run preview           # Preview production build
 npm run process-submodules # Generate card index from public/collection/ markdown files
 
 # CLI - Deck Management
-flashcards create <name> [--template physics|chemistry]  # Create new deck
-flashcards auth                                          # Setup authentication
+flashcards create <name> [--path <path>]                 # Create new deck (scaffolds directories + example file)
+flashcards add <deck-path> <card-name>                   # Add empty flashcard file + figures folder to a deck
+flashcards auth                                          # Setup Anthropic API key authentication
 
 # Flashcard generation workflow
-flashcards process <pdf-path> --output <name>            # Process PDF → sources/<name>/
-flashcards generate sources/<name> --output <name>       # Generate flashcards
-
-# Generate options:
-#   --output <name>     : Output filename (default: derived from input)
-#   --template <name>   : Subject-specific guide (physics, chemistry)
-#   --order <number>    : Order number for TOML frontmatter
-#   --tags <tags...>    : Tags for TOML frontmatter
+flashcards process <pdf-or-dir> [--output <name>] [--deck <path>] [--backend <engine>] [--method auto|txt|ocr] [--lang en]
+                                                         # Process PDF (or directory of PDFs) → sources/<name>/
+flashcards analyze-figures <figures-dir> [--batch-size <n>] [--force] [--no-rename] [--verbose]
+                                                         # Analyze figures, generate manifest, rename descriptively
+flashcards generate <source-dir> [--output <name>] [--template <subjects...>] [--prereqs <refs...>] [--order <n>] [--tags <tags...>] [--model <model>] [--verbose]
+                                                         # Generate flashcards from processed source
 
 # Reproducibility
-flashcards show-prompt <flashcard-file>                  # Reconstruct generation prompt
+flashcards show-prompt <flashcard-file> [--output <file>] # Reconstruct generation prompt
 
 # Worker deployment (separate repository: https://github.com/thomasrribeiro/flashcards-worker)
 # Navigate to the flashcards-worker repository directory first
@@ -245,14 +244,14 @@ flashcards generate sources/chapter1 --output chapter1
 
 ### CLI Commands
 ```bash
-# Process PDF (creates sources/<name>/ directory)
-flashcards process <pdf-path> [--output <name>] [--deck <path>]
+# Process PDF or directory of PDFs (creates sources/<name>/ directory)
+flashcards process <pdf-or-dir> [--output <name>] [--deck <path>] [--backend <engine>] [--method auto|txt|ocr] [--lang en]
 
 # Analyze figures and generate manifest (optional but recommended)
-flashcards analyze-figures <source-dir> [--force] [--no-rename] [--verbose]
+flashcards analyze-figures <figures-dir> [--batch-size <n>] [--force] [--no-rename] [--verbose]
 
 # Generate flashcards from processed source
-flashcards generate <source-dir> --output <name> [--template physics] [--order 1] [--tags ...]
+flashcards generate <source-dir> [--output <name>] [--template <subjects...>] [--prereqs <refs...>] [--order <n>] [--tags <tags...>] [--model <model>] [--verbose]
 
 # Reconstruct the prompt used to generate flashcards (for reproducibility)
 flashcards show-prompt <flashcard-file> [--output <file>]
@@ -329,6 +328,20 @@ This captures everything needed to reconstruct the exact prompt:
 3. Verify secrets are set: `wrangler secret list`
 4. Test OAuth flow end-to-end
 5. Monitor logs: `wrangler tail --format pretty`
+
+## Authoring Flashcard Decks (Manual or CLI)
+
+Whenever you author flashcards for any repo — whether through `flashcards generate` (PDF pipeline) or by hand (e.g., a personal "notes" repo with no PDF source) — you **MUST** first read `templates/guides/general.md` and follow its principles:
+
+- **Sequential learning**: define every concept in an earlier card before any card references it.
+- **Minimum information / atomicity**: one testable fact per card; split enumerations into separate cards.
+- **"Why before what"**: explanation cards precede factual cards.
+- **IPEE (Identify, Plan, Execute, Evaluate)** for procedural P:/S: cards.
+- **No `---` separators**: blank lines between cards only.
+- **Numbered section headers** (`## N.x Section Name`) matching the source structure.
+- **Cloze cards**: max 1-2 deletions; every `C:` line must contain at least one `[bracket]` or the parser will error.
+
+The `flashcards generate` CLI injects `general.md` automatically. For hand-authored decks, you must apply the same principles yourself — **read the guide before writing any cards**.
 
 ## Related Repositories
 

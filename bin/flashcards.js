@@ -129,7 +129,7 @@ A: To demonstrate the flashcard format. Delete this file and create your own!
 C: Flashcards use [Q:/A:] for questions, [C:] for cloze deletions, and [P:/S:] for methodology.
 
 Q: What is the difference between Q:/A: and P:/S: cards?
-A: Q:/A: is for simple questions with direct answers. P:/S: is for teaching problem-solving methodology using the ISAE framework (Identify, Set Up, Approach, Evaluate) with variables only, not numerical computation.
+A: Q:/A: is for simple questions with direct answers. P:/S: is for teaching problem-solving methodology using the IPEE framework (Identify, Plan, Execute, Evaluate) with variables only, not numerical computation.
 
 ---
 
@@ -743,7 +743,18 @@ async function authLogin() {
       return;
     }
 
-    const apiKey = await question('Enter your Anthropic API key: ');
+    // Mute terminal output while reading the key so it doesn't appear on screen or in shell history
+    const apiKey = await new Promise((resolve) => {
+      process.stdout.write('Enter your Anthropic API key: ');
+      rl.input.setRawMode?.(true);
+      rl._writeToOutput = () => {}; // suppress echo
+      rl.question('', (answer) => {
+        rl._writeToOutput = (s) => rl.output.write(s); // restore echo
+        rl.input.setRawMode?.(false);
+        process.stdout.write('\n');
+        resolve(answer);
+      });
+    });
     console.log();
 
     if (!apiKey || apiKey.trim().length === 0) {
@@ -1428,7 +1439,12 @@ async function generateFlashcards(sourceDirInput, options) {
 
   try {
     // Step 1: Get API key or OAuth token
-    let apiKey = options.apiKey;
+    // NOTE: --api-key <key> passes the key via argv which is visible in `ps` output.
+    // Prefer the stored config (set via `flashcards auth`) or ANTHROPIC_API_KEY env var.
+    let apiKey = options.apiKey || process.env.ANTHROPIC_API_KEY;
+    if (options.apiKey) {
+      console.log('\x1b[33m⚠  Warning: --api-key exposes your key in process list (ps). Prefer `flashcards auth` or ANTHROPIC_API_KEY env var.\x1b[0m');
+    }
     if (!apiKey) {
       apiKey = await claudeClient.getAccessToken();
       if (!apiKey) {
