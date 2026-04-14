@@ -18,6 +18,27 @@ let reposListCache = null; // Cached list from D1 (avoids duplicate fetches in s
 // Track which repo IDs fully loaded in this session (for safe orphan cleanup)
 let fullyLoadedRepos = new Set();
 
+// localStorage key holding the list of repo IDs the user added while logged out.
+// We re-fetch each one from GitHub on the next page load.
+const UNLOGGED_REPOS_KEY = 'flashcards_unlogged_repos';
+
+export function getUnloggedRepoList() {
+    try {
+        const raw = localStorage.getItem(UNLOGGED_REPOS_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch {
+        return [];
+    }
+}
+
+function setUnloggedRepoList(ids) {
+    try {
+        localStorage.setItem(UNLOGGED_REPOS_KEY, JSON.stringify([...new Set(ids)]));
+    } catch (error) {
+        console.error('[Storage] Failed to persist unlogged repo list:', error);
+    }
+}
+
 // Current user info (set after GitHub auth)
 let currentUser = null;
 
@@ -436,6 +457,17 @@ export async function saveRepoMetadata(repo) {
     }
     console.log(`[Storage] Repos cache now has ${reposCache.length} repos:`, reposCache.map(r => r.id));
 
+    // Persist GitHub repos added in unlogged state so they reload on next visit.
+    // Skip local/* (those come from the static collection, not user-added).
+    if (!currentUser && repo.id && !repo.id.startsWith('local/')) {
+        const list = getUnloggedRepoList();
+        if (!list.includes(repo.id)) {
+            list.push(repo.id);
+            setUnloggedRepoList(list);
+            console.log(`[Storage] Persisted unlogged repo: ${repo.id}`);
+        }
+    }
+
     // Sync to D1 if user is authenticated
     if (currentUser && repo.id && repo.name) {
         try {
@@ -572,6 +604,10 @@ export async function removeRepo(repoId) {
         } catch (error) {
             console.error('[Storage] Failed to save to localStorage:', error);
         }
+
+        // Drop from the unlogged-repos list so we don't re-fetch it next visit
+        const list = getUnloggedRepoList().filter(id => id !== repoId);
+        setUnloggedRepoList(list);
     }
 
     return Promise.resolve();

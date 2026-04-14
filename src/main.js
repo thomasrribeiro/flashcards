@@ -6,7 +6,7 @@ import { initDB, getAllCards, getAllReviews, getStats, getAllRepos, getAllDecks,
 import { loadRepository, removeRepository } from './repo-manager.js';
 import { parseDeck } from './parser.js';
 import { hashCard } from './hasher.js';
-import { getAuthenticatedUser, getUserRepositories } from './github-client.js';
+import { getAuthenticatedUser, getUserRepositories, getOrgRepositories } from './github-client.js';
 import { githubAuth } from './github-auth.js';
 import { startSession, startDrillSession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
 
@@ -14,6 +14,7 @@ import { startSession, startDrillSession, revealAnswer, gradeCard, getState, cle
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
 import { initFolderCreator, openFolderCreator } from './folder-creator.js';
 import { initCardEditor, openCardEditorCreate, openCardEditorEdit } from './card-editor.js';
+import { confirmDialog } from './confirm-modal.js';
 import './card-editor.css';
 
 /**
@@ -31,9 +32,13 @@ async function init() {
         const isAuthenticated = githubAuth.isAuthenticated();
 
         if (!isAuthenticated) {
-            console.log('About to load local collection repos...');
-            await loadLocalCollectionRepos();
-            console.log('Local collection repos loaded');
+            // Seed the example deck on first unlogged visit so new users see
+            // something immediately. A separate flag ensures we don't re-add
+            // it if the user explicitly removes it later.
+            seedExampleRepoOnFirstVisit();
+
+            // Re-fetch any GitHub repos the user added while logged out
+            await loadUnloggedGitHubRepos();
         } else {
             // Load user's repos from D1
             console.log('About to load user repos from D1...');
@@ -45,16 +50,31 @@ async function init() {
         await loadRepositories();
         console.log('Repositories loaded');
 
-        // Restore navigation state from URL if present
-        await restoreNavigationFromURL();
+        // On a fresh page load (refresh or direct visit), always land at home —
+        // strip our nav params from prior pushState so the breadcrumb resets.
+        // Only strip nav params; leave OAuth params (github_token, user, state, …)
+        // intact so github-auth.js can complete the callback.
+        const url = new URL(window.location);
+        let stripped = false;
+        for (const key of ['deck', 'path', 'category', 'study', 'file']) {
+            if (url.searchParams.has(key)) {
+                url.searchParams.delete(key);
+                stripped = true;
+            }
+        }
+        if (stripped) {
+            history.replaceState(null, '', url.pathname + (url.search || ''));
+        }
 
         setupEventListeners();
 
-        // Setup repo input if authenticated
-        if (githubAuth.isAuthenticated()) {
-            await setupRepoInput();
+        // Repo input is available in both states; data source differs.
+        // Logged-in: searches the user's own repos. Logged-out: searches the
+        // thomasrribeiro-flashcards org's public decks.
+        await setupRepoInput();
 
-            // Initialize card editor components
+        if (githubAuth.isAuthenticated()) {
+            // Initialize card editor components (logged-in only — they write to GitHub)
             initDeckCreator(onDeckCreated);
             initFolderCreator(onFolderCreated);
             initCardEditor(onCardSaved);
@@ -130,6 +150,67 @@ async function loadUserRepos() {
     if (cleaned > 0) {
         console.log(`[Main] Cleaned up ${cleaned} orphaned reviews`);
     }
+}
+
+const EXAMPLE_REPO_ID = 'thomasrribeiro-flashcards/example';
+const EXAMPLE_SEEDED_KEY = 'flashcards_example_seeded';
+
+/**
+ * On the very first unlogged visit, add the example deck to the user's
+ * list so they see content immediately. The seeded flag is set unconditionally
+ * so removing the deck afterwards is respected (no re-seeding on next load).
+ */
+function seedExampleRepoOnFirstVisit() {
+    try {
+        if (localStorage.getItem(EXAMPLE_SEEDED_KEY)) return;
+        const raw = localStorage.getItem('flashcards_unlogged_repos');
+        const list = raw ? JSON.parse(raw) : [];
+        if (!list.includes(EXAMPLE_REPO_ID)) {
+            list.push(EXAMPLE_REPO_ID);
+            localStorage.setItem('flashcards_unlogged_repos', JSON.stringify(list));
+        }
+        localStorage.setItem(EXAMPLE_SEEDED_KEY, '1');
+    } catch (error) {
+        console.error('[Main] Failed to seed example repo:', error);
+    }
+}
+
+/**
+ * Re-fetch GitHub repos the user added while logged out.
+ * Repo IDs are persisted in localStorage; cards/metadata are not.
+ */
+async function loadUnloggedGitHubRepos() {
+    const { getUnloggedRepoList } = await import('./storage.js');
+    const { loadRepository } = await import('./repo-manager.js');
+
+    const ids = getUnloggedRepoList();
+    if (ids.length === 0) return;
+
+    console.log(`[Main] Re-fetching ${ids.length} unlogged repos:`, ids);
+
+    const grid = document.getElementById('topics-grid');
+    let loaded = 0;
+    const failed = [];
+
+    const renderProgress = () => {
+        if (!grid) return;
+        grid.innerHTML = `<div class="loading">Loading your decks… (${loaded}/${ids.length})</div>`;
+    };
+    renderProgress();
+
+    await Promise.all(ids.map(async (id) => {
+        try {
+            await loadRepository(id);
+        } catch (error) {
+            console.error(`[Main] Failed to reload unlogged repo ${id}:`, error);
+            failed.push({ id, name: id.split('/').pop(), error: error.message });
+        } finally {
+            loaded++;
+            renderProgress();
+        }
+    }));
+
+    window.__failedRepos = failed;
 }
 
 /**
@@ -273,9 +354,15 @@ async function loadRepositories() {
  * Render the home-level category grid
  */
 function _renderCategoryGrid(displayDecks, allCards, allReviews, searchTerm, grid) {
+    // When unlogged, surface local/* decks (the example deck) directly on the
+    // front page instead of burying them inside a "Misc" folder.
+    const isLoggedIn = githubAuth.isAuthenticated();
+    const flatDecks = isLoggedIn ? [] : displayDecks.filter(d => d.id.startsWith('local/'));
+    const groupedDecks = isLoggedIn ? displayDecks : displayDecks.filter(d => !d.id.startsWith('local/'));
+
     // Group decks by subject
     const categoryMap = new Map();
-    for (const deck of displayDecks) {
+    for (const deck of groupedDecks) {
         const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim().toLowerCase() : 'misc';
         if (!categoryMap.has(subject)) categoryMap.set(subject, []);
         categoryMap.get(subject).push(deck);
@@ -288,16 +375,31 @@ function _renderCategoryGrid(displayDecks, allCards, allReviews, searchTerm, gri
         return a.localeCompare(b);
     });
 
-    const filtered = searchTerm
+    const filteredCategories = searchTerm
         ? sorted.filter(name => name.toLowerCase().includes(searchTerm))
         : sorted;
 
-    if (filtered.length === 0) {
-        grid.innerHTML = '<div class="loading">No categories match your search.</div>';
+    const filteredFlatDecks = searchTerm
+        ? flatDecks.filter(d => d.id.split('/').pop().toLowerCase().includes(searchTerm))
+        : flatDecks;
+
+    if (filteredCategories.length === 0 && filteredFlatDecks.length === 0) {
+        grid.innerHTML = '<div class="loading">No matches.</div>';
         return;
     }
 
-    for (const categoryName of filtered) {
+    // Render flat (ungrouped) decks first
+    for (const deck of filteredFlatDecks) {
+        const deckCards = allCards.filter(c => c.deckName === deck.id);
+        const deckReviews = allReviews.filter(r => deckCards.some(c => c.hash === r.cardHash));
+        grid.appendChild(createDeckCard({
+            ...deck,
+            cards: deckCards,
+            reviews: new Map(deckReviews.map(r => [r.cardHash, r]))
+        }));
+    }
+
+    for (const categoryName of filteredCategories) {
         grid.appendChild(createCategoryCard(categoryName, categoryMap.get(categoryName), allCards, allReviews));
     }
 
@@ -349,7 +451,13 @@ function createCategoryCard(categoryName, decks, allCards, allReviews) {
     resetBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (confirm(`Reset all ${totalCards} card${totalCards !== 1 ? 's' : ''} in "${categoryName}"? This marks everything as new.`)) {
+        const ok = await confirmDialog({
+            title: 'Reset category',
+            message: `Reset all ${totalCards} card${totalCards !== 1 ? 's' : ''} in "${categoryName}"? This marks everything as new.`,
+            confirmText: 'Reset',
+            danger: true,
+        });
+        if (ok) {
             for (const deck of decks) await resetDeck(deck.id);
             await loadRepositories();
         }
@@ -368,10 +476,10 @@ function createCategoryCard(categoryName, decks, allCards, allReviews) {
     };
     btnContainer.appendChild(drillBtn);
 
-    // Remove all decks in category from collection (auth only, non-local)
-    const isAuthenticated = localStorage.getItem('github_user') !== null;
+    // Remove all decks in category from collection (non-local only — local
+    // example decks ship with the app). Available in both auth states.
     const allGitHub = decks.every(d => !d.id.startsWith('local/'));
-    if (isAuthenticated && allGitHub) {
+    if (allGitHub) {
         const removeBtn = document.createElement('button');
         removeBtn.className = 'card-delete-btn';
         removeBtn.title = `Remove all decks in "${categoryName}" from your collection`;
@@ -379,7 +487,13 @@ function createCategoryCard(categoryName, decks, allCards, allReviews) {
         removeBtn.onclick = async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (confirm(`Remove all ${deckCount} deck${deckCount !== 1 ? 's' : ''} in "${categoryName}" from your collection?\n\nThis does NOT delete the GitHub repositories.`)) {
+            const ok = await confirmDialog({
+                title: 'Remove category',
+                message: `Remove all ${deckCount} deck${deckCount !== 1 ? 's' : ''} in "${categoryName}" from your collection?\n\nThis does NOT delete the GitHub repositories.`,
+                confirmText: 'Remove',
+                danger: true,
+            });
+            if (ok) {
                 for (const deck of decks) await removeRepository(deck.id);
                 await loadRepositories();
             }
@@ -520,7 +634,13 @@ function createDeckCard(deck) {
     resetBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (confirm(`Reset all cards in "${displayName}"? This will mark all cards as new.`)) {
+        const ok = await confirmDialog({
+            title: 'Reset deck',
+            message: `Reset all cards in "${displayName}"? This will mark all cards as new.`,
+            confirmText: 'Reset',
+            danger: true,
+        });
+        if (ok) {
             await resetDeck(deck.id);
             await loadRepositories();
         }
@@ -541,9 +661,11 @@ function createDeckCard(deck) {
     };
     btnContainer.appendChild(reviewBtn);
 
-    // Only show delete button when authenticated (local repos must be manually removed from public/collection/)
-    const isAuthenticated = localStorage.getItem('github_user') !== null;
-    if (isAuthenticated) {
+    // Show delete button for any GitHub-backed deck (local/* example decks ship
+    // with the app and can't be removed). Unlogged users can also remove repos
+    // they added — the removal updates flashcards_unlogged_repos in localStorage.
+    const isLocalDeck = deck.id.startsWith('local/');
+    if (!isLocalDeck) {
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'card-delete-btn';
         deleteBtn.title = 'Remove from collection';
@@ -552,7 +674,13 @@ function createDeckCard(deck) {
             e.preventDefault();
             e.stopPropagation();
 
-            if (confirm(`Remove "${displayName}" from your collection?`)) {
+            const ok = await confirmDialog({
+                title: 'Remove deck',
+                message: `Remove "${displayName}" from your collection?`,
+                confirmText: 'Remove',
+                danger: true,
+            });
+            if (ok) {
                 try {
                     await removeRepository(deck.id);
                     await loadRepositories();
@@ -606,7 +734,13 @@ function createFailedRepoCard(failed) {
     deleteBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (confirm(`Remove "${failed.name}" from your list? The deck failed to load and will stop appearing.`)) {
+        const ok = await confirmDialog({
+            title: 'Remove deck',
+            message: `Remove "${failed.name}" from your list? The deck failed to load and will stop appearing.`,
+            confirmText: 'Remove',
+            danger: true,
+        });
+        if (ok) {
             try {
                 await removeRepository(failed.id);
                 window.__failedRepos = (window.__failedRepos || []).filter(r => r.id !== failed.id);
@@ -739,30 +873,31 @@ function setupEventListeners() {
 }
 
 /**
- * Setup repository input with user's repos dropdown
+ * Setup repository input with dropdown.
+ * Logged-in: dropdown shows the user's own repos.
+ * Logged-out: dropdown shows public decks from the thomasrribeiro-flashcards org.
  */
+const PUBLIC_DECKS_ORG = 'thomasrribeiro-flashcards';
+
 async function setupRepoInput() {
     const repoInput = document.getElementById('github-repo-input');
     const suggestions = document.getElementById('repo-suggestions');
+    if (!repoInput || !suggestions) return;
 
     let userRepos = [];
     let selectedIndex = -1;
 
+    repoInput.value = '';
+    repoInput.placeholder = 'Add decks...';
+
+    // Dropdown always suggests from the public org; users can still type any
+    // owner/repo by hand to add their own private repos when authenticated.
     try {
-        // Get authenticated user
-        const user = await getAuthenticatedUser();
-        console.log(`[Main] Loading repos for ${user.login}`);
-        // Don't pre-fill, just set placeholder
-        repoInput.value = '';
-        repoInput.placeholder = 'owner/repository';
-
-        // Load user repositories (but don't show dropdown yet)
-        userRepos = await getUserRepositories();
-        console.log(`[Main] Loaded ${userRepos.length} repositories`);
-
+        console.log(`[Main] Loading public decks from ${PUBLIC_DECKS_ORG}`);
+        userRepos = await getOrgRepositories(PUBLIC_DECKS_ORG);
+        console.log(`[Main] Loaded ${userRepos.length} public decks`);
     } catch (error) {
-        console.error('[Main] Failed to setup repo dropdown:', error);
-        suggestions.classList.add('hidden');
+        console.error(`[Main] Failed to load ${PUBLIC_DECKS_ORG} repos:`, error);
     }
 
     // Input event for filtering
@@ -1899,7 +2034,13 @@ function createFolderCard(folderName, folderContent, allReviews) {
     resetBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (confirm(`Reset all cards in "${folderName}"? This will mark all cards as due for review.`)) {
+        const ok = await confirmDialog({
+            title: 'Reset folder',
+            message: `Reset all cards in "${folderName}"? This will mark all cards as due for review.`,
+            confirmText: 'Reset',
+            danger: true,
+        });
+        if (ok) {
             // Build folder path
             const folderPath = [...currentPath, folderName].join('/');
             const { refreshDeck } = await import('./storage.js');
@@ -1998,7 +2139,13 @@ function createSubdeckCard(subdeck) {
     resetBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (confirm(`Reset all cards in "${displayName}"? This will mark all cards as due for review.`)) {
+        const ok = await confirmDialog({
+            title: 'Reset file',
+            message: `Reset all cards in "${displayName}"? This will mark all cards as due for review.`,
+            confirmText: 'Reset',
+            danger: true,
+        });
+        if (ok) {
             // Use file path for filtering
             const { refreshDeck } = await import('./storage.js');
             await refreshDeck(subdeck.deckId, subdeck.fullPath);

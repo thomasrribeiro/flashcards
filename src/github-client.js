@@ -220,6 +220,34 @@ export async function getUserRepositories() {
 }
 
 /**
+ * Fetch public repositories for a GitHub organization (works unauthenticated).
+ * Used to populate the repo-add dropdown for logged-out users.
+ */
+export async function getOrgRepositories(org) {
+    const allRepos = [];
+    let url = `${GITHUB_API}/orgs/${org}/repos?type=public&per_page=100&sort=pushed&page=1`;
+
+    while (url) {
+        const response = await fetch(url, { headers: getAuthHeaders() });
+
+        if (!response.ok) {
+            const err = new Error(`Failed to list ${org} repositories: ${response.statusText}`);
+            err.status = response.status;
+            throw err;
+        }
+
+        const repos = await response.json();
+        allRepos.push(...repos);
+
+        const link = response.headers.get('Link') || '';
+        const nextMatch = link.match(/<([^>]+)>;\s*rel="next"/);
+        url = nextMatch ? nextMatch[1] : null;
+    }
+
+    return allRepos;
+}
+
+/**
  * Parse owner/repo string
  */
 export function parseRepoString(repoString) {

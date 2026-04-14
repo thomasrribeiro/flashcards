@@ -73,8 +73,8 @@
                     <button class="btn-github-login" id="btn-github-login">
                         Login with GitHub
                     </button>
-                    <div class="user-info hidden" id="user-info">
-                        <div class="user-info-row">
+                    <div class="user-info" id="user-info">
+                        <div class="user-info-row hidden" id="user-info-row-main">
                             <span id="user-name"></span>
                             <button class="btn-logout" id="btn-logout">Logout</button>
                         </div>
@@ -84,7 +84,7 @@
                                     type="text"
                                     id="github-repo-input"
                                     class="repo-input-field"
-                                    placeholder="owner/repository"
+                                    placeholder="Add decks..."
                                     autocomplete="off"
                                 />
                                 <div id="repo-suggestions" class="repo-suggestions hidden"></div>

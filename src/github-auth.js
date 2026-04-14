@@ -128,18 +128,19 @@ class GitHubAuth {
         localStorage.removeItem('github_user');
         localStorage.removeItem('github_token');
 
-        // Reload page to reset UI state
-        window.location.reload();
+        // Navigate to clean root URL so the breadcrumb resets to "home"
+        // (a plain reload would keep ?deck=… params and try to restore that view)
+        window.location.href = window.location.pathname;
     }
 
     updateUI(isLoggedIn) {
         const loginBtn = document.getElementById('btn-github-login');
-        const userInfo = document.getElementById('user-info');
+        const userInfoRow = document.getElementById('user-info-row-main');
         const userName = document.getElementById('user-name');
 
         if (isLoggedIn && this.user) {
             if (loginBtn) loginBtn.classList.add('hidden');
-            if (userInfo) userInfo.classList.remove('hidden');
+            if (userInfoRow) userInfoRow.classList.remove('hidden');
             if (userName) {
                 // Show only first name
                 const fullName = this.user.name || this.user.username;
@@ -148,7 +149,7 @@ class GitHubAuth {
             }
         } else {
             if (loginBtn) loginBtn.classList.remove('hidden');
-            if (userInfo) userInfo.classList.add('hidden');
+            if (userInfoRow) userInfoRow.classList.add('hidden');
         }
     }
 

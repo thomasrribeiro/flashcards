@@ -13,6 +13,7 @@ import {
     cardToFormData,
     countClozeDeletions
 } from './card-serializer.js';
+import { confirmDialog } from './confirm-modal.js';
 import { markdownToHtml } from './markdown.js';
 
 let modal = null;
@@ -602,9 +603,15 @@ export async function openCardEditorEdit(deckId, filePath, cardIndex = 0) {
 /**
  * Close the modal
  */
-export function closeModal() {
-    if (state.isDirty && !confirm('You have unsaved changes. Discard them?')) {
-        return;
+export async function closeModal() {
+    if (state.isDirty) {
+        const ok = await confirmDialog({
+            title: 'Unsaved changes',
+            message: 'You have unsaved changes. Discard them?',
+            confirmText: 'Discard',
+            danger: true,
+        });
+        if (!ok) return;
     }
     modal.classList.add('hidden');
     clearTimeout(previewTimer);
@@ -713,7 +720,13 @@ async function handleDelete() {
         ? 'This is the only card in the file. Delete the entire file?'
         : 'Delete this card?';
 
-    if (!confirm(confirmMsg)) return;
+    const ok = await confirmDialog({
+        title: 'Delete card',
+        message: confirmMsg,
+        confirmText: 'Delete',
+        danger: true,
+    });
+    if (!ok) return;
 
     const submitBtn = modal.querySelector('#card-editor-submit');
     const deleteBtn = modal.querySelector('#card-editor-delete');
