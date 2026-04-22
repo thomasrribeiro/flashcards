@@ -410,6 +410,21 @@ export async function refreshDeck(deckId, folder = null) {
         return;
     }
 
+    // Pre-compute card hashes to remove (mirrors localStorage path logic)
+    const cardsInDeck = cardsCache.filter(c => {
+        if (c.deckName !== deckId && c.source?.repo !== deckId) return false;
+        if (folder) {
+            const cardPath = c.source?.file || '';
+            const normalizedCardPath = cardPath.startsWith('flashcards/') ? cardPath.substring(11) : cardPath;
+            const normalizedFolder = folder.startsWith('flashcards/') ? folder.substring(11) : folder;
+            if (normalizedCardPath === normalizedFolder) return true;
+            if (normalizedCardPath.startsWith(normalizedFolder + '/')) return true;
+            return false;
+        }
+        return true;
+    });
+    const cardHashSet = new Set(cardsInDeck.map(c => c.hash));
+
     try {
         const userId = currentUser.github_id || currentUser.id;
         const response = await fetch(`${WORKER_URL}/api/refresh/${userId}/${encodeURIComponent(deckId)}`, {
@@ -425,18 +440,21 @@ export async function refreshDeck(deckId, folder = null) {
         const { deleted } = await response.json();
         console.log(`[Storage] Refreshed deck - deleted ${deleted} review(s)`);
 
-        // Reload reviews from D1 (don't merge with localStorage - use D1 as source of truth)
+        // Reload from D1 to get the authoritative post-deletion state
         await loadReviewsFromD1(false);
-
-        // Save updated reviews to localStorage
-        try {
-            localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
-            console.log('[Storage] Updated localStorage after refresh');
-        } catch (error) {
-            console.error('[Storage] Failed to update localStorage after refresh:', error);
-        }
     } catch (error) {
         console.error('[Storage] Error refreshing deck:', error);
+    }
+
+    // Always apply local filter after the API attempt so the UI reflects the
+    // reset even if D1 returned stale data or the request failed transiently.
+    reviewsCache = reviewsCache.filter(r => !cardHashSet.has(r.cardHash));
+
+    try {
+        localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+        console.log('[Storage] Updated localStorage after refresh');
+    } catch (error) {
+        console.error('[Storage] Failed to update localStorage after refresh:', error);
     }
 }
 
