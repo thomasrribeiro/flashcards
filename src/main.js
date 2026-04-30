@@ -431,7 +431,8 @@ function createCategoryCard(categoryName, decks, allCards, allReviews) {
         });
     }
 
-    const progressPercent = totalCards > 0 ? Math.round((reviewedCards / totalCards) * 100) : 0;
+    const retainedCards = totalCards - dueCards;
+    const progressPercent = totalCards > 0 ? Math.round((retainedCards / totalCards) * 100) : 0;
     const deckCount = decks.length;
     const description = `${deckCount} deck${deckCount !== 1 ? 's' : ''} · ${totalCards} card${totalCards !== 1 ? 's' : ''}`;
 
@@ -693,8 +694,9 @@ function createDeckCard(deck) {
         btnContainer.appendChild(deleteBtn);
     }
 
-    // Calculate progress percentage (cards reviewed at least once)
-    const progressPercent = totalCards > 0 ? Math.round((reviewedCards / totalCards) * 100) : 0;
+    // Retained = reviewed cards whose due date is still in the future
+    const retainedCards = reviewedCards - dueReviewedCards;
+    const progressPercent = totalCards > 0 ? Math.round((retainedCards / totalCards) * 100) : 0;
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'project-content';
@@ -2068,8 +2070,13 @@ function createFolderCard(folderName, folderContent, allReviews) {
 
     // No delete button for folders - managed via git
 
-    // Calculate progress percentage (cards reviewed at least once)
-    const progressPercent = totalCards > 0 ? Math.round((reviewedCards / totalCards) * 100) : 0;
+    // Retained = cards with a review whose due date is still in the future
+    const now = new Date();
+    const retainedCards = allCardsInFolder.filter(card => {
+        const review = allReviews.find(r => r.cardHash === card.hash);
+        return review && new Date(review.fsrsCard.due) > now;
+    }).length;
+    const progressPercent = totalCards > 0 ? Math.round((retainedCards / totalCards) * 100) : 0;
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'project-content';
@@ -2156,8 +2163,9 @@ function createSubdeckCard(subdeck) {
     };
     btnContainer.appendChild(resetBtn);
 
-    // Calculate progress percentage (cards reviewed at least once)
-    const progressPercent = totalCards > 0 ? Math.round((reviewedCards / totalCards) * 100) : 0;
+    // Retained = reviewed cards whose due date is still in the future
+    const retainedCards = reviewedCards - dueReviewedCards;
+    const progressPercent = totalCards > 0 ? Math.round((retainedCards / totalCards) * 100) : 0;
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'project-content';
