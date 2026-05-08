@@ -877,6 +877,132 @@ Q: What's a criticism of pure utilitarianism?
 A: Can justify harming individuals for collective benefit (tyranny of the majority)
 ```
 
+## Advanced Refinements
+
+These refinements layer on top of the core principles above. Apply them once your cards already satisfy atomicity, sequential learning, and variable-definition rules.
+
+### A1. Answer Brevity Targets
+
+The earlier "1-4 sentences" allowance is a maximum, not a goal. Tighten further:
+
+- **Definitional answers**: 1-5 words ideal (e.g., "Hydroxyl group", "O(log n)", "Kinetic energy")
+- **Explanatory answers**: 1 sentence ideal, ≤3 sentences max
+- **Why/comparison answers**: ≤3 sentences, prefer 2
+
+If your answer needs 4+ sentences, **the card is not atomic** — split it.
+
+❌ **Too long**:
+```markdown
+Q: What is a hash table?
+A: A hash table is a data structure that maps keys to values using a hash function, typically achieving O(1) average-case lookup, insertion, and deletion. It uses an array of buckets where each key is hashed to determine its bucket index. When two keys hash to the same bucket, collisions are resolved using techniques like chaining or open addressing. Hash tables are widely used because of their fast average performance, though worst-case performance can degrade to O(n).
+```
+
+✅ **Tightened (atomic split)**:
+```markdown
+Q: What is a hash table?
+A: A key-value data structure with O(1) average lookup via a hash function.
+
+Q: How do hash tables resolve collisions?
+A: Chaining (linked list per bucket) or open addressing (probe for next slot).
+
+Q: What is the worst-case time complexity of hash table operations?
+A: O(n), when many keys collide into one bucket.
+```
+
+**Why it matters**: Long backs slow review, raise failure rates, and almost always hide multiple atomic facts.
+
+### A2. Worked-Example Fadeout (Avoid Expertise Reversal)
+
+Full IPEE scaffolding (IDENTIFY → PLAN → EXECUTE → EVALUATE) is essential when introducing a problem type but becomes counterproductive once the pattern is internalized. Research on the **expertise reversal effect** (Kalyuga, 2003) shows fully scaffolded examples *hurt* advanced learners — they slow recall and induce redundant verification.
+
+**Apply fadeout within and across chapters:**
+
+- **Introduction (first time)**: Full IPEE — all four steps explicit
+- **Mid-chapter**: Drop the IDENTIFY step (the pattern is now obvious from the prompt)
+- **Late-chapter / advanced**: Drop both IDENTIFY and PLAN — go straight from problem to EXECUTE
+- **Drill cards**: Just problem and answer (no IPEE structure)
+
+✅ **Faded example** (later in chapter, after IPEE has been established):
+```markdown
+P: Solve $\int x e^x \, dx$.
+
+S:
+**EXECUTE**: Integration by parts with $u = x$, $dv = e^x dx$:
+- $du = dx$, $v = e^x$
+- $\int x e^x \, dx = x e^x - \int e^x \, dx = x e^x - e^x + C = e^x(x-1) + C$
+
+**EVALUATE**: Differentiate to verify: $\frac{d}{dx}[e^x(x-1) + C] = e^x(x-1) + e^x = xe^x$ ✓
+```
+
+**Rule of thumb**: First 1-2 P:/S: cards in a chapter use full IPEE; later cards fade scaffolding once the pattern is established.
+
+### A3. Pattern-Recognition / Triggering Cards
+
+A distinct, named card type that lives between Q:/A: and P:/S:: **the front shows a problem signature; the back shows the strategy choice — no execution.** These cards train the IDENTIFY skill in isolation, so when a real problem arrives the strategy fires fast.
+
+**Format**: Use Q:/A: with the convention that the question presents a *problem shape* and the answer names the *technique*.
+
+**Examples**:
+```markdown
+# Calculus:
+Q: You're integrating $\int x \cos(x) \, dx$. What technique?
+A: Integration by parts (one factor differentiates simpler; the other integrates cleanly).
+
+Q: You're integrating $\int \frac{1}{x^2 + 4} \, dx$. What technique?
+A: Trig substitution — $x = 2\tan\theta$ converts the denominator to $\sec^2\theta$.
+
+# Linear algebra:
+Q: You need to solve $A\vec{x} = \vec{b}$ where $A$ is square and you'll reuse the same $A$ for multiple $\vec{b}$. What approach?
+A: LU decomposition (factor once, then substitute for each $\vec{b}$).
+
+# Algorithms:
+Q: You're given an array problem asking for "longest subarray such that...". What technique should you reach for first?
+A: Sliding window (or two-pointer) — O(n) instead of O(n²) brute force.
+
+# Probability:
+Q: A problem asks "probability of at least one X in N trials". What's the trick?
+A: Complement: $1 - P(\text{no X})$ = $1 - (1-p)^N$.
+```
+
+**When to add them**: After introducing a technique, before the worked examples. Pattern-recognition cards make the EXECUTE phase faster by training fast IDENTIFY.
+
+### A4. Mnemonic Techniques (Beyond Enumerations)
+
+Mnemonics are not just for unordered lists. Use them whenever a concept resists straightforward recall — but **use sparingly**: an unmemorable mnemonic is worse than no mnemonic.
+
+**Effective patterns**:
+
+1. **Acronyms**: PEMDAS (order of operations), SOH-CAH-TOA (trig ratios), FOIL (binomial expansion), ACID (database properties).
+2. **Vivid imagery for abstract symbols**: "$\nabla$ (nabla) looks like an upside-down triangle pointing where the steepest decrease lives".
+3. **Personal/familiar anchors**: "Big-O is the *ceiling*; Big-Ω is the *floor*; Big-Θ is the *sandwich*."
+4. **Phonetic/rhyme**: "i before e except after c", "Thirty days hath September..."
+5. **Story/sentence first letters**: "Some Officers Have Curly Auburn Hair To Offer Attraction" → SOH-CAH-TOA.
+
+**Use only when**:
+- The concept is high-frequency (revisited often)
+- It's prone to confusion with siblings (e.g., proximal vs. distal, prograde vs. retrograde)
+- A clean mnemonic exists — don't force one
+
+❌ **Don't** invent strained mnemonics for ordinary facts. The cognitive cost of decoding "BAGS" to recall "Boyle, Avogadro, Gay-Lussac, Standard" exceeds just learning the four laws as separate cards.
+
+### A5. No Decorative Images on Cards
+
+The figure catalog distinguishes `worked_example`, `diagram`, `concept_illustration`, and `decorative`. **Decorative images must never appear on cards** — they raise cognitive load without aiding retrieval.
+
+**Examples of decorative (skip)**:
+- Chapter opener photographs (e.g., a stock photo of a forest at the start of an ecology chapter)
+- Author portraits, historical scene paintings unless content-relevant
+- Repeating brand logos, section dividers, ornamental flourishes
+- Photographs of scientists/mathematicians used purely as biographical context
+
+**Examples of non-decorative (include)**:
+- Free-body diagrams, circuit schematics, molecular structures
+- Graphs, charts, and tables that encode data the card asks about
+- Maps where geography is the answer
+- Photos where the *visual itself* is what's being identified (e.g., a microscope image of a cell type)
+
+**Test**: If you removed the image, would the card still work equally well? If yes, the image is decorative — leave it out.
+
 ## Implementation Checklist
 
 When creating flashcards for a new topic:
@@ -890,8 +1016,12 @@ When creating flashcards for a new topic:
 - [ ] **Create formulas/definitions** - Use cloze deletion for speed
 - [ ] **Add two-way cards** - Test relationships bidirectionally
 - [ ] **Create methodology cards** - P:/S: for systematic problem-solving
+- [ ] **Add pattern-recognition cards** - Train IDENTIFY in isolation
+- [ ] **Fade IPEE scaffolding** - Less structure as pattern is internalized
+- [ ] **Tighten answer length** - 1-5 words for definitions, ≤3 sentences for explanations
 - [ ] **Optimize wording** - Trim every unnecessary word
 - [ ] **Check for interference** - Similar cards? Add distinguishing context
+- [ ] **Skip decorative images** - Only include figures that aid retrieval
 
 **Last updated**: {DATE}
 **Scope**: {DECK_NAME}
