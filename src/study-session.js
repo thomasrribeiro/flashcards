@@ -4,6 +4,7 @@
 
 import { getAllCards, getAllReviews, saveReview } from './storage.js';
 import { reviewCard, createCard, Rating, GradeKeys, State } from './fsrs-client.js';
+import { recordReviewLocally } from './habit-client.js';
 import { renderCardFront, renderCardBack, parseSolutionSteps, markdownToHtml, setCardContext } from './markdown.js';
 
 // Session state
@@ -138,6 +139,36 @@ export async function startDrillSession(onComplete, onCardChange, options = {}) 
     state.dueCards = cardsToStudy;
     state.totalCards = cardsToStudy.length;
     state.reviewedCards = 0;
+
+    updateStats();
+    showNextCard();
+}
+
+/**
+ * Start a Today session from a prebuilt queue (see today-queue.js).
+ * Entries with fsrsCard === null are new cards and get a fresh FSRS card.
+ */
+export function startTodaySession(queue, onComplete, onCardChange) {
+    state = {
+        currentCardIndex: 0,
+        dueCards: queue.map(({ card, fsrsCard, cardHash }) => ({
+            card,
+            fsrsCard: fsrsCard || createCard(),
+            cardHash
+        })),
+        totalCards: queue.length,
+        reviewedCards: 0,
+        reviewedCount: 0,
+        isRevealed: false,
+        currentCard: null,
+        currentFsrsCard: null,
+        currentStepIndex: 0,
+        solutionSteps: [],
+        deckId: '__today__',
+        fileFilter: null,
+        onComplete,
+        onCardChange
+    };
 
     updateStats();
     showNextCard();
@@ -406,8 +437,9 @@ export async function gradeCard(grade) {
     console.log(`[StudySession] Graded card ${state.currentCard.hash?.substring(0, 8)} with grade ${grade}`);
     console.log(`[StudySession] New due date: ${result.card.due}`);
 
-    // Save updated FSRS state
-    await saveReview(state.currentCard.hash, result.card);
+    // Save updated FSRS state, with the review log for habit/analytics tracking
+    await saveReview(state.currentCard.hash, result.card, result.log);
+    recordReviewLocally(result.log);
 
     // Update stats and move to next card
     state.reviewedCount++;

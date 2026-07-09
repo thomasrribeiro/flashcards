@@ -1578,3 +1578,75 @@ kbd {
 .file-card {
     /* No special styling needed - inherits from .project-card */
 }
+
+/* ── Daily habit: Today hero, streak badge, focus-star toggle ── */
+
+.today-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+    background: rgba(245, 200, 66, 0.12);
+    border: 1px solid var(--black);
+    border-left: 4px solid var(--gold);
+}
+
+.today-hero-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.today-hero-text strong {
+    font-size: 1.05rem;
+}
+
+.today-hero-text span {
+    font-size: 0.85rem;
+    opacity: 0.75;
+}
+
+.today-start-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.streak-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    margin-left: 8px;
+    font-size: 0.8rem;
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--black);
+    color: var(--gold);
+    white-space: nowrap;
+}
+
+.card-star-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: var(--white);
+    border: 1px solid var(--black);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--black);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.15s ease;
+}
+
+.card-star-btn.active {
+    background: var(--gold);
+}
+
+.session-habit-line {
+    margin-top: 8px;
+    font-size: 0.9rem;
+    opacity: 0.8;
+}

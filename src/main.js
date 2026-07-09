@@ -8,7 +8,9 @@ import { parseDeck } from './parser.js';
 import { hashCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories, getOrgRepositories } from './github-client.js';
 import { githubAuth } from './github-auth.js';
-import { startSession, startDrillSession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
+import { startSession, startDrillSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
+import { buildTodayQueue, todayQueueCounts } from './today-queue.js';
+import { getSettings, saveSettings, getHabitStatus, levelForXp } from './habit-client.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -49,6 +51,11 @@ async function init() {
         console.log('About to load repositories...');
         await loadRepositories();
         console.log('Repositories loaded');
+
+        // Load habit settings (active decks, daily goal) and render the
+        // Today hero + streak badge
+        habitSettings = await getSettings();
+        await renderTodayHero();
 
         // On a fresh page load (refresh or direct visit), always land at home —
         // strip our nav params from prior pushState so the breadcrumb resets.
@@ -340,6 +347,10 @@ async function loadRepositories() {
 
         updateDeckBreadcrumb();
 
+        // Refresh the Today hero whenever the grid re-renders (no-op until
+        // habit settings have loaded in init)
+        if (habitSettings) renderTodayHero();
+
     } catch (error) {
         console.error('Error loading repositories:', error);
         grid.innerHTML = `
@@ -626,6 +637,19 @@ function createDeckCard(deck) {
     // Add button container (top right)
     const btnContainer = document.createElement('div');
     btnContainer.className = 'card-buttons';
+
+    // Active-deck (focus) star toggle — active decks feed the Today session
+    const isActive = (habitSettings?.activeDecks || []).includes(deck.id);
+    const starBtn = document.createElement('button');
+    starBtn.className = 'card-star-btn' + (isActive ? ' active' : '');
+    starBtn.title = isActive ? 'Remove from daily focus' : 'Add to daily focus';
+    starBtn.textContent = isActive ? '★' : '☆';
+    starBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        await toggleActiveDeck(deck.id);
+    };
+    btnContainer.appendChild(starBtn);
 
     // Add reset button
     const resetBtn = document.createElement('button');
@@ -1265,6 +1289,7 @@ async function loadLocalRepo(repoInfo) {
 // Deck navigation state (inline breadcrumb navigation)
 let currentCategory = null; // The currently selected category folder (null = at home level)
 let currentDeck = null;
+let habitSettings = null; // Cached habit settings (active decks, daily goal)
 let currentPath = [];
 let folderHierarchy = null;
 let allReviewsCache = null; // Cache for reviews during navigation
@@ -1722,6 +1747,145 @@ function exitDeckNavigation() {
 /**
  * Start an inline study session
  */
+/**
+ * Render the Today hero (daily focus-queue entry point) and streak badge.
+ * Shown only at browse levels — never inside a deck or study session.
+ */
+async function renderTodayHero() {
+    const hero = document.getElementById('today-hero');
+    if (!hero) return;
+
+    if (currentDeck || isInStudySession) {
+        hero.classList.add('hidden');
+        return;
+    }
+
+    try {
+        const status = await getHabitStatus();
+        habitSettings = status.settings;
+        updateStreakBadge(status);
+
+        const active = habitSettings.activeDecks || [];
+        if (active.length === 0) {
+            hero.innerHTML = `
+                <div class="today-hero-text">
+                    <strong>Build a daily habit</strong>
+                    <span>Mark 2–4 decks as active (☆ on a deck card) to get a small, winnable session every day.</span>
+                </div>`;
+            hero.classList.remove('hidden');
+            return;
+        }
+
+        const allCards = await getAllCards();
+        const allReviews = await getAllReviews();
+        const counts = todayQueueCounts({
+            cards: allCards,
+            reviews: allReviews,
+            activeDeckIds: active,
+            newPerDay: habitSettings.newPerDay,
+            newIntroducedToday: status.today.newCards
+        });
+
+        const streakStr = status.streak > 0 ? `\u{1F525} ${status.streak}-day streak` : 'Start your streak today';
+        const goalStr = status.today.goalMet
+            ? '✓ goal met'
+            : `${status.today.reviews}/${habitSettings.dailyGoal} reviews today`;
+
+        if (counts.total === 0) {
+            hero.innerHTML = `
+                <div class="today-hero-text">
+                    <strong>All clear for today \u{1F389}</strong>
+                    <span>${streakStr} · ${goalStr}</span>
+                </div>`;
+        } else {
+            hero.innerHTML = `
+                <div class="today-hero-text">
+                    <strong>Today: ${counts.due} due · ${counts.fresh} new</strong>
+                    <span>${streakStr} · ${goalStr}</span>
+                </div>
+                <button id="today-start-btn" class="btn-reveal today-start-btn">Start</button>`;
+            hero.querySelector('#today-start-btn').onclick = () => startTodayStudySession();
+        }
+        hero.classList.remove('hidden');
+    } catch (error) {
+        console.error('[Main] Failed to render Today hero:', error);
+        hero.classList.add('hidden');
+    }
+}
+
+/**
+ * Update the always-visible streak/level badge in the controls bar
+ */
+function updateStreakBadge(status) {
+    const badge = document.getElementById('streak-badge');
+    if (!badge) return;
+    const level = levelForXp(status.totalXp);
+    const parts = [];
+    if (status.streak > 0) parts.push(`\u{1F525} ${status.streak}`);
+    if (level > 0) parts.push(`lvl ${level}`);
+    if (parts.length === 0) {
+        badge.classList.add('hidden');
+        return;
+    }
+    badge.textContent = parts.join(' · ');
+    badge.classList.remove('hidden');
+}
+
+/**
+ * Toggle a deck's membership in the active (focus) set
+ */
+async function toggleActiveDeck(deckId) {
+    const active = new Set(habitSettings?.activeDecks || []);
+    if (active.has(deckId)) {
+        active.delete(deckId);
+    } else {
+        active.add(deckId);
+    }
+    habitSettings = await saveSettings({ activeDecks: [...active] });
+    await loadRepositories(); // re-renders deck stars + Today hero
+}
+
+/**
+ * Start the Today session: due + capped new cards from active decks
+ */
+async function startTodayStudySession() {
+    const allCards = await getAllCards();
+    const allReviews = await getAllReviews();
+    const status = await getHabitStatus();
+    habitSettings = status.settings;
+
+    const queue = buildTodayQueue({
+        cards: allCards,
+        reviews: allReviews,
+        activeDeckIds: habitSettings.activeDecks,
+        newPerDay: habitSettings.newPerDay,
+        newIntroducedToday: status.today.newCards
+    });
+
+    if (queue.length === 0) {
+        await renderTodayHero();
+        return;
+    }
+
+    isInStudySession = true;
+    currentStudyFile = 'today';
+
+    const topicsGrid = document.getElementById('topics-grid');
+    const studyArea = document.getElementById('study-area');
+    const sessionComplete = document.getElementById('session-complete');
+    const hero = document.getElementById('today-hero');
+
+    topicsGrid.classList.add('hidden');
+    if (hero) hero.classList.add('hidden');
+    studyArea.classList.remove('hidden');
+    sessionComplete.classList.add('hidden');
+
+    updateDeckBreadcrumb();
+    setupStudyEventListeners();
+
+    startTodaySession(queue, onSessionComplete, () => {});
+}
+
 async function startStudySession(deckId, fileFilter, displayFileName) {
     isInStudySession = true;
     currentStudyFile = displayFileName;
@@ -1746,6 +1910,7 @@ async function startStudySession(deckId, fileFilter, displayFileName) {
     const sessionComplete = document.getElementById('session-complete');
 
     topicsGrid.classList.add('hidden');
+    document.getElementById('today-hero')?.classList.add('hidden');
     studyArea.classList.remove('hidden');
     sessionComplete.classList.add('hidden');
 
@@ -1787,6 +1952,7 @@ async function startDrillAllSession(subject = null) {
     const sessionComplete = document.getElementById('session-complete');
 
     topicsGrid.classList.add('hidden');
+    document.getElementById('today-hero')?.classList.add('hidden');
     studyArea.classList.remove('hidden');
     sessionComplete.classList.add('hidden');
 
@@ -1859,6 +2025,20 @@ function onSessionComplete() {
 
     studyArea.classList.add('hidden');
     sessionComplete.classList.remove('hidden');
+
+    // Show streak/XP/goal status on the complete screen (best-effort)
+    const habitLine = document.getElementById('session-habit-line');
+    if (habitLine) {
+        habitLine.textContent = '';
+        getHabitStatus().then(status => {
+            updateStreakBadge(status);
+            const parts = [];
+            if (status.streak > 0) parts.push(`\u{1F525} ${status.streak}-day streak`);
+            parts.push(`+${status.today.xp} XP today`);
+            parts.push(status.today.goalMet ? 'daily goal met ✓' : `${status.today.reviews}/${status.settings.dailyGoal} toward daily goal`);
+            habitLine.textContent = parts.join(' · ');
+        }).catch(() => {});
+    }
 }
 
 /**

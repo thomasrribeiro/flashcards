@@ -5,6 +5,7 @@
  */
 
 import { State } from './fsrs-client.js';
+import { getLocalDate } from './today-queue.js';
 
 // Get worker URL from environment
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
@@ -257,8 +258,10 @@ export async function getCard(hash) {
 
 /**
  * Save a review (FSRS state) - syncs to D1 or localStorage
+ * @param {Object} log - optional ts-fsrs review log; when present it is sent
+ *   with the sync payload so the worker records review_logs / daily_activity.
  */
-export async function saveReview(cardHash, fsrsCard) {
+export async function saveReview(cardHash, fsrsCard, log = null) {
     const review = {
         cardHash,
         fsrsCard,
@@ -303,7 +306,16 @@ export async function saveReview(cardHash, fsrsCard) {
                         filepath: card.source?.file || '',
                         fsrsState: fsrsCard,
                         lastReviewed: review.lastReviewed,
-                        dueDate: fsrsCard.due
+                        dueDate: fsrsCard.due,
+                        log: log ? {
+                            rating: log.rating,
+                            prevState: log.state,
+                            stability: log.stability,
+                            difficulty: log.difficulty,
+                            elapsedDays: log.elapsed_days,
+                            scheduledDays: log.scheduled_days
+                        } : null,
+                        localDate: getLocalDate()
                     }]
                 })
             });

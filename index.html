@@ -106,10 +106,14 @@
 <button id="drill-all-btn" class="drill-all-btn" title="Review all">
                         <img src="./icons/gavel.png" alt="Drill all" style="width:16px;height:16px;filter:invert(1);">
                     </button>
+                    <span id="streak-badge" class="streak-badge hidden" title="Daily streak"></span>
                 </div>
 
                 <!-- Deck Navigation Breadcrumb -->
                 <div class="deck-breadcrumb hidden" id="deck-breadcrumb"></div>
+
+                <!-- Today hero: daily focus-queue session entry point -->
+                <div id="today-hero" class="today-hero hidden"></div>
 
                 <div id="topics-grid" class="projects-grid">
                     <!-- Topics will be loaded dynamically -->
@@ -159,6 +163,7 @@
                 <div id="session-complete" class="session-complete hidden">
                     <h2>Session Complete!</h2>
                     <p>Great work! All cards have been reviewed.</p>
+                    <p id="session-habit-line" class="session-habit-line"></p>
                 </div>
             </main>
         </div>
