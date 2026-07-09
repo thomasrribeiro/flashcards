@@ -12,6 +12,7 @@ import { startSession, startDrillSession, startTodaySession, revealAnswer, grade
 import { buildTodayQueue, todayQueueCounts } from './today-queue.js';
 import { getSettings, saveSettings, getHabitStatus, levelForXp } from './habit-client.js';
 import { renderDashboard } from './dashboard.js';
+import { getPushState, subscribeToPush } from './push-client.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -73,13 +74,18 @@ async function init() {
         habitSettings = await getSettings();
         await renderTodayHero();
 
+        // Deep link from a push notification: jump straight into Today
+        if (new URL(window.location).searchParams.get('today') === '1') {
+            startTodayStudySession();
+        }
+
         // On a fresh page load (refresh or direct visit), always land at home —
         // strip our nav params from prior pushState so the breadcrumb resets.
         // Only strip nav params; leave OAuth params (github_token, user, state, …)
         // intact so github-auth.js can complete the callback.
         const url = new URL(window.location);
         let stripped = false;
-        for (const key of ['deck', 'path', 'category', 'study', 'file']) {
+        for (const key of ['deck', 'path', 'category', 'study', 'file', 'today']) {
             if (url.searchParams.has(key)) {
                 url.searchParams.delete(key);
                 stripped = true;
@@ -1852,9 +1858,42 @@ async function renderTodayHero() {
             hero.querySelector('#today-start-btn').onclick = () => startTodayStudySession();
         }
         hero.classList.remove('hidden');
+        renderReminderAffordance();
     } catch (error) {
         console.error('[Main] Failed to render Today hero:', error);
         hero.classList.add('hidden');
+    }
+}
+
+/**
+ * Show an "Enable reminders" control (or an install hint) inside the Today
+ * hero, based on push capability. iOS only allows push from an installed PWA.
+ */
+async function renderReminderAffordance() {
+    const hero = document.getElementById('today-hero');
+    if (!hero) return;
+    let state;
+    try { state = await getPushState(); } catch { return; }
+    if (state === 'unsupported' || state === 'subscribed' || state === 'denied') return;
+
+    const bar = document.createElement('div');
+    bar.className = 'reminder-affordance';
+    if (state === 'needs-install') {
+        bar.innerHTML = '<span>🔔 Add to Home Screen (Share → Add to Home Screen) to get daily reminders.</span>';
+    } else {
+        bar.innerHTML = '<button id="enable-reminders-btn" class="reminder-btn">🔔 Enable daily reminders</button>';
+    }
+    hero.appendChild(bar);
+
+    const btn = bar.querySelector('#enable-reminders-btn');
+    if (btn) {
+        btn.onclick = async () => {
+            btn.disabled = true;
+            btn.textContent = 'Enabling…';
+            const ok = await subscribeToPush();
+            btn.textContent = ok ? '✓ Reminders on' : 'Could not enable';
+            if (ok) setTimeout(() => bar.remove(), 1500);
+        };
     }
 }
 
