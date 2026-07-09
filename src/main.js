@@ -341,8 +341,8 @@ async function loadRepositories() {
         }
 
         if (currentCategory === null) {
-            // HOME LEVEL: render category cards
-            _renderCategoryGrid(displayDecks, allCards, allReviews, searchTerm, grid);
+            // HOME LEVEL: hierarchical tree (subject → deck) with focus toggles
+            renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid);
         } else {
             // CATEGORY LEVEL: render deck cards for the current category
             const filteredDecks = displayDecks.filter(deck => {
@@ -385,8 +385,134 @@ async function loadRepositories() {
     }
 }
 
+// Collapsed subject groups in the tree (persisted for the session)
+const collapsedSubjects = new Set();
+
 /**
- * Render the home-level category grid
+ * Compute due/new counts for a deck from its cards + reviews.
+ */
+function deckCounts(deckCards, reviewMap, now = new Date()) {
+    let reviewed = 0, dueReviewed = 0;
+    for (const c of deckCards) {
+        const r = reviewMap.get(c.hash);
+        if (!r) continue;
+        reviewed++;
+        if (new Date(r.fsrsCard.due) <= now) dueReviewed++;
+    }
+    const fresh = deckCards.length - reviewed;
+    return { total: deckCards.length, fresh, due: fresh + dueReviewed, reviewed };
+}
+
+/**
+ * Home-level hierarchical tree: subject → deck rows, each with a focus (★)
+ * toggle, due/new counts, and a quick-drill button. Clicking a deck name opens
+ * its chapters via the existing deck navigation.
+ */
+function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
+    const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
+    const active = new Set(habitSettings?.activeDecks || []);
+
+    // Group by subject
+    const groups = new Map();
+    for (const deck of displayDecks) {
+        const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim() : 'Misc';
+        if (!groups.has(subject)) groups.set(subject, []);
+        groups.get(subject).push(deck);
+    }
+    const subjects = [...groups.keys()].sort((a, b) =>
+        a === 'Misc' ? 1 : b === 'Misc' ? -1 : a.localeCompare(b));
+
+    const term = (searchTerm || '').toLowerCase();
+    grid.innerHTML = '';
+    const tree = document.createElement('div');
+    tree.className = 'deck-tree';
+
+    let anyShown = false;
+    for (const subject of subjects) {
+        let decks = groups.get(subject).slice().sort((a, b) =>
+            (a.id.split('/').pop()).localeCompare(b.id.split('/').pop()));
+        if (term) decks = decks.filter(d => d.id.split('/').pop().toLowerCase().includes(term));
+        if (decks.length === 0) continue;
+        anyShown = true;
+
+        const collapsed = collapsedSubjects.has(subject);
+        const activeInGroup = decks.filter(d => active.has(d.id)).length;
+
+        const group = document.createElement('div');
+        group.className = 'tree-group';
+
+        const header = document.createElement('div');
+        header.className = 'tree-group-header';
+        header.innerHTML = `
+            <span class="tree-caret">${collapsed ? '▸' : '▾'}</span>
+            <span class="tree-group-name">${escapeHtml(subject)}</span>
+            <span class="tree-group-meta">${decks.length} deck${decks.length === 1 ? '' : 's'}${activeInGroup ? ` · ${activeInGroup} ★` : ''}</span>`;
+        header.onclick = () => {
+            if (collapsedSubjects.has(subject)) collapsedSubjects.delete(subject);
+            else collapsedSubjects.add(subject);
+            loadRepositories();
+        };
+        group.appendChild(header);
+
+        if (!collapsed) {
+            for (const deck of decks) {
+                const name = deck.id.split('/').pop();
+                const deckCards = allCards.filter(c => c.deckName === deck.id || c.source?.repo === deck.id);
+                const counts = deckCounts(deckCards, reviewMap);
+                const isActive = active.has(deck.id);
+
+                const row = document.createElement('div');
+                row.className = 'tree-deck-row';
+
+                const star = document.createElement('button');
+                star.className = 'tree-star' + (isActive ? ' active' : '');
+                star.title = isActive ? 'Remove from daily focus' : 'Add to daily focus';
+                star.textContent = isActive ? '★' : '☆';
+                star.onclick = (e) => { e.stopPropagation(); toggleActiveDeck(deck.id); };
+
+                const label = document.createElement('span');
+                label.className = 'tree-deck-name';
+                label.textContent = name;
+                label.onclick = () => navigateToDeck(deck);
+
+                const meta = document.createElement('span');
+                meta.className = 'tree-deck-counts';
+                meta.innerHTML = counts.due > 0
+                    ? `<span class="cnt-due">${counts.due} due</span>${counts.fresh > 0 ? ` · <span class="cnt-new">${counts.fresh} new</span>` : ''}`
+                    : `<span class="cnt-done">✓ ${counts.total}</span>`;
+
+                const drill = document.createElement('button');
+                drill.className = 'tree-drill';
+                drill.title = 'Drill this deck';
+                drill.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Drill" style="width:14px;height:14px;">`;
+                drill.onclick = async (e) => {
+                    e.stopPropagation();
+                    await navigateToDeck(deck, [], true);
+                    startStudySession(deck.id, null, 'all');
+                };
+
+                row.append(star, label, meta, drill);
+                group.appendChild(row);
+            }
+        }
+        tree.appendChild(group);
+    }
+
+    if (!anyShown) {
+        grid.innerHTML = `<div class="loading">${term ? 'No decks match your search.' : 'No decks yet.'}</div>`;
+        return;
+    }
+    grid.appendChild(tree);
+
+    // Surface repos that failed to load, same as the grid view
+    for (const failed of (window.__failedRepos || [])) {
+        grid.appendChild(createFailedRepoCard(failed));
+    }
+    renderEvictedNotice();
+}
+
+/**
+ * Render the home-level category grid (legacy; kept for reference/fallback)
  */
 function _renderCategoryGrid(displayDecks, allCards, allReviews, searchTerm, grid) {
     // When unlogged, surface local/* decks (the example deck) directly on the
