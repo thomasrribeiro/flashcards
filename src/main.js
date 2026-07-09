@@ -11,6 +11,7 @@ import { githubAuth } from './github-auth.js';
 import { startSession, startDrillSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
 import { buildTodayQueue, todayQueueCounts } from './today-queue.js';
 import { getSettings, saveSettings, getHabitStatus, levelForXp } from './habit-client.js';
+import { renderDashboard } from './dashboard.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -910,6 +911,35 @@ function setupEventListeners() {
     const drillAllBtn = document.getElementById('drill-all-btn');
     if (drillAllBtn) {
         drillAllBtn.addEventListener('click', () => startDrillAllSession());
+    }
+
+    // Progress dashboard toggle
+    const statsBtn = document.getElementById('stats-btn');
+    if (statsBtn) {
+        statsBtn.addEventListener('click', () => toggleDashboard());
+    }
+}
+
+/**
+ * Show/hide the analytics dashboard (swapped with the grid + Today hero)
+ */
+let dashboardOpen = false;
+async function toggleDashboard() {
+    const dashboard = document.getElementById('dashboard');
+    const grid = document.getElementById('topics-grid');
+    const hero = document.getElementById('today-hero');
+    if (!dashboard) return;
+
+    dashboardOpen = !dashboardOpen;
+    if (dashboardOpen) {
+        grid.classList.add('hidden');
+        if (hero) hero.classList.add('hidden');
+        dashboard.classList.remove('hidden');
+        await renderDashboard();
+    } else {
+        dashboard.classList.add('hidden');
+        grid.classList.remove('hidden');
+        if (habitSettings) renderTodayHero();
     }
 }
 
