@@ -300,6 +300,7 @@ async function loadRepositories() {
         // Show message if no decks
         if (displayDecks.length === 0) {
             controlsBar.classList.add('hidden');
+            document.getElementById('view-tabs')?.classList.add('hidden');
             if (isLoggedIn) {
                 grid.innerHTML = '<div class="loading">Search for a GitHub repository and click + to add it.</div>';
             } else {
@@ -310,6 +311,7 @@ async function loadRepositories() {
 
         // Show controls when there are decks
         controlsBar.classList.remove('hidden');
+        document.getElementById('view-tabs')?.classList.remove('hidden');
 
         const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
         const breadcrumb = document.getElementById('deck-breadcrumb');
@@ -919,32 +921,51 @@ function setupEventListeners() {
         drillAllBtn.addEventListener('click', () => startDrillAllSession());
     }
 
-    // Progress dashboard toggle
-    const statsBtn = document.getElementById('stats-btn');
-    if (statsBtn) {
-        statsBtn.addEventListener('click', () => toggleDashboard());
-    }
+    // View tabs: Decks / Progress
+    const tabDecks = document.getElementById('tab-decks');
+    const tabProgress = document.getElementById('tab-progress');
+    if (tabDecks) tabDecks.addEventListener('click', () => showMainView('decks'));
+    if (tabProgress) tabProgress.addEventListener('click', () => showMainView('progress'));
 }
 
 /**
- * Show/hide the analytics dashboard (swapped with the grid + Today hero)
+ * Central switcher between the Decks view and the Progress (dashboard) view.
+ * Exits any in-progress study session first so returning is always clean.
  */
-let dashboardOpen = false;
-async function toggleDashboard() {
+let currentMainView = 'decks';
+async function showMainView(view) {
     const dashboard = document.getElementById('dashboard');
     const grid = document.getElementById('topics-grid');
     const hero = document.getElementById('today-hero');
-    if (!dashboard) return;
+    const breadcrumb = document.getElementById('deck-breadcrumb');
+    const studyArea = document.getElementById('study-area');
+    const sessionComplete = document.getElementById('session-complete');
+    const tabDecks = document.getElementById('tab-decks');
+    const tabProgress = document.getElementById('tab-progress');
 
-    dashboardOpen = !dashboardOpen;
-    if (dashboardOpen) {
-        grid.classList.add('hidden');
-        if (hero) hero.classList.add('hidden');
-        dashboard.classList.remove('hidden');
+    // Leaving a study session? Tear it down cleanly.
+    if (isInStudySession) {
+        await exitStudySession(true);
+    }
+
+    currentMainView = view;
+    tabDecks?.classList.toggle('active', view === 'decks');
+    tabProgress?.classList.toggle('active', view === 'progress');
+
+    if (view === 'progress') {
+        grid?.classList.add('hidden');
+        hero?.classList.add('hidden');
+        breadcrumb?.classList.add('hidden');
+        studyArea?.classList.add('hidden');
+        sessionComplete?.classList.add('hidden');
+        dashboard?.classList.remove('hidden');
         await renderDashboard();
     } else {
-        dashboard.classList.add('hidden');
-        grid.classList.remove('hidden');
+        dashboard?.classList.add('hidden');
+        studyArea?.classList.add('hidden');
+        sessionComplete?.classList.add('hidden');
+        grid?.classList.remove('hidden');
+        updateDeckBreadcrumb();
         if (habitSettings) renderTodayHero();
     }
 }
@@ -1817,6 +1838,15 @@ async function renderTodayHero() {
         updateStreakBadge(status);
 
         const active = habitSettings.activeDecks || [];
+
+        // Gavel tooltip reflects its behavior: active decks if set, else all
+        const drillBtn = document.getElementById('drill-all-btn');
+        if (drillBtn) {
+            drillBtn.title = active.length > 0
+                ? `Drill your ${active.length} active deck${active.length === 1 ? '' : 's'}`
+                : 'Drill all decks';
+        }
+
         if (active.length === 0) {
             hero.innerHTML = `
                 <div class="today-hero-text">
@@ -2027,9 +2057,15 @@ async function startDrillAllSession(subject = null) {
         return;
     }
 
+    // When active (focus) decks are set and no explicit subject was requested,
+    // the gavel drills only those; otherwise it drills everything.
+    const active = habitSettings?.activeDecks || [];
+    const useActive = subject === null && active.length > 0;
+
     isInStudySession = true;
     isDrillAll = true;
-    currentStudyFile = subject ? `drill ${subject.toLowerCase()}` : 'drill all';
+    currentStudyFile = subject ? `drill ${subject.toLowerCase()}`
+        : useActive ? 'drill active' : 'drill all';
 
     const topicsGrid = document.getElementById('topics-grid');
     const studyArea = document.getElementById('study-area');
@@ -2037,13 +2073,18 @@ async function startDrillAllSession(subject = null) {
 
     topicsGrid.classList.add('hidden');
     document.getElementById('today-hero')?.classList.add('hidden');
+    document.getElementById('dashboard')?.classList.add('hidden');
     studyArea.classList.remove('hidden');
     sessionComplete.classList.add('hidden');
 
     updateDeckBreadcrumb();
     setupStudyEventListeners();
 
-    await startDrillSession(onSessionComplete, () => {}, { maxCards: 50, subject });
+    await startDrillSession(onSessionComplete, () => {}, {
+        maxCards: 50,
+        subject,
+        activeDeckIds: useActive ? active : null
+    });
 }
 
 /**

@@ -102,6 +102,12 @@
                     </div>
                 </div>
 
+                <!-- View tabs: Decks vs Progress -->
+                <div class="view-tabs hidden" id="view-tabs">
+                    <button id="tab-decks" class="view-tab active">Decks</button>
+                    <button id="tab-progress" class="view-tab">Progress</button>
+                </div>
+
                 <!-- Filter Controls -->
                 <div class="controls-bar hidden" id="controls-bar">
                     <input
@@ -111,10 +117,9 @@
                         placeholder="Search decks..."
                         autocomplete="off"
                     />
-<button id="drill-all-btn" class="drill-all-btn" title="Review all">
-                        <img src="./icons/gavel.png" alt="Drill all" style="width:16px;height:16px;filter:invert(1);">
+                    <button id="drill-all-btn" class="drill-all-btn" title="Review all decks">
+                        <img src="./icons/gavel.png" alt="Drill" style="width:16px;height:16px;filter:invert(1);">
                     </button>
-                    <button id="stats-btn" class="drill-all-btn" title="Progress dashboard" style="margin-left:6px;">📊</button>
                     <span id="streak-badge" class="streak-badge hidden" title="Daily streak"></span>
                 </div>
 

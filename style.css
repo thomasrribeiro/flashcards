@@ -1769,3 +1769,36 @@ kbd {
     opacity: 0.6;
     cursor: default;
 }
+
+/* ── Decks / Progress view tabs ── */
+
+.view-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--black);
+}
+
+.view-tab {
+    padding: 8px 18px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--black);
+    opacity: 0.5;
+    margin-bottom: -1px;
+}
+
+.view-tab.active {
+    opacity: 1;
+    border-color: var(--black);
+    background: var(--white);
+    font-weight: 600;
+}
+
+.view-tab:hover {
+    opacity: 0.85;
+}

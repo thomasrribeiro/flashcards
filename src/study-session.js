@@ -88,7 +88,7 @@ function renderStepLabel(label) {
  * Uses the normal FSRS scheduling path so reviews still count.
  */
 export async function startDrillSession(onComplete, onCardChange, options = {}) {
-    const { maxCards = 50, subject = null } = options;
+    const { maxCards = 50, subject = null, activeDeckIds = null } = options;
 
     state = {
         currentCardIndex: 0,
@@ -111,9 +111,12 @@ export async function startDrillSession(onComplete, onCardChange, options = {}) 
     const allReviews = await getAllReviews();
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
 
-    // Filter by subject if provided
+    // Filter by active decks if provided (takes priority), else by subject
     let filteredCards = allCards;
-    if (subject !== null) {
+    if (activeDeckIds && activeDeckIds.length > 0) {
+        const active = new Set(activeDeckIds);
+        filteredCards = allCards.filter(card => active.has(card.source?.repo || card.deckName));
+    } else if (subject !== null) {
         filteredCards = allCards.filter(card => {
             const cardSubject = (card.deckMetadata?.subject && card.deckMetadata.subject.trim())
                 ? card.deckMetadata.subject.trim().toLowerCase()
