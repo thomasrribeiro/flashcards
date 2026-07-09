@@ -22,8 +22,23 @@ import './card-editor.css';
 /**
  * Initialize the application
  */
+/**
+ * Register the service worker (PWA install + offline shell + push).
+ * Scope is the app base path so it works under /flashcards/ in production.
+ */
+function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    window.addEventListener('load', () => {
+        const swUrl = `${import.meta.env.BASE_URL}sw.js`;
+        navigator.serviceWorker.register(swUrl, { scope: import.meta.env.BASE_URL })
+            .then(reg => console.log('[PWA] Service worker registered:', reg.scope))
+            .catch(err => console.error('[PWA] Service worker registration failed:', err));
+    });
+}
+
 async function init() {
     console.log('=== INIT START ===');
+    registerServiceWorker();
     try {
         await initDB();
         console.log('DB initialized');

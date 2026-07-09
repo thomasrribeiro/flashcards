@@ -23,6 +23,74 @@ let fullyLoadedRepos = new Set();
 // We re-fetch each one from GitHub on the next page load.
 const UNLOGGED_REPOS_KEY = 'flashcards_unlogged_repos';
 
+// Outbox of review-sync payloads that failed to reach D1 (offline / transient
+// error). Flushed on init and whenever the browser comes back online, so a
+// review graded offline is never silently lost.
+const SYNC_OUTBOX_KEY = 'flashcards_sync_outbox';
+
+function getSyncOutbox() {
+    try {
+        const raw = localStorage.getItem(SYNC_OUTBOX_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch {
+        return [];
+    }
+}
+
+function enqueueSync(userId, reviewPayload) {
+    try {
+        const outbox = getSyncOutbox();
+        outbox.push({ userId, review: reviewPayload });
+        localStorage.setItem(SYNC_OUTBOX_KEY, JSON.stringify(outbox));
+        console.log('[Storage] Queued review for later sync; outbox size:', outbox.length);
+    } catch (error) {
+        console.error('[Storage] Failed to enqueue review for sync:', error);
+    }
+}
+
+/**
+ * Flush queued review syncs to D1. Batches by user. Safe to call repeatedly.
+ */
+export async function flushSyncOutbox() {
+    const outbox = getSyncOutbox();
+    if (outbox.length === 0) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
+    // Group payloads by userId; the sync endpoint accepts an array
+    const byUser = new Map();
+    for (const item of outbox) {
+        if (!byUser.has(item.userId)) byUser.set(item.userId, []);
+        byUser.get(item.userId).push(item.review);
+    }
+
+    const remaining = [];
+    for (const [userId, reviews] of byUser) {
+        try {
+            const response = await fetch(`${WORKER_URL}/api/reviews/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, reviews })
+            });
+            if (!response.ok) throw new Error(response.statusText);
+            console.log(`[Storage] Flushed ${reviews.length} queued review(s) for ${userId}`);
+        } catch (error) {
+            console.error('[Storage] Outbox flush failed, will retry later:', error);
+            remaining.push(...reviews.map(review => ({ userId, review })));
+        }
+    }
+
+    try {
+        localStorage.setItem(SYNC_OUTBOX_KEY, JSON.stringify(remaining));
+    } catch (error) {
+        console.error('[Storage] Failed to persist outbox after flush:', error);
+    }
+}
+
+// Retry the outbox whenever connectivity returns
+if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => { flushSyncOutbox(); });
+}
+
 export function getUnloggedRepoList() {
     try {
         const raw = localStorage.getItem(UNLOGGED_REPOS_KEY);
@@ -109,6 +177,9 @@ export async function initDB() {
             throw new Error(`Failed to ensure user: ${response.statusText} - ${errorText}`);
         }
 
+        // Flush any reviews queued while offline before loading fresh state
+        await flushSyncOutbox();
+
         // Load reviews and repo list in parallel — neither depends on the other
         await Promise.all([loadReviewsFromD1(), loadReposFromD1()]);
 
@@ -186,13 +257,21 @@ async function loadReviewsFromD1(mergeWithLocalStorage = true) {
                 console.error('[Storage] Failed to load localStorage reviews:', error);
             }
 
-            // Merge: D1 reviews + localStorage reviews (D1 takes precedence for duplicates)
-            const d1Hashes = new Set(d1Reviews.map(r => r.cardHash));
-            const uniqueLocalReviews = localReviews.filter(r => !d1Hashes.has(r.cardHash));
+            // Merge by cardHash, keeping whichever copy was reviewed more
+            // recently. (Previously D1 always won, which could silently clobber
+            // a review graded offline with an older server state.)
+            const merged = new Map();
+            const ts = r => {
+                const t = r.lastReviewed ? Date.parse(r.lastReviewed) : NaN;
+                return Number.isNaN(t) ? 0 : t;
+            };
+            for (const r of [...d1Reviews, ...localReviews]) {
+                const existing = merged.get(r.cardHash);
+                if (!existing || ts(r) >= ts(existing)) merged.set(r.cardHash, r);
+            }
+            reviewsCache = [...merged.values()];
 
-            reviewsCache = [...d1Reviews, ...uniqueLocalReviews];
-
-            console.log(`[Storage] Loaded ${d1Reviews.length} reviews from D1, ${uniqueLocalReviews.length} from localStorage, total: ${reviewsCache.length}`);
+            console.log(`[Storage] Merged ${d1Reviews.length} D1 + ${localReviews.length} local reviews (newer-wins), total: ${reviewsCache.length}`);
         } else {
             // Use D1 as source of truth (for refresh operations)
             reviewsCache = d1Reviews;
@@ -295,38 +374,58 @@ export async function saveReview(cardHash, fsrsCard, log = null) {
             }
 
             const userId = currentUser.github_id || currentUser.id;
-            const response = await fetch(`${WORKER_URL}/api/reviews/sync`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId,
-                    reviews: [{
-                        cardHash,
-                        repo: card.source?.repo || card.deckName,
-                        filepath: card.source?.file || '',
-                        fsrsState: fsrsCard,
-                        lastReviewed: review.lastReviewed,
-                        dueDate: fsrsCard.due,
-                        log: log ? {
-                            rating: log.rating,
-                            prevState: log.state,
-                            stability: log.stability,
-                            difficulty: log.difficulty,
-                            elapsedDays: log.elapsed_days,
-                            scheduledDays: log.scheduled_days
-                        } : null,
-                        localDate: getLocalDate()
-                    }]
-                })
-            });
+            const reviewPayload = {
+                cardHash,
+                repo: card.source?.repo || card.deckName,
+                filepath: card.source?.file || '',
+                fsrsState: fsrsCard,
+                lastReviewed: review.lastReviewed,
+                dueDate: fsrsCard.due,
+                log: log ? {
+                    rating: log.rating,
+                    prevState: log.state,
+                    stability: log.stability,
+                    difficulty: log.difficulty,
+                    elapsedDays: log.elapsed_days,
+                    scheduledDays: log.scheduled_days
+                } : null,
+                localDate: getLocalDate()
+            };
 
-            if (!response.ok) {
-                console.error('[Storage] Failed to sync review to D1:', response.statusText);
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                enqueueSync(userId, reviewPayload);
             } else {
-                console.log('[Storage] Review synced to D1 successfully');
+                const response = await fetch(`${WORKER_URL}/api/reviews/sync`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, reviews: [reviewPayload] })
+                });
+
+                if (!response.ok) {
+                    console.error('[Storage] Failed to sync review to D1, queueing:', response.statusText);
+                    enqueueSync(userId, reviewPayload);
+                } else {
+                    console.log('[Storage] Review synced to D1 successfully');
+                }
             }
         } catch (error) {
-            console.error('[Storage] Error syncing review to D1:', error);
+            // Network error — queue for retry rather than lose the review
+            console.error('[Storage] Error syncing review to D1, queueing:', error);
+            const userId = currentUser.github_id || currentUser.id;
+            const card = cardsCache.find(c => c.hash === cardHash);
+            enqueueSync(userId, {
+                cardHash,
+                repo: card?.source?.repo || card?.deckName || '',
+                filepath: card?.source?.file || '',
+                fsrsState: fsrsCard,
+                lastReviewed: review.lastReviewed,
+                dueDate: fsrsCard.due,
+                log: log ? {
+                    rating: log.rating, prevState: log.state, stability: log.stability,
+                    difficulty: log.difficulty, elapsedDays: log.elapsed_days, scheduledDays: log.scheduled_days
+                } : null,
+                localDate: getLocalDate()
+            });
         }
     }
 
