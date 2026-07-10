@@ -341,16 +341,18 @@ async function loadRepositories() {
         }
 
         if (currentCategory === null) {
-            // HOME LEVEL: tree (default) or legacy category-card grid
+            // HOME LEVEL: tree (default), columns, or legacy category-card grid
+            grid.classList.toggle('tree-mode', deckViewMode === 'tree');
+            grid.classList.toggle('columns-mode', deckViewMode === 'columns');
             if (deckViewMode === 'tree') {
-                grid.classList.add('tree-mode');
                 renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid);
+            } else if (deckViewMode === 'columns') {
+                renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid);
             } else {
-                grid.classList.remove('tree-mode');
                 _renderCategoryGrid(displayDecks, allCards, allReviews, searchTerm, grid);
             }
         } else {
-            grid.classList.remove('tree-mode');
+            grid.classList.remove('tree-mode', 'columns-mode');
             // CATEGORY LEVEL: render deck cards for the current category
             const filteredDecks = displayDecks.filter(deck => {
                 const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim().toLowerCase() : 'misc';
@@ -592,7 +594,7 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
                 { cls: 'tree-star tree-star-parent' + (starState === 'none' ? '' : ' active'), title: starState === 'all' ? 'Unfocus subject' : 'Focus all decks in subject', html: subjectStarGlyph(starState), onclick: () => toggleActiveSubject(deckIds) },
                 { cls: 'tree-act', title: `Review ${subject} (due + new)`, html: GAVEL_IMG, onclick: () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject) },
                 { cls: 'tree-act', title: `Reset all progress in ${subject}`, html: RESET_IMG, onclick: () => resetScope(deckIds.map(id => ({ deckId: id })), `Reset progress for all ${deckIds.length} decks in "${subject}"?`) },
-                { cls: 'tree-act tree-del', title: `Remove all decks in ${subject}`, html: '×', onclick: () => deleteScope(deckIds, `Remove all ${deckIds.length} decks in "${subject}" from your collection?`) }
+                null // no delete at subject level (a subject isn't a repo)
             ]
         }));
 
@@ -669,6 +671,213 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
         return;
     }
     grid.appendChild(tree);
+    for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
+    renderEvictedNotice();
+}
+
+// ── Columns (Miller / Finder) view ──────────────────────────────────────────
+
+// Selection path for the columns view (persists across re-renders)
+let columnsSel = { subject: null, deck: null, chapter: null };
+
+function colRow({ name, pct, star, hasChildren, selected, onClick }) {
+    const row = document.createElement('div');
+    row.className = 'col-row' + (selected ? ' selected' : '');
+    row.onclick = onClick;
+    if (star) {
+        const s = document.createElement('button');
+        s.className = 'col-star' + (star.active ? ' active' : '');
+        s.title = star.title;
+        s.textContent = star.glyph;
+        s.onclick = (e) => { e.stopPropagation(); star.onClick(); };
+        row.appendChild(s);
+    } else {
+        const sp = document.createElement('span'); sp.className = 'col-star-spacer'; row.appendChild(sp);
+    }
+    const nm = document.createElement('span'); nm.className = 'col-name'; nm.textContent = name;
+    const pctEl = document.createElement('span'); pctEl.className = 'col-pct'; pctEl.textContent = pct + '%';
+    const chev = document.createElement('span');
+    chev.className = hasChildren ? 'col-chevron' : 'col-chevron-spacer';
+    chev.textContent = hasChildren ? '›' : '';
+    row.append(nm, pctEl, chev);
+    return row;
+}
+
+/** Rightmost detail pane: stats + Review/Reset/Delete for the deepest selection. */
+function buildColumnsDetail(subjects, reviewMap, now) {
+    const pane = document.createElement('div');
+    pane.className = 'col-detail';
+    const { subject, deck, chapter } = columnsSel;
+    if (!subject || !subjects.has(subject)) {
+        pane.innerHTML = `<div class="col-detail-empty">Select a subject to see its details and review options.</div>`;
+        return pane;
+    }
+    const decks = subjects.get(subject);
+
+    let title, sub, cards, filterFn, level;
+    if (chapter && deck && decks.get(deck)?.has(chapter)) {
+        cards = decks.get(deck).get(chapter);
+        title = chapter.split('/').pop().replace(/\.md$/, '');
+        sub = `${subject} / ${deck.split('/').pop()}`;
+        filterFn = c => (c.source?.repo || c.deckName) === deck && c.source?.file === chapter;
+        level = 'chapter';
+    } else if (deck && decks.has(deck)) {
+        cards = [...decks.get(deck).values()].flat();
+        title = deck.split('/').pop();
+        sub = subject;
+        filterFn = c => (c.source?.repo || c.deckName) === deck;
+        level = 'deck';
+    } else {
+        const deckIds = [...decks.keys()];
+        cards = deckIds.flatMap(id => [...decks.get(id).values()].flat());
+        title = subject;
+        sub = `${deckIds.length} deck${deckIds.length === 1 ? '' : 's'}`;
+        filterFn = c => deckIds.includes(c.source?.repo || c.deckName);
+        level = 'subject';
+    }
+    const prog = scopeProgress(cards, reviewMap, now);
+
+    pane.innerHTML = `
+        <div class="col-detail-sub">${escapeHtml(sub)}</div>
+        <div class="col-detail-title">${escapeHtml(title)}</div>
+        <div class="col-detail-stats">
+            <div><strong>${prog.total}</strong><span>cards</span></div>
+            <div><strong>${prog.due}</strong><span>due</span></div>
+            <div><strong>${prog.fresh}</strong><span>new</span></div>
+            <div><strong>${prog.pct}%</strong><span>retained</span></div>
+        </div>`;
+
+    const reviewBtn = document.createElement('button');
+    reviewBtn.className = 'col-review-btn';
+    const toDo = prog.due + prog.fresh;
+    reviewBtn.textContent = toDo > 0 ? `Review · ${prog.due} due · ${prog.fresh} new` : 'Nothing due right now';
+    reviewBtn.disabled = toDo === 0;
+    reviewBtn.onclick = () => startScopedReview(filterFn, title);
+    pane.appendChild(reviewBtn);
+
+    const actions = document.createElement('div');
+    actions.className = 'col-detail-actions';
+    const resetB = document.createElement('button');
+    resetB.className = 'col-detail-act';
+    resetB.textContent = 'Reset progress';
+    resetB.onclick = () => {
+        if (level === 'chapter') resetScope([{ deckId: deck, file: chapter }], `Reset progress in "${title}"?`);
+        else if (level === 'deck') resetScope([{ deckId: deck }], `Reset all progress in "${title}"?`);
+        else resetScope([...decks.keys()].map(id => ({ deckId: id })), `Reset progress for all decks in "${title}"?`);
+    };
+    actions.appendChild(resetB);
+    if (level === 'deck') {
+        const delB = document.createElement('button');
+        delB.className = 'col-detail-act col-detail-del';
+        delB.textContent = 'Remove deck';
+        delB.onclick = () => deleteScope([deck], `Remove "${title}" from your collection?`);
+        actions.appendChild(delB);
+    }
+    pane.appendChild(actions);
+    return pane;
+}
+
+/**
+ * Columns view: Subject | Deck | Chapter | Detail. Each pane scrolls
+ * independently (long chapter lists never overflow). Star toggles inline;
+ * review/reset/delete live in the detail pane for the selected item.
+ */
+function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid) {
+    const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
+    const now = new Date();
+    const active = new Set(habitSettings?.activeDecks || []);
+    const term = (searchTerm || '').toLowerCase();
+    const fileBase = f => f.split('/').pop().replace(/\.md$/, '');
+    const pct = cards => scopeProgress(cards, reviewMap, now).pct;
+
+    // Build Subject → Deck → File → cards
+    const deckById = new Map(displayDecks.map(d => [d.id, d]));
+    const subjects = new Map();
+    for (const card of allCards) {
+        const deckId = card.source?.repo || card.deckName;
+        const deck = deckById.get(deckId);
+        if (!deck) continue;
+        const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim() : 'Misc';
+        if (!subjects.has(subject)) subjects.set(subject, new Map());
+        const decks = subjects.get(subject);
+        if (!decks.has(deckId)) decks.set(deckId, new Map());
+        const file = card.source?.file || 'unknown';
+        const files = decks.get(deckId);
+        if (!files.has(file)) files.set(file, []);
+        files.get(file).push(card);
+    }
+    const subjectNames = [...subjects.keys()].sort((a, b) => a === 'Misc' ? 1 : b === 'Misc' ? -1 : a.localeCompare(b));
+
+    // Prune a stale selection (e.g. after a delete)
+    if (columnsSel.subject && !subjects.has(columnsSel.subject)) columnsSel = { subject: null, deck: null, chapter: null };
+    if (columnsSel.deck && !subjects.get(columnsSel.subject)?.has(columnsSel.deck)) { columnsSel.deck = null; columnsSel.chapter = null; }
+    if (columnsSel.chapter && !subjects.get(columnsSel.subject)?.get(columnsSel.deck)?.has(columnsSel.chapter)) columnsSel.chapter = null;
+
+    grid.innerHTML = '';
+    if (subjectNames.length === 0) { grid.innerHTML = `<div class="loading">No decks yet.</div>`; return; }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'columns-view';
+    const makePane = rows => {
+        const pane = document.createElement('div');
+        pane.className = 'col-pane';
+        if (rows.length === 0) { const e = document.createElement('div'); e.className = 'col-empty'; e.textContent = term ? 'No matches' : ''; pane.appendChild(e); }
+        rows.forEach(r => pane.appendChild(r));
+        return pane;
+    };
+
+    // Pane 1 — subjects
+    const p1 = subjectNames
+        .filter(s => !term || s.toLowerCase().includes(term) ||
+            [...subjects.get(s).keys()].some(id => id.split('/').pop().toLowerCase().includes(term) ||
+                [...subjects.get(s).get(id).keys()].some(f => fileBase(f).toLowerCase().includes(term))))
+        .map(subject => {
+            const decks = subjects.get(subject);
+            const deckIds = [...decks.keys()];
+            const cards = deckIds.flatMap(id => [...decks.get(id).values()].flat());
+            const starState = subjectStarState(deckIds);
+            return colRow({
+                name: subject, pct: pct(cards),
+                star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Unfocus subject' : 'Focus all decks in subject', onClick: () => toggleActiveSubject(deckIds) },
+                hasChildren: true, selected: columnsSel.subject === subject,
+                onClick: () => { columnsSel = { subject, deck: null, chapter: null }; loadRepositories(); }
+            });
+        });
+    wrap.appendChild(makePane(p1));
+
+    // Pane 2 — decks in the selected subject
+    if (columnsSel.subject && subjects.has(columnsSel.subject)) {
+        const decks = subjects.get(columnsSel.subject);
+        let deckIds = [...decks.keys()].sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()));
+        if (term) deckIds = deckIds.filter(id => id.split('/').pop().toLowerCase().includes(term) || [...decks.get(id).keys()].some(f => fileBase(f).toLowerCase().includes(term)));
+        const p2 = deckIds.map(deckId => {
+            const cards = [...decks.get(deckId).values()].flat();
+            const isActive = active.has(deckId);
+            return colRow({
+                name: deckId.split('/').pop(), pct: pct(cards),
+                star: { glyph: isActive ? '★' : '☆', active: isActive, title: isActive ? 'Remove from daily focus' : 'Add to daily focus', onClick: () => toggleActiveDeck(deckId) },
+                hasChildren: true, selected: columnsSel.deck === deckId,
+                onClick: () => { columnsSel = { subject: columnsSel.subject, deck: deckId, chapter: null }; loadRepositories(); }
+            });
+        });
+        wrap.appendChild(makePane(p2));
+    }
+
+    // Pane 3 — chapters in the selected deck
+    if (columnsSel.subject && columnsSel.deck && subjects.get(columnsSel.subject)?.has(columnsSel.deck)) {
+        const files = subjects.get(columnsSel.subject).get(columnsSel.deck);
+        let fileList = [...files.keys()].sort((a, b) => a.localeCompare(b));
+        if (term) fileList = fileList.filter(f => fileBase(f).toLowerCase().includes(term));
+        const p3 = fileList.map(file => colRow({
+            name: fileBase(file), pct: pct(files.get(file)),
+            star: null, hasChildren: false, selected: columnsSel.chapter === file,
+            onClick: () => { columnsSel = { subject: columnsSel.subject, deck: columnsSel.deck, chapter: file }; loadRepositories(); }
+        }));
+        wrap.appendChild(makePane(p3));
+    }
+
+    wrap.appendChild(buildColumnsDetail(subjects, reviewMap, now));
+    grid.appendChild(wrap);
     for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
     renderEvictedNotice();
 }
@@ -810,30 +1019,8 @@ function createCategoryCard(categoryName, decks, allCards, allReviews) {
     };
     btnContainer.appendChild(resetBtn);
 
-    // Remove all decks in category from collection (non-local only — local
-    // example decks ship with the app). Available in both auth states.
-    const allGitHub = decks.every(d => !d.id.startsWith('local/'));
-    if (allGitHub) {
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'card-delete-btn';
-        removeBtn.title = `Remove all decks in "${categoryName}" from your collection`;
-        removeBtn.innerHTML = '×';
-        removeBtn.onclick = async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const ok = await confirmDialog({
-                title: 'Remove category',
-                message: `Remove all ${deckCount} deck${deckCount !== 1 ? 's' : ''} in "${categoryName}" from your collection?\n\nThis does NOT delete the GitHub repositories.`,
-                confirmText: 'Remove',
-                danger: true,
-            });
-            if (ok) {
-                for (const deck of decks) await removeRepository(deck.id);
-                await loadRepositories();
-            }
-        };
-        btnContainer.appendChild(removeBtn);
-    }
+    // No delete at the subject level: a subject is just a grouping, not a repo.
+    // Removal happens per-deck (each deck is a GitHub repo).
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'project-content';
@@ -1221,14 +1408,11 @@ function setupEventListeners() {
         });
     }
 
-    // Tree / Cards view toggle
-    const viewTree = document.getElementById('view-tree');
-    const viewCards = document.getElementById('view-cards');
-    if (viewTree) viewTree.addEventListener('click', () => setDeckView('tree'));
-    if (viewCards) viewCards.addEventListener('click', () => setDeckView('cards'));
-    // Reflect the persisted mode
-    viewTree?.classList.toggle('active', deckViewMode === 'tree');
-    viewCards?.classList.toggle('active', deckViewMode === 'cards');
+    // Tree / Cards / Columns view toggle
+    document.getElementById('view-tree')?.addEventListener('click', () => setDeckView('tree'));
+    document.getElementById('view-cards')?.addEventListener('click', () => setDeckView('cards'));
+    document.getElementById('view-columns')?.addEventListener('click', () => setDeckView('columns'));
+    reflectViewToggle();
 
     // View tabs: Decks / Progress
     const tabDecks = document.getElementById('tab-decks');
@@ -1242,19 +1426,27 @@ function setupEventListeners() {
 }
 
 /**
- * Deck view mode: 'tree' (default) or 'cards' (legacy category grid + breadcrumb).
+ * Deck view mode: 'tree' (default), 'cards' (category grid + breadcrumb),
+ * or 'columns' (Miller/Finder-style panes).
  */
 const DECK_VIEW_KEY = 'flashcards_deck_view';
 let deckViewMode = (() => {
-    try { return localStorage.getItem(DECK_VIEW_KEY) === 'cards' ? 'cards' : 'tree'; }
-    catch { return 'tree'; }
+    try {
+        const v = localStorage.getItem(DECK_VIEW_KEY);
+        return (v === 'cards' || v === 'columns') ? v : 'tree';
+    } catch { return 'tree'; }
 })();
 
-function setDeckView(mode) {
-    deckViewMode = mode === 'cards' ? 'cards' : 'tree';
-    try { localStorage.setItem(DECK_VIEW_KEY, deckViewMode); } catch { /* ignore */ }
+function reflectViewToggle() {
     document.getElementById('view-tree')?.classList.toggle('active', deckViewMode === 'tree');
     document.getElementById('view-cards')?.classList.toggle('active', deckViewMode === 'cards');
+    document.getElementById('view-columns')?.classList.toggle('active', deckViewMode === 'columns');
+}
+
+function setDeckView(mode) {
+    deckViewMode = (mode === 'cards' || mode === 'columns') ? mode : 'tree';
+    try { localStorage.setItem(DECK_VIEW_KEY, deckViewMode); } catch { /* ignore */ }
+    reflectViewToggle();
     // Switching view resets to home so navigation state stays coherent
     currentDeck = null;
     currentCategory = null;
