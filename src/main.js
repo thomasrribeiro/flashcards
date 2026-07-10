@@ -8,7 +8,7 @@ import { parseDeck } from './parser.js';
 import { hashCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories, getOrgRepositories } from './github-client.js';
 import { githubAuth } from './github-auth.js';
-import { startSession, startDrillSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
+import { startSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
 import { buildTodayQueue, todayQueueCounts } from './today-queue.js';
 import { getSettings, saveSettings, getHabitStatus, levelForXp } from './habit-client.js';
 import { renderDashboard } from './dashboard.js';
@@ -72,7 +72,7 @@ async function init() {
         // Load habit settings (active decks, daily goal) and render the
         // Today hero + streak badge
         habitSettings = await getSettings();
-        await renderTodayHero();
+        await renderReviewButton();
 
         // Deep link from a push notification: jump straight into Today
         if (new URL(window.location).searchParams.get('today') === '1') {
@@ -341,9 +341,16 @@ async function loadRepositories() {
         }
 
         if (currentCategory === null) {
-            // HOME LEVEL: hierarchical tree (subject → deck) with focus toggles
-            renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid);
+            // HOME LEVEL: tree (default) or legacy category-card grid
+            if (deckViewMode === 'tree') {
+                grid.classList.add('tree-mode');
+                renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid);
+            } else {
+                grid.classList.remove('tree-mode');
+                _renderCategoryGrid(displayDecks, allCards, allReviews, searchTerm, grid);
+            }
         } else {
+            grid.classList.remove('tree-mode');
             // CATEGORY LEVEL: render deck cards for the current category
             const filteredDecks = displayDecks.filter(deck => {
                 const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim().toLowerCase() : 'misc';
@@ -373,7 +380,7 @@ async function loadRepositories() {
 
         // Refresh the Today hero whenever the grid re-renders (no-op until
         // habit settings have loaded in init)
-        if (habitSettings) renderTodayHero();
+        if (habitSettings) renderReviewButton();
 
     } catch (error) {
         console.error('Error loading repositories:', error);
@@ -436,22 +443,35 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
         anyShown = true;
 
         const collapsed = collapsedSubjects.has(subject);
-        const activeInGroup = decks.filter(d => active.has(d.id)).length;
+        const deckIds = decks.map(d => d.id);
+        const starState = subjectStarState(deckIds);
 
         const group = document.createElement('div');
         group.className = 'tree-group';
 
         const header = document.createElement('div');
         header.className = 'tree-group-header';
-        header.innerHTML = `
+
+        // Parent star: activate/deactivate all decks in this subject
+        const parentStar = document.createElement('button');
+        parentStar.className = 'tree-star tree-star-parent' + (starState === 'none' ? '' : ' active');
+        parentStar.title = starState === 'all' ? 'Unfocus this whole subject' : 'Focus all decks in this subject';
+        parentStar.textContent = subjectStarGlyph(starState);
+        parentStar.onclick = (e) => { e.stopPropagation(); toggleActiveSubject(deckIds); };
+
+        const headerBody = document.createElement('div');
+        headerBody.className = 'tree-group-body';
+        headerBody.innerHTML = `
             <span class="tree-caret">${collapsed ? '▸' : '▾'}</span>
             <span class="tree-group-name">${escapeHtml(subject)}</span>
-            <span class="tree-group-meta">${decks.length} deck${decks.length === 1 ? '' : 's'}${activeInGroup ? ` · ${activeInGroup} ★` : ''}</span>`;
-        header.onclick = () => {
+            <span class="tree-group-meta">${decks.length} deck${decks.length === 1 ? '' : 's'}</span>`;
+        headerBody.onclick = () => {
             if (collapsedSubjects.has(subject)) collapsedSubjects.delete(subject);
             else collapsedSubjects.add(subject);
             loadRepositories();
         };
+
+        header.append(parentStar, headerBody);
         group.appendChild(header);
 
         if (!collapsed) {
@@ -473,7 +493,8 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
                 const label = document.createElement('span');
                 label.className = 'tree-deck-name';
                 label.textContent = name;
-                label.onclick = () => navigateToDeck(deck);
+                label.title = 'Review this deck (due + new)';
+                label.onclick = () => reviewDeck(deck);
 
                 const meta = document.createElement('span');
                 meta.className = 'tree-deck-counts';
@@ -483,12 +504,11 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 
                 const drill = document.createElement('button');
                 drill.className = 'tree-drill';
-                drill.title = 'Drill this deck';
-                drill.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Drill" style="width:14px;height:14px;">`;
-                drill.onclick = async (e) => {
+                drill.title = 'Review this deck (due + new)';
+                drill.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review" style="width:14px;height:14px;">`;
+                drill.onclick = (e) => {
                     e.stopPropagation();
-                    await navigateToDeck(deck, [], true);
-                    startStudySession(deck.id, null, 'all');
+                    reviewDeck(deck);
                 };
 
                 row.append(star, label, meta, drill);
@@ -605,6 +625,16 @@ function createCategoryCard(categoryName, decks, allCards, allReviews) {
     const btnContainer = document.createElement('div');
     btnContainer.className = 'card-buttons';
 
+    // Parent star: focus/unfocus all decks in this subject
+    const deckIds = decks.map(d => d.id);
+    const starState = subjectStarState(deckIds);
+    const starBtn = document.createElement('button');
+    starBtn.className = 'card-star-btn' + (starState === 'none' ? '' : ' active');
+    starBtn.title = starState === 'all' ? 'Unfocus this whole subject' : 'Focus all decks in this subject';
+    starBtn.textContent = subjectStarGlyph(starState);
+    starBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); toggleActiveSubject(deckIds); };
+    btnContainer.appendChild(starBtn);
+
     // Reset all decks in category
     const resetBtn = document.createElement('button');
     resetBtn.className = 'card-reset-btn';
@@ -625,18 +655,6 @@ function createCategoryCard(categoryName, decks, allCards, allReviews) {
         }
     };
     btnContainer.appendChild(resetBtn);
-
-    // Drill cards in this category
-    const drillBtn = document.createElement('button');
-    drillBtn.className = 'card-review-btn';
-    drillBtn.title = `Drill cards in ${categoryName}`;
-    drillBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Drill">`;
-    drillBtn.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        startDrillAllSession(categoryName);
-    };
-    btnContainer.appendChild(drillBtn);
 
     // Remove all decks in category from collection (non-local only — local
     // example decks ship with the app). Available in both auth states.
@@ -1041,17 +1059,48 @@ function setupEventListeners() {
         });
     }
 
-    // Drill-all: start a random shuffled session across all loaded decks
-    const drillAllBtn = document.getElementById('drill-all-btn');
-    if (drillAllBtn) {
-        drillAllBtn.addEventListener('click', () => startDrillAllSession());
+    // Primary Review action: scheduled session across active decks
+    const reviewBtn = document.getElementById('review-btn');
+    if (reviewBtn) {
+        reviewBtn.addEventListener('click', () => {
+            if (!reviewBtn.disabled) startTodayStudySession();
+        });
     }
+
+    // Tree / Cards view toggle
+    const viewTree = document.getElementById('view-tree');
+    const viewCards = document.getElementById('view-cards');
+    if (viewTree) viewTree.addEventListener('click', () => setDeckView('tree'));
+    if (viewCards) viewCards.addEventListener('click', () => setDeckView('cards'));
+    // Reflect the persisted mode
+    viewTree?.classList.toggle('active', deckViewMode === 'tree');
+    viewCards?.classList.toggle('active', deckViewMode === 'cards');
 
     // View tabs: Decks / Progress
     const tabDecks = document.getElementById('tab-decks');
     const tabProgress = document.getElementById('tab-progress');
     if (tabDecks) tabDecks.addEventListener('click', () => showMainView('decks'));
     if (tabProgress) tabProgress.addEventListener('click', () => showMainView('progress'));
+}
+
+/**
+ * Deck view mode: 'tree' (default) or 'cards' (legacy category grid + breadcrumb).
+ */
+const DECK_VIEW_KEY = 'flashcards_deck_view';
+let deckViewMode = (() => {
+    try { return localStorage.getItem(DECK_VIEW_KEY) === 'cards' ? 'cards' : 'tree'; }
+    catch { return 'tree'; }
+})();
+
+function setDeckView(mode) {
+    deckViewMode = mode === 'cards' ? 'cards' : 'tree';
+    try { localStorage.setItem(DECK_VIEW_KEY, deckViewMode); } catch { /* ignore */ }
+    document.getElementById('view-tree')?.classList.toggle('active', deckViewMode === 'tree');
+    document.getElementById('view-cards')?.classList.toggle('active', deckViewMode === 'cards');
+    // Switching view resets to home so navigation state stays coherent
+    currentDeck = null;
+    currentCategory = null;
+    loadRepositories();
 }
 
 /**
@@ -1078,21 +1127,25 @@ async function showMainView(view) {
     tabDecks?.classList.toggle('active', view === 'decks');
     tabProgress?.classList.toggle('active', view === 'progress');
 
+    const controlsBar = document.getElementById('controls-bar');
+
     if (view === 'progress') {
         grid?.classList.add('hidden');
         hero?.classList.add('hidden');
         breadcrumb?.classList.add('hidden');
         studyArea?.classList.add('hidden');
         sessionComplete?.classList.add('hidden');
+        controlsBar?.classList.add('hidden');   // Review + toggle + search belong to Decks
         dashboard?.classList.remove('hidden');
         await renderDashboard();
     } else {
         dashboard?.classList.add('hidden');
         studyArea?.classList.add('hidden');
         sessionComplete?.classList.add('hidden');
+        controlsBar?.classList.remove('hidden');
         grid?.classList.remove('hidden');
         updateDeckBreadcrumb();
-        if (habitSettings) renderTodayHero();
+        if (habitSettings) renderReviewButton();
     }
 }
 
@@ -1746,6 +1799,14 @@ async function navigateToDeck(deck, path = [], updateHistory = true) {
  */
 function updateDeckBreadcrumb() {
     const breadcrumb = document.getElementById('deck-breadcrumb');
+
+    // Breadcrumb belongs to the card view only. In tree view at the home level
+    // there's no path to show, so keep it hidden.
+    if (deckViewMode === 'tree' && !currentDeck && !isInStudySession) {
+        breadcrumb.classList.add('hidden');
+        return;
+    }
+
     breadcrumb.classList.remove('hidden');
     breadcrumb.innerHTML = '';
 
@@ -1946,17 +2007,13 @@ function exitDeckNavigation() {
  * Start an inline study session
  */
 /**
- * Render the Today hero (daily focus-queue entry point) and streak badge.
- * Shown only at browse levels — never inside a deck or study session.
+ * Update the primary Review button (scheduled session across active decks)
+ * and the streak badge. The Review button is the daily driver; it's disabled
+ * until at least one deck is starred active.
  */
-async function renderTodayHero() {
-    const hero = document.getElementById('today-hero');
-    if (!hero) return;
-
-    if (currentDeck || isInStudySession) {
-        hero.classList.add('hidden');
-        return;
-    }
+async function renderReviewButton() {
+    const btn = document.getElementById('review-btn');
+    if (!btn) return;
 
     try {
         const status = await getHabitStatus();
@@ -1965,21 +2022,10 @@ async function renderTodayHero() {
 
         const active = habitSettings.activeDecks || [];
 
-        // Gavel tooltip reflects its behavior: active decks if set, else all
-        const drillBtn = document.getElementById('drill-all-btn');
-        if (drillBtn) {
-            drillBtn.title = active.length > 0
-                ? `Drill your ${active.length} active deck${active.length === 1 ? '' : 's'}`
-                : 'Drill all decks';
-        }
-
         if (active.length === 0) {
-            hero.innerHTML = `
-                <div class="today-hero-text">
-                    <strong>Build a daily habit</strong>
-                    <span>Mark 2–4 decks as active (☆ on a deck card) to get a small, winnable session every day.</span>
-                </div>`;
-            hero.classList.remove('hidden');
+            btn.disabled = true;
+            btn.textContent = 'Review';
+            btn.title = 'Star decks (★) to build your daily review';
             return;
         }
 
@@ -1993,31 +2039,19 @@ async function renderTodayHero() {
             newIntroducedToday: status.today.newCards
         });
 
-        const streakStr = status.streak > 0 ? `\u{1F525} ${status.streak}-day streak` : 'Start your streak today';
-        const goalStr = status.today.goalMet
-            ? '✓ goal met'
-            : `${status.today.reviews}/${habitSettings.dailyGoal} reviews today`;
-
         if (counts.total === 0) {
-            hero.innerHTML = `
-                <div class="today-hero-text">
-                    <strong>All clear for today \u{1F389}</strong>
-                    <span>${streakStr} · ${goalStr}</span>
-                </div>`;
+            btn.disabled = true;
+            btn.textContent = 'All clear for today 🎉';
+            btn.title = status.today.goalMet ? 'Daily goal met' : 'Nothing due right now';
         } else {
-            hero.innerHTML = `
-                <div class="today-hero-text">
-                    <strong>Today: ${counts.due} due · ${counts.fresh} new</strong>
-                    <span>${streakStr} · ${goalStr}</span>
-                </div>
-                <button id="today-start-btn" class="btn-reveal today-start-btn">Start</button>`;
-            hero.querySelector('#today-start-btn').onclick = () => startTodayStudySession();
+            btn.disabled = false;
+            btn.textContent = `Review · ${counts.due} due · ${counts.fresh} new`;
+            btn.title = `Review your ${active.length} active deck${active.length === 1 ? '' : 's'}`;
         }
-        hero.classList.remove('hidden');
-        renderReminderAffordance();
     } catch (error) {
-        console.error('[Main] Failed to render Today hero:', error);
-        hero.classList.add('hidden');
+        console.error('[Main] Failed to render Review button:', error);
+        btn.disabled = true;
+        btn.textContent = 'Review';
     }
 }
 
@@ -2082,7 +2116,39 @@ async function toggleActiveDeck(deckId) {
         active.add(deckId);
     }
     habitSettings = await saveSettings({ activeDecks: [...active] });
-    await loadRepositories(); // re-renders deck stars + Today hero
+    await loadRepositories(); // re-renders stars + Review button
+}
+
+/**
+ * Tri-state of a subject's decks in the active set: all / some / none.
+ */
+function subjectStarState(deckIds) {
+    const active = new Set(habitSettings?.activeDecks || []);
+    const on = deckIds.filter(id => active.has(id)).length;
+    if (on === 0) return 'none';
+    if (on === deckIds.length) return 'all';
+    return 'some';
+}
+
+/** Glyph for a tri-state subject star. */
+function subjectStarGlyph(state) {
+    return state === 'all' ? '★' : state === 'some' ? '◐' : '☆';
+}
+
+/**
+ * Bulk activate/deactivate every deck in a subject. Clicking a parent star
+ * activates all if not all active, else clears them.
+ */
+async function toggleActiveSubject(deckIds) {
+    const active = new Set(habitSettings?.activeDecks || []);
+    const state = subjectStarState(deckIds);
+    if (state === 'all') {
+        deckIds.forEach(id => active.delete(id));
+    } else {
+        deckIds.forEach(id => active.add(id));
+    }
+    habitSettings = await saveSettings({ activeDecks: [...active] });
+    await loadRepositories();
 }
 
 /**
@@ -2103,7 +2169,7 @@ async function startTodayStudySession() {
     });
 
     if (queue.length === 0) {
-        await renderTodayHero();
+        await renderReviewButton();
         return;
     }
 
@@ -2124,6 +2190,29 @@ async function startTodayStudySession() {
     setupStudyEventListeners();
 
     startTodaySession(queue, onSessionComplete, () => {});
+}
+
+/**
+ * Review a single deck's due + new cards (used by the tree — no breadcrumb nav).
+ * The Decks tab is the exit back to the deck list.
+ */
+async function reviewDeck(deck) {
+    const allCards = await getAllCards();
+    const hasCards = allCards.some(c => c.deckName === deck.id || c.source?.repo === deck.id);
+    if (!hasCards) return;
+
+    isInStudySession = true;
+    currentStudyFile = deck.id.split('/').pop();
+
+    document.getElementById('topics-grid')?.classList.add('hidden');
+    document.getElementById('dashboard')?.classList.add('hidden');
+    document.getElementById('study-area')?.classList.remove('hidden');
+    document.getElementById('session-complete')?.classList.add('hidden');
+
+    updateDeckBreadcrumb();
+    setupStudyEventListeners();
+
+    await startSession(deck.id, null, onSessionComplete, () => {});
 }
 
 async function startStudySession(deckId, fileFilter, displayFileName) {
@@ -2170,47 +2259,6 @@ async function startStudySession(deckId, fileFilter, displayFileName) {
 
     // Start the session
     await startSession(deckId, fileFilter, onSessionComplete, onCardChange);
-}
-
-/**
- * Start a drill-all session (random cards pooled across every loaded deck)
- * @param {string|null} subject - Optional category subject filter
- */
-async function startDrillAllSession(subject = null) {
-    const allCards = await getAllCards();
-    if (allCards.length === 0) {
-        alert('No cards loaded. Add a deck first.');
-        return;
-    }
-
-    // When active (focus) decks are set and no explicit subject was requested,
-    // the gavel drills only those; otherwise it drills everything.
-    const active = habitSettings?.activeDecks || [];
-    const useActive = subject === null && active.length > 0;
-
-    isInStudySession = true;
-    isDrillAll = true;
-    currentStudyFile = subject ? `drill ${subject.toLowerCase()}`
-        : useActive ? 'drill active' : 'drill all';
-
-    const topicsGrid = document.getElementById('topics-grid');
-    const studyArea = document.getElementById('study-area');
-    const sessionComplete = document.getElementById('session-complete');
-
-    topicsGrid.classList.add('hidden');
-    document.getElementById('today-hero')?.classList.add('hidden');
-    document.getElementById('dashboard')?.classList.add('hidden');
-    studyArea.classList.remove('hidden');
-    sessionComplete.classList.add('hidden');
-
-    updateDeckBreadcrumb();
-    setupStudyEventListeners();
-
-    await startDrillSession(onSessionComplete, () => {}, {
-        maxCards: 50,
-        subject,
-        activeDeckIds: useActive ? active : null
-    });
 }
 
 /**

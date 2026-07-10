@@ -1898,3 +1898,73 @@ kbd {
 
 .tree-drill img { filter: invert(1); display: block; }
 .tree-drill:hover { opacity: 0.8; }
+
+/* ── Redesigned Decks controls: Review button, view toggle ── */
+
+.review-btn {
+    padding: 0 16px;
+    height: 32px;
+    background: var(--gold);
+    border: 1px solid var(--black);
+    color: var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.review-btn:hover:not(:disabled) { background: #f8d96b; }
+
+.review-btn:disabled {
+    background: var(--light-gray);
+    color: #999;
+    border-color: #ccc;
+    cursor: default;
+}
+
+.view-toggle {
+    display: inline-flex;
+    border: 1px solid var(--black);
+    height: 32px;
+}
+
+.view-toggle-btn {
+    padding: 0 14px;
+    background: var(--white);
+    border: none;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--black);
+    opacity: 0.55;
+}
+
+.view-toggle-btn + .view-toggle-btn { border-left: 1px solid var(--black); }
+.view-toggle-btn.active { background: var(--black); color: var(--white); opacity: 1; }
+
+/* Let the tree span the full content width (override the projects grid) */
+.projects-grid.tree-mode {
+    display: block;
+    width: 100%;
+}
+
+/* Parent (subject) star in the tree header */
+.tree-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tree-group-body {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    cursor: pointer;
+}
+
+.tree-star-parent {
+    font-size: 17px;
+    width: 22px;
+}
