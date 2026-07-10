@@ -2090,31 +2090,32 @@ kbd {
 
 .projects-grid.columns-mode { display: block; width: 100%; }
 
-/* Strip of panes: height fits the tallest column up to a max; scrolls
-   horizontally if there are too many columns to fit. */
+/* Strip of exactly 3 equal-width columns (Subject | Deck | Chapter) filling
+   the window. Height is capped to 7 rows; taller columns scroll vertically. */
 .columns-view {
+    --col-row-h: 34px;
     display: flex;
     align-items: stretch;
     border: 1px solid var(--black);
-    max-height: 640px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    height: calc(var(--col-row-h) * 7);
+    overflow: hidden;
 }
 
-/* Each pane is a pure item list with its own vertical scrollbar. */
+/* Each column is one third of the width with its own vertical scrollbar. */
 .col-pane {
-    flex: 0 0 300px;
+    flex: 1 1 0;
+    min-width: 0;
     border-right: 1px solid #ddd;
     overflow-y: auto;
 }
-
-.col-filler { flex: 1 1 auto; min-width: 0; }
+.col-pane:last-child { border-right: none; }
 
 .col-row {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 8px;
+    height: var(--col-row-h);
+    padding: 0 8px;
     cursor: pointer;
     border-bottom: 1px solid #f2f2f2;
 }
@@ -2173,7 +2174,6 @@ kbd {
 .col-empty { padding: 12px; font-size: 0.8rem; opacity: 0.5; }
 
 @media (max-width: 760px) {
-    .columns-view { flex-direction: column; max-height: none; overflow-x: hidden; }
-    .col-pane { flex: none; border-right: none; border-bottom: 1px solid #ddd; max-height: 220px; }
-    .col-filler { display: none; }
+    .columns-view { flex-direction: column; height: auto; }
+    .col-pane { flex: none; border-right: none; border-bottom: 1px solid #ddd; height: calc(var(--col-row-h) * 5); }
 }

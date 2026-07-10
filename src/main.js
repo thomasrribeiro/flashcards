@@ -792,12 +792,13 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
         });
     wrap.appendChild(makePane(p1));
 
-    // Pane 2 — decks in the selected subject
+    // Pane 2 — decks in the selected subject (blank until a subject is picked)
+    let p2 = [];
     if (columnsSel.subject && subjects.has(columnsSel.subject)) {
         const decks = subjects.get(columnsSel.subject);
         let deckIds = [...decks.keys()].sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()));
         if (term) deckIds = deckIds.filter(id => id.split('/').pop().toLowerCase().includes(term) || [...decks.get(id).keys()].some(f => fileBase(f).toLowerCase().includes(term)));
-        const p2 = deckIds.map(deckId => {
+        p2 = deckIds.map(deckId => {
             const isActive = active.has(deckId);
             const deckName = deckId.split('/').pop();
             return colRow({
@@ -812,16 +813,17 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
                 onClick: () => { columnsSel = { subject: columnsSel.subject, deck: deckId, chapter: null }; loadRepositories(); }
             });
         });
-        wrap.appendChild(makePane(p2));
     }
+    wrap.appendChild(makePane(p2));
 
-    // Pane 3 — chapters in the selected deck
+    // Pane 3 — chapters in the selected deck (blank until a deck is picked)
+    let p3 = [];
     if (columnsSel.subject && columnsSel.deck && subjects.get(columnsSel.subject)?.has(columnsSel.deck)) {
         const deckId = columnsSel.deck;
         const files = subjects.get(columnsSel.subject).get(deckId);
         let fileList = [...files.keys()].sort((a, b) => a.localeCompare(b));
         if (term) fileList = fileList.filter(f => fileBase(f).toLowerCase().includes(term));
-        const p3 = fileList.map(file => {
+        p3 = fileList.map(file => {
             const chName = fileBase(file);
             const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName);
             return colRow({
@@ -834,13 +836,8 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
                 onClick: review
             });
         });
-        wrap.appendChild(makePane(p3));
     }
-
-    // Blank filler pane extends to the end
-    const filler = document.createElement('div');
-    filler.className = 'col-filler';
-    wrap.appendChild(filler);
+    wrap.appendChild(makePane(p3));
 
     grid.appendChild(wrap);
     for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
