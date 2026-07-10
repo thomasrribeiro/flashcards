@@ -50,18 +50,10 @@
                     </h3>
                     <div class="collapsible-content" id="getting-started-content">
                         <ol>
-                            <li>Star (★) 2–4 decks to focus on</li>
-                            <li>Hit <strong>Review</strong> for a small daily session</li>
-                            <li>Rate your recall — come back tomorrow</li>
+                            <li>Star (★) items to set your daily review scope — or review any level directly with the <img src="./icons/gavel.png" alt="gavel" style="height: 1em; vertical-align: middle;"> button</li>
+                            <li>Rate your recall</li>
+                            <li>Come back for daily review</li>
                         </ol>
-                    </div>
-
-                    <h3 class="collapsible-header" data-section="daily-habit">
-                        <span class="toggle-icon" style="transform: rotate(90deg);"></span>
-                        Building a daily habit
-                    </h3>
-                    <div class="collapsible-content" id="daily-habit-content">
-                        <p>Star a few decks as <strong>active</strong> and the <strong>Review</strong> button gives you a small, winnable session each day — due cards plus a trickle of new ones, so you stay ahead of the forgetting curve without drowning in a backlog.</p>
                     </div>
 
                     <p class="tip">
@@ -116,21 +108,25 @@
                     <button id="tab-progress" class="view-tab">Progress</button>
                 </div>
 
-                <!-- Decks-tab controls: Review action + view toggle + search -->
+                <!-- Decks-tab controls -->
                 <div class="controls-bar hidden" id="controls-bar">
-                    <button id="review-btn" class="review-btn" disabled>Review</button>
-                    <div class="view-toggle" id="view-toggle">
-                        <button id="view-tree" class="view-toggle-btn active">Tree</button>
-                        <button id="view-cards" class="view-toggle-btn">Cards</button>
+                    <div class="controls-row">
+                        <input
+                            type="text"
+                            id="search-input"
+                            class="search-input"
+                            placeholder="Search decks..."
+                            autocomplete="off"
+                        />
+                        <button id="review-btn" class="review-btn" disabled>Review</button>
+                        <span id="streak-badge" class="streak-badge hidden" title="Daily streak"></span>
                     </div>
-                    <input
-                        type="text"
-                        id="search-input"
-                        class="search-input"
-                        placeholder="Search decks..."
-                        autocomplete="off"
-                    />
-                    <span id="streak-badge" class="streak-badge hidden" title="Daily streak"></span>
+                    <div class="controls-row">
+                        <div class="view-toggle" id="view-toggle">
+                            <button id="view-tree" class="view-toggle-btn active" title="Tree view" aria-label="Tree view">☰</button>
+                            <button id="view-cards" class="view-toggle-btn" title="Card view" aria-label="Card view">▦</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Deck Navigation Breadcrumb -->

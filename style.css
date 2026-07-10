@@ -1382,11 +1382,22 @@ kbd {
 /* Filter and Sort Controls */
 .controls-bar {
     display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 24px;
+    margin-top: 20px;
+}
+
+.controls-row {
+    display: flex;
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
-    margin-bottom: 30px;
-    margin-top: 20px;
+}
+
+.view-toggle-btn {
+    font-size: 1rem;
+    padding: 0 12px;
 }
 
 .controls-bar.hidden {
