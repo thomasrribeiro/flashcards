@@ -487,15 +487,54 @@ async function deleteScope(deckIds, message) {
 }
 
 /**
- * Home-level hierarchical tree: Subject → Deck → Chapter. Stars (Subject/Deck)
- * sit on the right; gavel/reset at every level; delete at Subject/Deck only.
- * Collapsed by default — only paths containing active decks auto-expand.
+ * One tree row: name cell (flex, indented by DOM nesting) + fixed-width meta +
+ * a fixed 4-column action grid, so meta/% and every action icon line up in
+ * columns regardless of nesting depth. Pass null in `actions` for an empty cell.
+ */
+function treeRow({ caret, name, nameCls, meta, actions, onBody, rowCls, title }) {
+    const row = document.createElement('div');
+    row.className = 'tree-row ' + (rowCls || '');
+
+    const cell = document.createElement('div');
+    cell.className = 'tree-name-cell';
+    if (title) cell.title = title;
+    if (onBody) cell.onclick = onBody;
+    const caretEl = document.createElement('span');
+    caretEl.className = 'tree-caret';
+    caretEl.textContent = caret == null ? '' : caret;
+    const nameEl = document.createElement('span');
+    nameEl.className = 'tree-name ' + (nameCls || '');
+    nameEl.textContent = name;
+    cell.append(caretEl, nameEl);
+
+    const metaEl = document.createElement('span');
+    metaEl.className = 'tree-meta';
+    metaEl.textContent = meta;
+
+    const acts = document.createElement('div');
+    acts.className = 'tree-actions';
+    for (const a of actions) {
+        if (!a) { const s = document.createElement('span'); s.className = 'tree-act-empty'; acts.appendChild(s); }
+        else acts.appendChild(treeActionBtn(a.cls, a.title, a.html, a.onclick));
+    }
+
+    row.append(cell, metaEl, acts);
+    return row;
+}
+
+/**
+ * Home-level hierarchical tree: Subject → Deck → Chapter, with connector rails.
+ * Stars (Subject/Deck) + gavel + reset at those levels; delete at Subject/Deck.
+ * Chapters get gavel + reset. Collapsed by default: subjects auto-expand only
+ * when they contain an active deck; decks never auto-expand (leaves stay hidden)
+ * unless manually opened or revealed by a search match.
  */
 function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
     const now = new Date();
     const active = new Set(habitSettings?.activeDecks || []);
     const term = (searchTerm || '').toLowerCase();
+    const fileBase = f => f.split('/').pop().replace(/\.md$/, '');
 
     // Build Subject → Deck → File → cards from loaded cards
     const deckById = new Map(displayDecks.map(d => [d.id, d]));
@@ -523,8 +562,15 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 
     for (const subject of subjectNames) {
         const decks = subjects.get(subject);
+        const subjectMatch = term && subject.toLowerCase().includes(term);
         let deckIds = [...decks.keys()].sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()));
-        if (term) deckIds = deckIds.filter(id => id.split('/').pop().toLowerCase().includes(term));
+        if (term && !subjectMatch) {
+            deckIds = deckIds.filter(id => {
+                if (id.split('/').pop().toLowerCase().includes(term)) return true;
+                for (const f of decks.get(id).keys()) if (fileBase(f).toLowerCase().includes(term)) return true;
+                return false;
+            });
+        }
         if (deckIds.length === 0) continue;
         anyShown = true;
 
@@ -537,92 +583,83 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 
         const group = document.createElement('div');
         group.className = 'tree-group';
-
-        const header = document.createElement('div');
-        header.className = 'tree-row tree-subject-row';
-        const body = document.createElement('div');
-        body.className = 'tree-row-body';
-        body.innerHTML = `<span class="tree-caret">${open ? '▾' : '▸'}</span>
-            <span class="tree-name tree-subject-name">${escapeHtml(subject)}</span>
-            <span class="tree-meta">${deckIds.length} deck${deckIds.length === 1 ? '' : 's'} · ${prog.pct}%</span>`;
-        body.onclick = () => treeToggle(skey, hasActive);
-        const acts = document.createElement('div');
-        acts.className = 'tree-actions';
-        acts.append(
-            treeActionBtn('tree-star tree-star-parent' + (starState === 'none' ? '' : ' active'),
-                starState === 'all' ? 'Unfocus subject' : 'Focus all decks in subject', subjectStarGlyph(starState),
-                () => toggleActiveSubject(deckIds)),
-            treeActionBtn('tree-act', `Review ${subject} (due + new)`, GAVEL_IMG,
-                () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject)),
-            treeActionBtn('tree-act', `Reset all progress in ${subject}`, RESET_IMG,
-                () => resetScope(deckIds.map(id => ({ deckId: id })), `Reset progress for all ${deckIds.length} decks in "${subject}"?`)),
-            treeActionBtn('tree-act tree-del', `Remove all decks in ${subject}`, '×',
-                () => deleteScope(deckIds, `Remove all ${deckIds.length} decks in "${subject}" from your collection?`))
-        );
-        header.append(body, acts);
-        group.appendChild(header);
+        group.appendChild(treeRow({
+            caret: open ? '▾' : '▸',
+            name: subject, nameCls: 'tree-subject-name', rowCls: 'tree-subject-row',
+            meta: `${deckIds.length} deck${deckIds.length === 1 ? '' : 's'} · ${prog.pct}%`,
+            onBody: () => treeToggle(skey, hasActive),
+            actions: [
+                { cls: 'tree-star tree-star-parent' + (starState === 'none' ? '' : ' active'), title: starState === 'all' ? 'Unfocus subject' : 'Focus all decks in subject', html: subjectStarGlyph(starState), onclick: () => toggleActiveSubject(deckIds) },
+                { cls: 'tree-act', title: `Review ${subject} (due + new)`, html: GAVEL_IMG, onclick: () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject) },
+                { cls: 'tree-act', title: `Reset all progress in ${subject}`, html: RESET_IMG, onclick: () => resetScope(deckIds.map(id => ({ deckId: id })), `Reset progress for all ${deckIds.length} decks in "${subject}"?`) },
+                { cls: 'tree-act tree-del', title: `Remove all decks in ${subject}`, html: '×', onclick: () => deleteScope(deckIds, `Remove all ${deckIds.length} decks in "${subject}" from your collection?`) }
+            ]
+        }));
 
         if (open) {
+            const subjChildren = document.createElement('div');
+            subjChildren.className = 'tree-children';
+
             for (const deckId of deckIds) {
                 const files = decks.get(deckId);
+                const deckName = deckId.split('/').pop();
+                const deckMatch = term && deckName.toLowerCase().includes(term);
                 const deckCards = [...files.values()].flat();
                 const dProg = scopeProgress(deckCards, reviewMap, now);
                 const isActive = active.has(deckId);
                 const dkey = 'deck:' + deckId;
-                const dOpen = term ? true : treeIsOpen(dkey, isActive);
                 const nCh = files.size;
-                const deckName = deckId.split('/').pop();
 
-                const drow = document.createElement('div');
-                drow.className = 'tree-row tree-deck-row';
-                const dbody = document.createElement('div');
-                dbody.className = 'tree-row-body tree-indent-1';
-                dbody.innerHTML = `<span class="tree-caret">${dOpen ? '▾' : '▸'}</span>
-                    <span class="tree-name">${escapeHtml(deckName)}</span>
-                    <span class="tree-meta">${nCh} chapter${nCh === 1 ? '' : 's'} · ${dProg.pct}%</span>`;
-                dbody.onclick = () => treeToggle(dkey, isActive);
-                const dacts = document.createElement('div');
-                dacts.className = 'tree-actions';
-                dacts.append(
-                    treeActionBtn('tree-star' + (isActive ? ' active' : ''),
-                        isActive ? 'Remove from daily focus' : 'Add to daily focus', isActive ? '★' : '☆',
-                        () => toggleActiveDeck(deckId)),
-                    treeActionBtn('tree-act', 'Review this deck (due + new)', GAVEL_IMG,
-                        () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName)),
-                    treeActionBtn('tree-act', 'Reset progress in this deck', RESET_IMG,
-                        () => resetScope([{ deckId }], `Reset all progress in "${deckName}"?`)),
-                    treeActionBtn('tree-act tree-del', 'Remove this deck', '×',
-                        () => deleteScope([deckId], `Remove "${deckName}" from your collection?`))
-                );
-                drow.append(dbody, dacts);
-                group.appendChild(drow);
+                // Search: only reveal chapters that match (unless deck/subject matched)
+                const fileList = [...files.keys()].sort((a, b) => a.localeCompare(b));
+                const matchingFiles = (term && !deckMatch && !subjectMatch)
+                    ? fileList.filter(f => fileBase(f).toLowerCase().includes(term)) : fileList;
+                // Decks never auto-open on active (leaves hidden by default);
+                // search opens a deck only to reveal matching chapters.
+                const dOpen = term ? (matchingFiles.length > 0 && !deckMatch && !subjectMatch)
+                    : treeIsOpen(dkey, false);
+
+                const deckBlock = document.createElement('div');
+                deckBlock.className = 'tree-deck-block';
+                deckBlock.appendChild(treeRow({
+                    caret: dOpen ? '▾' : '▸',
+                    name: deckName, rowCls: 'tree-deck-row',
+                    meta: `${nCh} chapter${nCh === 1 ? '' : 's'} · ${dProg.pct}%`,
+                    onBody: () => treeToggle(dkey, false),
+                    actions: [
+                        { cls: 'tree-star' + (isActive ? ' active' : ''), title: isActive ? 'Remove from daily focus' : 'Add to daily focus', html: isActive ? '★' : '☆', onclick: () => toggleActiveDeck(deckId) },
+                        { cls: 'tree-act', title: 'Review this deck (due + new)', html: GAVEL_IMG, onclick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName) },
+                        { cls: 'tree-act', title: 'Reset progress in this deck', html: RESET_IMG, onclick: () => resetScope([{ deckId }], `Reset all progress in "${deckName}"?`) },
+                        { cls: 'tree-act tree-del', title: 'Remove this deck', html: '×', onclick: () => deleteScope([deckId], `Remove "${deckName}" from your collection?`) }
+                    ]
+                }));
 
                 if (dOpen) {
-                    for (const file of [...files.keys()].sort((a, b) => a.localeCompare(b))) {
+                    const deckChildren = document.createElement('div');
+                    deckChildren.className = 'tree-children';
+                    for (const file of matchingFiles) {
                         const chCards = files.get(file);
                         const cProg = scopeProgress(chCards, reviewMap, now);
-                        const chName = file.split('/').pop().replace(/\.md$/, '');
-                        const crow = document.createElement('div');
-                        crow.className = 'tree-row tree-chapter-row';
-                        const cbody = document.createElement('div');
-                        cbody.className = 'tree-row-body tree-indent-2';
-                        cbody.title = 'Review this chapter (due + new)';
-                        cbody.innerHTML = `<span class="tree-name tree-chapter-name">${escapeHtml(chName)}</span>
-                            <span class="tree-meta">${chCards.length} card${chCards.length === 1 ? '' : 's'} · ${cProg.pct}%</span>`;
-                        cbody.onclick = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName);
-                        const cacts = document.createElement('div');
-                        cacts.className = 'tree-actions';
-                        cacts.append(
-                            treeActionBtn('tree-act', 'Review this chapter (due + new)', GAVEL_IMG,
-                                () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName)),
-                            treeActionBtn('tree-act', 'Reset progress in this chapter', RESET_IMG,
-                                () => resetScope([{ deckId, file }], `Reset progress in "${chName}"?`))
-                        );
-                        crow.append(cbody, cacts);
-                        group.appendChild(crow);
+                        const chName = fileBase(file);
+                        deckChildren.appendChild(treeRow({
+                            caret: null,
+                            name: chName, nameCls: 'tree-chapter-name', rowCls: 'tree-chapter-row',
+                            meta: `${chCards.length} card${chCards.length === 1 ? '' : 's'} · ${cProg.pct}%`,
+                            title: 'Review this chapter (due + new)',
+                            onBody: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName),
+                            actions: [
+                                null,
+                                { cls: 'tree-act', title: 'Review this chapter (due + new)', html: GAVEL_IMG, onclick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName) },
+                                { cls: 'tree-act', title: 'Reset progress in this chapter', html: RESET_IMG, onclick: () => resetScope([{ deckId, file }], `Reset progress in "${chName}"?`) },
+                                null
+                            ]
+                        }));
                     }
+                    deckBlock.appendChild(deckChildren);
                 }
+                subjChildren.appendChild(deckBlock);
             }
+            group.appendChild(subjChildren);
         }
         tree.appendChild(group);
     }
@@ -1166,11 +1203,11 @@ function setupEventListeners() {
 
     if (searchInput) {
         searchInput.addEventListener('input', () => {
-            if (currentDeck) {
-                // Inside a deck - filter folders and files
+            // Tree view filters the tree in place; only the card view's
+            // in-deck level uses renderCurrentLevel.
+            if (deckViewMode === 'cards' && currentDeck) {
                 renderCurrentLevel();
             } else {
-                // At home - filter decks
                 loadRepositories();
             }
         });

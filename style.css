@@ -1810,8 +1810,12 @@ kbd {
     font-weight: 600;
 }
 
+.view-tab { text-decoration: none; }
+
 .view-tab:hover {
-    opacity: 0.85;
+    opacity: 1;
+    text-decoration: none;
+    background: var(--light-gray);
 }
 
 /* ── Deck tree (home view) ── */
@@ -1980,42 +1984,29 @@ kbd {
     width: 22px;
 }
 
-/* ── 3-level deck tree ── */
+/* ── 3-level deck tree (nested rails + aligned columns) ── */
 
 .tree-row {
     display: flex;
     align-items: center;
-    gap: 8px;
     border-bottom: 1px solid #eee;
     min-height: 34px;
 }
+.tree-row:hover { background: var(--light-gray); }
+.tree-subject-row { border-bottom: 1px solid var(--black); min-height: 38px; }
 
-.tree-subject-row {
-    border-bottom: 1px solid var(--black);
-    min-height: 38px;
-}
-
-.tree-row-body {
+.tree-name-cell {
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex: 1;
+    gap: 6px;
     cursor: pointer;
-    min-width: 0;
+    overflow: hidden;
     padding: 4px 0;
 }
 
-.tree-indent-1 { padding-left: 22px; }
-.tree-indent-2 { padding-left: 46px; }
-
-.tree-row:hover { background: var(--light-gray); }
-
-.tree-caret {
-    width: 12px;
-    opacity: 0.6;
-    font-size: 0.75rem;
-    flex-shrink: 0;
-}
+.tree-caret { width: 12px; flex-shrink: 0; opacity: 0.6; font-size: 0.7rem; }
 
 .tree-name {
     overflow: hidden;
@@ -2023,56 +2014,65 @@ kbd {
     white-space: nowrap;
     font-size: 0.9rem;
 }
-
 .tree-subject-name { font-weight: 600; font-size: 0.98rem; }
 .tree-chapter-name { font-size: 0.84rem; opacity: 0.9; }
 
+/* Fixed right-side columns → meta % and every icon align across depths */
 .tree-meta {
-    margin-left: auto;
+    width: 130px;
+    text-align: right;
     font-size: 0.75rem;
     opacity: 0.55;
     white-space: nowrap;
     flex-shrink: 0;
-    padding-right: 6px;
+    padding-right: 12px;
 }
 
 .tree-actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(4, 28px);
     align-items: center;
-    gap: 4px;
     flex-shrink: 0;
-    padding-right: 4px;
 }
 
-.tree-act {
-    background: none;
-    border: 1px solid transparent;
-    cursor: pointer;
-    padding: 3px 5px;
+.tree-act, .tree-star {
     display: flex;
     align-items: center;
     justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 0;
     font-size: 15px;
     line-height: 1;
     color: var(--black);
     opacity: 0.6;
 }
-
-.tree-act:hover { opacity: 1; border-color: var(--black); }
+.tree-act:hover, .tree-star:hover { opacity: 1; }
+.tree-star.active { color: var(--gold); opacity: 1; }
 .tree-act.tree-del { font-size: 18px; }
 .tree-act img { display: block; }
+.tree-act-empty { display: block; }
 
-.tree-star {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 15px;
-    line-height: 1;
-    color: var(--black);
-    padding: 3px 4px;
+/* Nesting rails: vertical guide line per level + horizontal branch per row */
+.tree-children {
+    margin-left: 13px;
+    border-left: 1px solid #d0d0d0;
 }
-.tree-star.active { color: var(--gold); }
-.tree-star-parent { font-size: 16px; }
+.tree-children > .tree-row > .tree-name-cell,
+.tree-children > .tree-deck-block > .tree-row > .tree-name-cell {
+    position: relative;
+    padding-left: 16px;
+}
+.tree-children > .tree-row > .tree-name-cell::before,
+.tree-children > .tree-deck-block > .tree-row > .tree-name-cell::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 12px;
+    border-top: 1px solid #d0d0d0;
+}
 
 /* Back-to-decks button in the study surface */
 .study-back-btn {
