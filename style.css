@@ -1979,3 +1979,109 @@ kbd {
     font-size: 17px;
     width: 22px;
 }
+
+/* ── 3-level deck tree ── */
+
+.tree-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #eee;
+    min-height: 34px;
+}
+
+.tree-subject-row {
+    border-bottom: 1px solid var(--black);
+    min-height: 38px;
+}
+
+.tree-row-body {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    cursor: pointer;
+    min-width: 0;
+    padding: 4px 0;
+}
+
+.tree-indent-1 { padding-left: 22px; }
+.tree-indent-2 { padding-left: 46px; }
+
+.tree-row:hover { background: var(--light-gray); }
+
+.tree-caret {
+    width: 12px;
+    opacity: 0.6;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.tree-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9rem;
+}
+
+.tree-subject-name { font-weight: 600; font-size: 0.98rem; }
+.tree-chapter-name { font-size: 0.84rem; opacity: 0.9; }
+
+.tree-meta {
+    margin-left: auto;
+    font-size: 0.75rem;
+    opacity: 0.55;
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding-right: 6px;
+}
+
+.tree-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    padding-right: 4px;
+}
+
+.tree-act {
+    background: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    padding: 3px 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--black);
+    opacity: 0.6;
+}
+
+.tree-act:hover { opacity: 1; border-color: var(--black); }
+.tree-act.tree-del { font-size: 18px; }
+.tree-act img { display: block; }
+
+.tree-star {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--black);
+    padding: 3px 4px;
+}
+.tree-star.active { color: var(--gold); }
+.tree-star-parent { font-size: 16px; }
+
+/* Back-to-decks button in the study surface */
+.study-back-btn {
+    background: var(--white);
+    border: 1px solid var(--black);
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    padding: 5px 12px;
+    margin-bottom: 16px;
+}
+.study-back-btn:hover { background: var(--light-gray); }

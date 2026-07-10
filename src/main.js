@@ -392,127 +392,236 @@ async function loadRepositories() {
     }
 }
 
-// Collapsed subject groups in the tree (persisted for the session)
-const collapsedSubjects = new Set();
+// Tree expand state: key -> explicit open/closed. Default: open only for
+// subjects/decks that contain active (starred) decks.
+const treeExpand = new Map();
+function treeIsOpen(key, hasActive) {
+    return treeExpand.has(key) ? treeExpand.get(key) : hasActive;
+}
+function treeToggle(key, hasActive) {
+    treeExpand.set(key, !treeIsOpen(key, hasActive));
+    loadRepositories();
+}
 
-/**
- * Compute due/new counts for a deck from its cards + reviews.
- */
-function deckCounts(deckCards, reviewMap, now = new Date()) {
-    let reviewed = 0, dueReviewed = 0;
-    for (const c of deckCards) {
+const GAVEL_IMG = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review" style="width:13px;height:13px;">`;
+const RESET_IMG = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset" style="width:13px;height:13px;">`;
+
+/** Progress over a set of cards: retained (reviewed & not due) / total. */
+function scopeProgress(cards, reviewMap, now) {
+    let due = 0, fresh = 0, retained = 0;
+    for (const c of cards) {
         const r = reviewMap.get(c.hash);
-        if (!r) continue;
-        reviewed++;
-        if (new Date(r.fsrsCard.due) <= now) dueReviewed++;
+        if (!r) fresh++;
+        else if (new Date(r.fsrsCard.due) <= now) due++;
+        else retained++;
     }
-    const fresh = deckCards.length - reviewed;
-    return { total: deckCards.length, fresh, due: fresh + dueReviewed, reviewed };
+    const total = cards.length;
+    return { total, due, fresh, retained, pct: total ? Math.round(retained / total * 100) : 0 };
+}
+
+function treeActionBtn(cls, title, html, onclick) {
+    const b = document.createElement('button');
+    b.className = cls;
+    b.title = title;
+    b.innerHTML = html;
+    b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); onclick(); };
+    return b;
+}
+
+/** Enter the shared study surface for a scoped review. */
+function enterStudyArea(label) {
+    isInStudySession = true;
+    currentStudyFile = label || null;
+    document.getElementById('topics-grid')?.classList.add('hidden');
+    document.getElementById('dashboard')?.classList.add('hidden');
+    document.getElementById('study-area')?.classList.remove('hidden');
+    document.getElementById('session-complete')?.classList.add('hidden');
+    updateDeckBreadcrumb();
+    setupStudyEventListeners();
 }
 
 /**
- * Home-level hierarchical tree: subject → deck rows, each with a focus (★)
- * toggle, due/new counts, and a quick-drill button. Clicking a deck name opens
- * its chapters via the existing deck navigation.
+ * Review any scope (subject / deck / chapter): its due + new cards.
+ * Ensures the needed decks are loaded first (lazy-load ready).
+ */
+async function startScopedReview(filterFn, label) {
+    const allCards = await getAllCards();
+    const allReviews = await getAllReviews();
+    const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
+    const now = new Date();
+    const due = [], fresh = [];
+    for (const card of allCards) {
+        if (!filterFn(card)) continue;
+        const r = reviewMap.get(card.hash);
+        if (!r) fresh.push({ card, fsrsCard: null, cardHash: card.hash });
+        else {
+            const d = new Date(r.fsrsCard.due);
+            if (d <= now) due.push({ card, fsrsCard: r.fsrsCard, cardHash: card.hash, _due: d });
+        }
+    }
+    due.sort((a, b) => a._due - b._due);
+    const queue = [...due, ...fresh];
+    if (queue.length === 0) {
+        alert('Nothing to review here right now — all caught up.');
+        return;
+    }
+    enterStudyArea(label);
+    startTodaySession(queue, onSessionComplete, () => {});
+}
+
+async function resetScope(specs, message) {
+    const ok = await confirmDialog({ title: 'Reset progress', message, confirmText: 'Reset', danger: true });
+    if (!ok) return;
+    const { refreshDeck } = await import('./storage.js');
+    for (const s of specs) await refreshDeck(s.deckId, s.file || null);
+    await loadRepositories();
+}
+
+async function deleteScope(deckIds, message) {
+    const ok = await confirmDialog({ title: 'Remove from collection', message, confirmText: 'Remove', danger: true });
+    if (!ok) return;
+    for (const id of deckIds) {
+        try { await removeRepository(id); } catch (e) { console.error('[Main] delete failed', id, e); }
+    }
+    await loadRepositories();
+}
+
+/**
+ * Home-level hierarchical tree: Subject → Deck → Chapter. Stars (Subject/Deck)
+ * sit on the right; gavel/reset at every level; delete at Subject/Deck only.
+ * Collapsed by default — only paths containing active decks auto-expand.
  */
 function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
+    const now = new Date();
     const active = new Set(habitSettings?.activeDecks || []);
+    const term = (searchTerm || '').toLowerCase();
 
-    // Group by subject
-    const groups = new Map();
-    for (const deck of displayDecks) {
+    // Build Subject → Deck → File → cards from loaded cards
+    const deckById = new Map(displayDecks.map(d => [d.id, d]));
+    const subjects = new Map();
+    for (const card of allCards) {
+        const deckId = card.source?.repo || card.deckName;
+        const deck = deckById.get(deckId);
+        if (!deck) continue;
         const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim() : 'Misc';
-        if (!groups.has(subject)) groups.set(subject, []);
-        groups.get(subject).push(deck);
+        if (!subjects.has(subject)) subjects.set(subject, new Map());
+        const decks = subjects.get(subject);
+        if (!decks.has(deckId)) decks.set(deckId, new Map());
+        const file = card.source?.file || 'unknown';
+        const files = decks.get(deckId);
+        if (!files.has(file)) files.set(file, []);
+        files.get(file).push(card);
     }
-    const subjects = [...groups.keys()].sort((a, b) =>
+    const subjectNames = [...subjects.keys()].sort((a, b) =>
         a === 'Misc' ? 1 : b === 'Misc' ? -1 : a.localeCompare(b));
 
-    const term = (searchTerm || '').toLowerCase();
     grid.innerHTML = '';
     const tree = document.createElement('div');
     tree.className = 'deck-tree';
-
     let anyShown = false;
-    for (const subject of subjects) {
-        let decks = groups.get(subject).slice().sort((a, b) =>
-            (a.id.split('/').pop()).localeCompare(b.id.split('/').pop()));
-        if (term) decks = decks.filter(d => d.id.split('/').pop().toLowerCase().includes(term));
-        if (decks.length === 0) continue;
+
+    for (const subject of subjectNames) {
+        const decks = subjects.get(subject);
+        let deckIds = [...decks.keys()].sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()));
+        if (term) deckIds = deckIds.filter(id => id.split('/').pop().toLowerCase().includes(term));
+        if (deckIds.length === 0) continue;
         anyShown = true;
 
-        const collapsed = collapsedSubjects.has(subject);
-        const deckIds = decks.map(d => d.id);
+        const subjCards = deckIds.flatMap(id => [...decks.get(id).values()].flat());
+        const prog = scopeProgress(subjCards, reviewMap, now);
         const starState = subjectStarState(deckIds);
+        const hasActive = deckIds.some(id => active.has(id));
+        const skey = 'subj:' + subject;
+        const open = term ? true : treeIsOpen(skey, hasActive);
 
         const group = document.createElement('div');
         group.className = 'tree-group';
 
         const header = document.createElement('div');
-        header.className = 'tree-group-header';
-
-        // Parent star: activate/deactivate all decks in this subject
-        const parentStar = document.createElement('button');
-        parentStar.className = 'tree-star tree-star-parent' + (starState === 'none' ? '' : ' active');
-        parentStar.title = starState === 'all' ? 'Unfocus this whole subject' : 'Focus all decks in this subject';
-        parentStar.textContent = subjectStarGlyph(starState);
-        parentStar.onclick = (e) => { e.stopPropagation(); toggleActiveSubject(deckIds); };
-
-        const headerBody = document.createElement('div');
-        headerBody.className = 'tree-group-body';
-        headerBody.innerHTML = `
-            <span class="tree-caret">${collapsed ? '▸' : '▾'}</span>
-            <span class="tree-group-name">${escapeHtml(subject)}</span>
-            <span class="tree-group-meta">${decks.length} deck${decks.length === 1 ? '' : 's'}</span>`;
-        headerBody.onclick = () => {
-            if (collapsedSubjects.has(subject)) collapsedSubjects.delete(subject);
-            else collapsedSubjects.add(subject);
-            loadRepositories();
-        };
-
-        header.append(parentStar, headerBody);
+        header.className = 'tree-row tree-subject-row';
+        const body = document.createElement('div');
+        body.className = 'tree-row-body';
+        body.innerHTML = `<span class="tree-caret">${open ? '▾' : '▸'}</span>
+            <span class="tree-name tree-subject-name">${escapeHtml(subject)}</span>
+            <span class="tree-meta">${deckIds.length} deck${deckIds.length === 1 ? '' : 's'} · ${prog.pct}%</span>`;
+        body.onclick = () => treeToggle(skey, hasActive);
+        const acts = document.createElement('div');
+        acts.className = 'tree-actions';
+        acts.append(
+            treeActionBtn('tree-star tree-star-parent' + (starState === 'none' ? '' : ' active'),
+                starState === 'all' ? 'Unfocus subject' : 'Focus all decks in subject', subjectStarGlyph(starState),
+                () => toggleActiveSubject(deckIds)),
+            treeActionBtn('tree-act', `Review ${subject} (due + new)`, GAVEL_IMG,
+                () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject)),
+            treeActionBtn('tree-act', `Reset all progress in ${subject}`, RESET_IMG,
+                () => resetScope(deckIds.map(id => ({ deckId: id })), `Reset progress for all ${deckIds.length} decks in "${subject}"?`)),
+            treeActionBtn('tree-act tree-del', `Remove all decks in ${subject}`, '×',
+                () => deleteScope(deckIds, `Remove all ${deckIds.length} decks in "${subject}" from your collection?`))
+        );
+        header.append(body, acts);
         group.appendChild(header);
 
-        if (!collapsed) {
-            for (const deck of decks) {
-                const name = deck.id.split('/').pop();
-                const deckCards = allCards.filter(c => c.deckName === deck.id || c.source?.repo === deck.id);
-                const counts = deckCounts(deckCards, reviewMap);
-                const isActive = active.has(deck.id);
+        if (open) {
+            for (const deckId of deckIds) {
+                const files = decks.get(deckId);
+                const deckCards = [...files.values()].flat();
+                const dProg = scopeProgress(deckCards, reviewMap, now);
+                const isActive = active.has(deckId);
+                const dkey = 'deck:' + deckId;
+                const dOpen = term ? true : treeIsOpen(dkey, isActive);
+                const nCh = files.size;
+                const deckName = deckId.split('/').pop();
 
-                const row = document.createElement('div');
-                row.className = 'tree-deck-row';
+                const drow = document.createElement('div');
+                drow.className = 'tree-row tree-deck-row';
+                const dbody = document.createElement('div');
+                dbody.className = 'tree-row-body tree-indent-1';
+                dbody.innerHTML = `<span class="tree-caret">${dOpen ? '▾' : '▸'}</span>
+                    <span class="tree-name">${escapeHtml(deckName)}</span>
+                    <span class="tree-meta">${nCh} chapter${nCh === 1 ? '' : 's'} · ${dProg.pct}%</span>`;
+                dbody.onclick = () => treeToggle(dkey, isActive);
+                const dacts = document.createElement('div');
+                dacts.className = 'tree-actions';
+                dacts.append(
+                    treeActionBtn('tree-star' + (isActive ? ' active' : ''),
+                        isActive ? 'Remove from daily focus' : 'Add to daily focus', isActive ? '★' : '☆',
+                        () => toggleActiveDeck(deckId)),
+                    treeActionBtn('tree-act', 'Review this deck (due + new)', GAVEL_IMG,
+                        () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName)),
+                    treeActionBtn('tree-act', 'Reset progress in this deck', RESET_IMG,
+                        () => resetScope([{ deckId }], `Reset all progress in "${deckName}"?`)),
+                    treeActionBtn('tree-act tree-del', 'Remove this deck', '×',
+                        () => deleteScope([deckId], `Remove "${deckName}" from your collection?`))
+                );
+                drow.append(dbody, dacts);
+                group.appendChild(drow);
 
-                const star = document.createElement('button');
-                star.className = 'tree-star' + (isActive ? ' active' : '');
-                star.title = isActive ? 'Remove from daily focus' : 'Add to daily focus';
-                star.textContent = isActive ? '★' : '☆';
-                star.onclick = (e) => { e.stopPropagation(); toggleActiveDeck(deck.id); };
-
-                const label = document.createElement('span');
-                label.className = 'tree-deck-name';
-                label.textContent = name;
-                label.title = 'Review this deck (due + new)';
-                label.onclick = () => reviewDeck(deck);
-
-                const meta = document.createElement('span');
-                meta.className = 'tree-deck-counts';
-                meta.innerHTML = counts.due > 0
-                    ? `<span class="cnt-due">${counts.due} due</span>${counts.fresh > 0 ? ` · <span class="cnt-new">${counts.fresh} new</span>` : ''}`
-                    : `<span class="cnt-done">✓ ${counts.total}</span>`;
-
-                const drill = document.createElement('button');
-                drill.className = 'tree-drill';
-                drill.title = 'Review this deck (due + new)';
-                drill.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review" style="width:14px;height:14px;">`;
-                drill.onclick = (e) => {
-                    e.stopPropagation();
-                    reviewDeck(deck);
-                };
-
-                row.append(star, label, meta, drill);
-                group.appendChild(row);
+                if (dOpen) {
+                    for (const file of [...files.keys()].sort((a, b) => a.localeCompare(b))) {
+                        const chCards = files.get(file);
+                        const cProg = scopeProgress(chCards, reviewMap, now);
+                        const chName = file.split('/').pop().replace(/\.md$/, '');
+                        const crow = document.createElement('div');
+                        crow.className = 'tree-row tree-chapter-row';
+                        const cbody = document.createElement('div');
+                        cbody.className = 'tree-row-body tree-indent-2';
+                        cbody.title = 'Review this chapter (due + new)';
+                        cbody.innerHTML = `<span class="tree-name tree-chapter-name">${escapeHtml(chName)}</span>
+                            <span class="tree-meta">${chCards.length} card${chCards.length === 1 ? '' : 's'} · ${cProg.pct}%</span>`;
+                        cbody.onclick = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName);
+                        const cacts = document.createElement('div');
+                        cacts.className = 'tree-actions';
+                        cacts.append(
+                            treeActionBtn('tree-act', 'Review this chapter (due + new)', GAVEL_IMG,
+                                () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName)),
+                            treeActionBtn('tree-act', 'Reset progress in this chapter', RESET_IMG,
+                                () => resetScope([{ deckId, file }], `Reset progress in "${chName}"?`))
+                        );
+                        crow.append(cbody, cacts);
+                        group.appendChild(crow);
+                    }
+                }
             }
         }
         tree.appendChild(group);
@@ -523,11 +632,7 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
         return;
     }
     grid.appendChild(tree);
-
-    // Surface repos that failed to load, same as the grid view
-    for (const failed of (window.__failedRepos || [])) {
-        grid.appendChild(createFailedRepoCard(failed));
-    }
+    for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
     renderEvictedNotice();
 }
 
@@ -634,6 +739,18 @@ function createCategoryCard(categoryName, decks, allCards, allReviews) {
     starBtn.textContent = subjectStarGlyph(starState);
     starBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); toggleActiveSubject(deckIds); };
     btnContainer.appendChild(starBtn);
+
+    // Review all decks in this subject (due + new)
+    const catGavel = document.createElement('button');
+    catGavel.className = 'card-review-btn';
+    catGavel.title = `Review ${categoryName} (due + new)`;
+    catGavel.innerHTML = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review">`;
+    catGavel.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), categoryName);
+    };
+    btnContainer.appendChild(catGavel);
 
     // Reset all decks in category
     const resetBtn = document.createElement('button');
@@ -1081,6 +1198,10 @@ function setupEventListeners() {
     const tabProgress = document.getElementById('tab-progress');
     if (tabDecks) tabDecks.addEventListener('click', () => showMainView('decks'));
     if (tabProgress) tabProgress.addEventListener('click', () => showMainView('progress'));
+
+    // Back-to-decks button shown during a study session
+    const studyBackBtn = document.getElementById('study-back-btn');
+    if (studyBackBtn) studyBackBtn.addEventListener('click', () => showMainView('decks'));
 }
 
 /**
