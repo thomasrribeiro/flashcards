@@ -9,7 +9,7 @@ import { hashCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories, getOrgRepositories } from './github-client.js';
 import { githubAuth } from './github-auth.js';
 import { startSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
-import { buildTodayQueue, todayQueueCounts } from './today-queue.js';
+import { buildTodayQueue, todayQueueCounts, SCOPE_SEP } from './today-queue.js';
 import { getSettings, saveSettings, getHabitStatus, levelForXp } from './habit-client.js';
 import { renderDashboard } from './dashboard.js';
 import { getPushState, subscribeToPush } from './push-client.js';
@@ -430,30 +430,68 @@ function treeActionBtn(cls, title, html, onclick) {
     return b;
 }
 
-/** Enter the shared study surface for a scoped review. */
-function enterStudyArea(label) {
+/**
+ * Enter the shared study surface. Renders the scope breadcrumb (with a clickable
+ * "home" that returns to the deck view) and a scope summary line.
+ * @param {Array<string>} breadcrumb - path segments, first is "home"
+ * @param {Object} scope - { total, due, fresh } card counts for the scope
+ */
+function enterStudyArea(breadcrumb, scope) {
     isInStudySession = true;
-    currentStudyFile = label || null;
     document.getElementById('topics-grid')?.classList.add('hidden');
     document.getElementById('dashboard')?.classList.add('hidden');
     document.getElementById('study-area')?.classList.remove('hidden');
     document.getElementById('session-complete')?.classList.add('hidden');
-    updateDeckBreadcrumb();
+
+    const bc = document.getElementById('study-breadcrumb');
+    if (bc) {
+        bc.innerHTML = '';
+        (breadcrumb || ['home']).forEach((seg, i, arr) => {
+            if (i === 0) {
+                const home = document.createElement('button');
+                home.className = 'study-home-btn';
+                home.textContent = seg;
+                home.onclick = () => showMainView('decks');
+                bc.appendChild(home);
+            } else {
+                const s = document.createElement('span');
+                s.className = 'study-bc-seg';
+                s.textContent = seg;
+                bc.appendChild(s);
+            }
+            if (i < arr.length - 1) {
+                const sep = document.createElement('span');
+                sep.className = 'study-bc-sep';
+                sep.textContent = '/';
+                bc.appendChild(sep);
+            }
+        });
+    }
+
+    const info = document.getElementById('study-scope-info');
+    if (info && scope) {
+        info.textContent = `${scope.total} card${scope.total === 1 ? '' : 's'} in scope · ${scope.due} due · ${scope.fresh} new`;
+    }
+
     setupStudyEventListeners();
 }
 
 /**
- * Review any scope (subject / deck / chapter): its due + new cards.
- * Ensures the needed decks are loaded first (lazy-load ready).
+ * Review any scope (subject / deck / chapter / starred): its due + new cards.
+ * @param {Function} filterFn - selects the cards in scope
+ * @param {string} label - short scope label
+ * @param {Array<string>} breadcrumb - path for the study header
  */
-async function startScopedReview(filterFn, label) {
+async function startScopedReview(filterFn, label, breadcrumb) {
     const allCards = await getAllCards();
     const allReviews = await getAllReviews();
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
     const now = new Date();
     const due = [], fresh = [];
+    let total = 0;
     for (const card of allCards) {
         if (!filterFn(card)) continue;
+        total++;
         const r = reviewMap.get(card.hash);
         if (!r) fresh.push({ card, fsrsCard: null, cardHash: card.hash });
         else {
@@ -467,7 +505,7 @@ async function startScopedReview(filterFn, label) {
         alert('Nothing to review here right now — all caught up.');
         return;
     }
-    enterStudyArea(label);
+    enterStudyArea(breadcrumb || ['home', label], { total, due: due.length, fresh: fresh.length });
     startTodaySession(queue, onSessionComplete, () => {});
 }
 
@@ -713,10 +751,13 @@ function colRow({ name, star, actions, hasChildren, selected, onClick }) {
         b.onclick = (e) => { e.stopPropagation(); a.onClick(); };
         acts.appendChild(b);
     }
-    const chev = document.createElement('span');
-    chev.className = 'col-chevron';
-    chev.textContent = hasChildren ? '›' : '';
-    acts.appendChild(chev);
+    // Chevron only for drillable rows — leaves have nothing to the right
+    if (hasChildren) {
+        const chev = document.createElement('span');
+        chev.className = 'col-chevron';
+        chev.textContent = '›';
+        acts.appendChild(chev);
+    }
     row.appendChild(acts);
     return row;
 }
@@ -730,9 +771,10 @@ function colRow({ name, star, actions, hasChildren, selected, onClick }) {
 function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid) {
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
     const now = new Date();
-    const active = new Set(habitSettings?.activeDecks || []);
+    const scopes = resolveActiveScopes(allCards);
     const term = (searchTerm || '').toLowerCase();
     const fileBase = f => f.split('/').pop().replace(/\.md$/, '');
+    const filesOf = decksMap => id => ({ repo: id, files: [...decksMap.get(id).keys()] });
 
     // Build Subject → Deck → File → cards
     const deckById = new Map(displayDecks.map(d => [d.id, d]));
@@ -778,13 +820,13 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
         .map(subject => {
             const decks = subjects.get(subject);
             const deckIds = [...decks.keys()];
-            const starState = subjectStarState(deckIds);
+            const deckFiles = deckIds.map(filesOf(decks));
+            const starState = scopeStarState(scopes, deckFiles);
             return colRow({
                 name: subject,
-                star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Unfocus subject' : 'Focus all decks in subject', onClick: () => toggleActiveSubject(deckIds) },
+                star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Unfocus subject' : 'Focus all decks in subject', onClick: () => toggleScopes(deckFiles) },
                 actions: [
-                    { html: GAVEL_IMG, title: `Review ${subject} (due + new)`, onClick: () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject) },
-                    { html: RESET_IMG, title: `Reset all progress in ${subject}`, onClick: () => resetScope(deckIds.map(id => ({ deckId: id })), `Reset progress for all ${deckIds.length} decks in "${subject}"?`) }
+                    { html: GAVEL_IMG, title: `Review ${subject} (due + new)`, onClick: () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject, ['home', subject]) }
                 ],
                 hasChildren: true, selected: columnsSel.subject === subject,
                 onClick: () => { columnsSel = { subject, deck: null, chapter: null }; loadRepositories(); }
@@ -799,13 +841,14 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
         let deckIds = [...decks.keys()].sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()));
         if (term) deckIds = deckIds.filter(id => id.split('/').pop().toLowerCase().includes(term) || [...decks.get(id).keys()].some(f => fileBase(f).toLowerCase().includes(term)));
         p2 = deckIds.map(deckId => {
-            const isActive = active.has(deckId);
             const deckName = deckId.split('/').pop();
+            const deckFiles = [filesOf(decks)(deckId)];
+            const starState = scopeStarState(scopes, deckFiles);
             return colRow({
                 name: deckName,
-                star: { glyph: isActive ? '★' : '☆', active: isActive, title: isActive ? 'Remove from daily focus' : 'Add to daily focus', onClick: () => toggleActiveDeck(deckId) },
+                star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Remove deck from daily focus' : 'Add deck to daily focus', onClick: () => toggleScopes(deckFiles) },
                 actions: [
-                    { html: GAVEL_IMG, title: 'Review this deck (due + new)', onClick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName) },
+                    { html: GAVEL_IMG, title: 'Review this deck (due + new)', onClick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName, ['home', columnsSel.subject, deckName]) },
                     { html: RESET_IMG, title: 'Reset progress in this deck', onClick: () => resetScope([{ deckId }], `Reset all progress in "${deckName}"?`) },
                     { html: '×', danger: true, title: 'Remove this deck', onClick: () => deleteScope([deckId], `Remove "${deckName}" from your collection?`) }
                 ],
@@ -823,11 +866,14 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
         const files = subjects.get(columnsSel.subject).get(deckId);
         let fileList = [...files.keys()].sort((a, b) => a.localeCompare(b));
         if (term) fileList = fileList.filter(f => fileBase(f).toLowerCase().includes(term));
+        const deckName = deckId.split('/').pop();
         p3 = fileList.map(file => {
             const chName = fileBase(file);
-            const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName);
+            const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, ['home', columnsSel.subject, deckName, chName]);
+            const chActive = chapterIsActive(scopes, deckId, file);
             return colRow({
-                name: chName, star: null,
+                name: chName,
+                star: { glyph: chActive ? '★' : '☆', active: chActive, title: chActive ? 'Remove chapter from daily focus' : 'Add chapter to daily focus', onClick: () => toggleChapterScope(deckId, file) },
                 actions: [
                     { html: GAVEL_IMG, title: 'Review this chapter (due + new)', onClick: review },
                     { html: RESET_IMG, title: 'Reset progress in this chapter', onClick: () => resetScope([{ deckId, file }], `Reset progress in "${chName}"?`) }
@@ -1392,12 +1438,9 @@ function setupEventListeners() {
  * or 'columns' (Miller/Finder-style panes).
  */
 const DECK_VIEW_KEY = 'flashcards_deck_view';
-let deckViewMode = (() => {
-    try {
-        const v = localStorage.getItem(DECK_VIEW_KEY);
-        return (v === 'cards' || v === 'columns') ? v : 'tree';
-    } catch { return 'tree'; }
-})();
+// Columns is the single active view. Tree/Cards renderers are kept in the code
+// for potential revert but are no longer reachable (the toggle was removed).
+let deckViewMode = 'columns';
 
 function reflectViewToggle() {
     document.getElementById('view-tree')?.classList.toggle('active', deckViewMode === 'tree');
@@ -2112,9 +2155,9 @@ async function navigateToDeck(deck, path = [], updateHistory = true) {
 function updateDeckBreadcrumb() {
     const breadcrumb = document.getElementById('deck-breadcrumb');
 
-    // Breadcrumb belongs to the card view only. In tree view at the home level
-    // there's no path to show, so keep it hidden.
-    if (deckViewMode === 'tree' && !currentDeck && !isInStudySession) {
+    // The persistent deck breadcrumb belongs to the legacy card view only.
+    // Columns (the active view) uses the in-session study breadcrumb instead.
+    if (deckViewMode !== 'cards' || !currentDeck) {
         breadcrumb.classList.add('hidden');
         return;
     }
@@ -2442,9 +2485,72 @@ function subjectStarState(deckIds) {
     return 'some';
 }
 
-/** Glyph for a tri-state subject star. */
+/** Glyph for a tri-state star. */
 function subjectStarGlyph(state) {
     return state === 'all' ? '★' : state === 'some' ? '◐' : '☆';
+}
+
+// ── Chapter-level active scope model ─────────────────────────────────────────
+// The active set (habitSettings.activeDecks) can hold whole-deck ids (repo)
+// and/or chapter scopes ("repo<SEP>file"). Columns stars operate at chapter
+// granularity; deck/subject stars are bulk operations over their chapters.
+
+const chapterScope = (repo, file) => repo + SCOPE_SEP + (file || '');
+
+/** Resolve the stored active list into a Set of chapter scopes. */
+function resolveActiveScopes(cards) {
+    const raw = habitSettings?.activeDecks || [];
+    const filesByRepo = new Map();
+    for (const c of cards) {
+        const repo = c.source?.repo || c.deckName;
+        if (!filesByRepo.has(repo)) filesByRepo.set(repo, new Set());
+        filesByRepo.get(repo).add(c.source?.file || '');
+    }
+    const scopes = new Set();
+    for (const entry of raw) {
+        if (entry.includes(SCOPE_SEP)) { scopes.add(entry); continue; }
+        const files = filesByRepo.get(entry);
+        if (files && files.size) files.forEach(f => scopes.add(chapterScope(entry, f)));
+        else scopes.add(entry); // repo not loaded — keep as-is
+    }
+    return scopes;
+}
+
+/** Tri-state over an array of { repo, files } deck descriptors. */
+function scopeStarState(scopes, deckFiles) {
+    let total = 0, on = 0;
+    for (const { repo, files } of deckFiles) {
+        for (const f of files) { total++; if (scopes.has(chapterScope(repo, f))) on++; }
+    }
+    if (on === 0) return 'none';
+    if (on === total) return 'all';
+    return 'some';
+}
+
+function chapterIsActive(scopes, repo, file) {
+    return scopes.has(chapterScope(repo, file));
+}
+
+async function saveActiveScopes(scopes) {
+    habitSettings = await saveSettings({ activeDecks: [...scopes] });
+    await loadRepositories();
+}
+
+async function toggleChapterScope(repo, file) {
+    const scopes = resolveActiveScopes(await getAllCards());
+    const sc = chapterScope(repo, file);
+    if (scopes.has(sc)) scopes.delete(sc); else scopes.add(sc);
+    await saveActiveScopes(scopes);
+}
+
+/** Bulk toggle over decks: if all their chapters are active, clear; else set. */
+async function toggleScopes(deckFiles) {
+    const scopes = resolveActiveScopes(await getAllCards());
+    const activate = scopeStarState(scopes, deckFiles) !== 'all';
+    for (const { repo, files } of deckFiles) {
+        files.forEach(f => activate ? scopes.add(chapterScope(repo, f)) : scopes.delete(chapterScope(repo, f)));
+    }
+    await saveActiveScopes(scopes);
 }
 
 /**
@@ -2485,22 +2591,21 @@ async function startTodayStudySession() {
         return;
     }
 
-    isInStudySession = true;
-    currentStudyFile = 'today';
+    // Scope totals over the whole active (starred) scope, not just today's queue
+    const scopeSet = resolveActiveScopes(allCards);
+    const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
+    const now = new Date();
+    let total = 0, due = 0, fresh = 0;
+    for (const c of allCards) {
+        const repo = c.source?.repo || c.deckName;
+        if (!scopeSet.has(repo) && !scopeSet.has(chapterScope(repo, c.source?.file || ''))) continue;
+        total++;
+        const r = reviewMap.get(c.hash);
+        if (!r) fresh++;
+        else if (new Date(r.fsrsCard.due) <= now) due++;
+    }
 
-    const topicsGrid = document.getElementById('topics-grid');
-    const studyArea = document.getElementById('study-area');
-    const sessionComplete = document.getElementById('session-complete');
-    const hero = document.getElementById('today-hero');
-
-    topicsGrid.classList.add('hidden');
-    if (hero) hero.classList.add('hidden');
-    studyArea.classList.remove('hidden');
-    sessionComplete.classList.add('hidden');
-
-    updateDeckBreadcrumb();
-    setupStudyEventListeners();
-
+    enterStudyArea(['home', 'Starred scope'], { total, due, fresh });
     startTodaySession(queue, onSessionComplete, () => {});
 }
 

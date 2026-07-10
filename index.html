@@ -121,13 +121,6 @@
                         <button id="review-btn" class="review-btn" disabled>Review</button>
                         <span id="streak-badge" class="streak-badge hidden" title="Daily streak"></span>
                     </div>
-                    <div class="controls-row">
-                        <div class="view-toggle" id="view-toggle">
-                            <button id="view-tree" class="view-toggle-btn active" title="Tree view" aria-label="Tree view">☰</button>
-                            <button id="view-columns" class="view-toggle-btn" title="Column view" aria-label="Column view">▥</button>
-                            <button id="view-cards" class="view-toggle-btn" title="Card view" aria-label="Card view">▦</button>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Deck Navigation Breadcrumb -->
@@ -143,7 +136,8 @@
 
                 <!-- Study Session (hidden by default) -->
                 <div id="study-area" class="study-area hidden">
-                    <button id="study-back-btn" class="study-back-btn" title="Back to decks">← Decks</button>
+                    <div id="study-breadcrumb" class="study-breadcrumb"></div>
+                    <div id="study-scope-info" class="study-scope-info"></div>
                     <div class="study-progress project-stats">
                         <span class="progress-label">Progress:</span>
                         <div class="progress-bar-container">

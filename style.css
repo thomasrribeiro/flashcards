@@ -2177,3 +2177,35 @@ kbd {
     .columns-view { flex-direction: column; height: auto; }
     .col-pane { flex: none; border-right: none; border-bottom: 1px solid #ddd; height: calc(var(--col-row-h) * 5); }
 }
+
+/* ── Study session breadcrumb + scope info ── */
+
+.study-breadcrumb {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    font-size: 0.8rem;
+    margin-bottom: 4px;
+}
+
+.study-home-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--black);
+    text-decoration: underline;
+    padding: 0;
+}
+.study-home-btn:hover { opacity: 0.7; }
+
+.study-bc-seg { opacity: 0.75; }
+.study-bc-sep { opacity: 0.4; }
+
+.study-scope-info {
+    font-size: 0.75rem;
+    opacity: 0.55;
+    margin-bottom: 14px;
+}
