@@ -680,10 +680,16 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 // Selection path for the columns view (persists across re-renders)
 let columnsSel = { subject: null, deck: null, chapter: null };
 
-function colRow({ name, pct, star, hasChildren, selected, onClick }) {
+/**
+ * One columns row: optional inline star (left), name, then inline action
+ * icons (gavel / reset / delete) + a chevron for drillable items. No metadata
+ * — panes are pure item lists.
+ */
+function colRow({ name, star, actions, hasChildren, selected, onClick }) {
     const row = document.createElement('div');
     row.className = 'col-row' + (selected ? ' selected' : '');
     row.onclick = onClick;
+
     if (star) {
         const s = document.createElement('button');
         s.className = 'col-star' + (star.active ? ' active' : '');
@@ -694,93 +700,32 @@ function colRow({ name, pct, star, hasChildren, selected, onClick }) {
     } else {
         const sp = document.createElement('span'); sp.className = 'col-star-spacer'; row.appendChild(sp);
     }
+
     const nm = document.createElement('span'); nm.className = 'col-name'; nm.textContent = name;
-    const pctEl = document.createElement('span'); pctEl.className = 'col-pct'; pctEl.textContent = pct + '%';
+    row.appendChild(nm);
+
+    const acts = document.createElement('div'); acts.className = 'col-row-actions';
+    for (const a of (actions || [])) {
+        const b = document.createElement('button');
+        b.className = 'col-act' + (a.danger ? ' col-act-del' : '');
+        b.title = a.title;
+        b.innerHTML = a.html;
+        b.onclick = (e) => { e.stopPropagation(); a.onClick(); };
+        acts.appendChild(b);
+    }
     const chev = document.createElement('span');
-    chev.className = hasChildren ? 'col-chevron' : 'col-chevron-spacer';
+    chev.className = 'col-chevron';
     chev.textContent = hasChildren ? '›' : '';
-    row.append(nm, pctEl, chev);
+    acts.appendChild(chev);
+    row.appendChild(acts);
     return row;
 }
 
-/** Rightmost detail pane: stats + Review/Reset/Delete for the deepest selection. */
-function buildColumnsDetail(subjects, reviewMap, now) {
-    const pane = document.createElement('div');
-    pane.className = 'col-detail';
-    const { subject, deck, chapter } = columnsSel;
-    if (!subject || !subjects.has(subject)) {
-        pane.innerHTML = `<div class="col-detail-empty">Select a subject to see its details and review options.</div>`;
-        return pane;
-    }
-    const decks = subjects.get(subject);
-
-    let title, sub, cards, filterFn, level;
-    if (chapter && deck && decks.get(deck)?.has(chapter)) {
-        cards = decks.get(deck).get(chapter);
-        title = chapter.split('/').pop().replace(/\.md$/, '');
-        sub = `${subject} / ${deck.split('/').pop()}`;
-        filterFn = c => (c.source?.repo || c.deckName) === deck && c.source?.file === chapter;
-        level = 'chapter';
-    } else if (deck && decks.has(deck)) {
-        cards = [...decks.get(deck).values()].flat();
-        title = deck.split('/').pop();
-        sub = subject;
-        filterFn = c => (c.source?.repo || c.deckName) === deck;
-        level = 'deck';
-    } else {
-        const deckIds = [...decks.keys()];
-        cards = deckIds.flatMap(id => [...decks.get(id).values()].flat());
-        title = subject;
-        sub = `${deckIds.length} deck${deckIds.length === 1 ? '' : 's'}`;
-        filterFn = c => deckIds.includes(c.source?.repo || c.deckName);
-        level = 'subject';
-    }
-    const prog = scopeProgress(cards, reviewMap, now);
-
-    pane.innerHTML = `
-        <div class="col-detail-sub">${escapeHtml(sub)}</div>
-        <div class="col-detail-title">${escapeHtml(title)}</div>
-        <div class="col-detail-stats">
-            <div><strong>${prog.total}</strong><span>cards</span></div>
-            <div><strong>${prog.due}</strong><span>due</span></div>
-            <div><strong>${prog.fresh}</strong><span>new</span></div>
-            <div><strong>${prog.pct}%</strong><span>retained</span></div>
-        </div>`;
-
-    const reviewBtn = document.createElement('button');
-    reviewBtn.className = 'col-review-btn';
-    const toDo = prog.due + prog.fresh;
-    reviewBtn.textContent = toDo > 0 ? `Review · ${prog.due} due · ${prog.fresh} new` : 'Nothing due right now';
-    reviewBtn.disabled = toDo === 0;
-    reviewBtn.onclick = () => startScopedReview(filterFn, title);
-    pane.appendChild(reviewBtn);
-
-    const actions = document.createElement('div');
-    actions.className = 'col-detail-actions';
-    const resetB = document.createElement('button');
-    resetB.className = 'col-detail-act';
-    resetB.textContent = 'Reset progress';
-    resetB.onclick = () => {
-        if (level === 'chapter') resetScope([{ deckId: deck, file: chapter }], `Reset progress in "${title}"?`);
-        else if (level === 'deck') resetScope([{ deckId: deck }], `Reset all progress in "${title}"?`);
-        else resetScope([...decks.keys()].map(id => ({ deckId: id })), `Reset progress for all decks in "${title}"?`);
-    };
-    actions.appendChild(resetB);
-    if (level === 'deck') {
-        const delB = document.createElement('button');
-        delB.className = 'col-detail-act col-detail-del';
-        delB.textContent = 'Remove deck';
-        delB.onclick = () => deleteScope([deck], `Remove "${title}" from your collection?`);
-        actions.appendChild(delB);
-    }
-    pane.appendChild(actions);
-    return pane;
-}
-
 /**
- * Columns view: Subject | Deck | Chapter | Detail. Each pane scrolls
- * independently (long chapter lists never overflow). Star toggles inline;
- * review/reset/delete live in the detail pane for the selected item.
+ * Columns view: Subject | Deck | Chapter | (blank filler). Each pane is a pure
+ * list with all actions inline; panes scroll vertically on their own; the whole
+ * strip scrolls horizontally if it's too wide. Height fits the tallest column
+ * up to a max, then that column scrolls.
  */
 function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid) {
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
@@ -788,7 +733,6 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
     const active = new Set(habitSettings?.activeDecks || []);
     const term = (searchTerm || '').toLowerCase();
     const fileBase = f => f.split('/').pop().replace(/\.md$/, '');
-    const pct = cards => scopeProgress(cards, reviewMap, now).pct;
 
     // Build Subject → Deck → File → cards
     const deckById = new Map(displayDecks.map(d => [d.id, d]));
@@ -834,11 +778,14 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
         .map(subject => {
             const decks = subjects.get(subject);
             const deckIds = [...decks.keys()];
-            const cards = deckIds.flatMap(id => [...decks.get(id).values()].flat());
             const starState = subjectStarState(deckIds);
             return colRow({
-                name: subject, pct: pct(cards),
+                name: subject,
                 star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Unfocus subject' : 'Focus all decks in subject', onClick: () => toggleActiveSubject(deckIds) },
+                actions: [
+                    { html: GAVEL_IMG, title: `Review ${subject} (due + new)`, onClick: () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject) },
+                    { html: RESET_IMG, title: `Reset all progress in ${subject}`, onClick: () => resetScope(deckIds.map(id => ({ deckId: id })), `Reset progress for all ${deckIds.length} decks in "${subject}"?`) }
+                ],
                 hasChildren: true, selected: columnsSel.subject === subject,
                 onClick: () => { columnsSel = { subject, deck: null, chapter: null }; loadRepositories(); }
             });
@@ -851,11 +798,16 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
         let deckIds = [...decks.keys()].sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()));
         if (term) deckIds = deckIds.filter(id => id.split('/').pop().toLowerCase().includes(term) || [...decks.get(id).keys()].some(f => fileBase(f).toLowerCase().includes(term)));
         const p2 = deckIds.map(deckId => {
-            const cards = [...decks.get(deckId).values()].flat();
             const isActive = active.has(deckId);
+            const deckName = deckId.split('/').pop();
             return colRow({
-                name: deckId.split('/').pop(), pct: pct(cards),
+                name: deckName,
                 star: { glyph: isActive ? '★' : '☆', active: isActive, title: isActive ? 'Remove from daily focus' : 'Add to daily focus', onClick: () => toggleActiveDeck(deckId) },
+                actions: [
+                    { html: GAVEL_IMG, title: 'Review this deck (due + new)', onClick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName) },
+                    { html: RESET_IMG, title: 'Reset progress in this deck', onClick: () => resetScope([{ deckId }], `Reset all progress in "${deckName}"?`) },
+                    { html: '×', danger: true, title: 'Remove this deck', onClick: () => deleteScope([deckId], `Remove "${deckName}" from your collection?`) }
+                ],
                 hasChildren: true, selected: columnsSel.deck === deckId,
                 onClick: () => { columnsSel = { subject: columnsSel.subject, deck: deckId, chapter: null }; loadRepositories(); }
             });
@@ -865,18 +817,31 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
 
     // Pane 3 — chapters in the selected deck
     if (columnsSel.subject && columnsSel.deck && subjects.get(columnsSel.subject)?.has(columnsSel.deck)) {
-        const files = subjects.get(columnsSel.subject).get(columnsSel.deck);
+        const deckId = columnsSel.deck;
+        const files = subjects.get(columnsSel.subject).get(deckId);
         let fileList = [...files.keys()].sort((a, b) => a.localeCompare(b));
         if (term) fileList = fileList.filter(f => fileBase(f).toLowerCase().includes(term));
-        const p3 = fileList.map(file => colRow({
-            name: fileBase(file), pct: pct(files.get(file)),
-            star: null, hasChildren: false, selected: columnsSel.chapter === file,
-            onClick: () => { columnsSel = { subject: columnsSel.subject, deck: columnsSel.deck, chapter: file }; loadRepositories(); }
-        }));
+        const p3 = fileList.map(file => {
+            const chName = fileBase(file);
+            const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName);
+            return colRow({
+                name: chName, star: null,
+                actions: [
+                    { html: GAVEL_IMG, title: 'Review this chapter (due + new)', onClick: review },
+                    { html: RESET_IMG, title: 'Reset progress in this chapter', onClick: () => resetScope([{ deckId, file }], `Reset progress in "${chName}"?`) }
+                ],
+                hasChildren: false, selected: columnsSel.chapter === file,
+                onClick: review
+            });
+        });
         wrap.appendChild(makePane(p3));
     }
 
-    wrap.appendChild(buildColumnsDetail(subjects, reviewMap, now));
+    // Blank filler pane extends to the end
+    const filler = document.createElement('div');
+    filler.className = 'col-filler';
+    wrap.appendChild(filler);
+
     grid.appendChild(wrap);
     for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
     renderEvictedNotice();
