@@ -10,9 +10,16 @@ function card(hash, deck, order = null, file = '') {
 }
 
 describe('buildTodayQueue', () => {
-    it('returns empty when no decks are active', () => {
+    it('returns empty with no active scope and no learned cards due', () => {
         const cards = [card('a', 'deck1')];
         expect(buildTodayQueue({ cards, reviews: [], activeDeckIds: [], now })).toEqual([]);
+    });
+
+    it('includes due learned cards even when their deck is not active', () => {
+        const cards = [card('due', 'deck1'), card('new', 'deck1')];
+        const reviews = [{ cardHash: 'due', fsrsCard: { due: past.toISOString() } }];
+        const q = buildTodayQueue({ cards, reviews, activeDeckIds: [], newPerDay: 10, now });
+        expect(q.map(c => c.cardHash)).toEqual(['due']);
     });
 
     it('includes new (never-reviewed) cards from active decks only', () => {
@@ -22,8 +29,8 @@ describe('buildTodayQueue', () => {
         expect(q[0].fsrsCard).toBeNull();
     });
 
-    it('includes reviewed cards that are due, excludes those not yet due', () => {
-        const cards = [card('due', 'deck1'), card('notdue', 'deck1')];
+    it('includes due reviewed cards globally and excludes those not yet due', () => {
+        const cards = [card('due', 'deck2'), card('notdue', 'deck2')];
         const reviews = [
             { cardHash: 'due', fsrsCard: { due: past.toISOString() } },
             { cardHash: 'notdue', fsrsCard: { due: future.toISOString() } }
@@ -58,6 +65,13 @@ describe('buildTodayQueue', () => {
         ];
         const q = buildTodayQueue({ cards, reviews, activeDeckIds: ['deck1'], newPerDay: 10, now });
         expect(q.map(c => c.cardHash)).toEqual(['dueOld', 'dueRecent', 'new1', 'new2']);
+    });
+
+    it('puts globally due cards before new cards from the active scope', () => {
+        const cards = [card('new', 'active', 1), card('due', 'inactive')];
+        const reviews = [{ cardHash: 'due', fsrsCard: { due: past.toISOString() } }];
+        const q = buildTodayQueue({ cards, reviews, activeDeckIds: ['active'], newPerDay: 10, now });
+        expect(q.map(c => c.cardHash)).toEqual(['due', 'new']);
     });
 
     it('accepts Date objects for due as well as ISO strings', () => {

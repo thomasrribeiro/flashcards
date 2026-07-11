@@ -30,6 +30,21 @@ import './card-editor.css';
  */
 function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
+
+    // Vite's source files are not content-hashed. A production service worker
+    // left behind on localhost can otherwise keep serving an obsolete UI.
+    if (import.meta.env.DEV) {
+        navigator.serviceWorker.getRegistrations()
+            .then(registrations => Promise.all(registrations.map(reg => reg.unregister())))
+            .catch(() => {});
+        if ('caches' in window) {
+            caches.keys()
+                .then(names => Promise.all(names.map(name => caches.delete(name))))
+                .catch(() => {});
+        }
+        return;
+    }
+
     window.addEventListener('load', () => {
         const swUrl = `${import.meta.env.BASE_URL}sw.js`;
         navigator.serviceWorker.register(swUrl, { scope: import.meta.env.BASE_URL })
@@ -44,9 +59,6 @@ async function init() {
     try {
         await initDB();
         console.log('DB initialized');
-
-        const grid = document.getElementById('topics-grid');
-        grid.innerHTML = '<div class="loading">Loading collection...</div>';
 
         const isAuthenticated = githubAuth.isAuthenticated();
 
@@ -133,17 +145,8 @@ async function loadUserRepos() {
 
     console.log(`[Main] Loading ${repos.length} repos from D1:`, repos.map(r => r.id));
 
-    const grid = document.getElementById('topics-grid');
-    const total = repos.length;
-    let loaded = 0;
     const failedRepos = [];
     const evicted = [];
-
-    const renderProgress = () => {
-        if (!grid) return;
-        grid.innerHTML = `<div class="loading">Loading your decks… (${loaded}/${total})</div>`;
-    };
-    renderProgress();
 
     // Load all repos in parallel — each repo already parallelises its own file fetches
     await Promise.all(repos.map(async (repo) => {
@@ -163,9 +166,6 @@ async function loadUserRepos() {
                 console.error(`[Main] Failed to load repo ${repo.id}:`, error);
                 failedRepos.push({ id: repo.id, name: displayName, error: error.message });
             }
-        } finally {
-            loaded++;
-            renderProgress();
         }
     }));
 
@@ -217,15 +217,7 @@ async function loadUnloggedGitHubRepos() {
 
     console.log(`[Main] Re-fetching ${ids.length} unlogged repos:`, ids);
 
-    const grid = document.getElementById('topics-grid');
-    let loaded = 0;
     const failed = [];
-
-    const renderProgress = () => {
-        if (!grid) return;
-        grid.innerHTML = `<div class="loading">Loading your decks… (${loaded}/${ids.length})</div>`;
-    };
-    renderProgress();
 
     await Promise.all(ids.map(async (id) => {
         try {
@@ -233,9 +225,6 @@ async function loadUnloggedGitHubRepos() {
         } catch (error) {
             console.error(`[Main] Failed to reload unlogged repo ${id}:`, error);
             failed.push({ id, name: id.split('/').pop(), error: error.message });
-        } finally {
-            loaded++;
-            renderProgress();
         }
     }));
 
@@ -316,30 +305,6 @@ async function loadRepositories() {
         const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
         const breadcrumb = document.getElementById('deck-breadcrumb');
 
-        // Global search: bypass category navigation, show all matching decks flat
-        if (searchTerm && !currentDeck) {
-            if (breadcrumb) breadcrumb.classList.add('hidden');
-
-            const filtered = displayDecks.filter(deck =>
-                deck.id.split('/').pop().toLowerCase().includes(searchTerm)
-            );
-
-            if (filtered.length === 0) {
-                grid.innerHTML = '<div class="loading">No decks match your search.</div>';
-            } else {
-                for (const deck of filtered) {
-                    const deckCards = allCards.filter(c => c.deckName === deck.id);
-                    const deckReviews = allReviews.filter(r => deckCards.some(c => c.hash === r.cardHash));
-                    grid.appendChild(createDeckCard({
-                        ...deck,
-                        cards: deckCards,
-                        reviews: new Map(deckReviews.map(r => [r.cardHash, r]))
-                    }));
-                }
-            }
-            return;
-        }
-
         if (currentCategory === null) {
             // HOME LEVEL: tree (default), columns, or legacy category-card grid
             grid.classList.toggle('tree-mode', deckViewMode === 'tree');
@@ -355,7 +320,7 @@ async function loadRepositories() {
             grid.classList.remove('tree-mode', 'columns-mode');
             // CATEGORY LEVEL: render deck cards for the current category
             const filteredDecks = displayDecks.filter(deck => {
-                const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim().toLowerCase() : 'misc';
+                const subject = subjectSlug(deck.subject);
                 return subject === currentCategory;
             });
 
@@ -407,6 +372,15 @@ function treeToggle(key, hasActive) {
 
 const GAVEL_IMG = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review" style="width:13px;height:13px;">`;
 const RESET_IMG = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset" style="width:13px;height:13px;">`;
+
+/** Match the lowercase kebab-case convention used by deck names. */
+function subjectSlug(subject) {
+    return (subject || 'misc')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'misc';
+}
 
 /** Progress over a set of cards: retained (reviewed & not due) / total. */
 function scopeProgress(cards, reviewMap, now) {
@@ -573,7 +547,7 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
     const now = new Date();
     const active = new Set(habitSettings?.activeDecks || []);
-    const term = (searchTerm || '').toLowerCase();
+    const term = (searchTerm || '').trim().toLowerCase();
     const fileBase = f => f.split('/').pop().replace(/\.md$/, '');
 
     // Build Subject → Deck → File → cards from loaded cards
@@ -583,7 +557,7 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
         const deckId = card.source?.repo || card.deckName;
         const deck = deckById.get(deckId);
         if (!deck) continue;
-        const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim() : 'Misc';
+        const subject = subjectSlug(deck.subject);
         if (!subjects.has(subject)) subjects.set(subject, new Map());
         const decks = subjects.get(subject);
         if (!decks.has(deckId)) decks.set(deckId, new Map());
@@ -593,7 +567,7 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
         files.get(file).push(card);
     }
     const subjectNames = [...subjects.keys()].sort((a, b) =>
-        a === 'Misc' ? 1 : b === 'Misc' ? -1 : a.localeCompare(b));
+        a === 'misc' ? 1 : b === 'misc' ? -1 : a.localeCompare(b));
 
     grid.innerHTML = '';
     const tree = document.createElement('div');
@@ -783,7 +757,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
         const deckId = card.source?.repo || card.deckName;
         const deck = deckById.get(deckId);
         if (!deck) continue;
-        const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim() : 'Misc';
+        const subject = subjectSlug(deck.subject);
         if (!subjects.has(subject)) subjects.set(subject, new Map());
         const decks = subjects.get(subject);
         if (!decks.has(deckId)) decks.set(deckId, new Map());
@@ -792,12 +766,35 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
         if (!files.has(file)) files.set(file, []);
         files.get(file).push(card);
     }
-    const subjectNames = [...subjects.keys()].sort((a, b) => a === 'Misc' ? 1 : b === 'Misc' ? -1 : a.localeCompare(b));
+    const subjectNames = [...subjects.keys()].sort((a, b) => a === 'misc' ? 1 : b === 'misc' ? -1 : a.localeCompare(b));
 
-    // Prune a stale selection (e.g. after a delete)
+    const sortedDeckIds = subject => [...subjects.get(subject).keys()]
+        .sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()));
+    const matchingDecks = new Map(subjectNames.map(subject => [
+        subject,
+        sortedDeckIds(subject).filter(id => id.split('/').pop().toLowerCase().includes(term))
+    ]));
+    const visibleSubjectNames = term
+        ? subjectNames.filter(subject => matchingDecks.get(subject).length > 0)
+        : subjectNames;
+
+    // Prune a stale selection (e.g. after a delete).
     if (columnsSel.subject && !subjects.has(columnsSel.subject)) columnsSel = { subject: null, deck: null, chapter: null };
     if (columnsSel.deck && !subjects.get(columnsSel.subject)?.has(columnsSel.deck)) { columnsSel.deck = null; columnsSel.chapter = null; }
     if (columnsSel.chapter && !subjects.get(columnsSel.subject)?.get(columnsSel.deck)?.has(columnsSel.chapter)) columnsSel.chapter = null;
+
+    // Search is global across deck names. Keep every subject containing a
+    // match, and default the remaining panes to the first matching deck.
+    if (term) {
+        if (!visibleSubjectNames.includes(columnsSel.subject)) {
+            columnsSel = { subject: visibleSubjectNames[0] || null, deck: null, chapter: null };
+        }
+        const subjectMatches = columnsSel.subject ? matchingDecks.get(columnsSel.subject) || [] : [];
+        if (!subjectMatches.includes(columnsSel.deck)) {
+            columnsSel.deck = subjectMatches[0] || null;
+            columnsSel.chapter = null;
+        }
+    }
 
     grid.innerHTML = '';
     if (subjectNames.length === 0) { grid.innerHTML = `<div class="loading">No decks yet.</div>`; return; }
@@ -813,10 +810,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
     };
 
     // Pane 1 — subjects
-    const p1 = subjectNames
-        .filter(s => !term || s.toLowerCase().includes(term) ||
-            [...subjects.get(s).keys()].some(id => id.split('/').pop().toLowerCase().includes(term) ||
-                [...subjects.get(s).get(id).keys()].some(f => fileBase(f).toLowerCase().includes(term))))
+    const p1 = visibleSubjectNames
         .map(subject => {
             const decks = subjects.get(subject);
             const deckIds = [...decks.keys()];
@@ -838,8 +832,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
     let p2 = [];
     if (columnsSel.subject && subjects.has(columnsSel.subject)) {
         const decks = subjects.get(columnsSel.subject);
-        let deckIds = [...decks.keys()].sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()));
-        if (term) deckIds = deckIds.filter(id => id.split('/').pop().toLowerCase().includes(term) || [...decks.get(id).keys()].some(f => fileBase(f).toLowerCase().includes(term)));
+        const deckIds = term ? matchingDecks.get(columnsSel.subject) : sortedDeckIds(columnsSel.subject);
         p2 = deckIds.map(deckId => {
             const deckName = deckId.split('/').pop();
             const deckFiles = [filesOf(decks)(deckId)];
@@ -864,8 +857,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
     if (columnsSel.subject && columnsSel.deck && subjects.get(columnsSel.subject)?.has(columnsSel.deck)) {
         const deckId = columnsSel.deck;
         const files = subjects.get(columnsSel.subject).get(deckId);
-        let fileList = [...files.keys()].sort((a, b) => a.localeCompare(b));
-        if (term) fileList = fileList.filter(f => fileBase(f).toLowerCase().includes(term));
+        const fileList = [...files.keys()].sort((a, b) => a.localeCompare(b));
         const deckName = deckId.split('/').pop();
         p3 = fileList.map(file => {
             const chName = fileBase(file);
@@ -903,7 +895,7 @@ function _renderCategoryGrid(displayDecks, allCards, allReviews, searchTerm, gri
     // Group decks by subject
     const categoryMap = new Map();
     for (const deck of groupedDecks) {
-        const subject = (deck.subject && deck.subject.trim()) ? deck.subject.trim().toLowerCase() : 'misc';
+        const subject = subjectSlug(deck.subject);
         if (!categoryMap.has(subject)) categoryMap.set(subject, []);
         categoryMap.get(subject).push(deck);
     }
@@ -1806,17 +1798,9 @@ export async function loadLocalCollectionRepos() {
         const index = await indexResponse.json();
         console.log(`[Main] Found ${index.repos.length} repos in collection`);
 
-        const grid = document.getElementById('topics-grid');
-
         // Load each repo from the index
         for (let i = 0; i < index.repos.length; i++) {
             const repoInfo = index.repos[i];
-
-            // Update loading status with specific deck name and progress
-            if (grid) {
-                grid.innerHTML = `<div class="loading">Loading ${repoInfo.name}... (${i + 1}/${index.repos.length})</div>`;
-            }
-
             await loadLocalRepo(repoInfo);
         }
 
@@ -2363,8 +2347,8 @@ function exitDeckNavigation() {
  */
 /**
  * Update the primary Review button (scheduled session across active decks)
- * and the streak badge. The Review button is the daily driver; it's disabled
- * until at least one deck is starred active.
+ * and the streak badge. The Review button is the daily driver; it stays enabled
+ * whenever learned material is due, even if no item is currently starred.
  */
 async function renderReviewButton() {
     const btn = document.getElementById('review-btn');
@@ -2376,13 +2360,6 @@ async function renderReviewButton() {
         updateStreakBadge(status);
 
         const active = habitSettings.activeDecks || [];
-
-        if (active.length === 0) {
-            btn.disabled = true;
-            btn.textContent = 'Review';
-            btn.title = 'Star decks (★) to build your daily review';
-            return;
-        }
 
         const allCards = await getAllCards();
         const allReviews = await getAllReviews();
@@ -2396,12 +2373,16 @@ async function renderReviewButton() {
 
         if (counts.total === 0) {
             btn.disabled = true;
-            btn.textContent = 'All clear for today 🎉';
-            btn.title = status.today.goalMet ? 'Daily goal met' : 'Nothing due right now';
+            btn.textContent = active.length === 0 ? 'Review' : 'All clear for today 🎉';
+            btn.title = active.length === 0
+                ? 'Nothing is due. Star items (★) to add new material.'
+                : (status.today.goalMet ? 'Daily goal met' : 'Nothing due right now');
         } else {
             btn.disabled = false;
             btn.textContent = `Review · ${counts.due} due · ${counts.fresh} new`;
-            btn.title = `Review your ${active.length} active deck${active.length === 1 ? '' : 's'}`;
+            btn.title = counts.due > 0
+                ? 'Review learned material first, then new cards from your starred scope'
+                : 'Learn new cards from your starred scope';
         }
     } catch (error) {
         console.error('[Main] Failed to render Review button:', error);
@@ -2591,21 +2572,23 @@ async function startTodayStudySession() {
         return;
     }
 
-    // Scope totals over the whole active (starred) scope, not just today's queue
+    // Summary covers the active scope plus learned cards that are due globally.
     const scopeSet = resolveActiveScopes(allCards);
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
     const now = new Date();
     let total = 0, due = 0, fresh = 0;
     for (const c of allCards) {
         const repo = c.source?.repo || c.deckName;
-        if (!scopeSet.has(repo) && !scopeSet.has(chapterScope(repo, c.source?.file || ''))) continue;
-        total++;
+        const inActiveScope = scopeSet.has(repo) || scopeSet.has(chapterScope(repo, c.source?.file || ''));
         const r = reviewMap.get(c.hash);
+        const isDue = Boolean(r && new Date(r.fsrsCard.due) <= now);
+        if (!inActiveScope && !isDue) continue;
+        total++;
         if (!r) fresh++;
-        else if (new Date(r.fsrsCard.due) <= now) due++;
+        else if (isDue) due++;
     }
 
-    enterStudyArea(['home', 'Starred scope'], { total, due, fresh });
+    enterStudyArea(['home', 'Daily review'], { total, due, fresh });
     startTodaySession(queue, onSessionComplete, () => {});
 }
 

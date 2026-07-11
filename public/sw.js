@@ -13,7 +13,7 @@
  * Also handles Web Push (see B3): a push shows a notification; a tap opens the app.
  */
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = `shell-${VERSION}`;
 const ASSET_CACHE = `assets-${VERSION}`;
 const GH_CACHE = `github-${VERSION}`;
@@ -93,6 +93,12 @@ self.addEventListener('fetch', event => {
 
     // Same-origin
     if (url.origin === self.location.origin) {
+        // Never cache Vite's unhashed development modules. This also makes a
+        // localhost worker left over from a production preview self-healing.
+        if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+            event.respondWith(fetch(request));
+            return;
+        }
         if (isNavigation(request)) {
             // scope root (e.g. /flashcards/) is the shell fallback
             const shellUrl = new URL('./', self.registration.scope).toString();

@@ -1815,7 +1815,6 @@ kbd {
 .view-tab:hover {
     opacity: 1;
     text-decoration: none;
-    background: var(--light-gray);
 }
 
 /* ── Deck tree (home view) ── */
