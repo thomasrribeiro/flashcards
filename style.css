@@ -1383,8 +1383,8 @@ kbd {
 .controls-bar {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-bottom: 24px;
+    gap: 16px;
+    margin-bottom: 8px;
     margin-top: 20px;
 }
 
@@ -1393,6 +1393,39 @@ kbd {
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+}
+
+.review-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.review-loading {
+    margin-bottom: 8px;
+    font-size: 0.75rem;
+}
+
+.review-loading-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+
+.review-loading-track {
+    height: 6px;
+    overflow: hidden;
+    background: #e0e0e0;
+    border-radius: 3px;
+}
+
+.review-loading-fill {
+    width: 0;
+    height: 100%;
+    background: var(--gold);
+    border-radius: inherit;
+    transition: width 0.15s ease;
 }
 
 .view-toggle-btn {
@@ -2179,13 +2212,20 @@ kbd {
 
 /* ── Study session breadcrumb + scope info ── */
 
+.study-header-row {
+    display: flex;
+    align-items: baseline;
+    max-width: 640px;
+    margin-bottom: 4px;
+}
+
 .study-breadcrumb {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 4px;
     font-size: 0.8rem;
-    margin-bottom: 4px;
+    min-width: 0;
 }
 
 .study-home-btn {
@@ -2202,9 +2242,15 @@ kbd {
 
 .study-bc-seg { opacity: 0.75; }
 .study-bc-sep { opacity: 0.4; }
+.study-bc-root { opacity: 0.75; }
 
 .study-scope-info {
     font-size: 0.75rem;
     opacity: 0.55;
-    margin-bottom: 14px;
+    max-width: 640px;
+    margin: 14px 0 0;
+    white-space: nowrap;
 }
+
+.study-progress { margin-top: 0; }
+.study-progress .progress-percent { width: 4ch; text-align: right; }

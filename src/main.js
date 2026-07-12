@@ -3,13 +3,13 @@
  */
 
 import { initDB, getAllCards, getAllReviews, getStats, getAllRepos, getAllDecks, getAllTopics, clearReviewsByDeck, saveCards, saveRepoMetadata } from './storage.js';
-import { loadRepository, removeRepository } from './repo-manager.js';
+import { loadRepository, loadRepositoryFiles, loadRepositoryMetadata, removeRepository } from './repo-manager.js';
 import { parseDeck } from './parser.js';
 import { hashCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories, getOrgRepositories } from './github-client.js';
 import { githubAuth } from './github-auth.js';
 import { startSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
-import { buildTodayQueue, todayQueueCounts, SCOPE_SEP } from './today-queue.js';
+import { buildTodayQueue, SCOPE_SEP } from './today-queue.js';
 import { getSettings, saveSettings, getHabitStatus, levelForXp } from './habit-client.js';
 import { renderDashboard } from './dashboard.js';
 import { getPushState, subscribeToPush } from './push-client.js';
@@ -60,7 +60,13 @@ async function init() {
         await initDB();
         console.log('DB initialized');
 
+        const grid = document.getElementById('topics-grid');
+        if (grid) grid.innerHTML = '<div class="loading">Loading collection...</div>';
+
         const isAuthenticated = githubAuth.isAuthenticated();
+        // Fetch the saved scope alongside repository metadata, but do not render
+        // columns until both are ready. Otherwise the first paint shows no stars.
+        const habitSettingsPromise = getSettings();
 
         if (!isAuthenticated) {
             // Seed the example deck on first unlogged visit so new users see
@@ -77,14 +83,15 @@ async function init() {
             console.log('User repos loaded from D1');
         }
 
+        habitSettings = await habitSettingsPromise;
+
         console.log('About to load repositories...');
         await loadRepositories();
         console.log('Repositories loaded');
 
-        // Load habit settings (active decks, daily goal) and render the
-        // Today hero + streak badge
-        habitSettings = await getSettings();
+        // Render the primary action and streak after the starred scope is shown.
         await renderReviewButton();
+        scheduleDailyPreparation();
 
         // Deep link from a push notification: jump straight into Today
         if (new URL(window.location).searchParams.get('today') === '1') {
@@ -135,7 +142,7 @@ async function init() {
  */
 async function loadUserRepos() {
     const { loadReposFromD1 } = await import('./storage.js');
-    const { loadRepository, removeRepository } = await import('./repo-manager.js');
+    const { loadRepositoryMetadata, removeRepository } = await import('./repo-manager.js');
 
     const repos = await loadReposFromD1();
     if (!repos || repos.length === 0) {
@@ -148,12 +155,12 @@ async function loadUserRepos() {
     const failedRepos = [];
     const evicted = [];
 
-    // Load all repos in parallel — each repo already parallelises its own file fetches
+    // Load only repo metadata + file trees in parallel. Card bodies are lazy.
     await Promise.all(repos.map(async (repo) => {
         const displayName = repo.id.split('/').pop();
         try {
-            await loadRepository(repo.id);
-            console.log(`[Main] Loaded repo: ${repo.id}`);
+            await loadRepositoryMetadata(repo.id);
+            console.log(`[Main] Loaded repo metadata: ${repo.id}`);
         } catch (error) {
             if (error.status === 404) {
                 // Repo is gone or has moved — silently evict the stale D1 entry
@@ -173,12 +180,8 @@ async function loadUserRepos() {
     window.__failedRepos = failedRepos;
     window.__evictedRepos = evicted;
 
-    // Clean up orphaned reviews after loading all repos
-    const { cleanupOrphanedReviews } = await import('./storage.js');
-    const cleaned = await cleanupOrphanedReviews();
-    if (cleaned > 0) {
-        console.log(`[Main] Cleaned up ${cleaned} orphaned reviews`);
-    }
+    // Orphan cleanup requires complete card hashes, so it runs only after a
+    // repository has been fully loaded for review.
 }
 
 const EXAMPLE_REPO_ID = 'thomasrribeiro-flashcards/example';
@@ -210,7 +213,7 @@ function seedExampleRepoOnFirstVisit() {
  */
 async function loadUnloggedGitHubRepos() {
     const { getUnloggedRepoList } = await import('./storage.js');
-    const { loadRepository } = await import('./repo-manager.js');
+    const { loadRepositoryMetadata } = await import('./repo-manager.js');
 
     const ids = getUnloggedRepoList();
     if (ids.length === 0) return;
@@ -221,7 +224,7 @@ async function loadUnloggedGitHubRepos() {
 
     await Promise.all(ids.map(async (id) => {
         try {
-            await loadRepository(id);
+            await loadRepositoryMetadata(id);
         } catch (error) {
             console.error(`[Main] Failed to reload unlogged repo ${id}:`, error);
             failed.push({ id, name: id.split('/').pop(), error: error.message });
@@ -412,15 +415,41 @@ function treeActionBtn(cls, title, html, onclick) {
  */
 function enterStudyArea(breadcrumb, scope) {
     isInStudySession = true;
+    setHomeReviewVisible(false);
     document.getElementById('topics-grid')?.classList.add('hidden');
     document.getElementById('dashboard')?.classList.add('hidden');
     document.getElementById('study-area')?.classList.remove('hidden');
     document.getElementById('session-complete')?.classList.add('hidden');
 
+    renderStudyBreadcrumb(breadcrumb || ['home']);
+
+    const info = document.getElementById('study-scope-info');
+    if (info && scope) {
+        info.textContent = `${scope.total} card${scope.total === 1 ? '' : 's'} · ${scope.due} due`;
+    }
+
+    setupStudyEventListeners();
+}
+
+function setHomeReviewVisible(visible) {
+    document.getElementById('controls-bar')?.classList.toggle('hidden', !visible);
+    document.querySelector('.review-row')?.classList.toggle('hidden', !visible);
+}
+
+/** Render the study path with a permanently clickable home segment. */
+function renderStudyBreadcrumb(segments) {
     const bc = document.getElementById('study-breadcrumb');
     if (bc) {
         bc.innerHTML = '';
-        (breadcrumb || ['home']).forEach((seg, i, arr) => {
+        const root = document.createElement('span');
+        root.className = 'study-bc-root';
+        root.textContent = '~';
+        bc.appendChild(root);
+        const rootSep = document.createElement('span');
+        rootSep.className = 'study-bc-sep';
+        rootSep.textContent = '/';
+        bc.appendChild(rootSep);
+        (segments || ['home']).forEach((seg, i, arr) => {
             if (i === 0) {
                 const home = document.createElement('button');
                 home.className = 'study-home-btn';
@@ -441,13 +470,17 @@ function enterStudyArea(breadcrumb, scope) {
             }
         });
     }
+}
 
-    const info = document.getElementById('study-scope-info');
-    if (info && scope) {
-        info.textContent = `${scope.total} card${scope.total === 1 ? '' : 's'} in scope · ${scope.due} due · ${scope.fresh} new`;
-    }
-
-    setupStudyEventListeners();
+/** Keep the breadcrumb synchronized with the chapter of the visible card. */
+function renderStudyCardBreadcrumb(card) {
+    if (!card) return;
+    const deckId = card.source?.repo || card.deckName || '';
+    const deckName = deckId.split('/').pop();
+    const subject = subjectSlug(card.deckMetadata?.subject);
+    const chapter = (card.source?.file || '')
+        .split('/').pop().replace(/\.md$/, '');
+    renderStudyBreadcrumb(['home', subject, deckName, chapter].filter(Boolean));
 }
 
 /**
@@ -455,8 +488,24 @@ function enterStudyArea(breadcrumb, scope) {
  * @param {Function} filterFn - selects the cards in scope
  * @param {string} label - short scope label
  * @param {Array<string>} breadcrumb - path for the study header
+ * @param {Array<string>} repoIds - repositories whose card bodies are needed
  */
-async function startScopedReview(filterFn, label, breadcrumb) {
+let scopedReviewLoading = false;
+
+async function startScopedReview(filterFn, label, breadcrumb, repoIds = [], fileSpecs = null) {
+    if (scopedReviewLoading) return;
+    scopedReviewLoading = true;
+    showReviewLoading(label);
+    try {
+        await ensureRepositoriesLoaded(repoIds, updateReviewLoading, fileSpecs);
+    } catch (error) {
+        console.error('[Main] Failed to load scoped review:', error);
+        alert('Review content could not be loaded. Check your connection and try again.');
+        return;
+    } finally {
+        scopedReviewLoading = false;
+        hideReviewLoading();
+    }
     const allCards = await getAllCards();
     const allReviews = await getAllReviews();
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
@@ -480,7 +529,152 @@ async function startScopedReview(filterFn, label, breadcrumb) {
         return;
     }
     enterStudyArea(breadcrumb || ['home', label], { total, due: due.length, fresh: fresh.length });
-    startTodaySession(queue, onSessionComplete, () => {});
+    startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb);
+}
+
+/** Fetch and parse card bodies only when a review action needs them. */
+async function ensureRepositoriesLoaded(repoIds, onProgress = null, fileSpecs = null) {
+    const unique = [...new Set((repoIds || []).filter(Boolean))];
+    if (unique.length === 0) {
+        onProgress?.({ completed: 0, total: 0 });
+        return;
+    }
+    const decks = new Map((await getAllDecks()).map(deck => [deck.id, deck]));
+    const loadedCards = await getAllCards();
+    const loadedFiles = new Set(loadedCards.map(card =>
+        `${card.source?.repo || card.deckName}\0${card.source?.file || ''}`));
+    const requestedFiles = fileSpecs || unique.filter(repoId => !repoId.startsWith('local/')).flatMap(repoId =>
+        (decks.get(repoId)?.files || []).map(file => ({
+            repo: repoId,
+            path: typeof file === 'string' ? file : file.path
+        }))
+    );
+    const files = requestedFiles.filter(({ repo, path }) =>
+        !repo.startsWith('local/') && !loadedFiles.has(`${repo}\0${path}`));
+    let completed = 0;
+    onProgress?.({ completed, total: files.length });
+    await mapWithConcurrency(files, 4, async ({ repo, path }) => {
+        await loadRepositoryFiles(repo, [path]);
+        completed++;
+        onProgress?.({ completed, total: files.length });
+    });
+}
+
+function showReviewLoading(label) {
+    const loader = document.getElementById('review-loading');
+    const labelEl = document.getElementById('review-loading-label');
+    const count = document.getElementById('review-loading-count');
+    const fill = document.getElementById('review-loading-fill');
+    if (labelEl) labelEl.textContent = `Loading ${label || 'review'}...`;
+    if (count) count.textContent = '0/0';
+    if (fill) fill.style.width = '0%';
+    loader?.classList.remove('hidden');
+}
+
+function updateReviewLoading({ completed, total }) {
+    const count = document.getElementById('review-loading-count');
+    const fill = document.getElementById('review-loading-fill');
+    if (count) count.textContent = `${completed}/${total}`;
+    if (fill) fill.style.width = `${total ? Math.round(completed / total * 100) : 100}%`;
+}
+
+function hideReviewLoading() {
+    document.getElementById('review-loading')?.classList.add('hidden');
+}
+
+async function mapWithConcurrency(items, limit, worker) {
+    const queue = [...items];
+    const runners = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+        while (queue.length) await worker(queue.shift());
+    });
+    await Promise.all(runners);
+}
+
+let dailyPreparationPromise = Promise.resolve();
+
+/** Queue preparation serially so star changes never duplicate active fetches. */
+function queueDailyPreparation() {
+    dailyPreparationPromise = dailyPreparationPromise
+        .catch(error => console.warn('[Main] Prior daily preparation failed:', error))
+        .then(() => prepareDailyContent());
+    return dailyPreparationPromise;
+}
+
+function scheduleDailyPreparation() {
+    const begin = () => queueDailyPreparation().catch(error =>
+        console.warn('[Main] Background review preparation failed:', error));
+    if ('requestIdleCallback' in window) window.requestIdleCallback(begin, { timeout: 1000 });
+    else setTimeout(begin, 0);
+}
+
+/**
+ * Prepare exact overdue files first, then starred files until today's new-card
+ * allowance is satisfied. No unrelated card bodies are downloaded.
+ */
+async function prepareDailyContent() {
+    const [reviews, decks, status] = await Promise.all([
+        getAllReviews(),
+        getAllDecks(),
+        getHabitStatus()
+    ]);
+    habitSettings = status.settings;
+    const deckMap = new Map(decks.map(deck => [deck.id, deck]));
+    const now = new Date();
+    const dueReviews = reviews.filter(review => new Date(review.fsrsCard.due) <= now);
+    const allFiles = deck => (deck?.files || [])
+        .map(file => typeof file === 'string' ? file : file.path)
+        .sort((a, b) => a.localeCompare(b));
+
+    const dueFileKeys = new Map();
+    for (const review of dueReviews) {
+        if (review.repo && review.filepath) {
+            dueFileKeys.set(`${review.repo}\0${review.filepath}`, { repo: review.repo, file: review.filepath });
+        } else if (review.repo) {
+            for (const file of allFiles(deckMap.get(review.repo))) {
+                dueFileKeys.set(`${review.repo}\0${file}`, { repo: review.repo, file });
+            }
+        } else {
+            // Truly legacy local rows cannot be mapped without their hashes.
+            for (const deck of decks) for (const file of allFiles(deck)) {
+                dueFileKeys.set(`${deck.id}\0${file}`, { repo: deck.id, file });
+            }
+        }
+    }
+
+    await mapWithConcurrency([...dueFileKeys.values()], 4,
+        ({ repo, file }) => loadRepositoryFiles(repo, [file]));
+
+    const active = new Set(habitSettings.activeDecks || []);
+    const activeFiles = [];
+    for (const scope of active) {
+        const split = scope.indexOf(SCOPE_SEP);
+        const repo = split >= 0 ? scope.slice(0, split) : scope;
+        if (split >= 0) {
+            activeFiles.push({ repo, file: scope.slice(split + SCOPE_SEP.length) });
+        } else {
+            for (const file of allFiles(deckMap.get(repo))) activeFiles.push({ repo, file });
+        }
+    }
+
+    const reviewHashes = new Set(reviews.map(review => review.cardHash));
+    const activeFileKeys = new Set(activeFiles.map(({ repo, file }) => `${repo}\0${file}`));
+    const loadedCards = await getAllCards();
+    const loadedFileKeys = new Set(loadedCards.map(card =>
+        `${card.source?.repo || card.deckName}\0${card.source?.file || ''}`));
+    let freshPrepared = loadedCards.filter(card =>
+        activeFileKeys.has(`${card.source?.repo || card.deckName}\0${card.source?.file || ''}`)
+        && !reviewHashes.has(card.hash)
+    ).length;
+    const newBudget = Math.max(0, habitSettings.newPerDay - status.today.newCards);
+
+    const seen = new Set(loadedFileKeys);
+    for (const { repo, file } of activeFiles) {
+        const key = `${repo}\0${file}`;
+        if (seen.has(key) || freshPrepared >= newBudget) continue;
+        seen.add(key);
+        const cards = await loadRepositoryFiles(repo, [file]);
+        freshPrepared += cards.filter(card => !reviewHashes.has(card.hash)).length;
+    }
 }
 
 async function resetScope(specs, message) {
@@ -604,7 +798,7 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
             onBody: () => treeToggle(skey, hasActive),
             actions: [
                 { cls: 'tree-star tree-star-parent' + (starState === 'none' ? '' : ' active'), title: starState === 'all' ? 'Unfocus subject' : 'Focus all decks in subject', html: subjectStarGlyph(starState), onclick: () => toggleActiveSubject(deckIds) },
-                { cls: 'tree-act', title: `Review ${subject} (due + new)`, html: GAVEL_IMG, onclick: () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject) },
+                { cls: 'tree-act', title: `Review ${subject} (due + new)`, html: GAVEL_IMG, onclick: () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject, null, deckIds) },
                 { cls: 'tree-act', title: `Reset all progress in ${subject}`, html: RESET_IMG, onclick: () => resetScope(deckIds.map(id => ({ deckId: id })), `Reset progress for all ${deckIds.length} decks in "${subject}"?`) },
                 null // no delete at subject level (a subject isn't a repo)
             ]
@@ -642,7 +836,7 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
                     onBody: () => treeToggle(dkey, false),
                     actions: [
                         { cls: 'tree-star' + (isActive ? ' active' : ''), title: isActive ? 'Remove from daily focus' : 'Add to daily focus', html: isActive ? '★' : '☆', onclick: () => toggleActiveDeck(deckId) },
-                        { cls: 'tree-act', title: 'Review this deck (due + new)', html: GAVEL_IMG, onclick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName) },
+                        { cls: 'tree-act', title: 'Review this deck (due + new)', html: GAVEL_IMG, onclick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName, null, [deckId]) },
                         { cls: 'tree-act', title: 'Reset progress in this deck', html: RESET_IMG, onclick: () => resetScope([{ deckId }], `Reset all progress in "${deckName}"?`) },
                         { cls: 'tree-act tree-del', title: 'Remove this deck', html: '×', onclick: () => deleteScope([deckId], `Remove "${deckName}" from your collection?`) }
                     ]
@@ -660,10 +854,10 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
                             name: chName, nameCls: 'tree-chapter-name', rowCls: 'tree-chapter-row',
                             meta: `${chCards.length} card${chCards.length === 1 ? '' : 's'} · ${cProg.pct}%`,
                             title: 'Review this chapter (due + new)',
-                            onBody: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName),
+                            onBody: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, null, [deckId], [{ repo: deckId, path: file }]),
                             actions: [
                                 null,
-                                { cls: 'tree-act', title: 'Review this chapter (due + new)', html: GAVEL_IMG, onclick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName) },
+                                { cls: 'tree-act', title: 'Review this chapter (due + new)', html: GAVEL_IMG, onclick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, null, [deckId], [{ repo: deckId, path: file }]) },
                                 { cls: 'tree-act', title: 'Reset progress in this chapter', html: RESET_IMG, onclick: () => resetScope([{ deckId, file }], `Reset progress in "${chName}"?`) },
                                 null
                             ]
@@ -743,28 +937,29 @@ function colRow({ name, star, actions, hasChildren, selected, onClick }) {
  * up to a max, then that column scrolls.
  */
 function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid) {
-    const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
-    const now = new Date();
-    const scopes = resolveActiveScopes(allCards);
+    const scopes = resolveActiveScopes(allCards, displayDecks);
     const term = (searchTerm || '').toLowerCase();
     const fileBase = f => f.split('/').pop().replace(/\.md$/, '');
     const filesOf = decksMap => id => ({ repo: id, files: [...decksMap.get(id).keys()] });
 
-    // Build Subject → Deck → File → cards
-    const deckById = new Map(displayDecks.map(d => [d.id, d]));
+    // Build Subject → Deck → File from lightweight Git-tree metadata. Loaded
+    // cards are not required to render or search the columns.
     const subjects = new Map();
-    for (const card of allCards) {
-        const deckId = card.source?.repo || card.deckName;
-        const deck = deckById.get(deckId);
-        if (!deck) continue;
+    for (const deck of displayDecks) {
+        const deckId = deck.id;
         const subject = subjectSlug(deck.subject);
         if (!subjects.has(subject)) subjects.set(subject, new Map());
         const decks = subjects.get(subject);
         if (!decks.has(deckId)) decks.set(deckId, new Map());
-        const file = card.source?.file || 'unknown';
         const files = decks.get(deckId);
-        if (!files.has(file)) files.set(file, []);
-        files.get(file).push(card);
+        const metadataFiles = (deck.files || []).map(file => typeof file === 'string' ? file : file.path);
+        const loadedFiles = allCards
+            .filter(card => (card.source?.repo || card.deckName) === deckId)
+            .map(card => card.source?.file)
+            .filter(Boolean);
+        for (const file of new Set([...metadataFiles, ...loadedFiles])) {
+            if (!files.has(file)) files.set(file, []);
+        }
     }
     const subjectNames = [...subjects.keys()].sort((a, b) => a === 'misc' ? 1 : b === 'misc' ? -1 : a.localeCompare(b));
 
@@ -820,7 +1015,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
                 name: subject,
                 star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Unfocus subject' : 'Focus all decks in subject', onClick: () => toggleScopes(deckFiles) },
                 actions: [
-                    { html: GAVEL_IMG, title: `Review ${subject} (due + new)`, onClick: () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject, ['home', subject]) }
+                    { html: GAVEL_IMG, title: `Review ${subject} (due + new)`, onClick: () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject, ['home', subject], deckIds) }
                 ],
                 hasChildren: true, selected: columnsSel.subject === subject,
                 onClick: () => { columnsSel = { subject, deck: null, chapter: null }; loadRepositories(); }
@@ -841,7 +1036,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
                 name: deckName,
                 star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Remove deck from daily focus' : 'Add deck to daily focus', onClick: () => toggleScopes(deckFiles) },
                 actions: [
-                    { html: GAVEL_IMG, title: 'Review this deck (due + new)', onClick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName, ['home', columnsSel.subject, deckName]) },
+                    { html: GAVEL_IMG, title: 'Review this deck (due + new)', onClick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName, ['home', columnsSel.subject, deckName], [deckId]) },
                     { html: RESET_IMG, title: 'Reset progress in this deck', onClick: () => resetScope([{ deckId }], `Reset all progress in "${deckName}"?`) },
                     { html: '×', danger: true, title: 'Remove this deck', onClick: () => deleteScope([deckId], `Remove "${deckName}" from your collection?`) }
                 ],
@@ -861,7 +1056,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
         const deckName = deckId.split('/').pop();
         p3 = fileList.map(file => {
             const chName = fileBase(file);
-            const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, ['home', columnsSel.subject, deckName, chName]);
+            const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, ['home', columnsSel.subject, deckName, chName], [deckId], [{ repo: deckId, path: file }]);
             const chActive = chapterIsActive(scopes, deckId, file);
             return colRow({
                 name: chName,
@@ -994,7 +1189,7 @@ function createCategoryCard(categoryName, decks, allCards, allReviews) {
     catGavel.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), categoryName);
+        startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), categoryName, null, deckIds);
     };
     btnContainer.appendChild(catGavel);
 
@@ -1475,6 +1670,7 @@ async function showMainView(view) {
     tabProgress?.classList.toggle('active', view === 'progress');
 
     const controlsBar = document.getElementById('controls-bar');
+    setHomeReviewVisible(view === 'decks');
 
     if (view === 'progress') {
         grid?.classList.add('hidden');
@@ -1706,43 +1902,10 @@ async function handleAddRepository() {
     input.disabled = true;
 
     try {
-        // Import hasFlashcardContent to validate the repo
-        const { hasFlashcardContent } = await import('./github-client.js');
-        const [owner, repo] = repoString.split('/');
-
-        // Check if repository contains flashcard content
-        console.log(`[Main] Validating ${repoString} for flashcard content...`);
-        let hasFlashcards;
-        try {
-            hasFlashcards = await hasFlashcardContent(owner, repo);
-        } catch (accessError) {
-            if (accessError.status === 404) {
-                alert(`Repository "${repoString}" was not found or is not accessible.\n\nIf this repo lives in an organization, the flashcards OAuth app may not have access to that org. Grant access at:\nhttps://github.com/organizations/${owner}/settings/oauth_application_policy`);
-            } else if (accessError.status === 403) {
-                alert(`Access denied to "${repoString}". Check the OAuth app's org permissions, or wait if this is a rate limit.`);
-            } else if (accessError.status === 401) {
-                alert(`Authentication failed. Please log out and log back in.`);
-            } else {
-                alert(`Failed to check repository: ${accessError.message}`);
-            }
-            addBtn.textContent = originalText;
-            addBtn.disabled = false;
-            input.disabled = false;
-            return;
-        }
-
-        if (!hasFlashcards) {
-            alert(`Repository "${repoString}" must have a flashcards/ folder containing markdown files with Q:/A:/C:/P: format. Please check the repository structure and try again.`);
-            addBtn.textContent = originalText;
-            addBtn.disabled = false;
-            input.disabled = false;
-            return;
-        }
-
-        console.log(`[Main] ${repoString} validated successfully`);
-
-        const result = await loadRepository(repoString);
-        console.log(`Loaded deck with ${result.cards.length} total cards from ${repoString}`);
+        // Adding a deck reads only repository metadata and the flashcards tree.
+        // Card bodies remain lazy until the first review.
+        await loadRepositoryMetadata(repoString, { sync: true });
+        console.log(`[Main] Added metadata-only deck ${repoString}`);
 
         // Clear input
         input.value = '';
@@ -1926,6 +2089,7 @@ async function restoreNavigationFromURL() {
                 console.log('[Navigation] Restoring study session for file:', fileParam);
                 const displayName = fileParam.split('/').pop().replace('.md', '');
                 isInStudySession = true;
+                setHomeReviewVisible(false);
                 currentStudyFile = displayName;
 
                 const topicsGrid = document.getElementById('topics-grid');
@@ -1938,7 +2102,8 @@ async function restoreNavigationFromURL() {
 
                 setupStudyEventListeners();
                 updateDeckBreadcrumb();
-                await startSession(deck.id, fileParam, onSessionComplete);
+                await ensureRepositoriesLoaded([deck.id]);
+                await startSession(deck.id, fileParam, onSessionComplete, renderStudyCardBreadcrumb);
             }
         } else {
             console.log('[Navigation] Deck not found!');
@@ -1995,6 +2160,7 @@ async function handlePopState(event) {
                 await navigateToDeck(deck, path, false);
                 // Then start study session (without pushing history)
                 isInStudySession = true;
+                setHomeReviewVisible(false);
                 currentStudyFile = state.file.replace('.md', '');
 
                 const topicsGrid = document.getElementById('topics-grid');
@@ -2007,7 +2173,8 @@ async function handlePopState(event) {
 
                 setupStudyEventListeners();
                 updateDeckBreadcrumb();
-                await startSession(deck.id, state.file, onSessionComplete);
+                await ensureRepositoriesLoaded([deck.id]);
+                await startSession(deck.id, state.file, onSessionComplete, renderStudyCardBreadcrumb);
             } else {
                 // Use updateHistory=false to avoid pushing duplicate history entry
                 await navigateToDeck(deck, path, false);
@@ -2021,6 +2188,7 @@ async function handlePopState(event) {
         folderHierarchy = null;
         allReviewsCache = null;
 
+        setHomeReviewVisible(true);
         await loadRepositories();
     }
 }
@@ -2361,27 +2529,20 @@ async function renderReviewButton() {
 
         const active = habitSettings.activeDecks || [];
 
-        const allCards = await getAllCards();
         const allReviews = await getAllReviews();
-        const counts = todayQueueCounts({
-            cards: allCards,
-            reviews: allReviews,
-            activeDeckIds: active,
-            newPerDay: habitSettings.newPerDay,
-            newIntroducedToday: status.today.newCards
-        });
+        const now = new Date();
+        const due = allReviews.filter(review => new Date(review.fsrsCard.due) <= now).length;
+        const hasReviewWork = due > 0 || active.length > 0;
 
-        if (counts.total === 0) {
+        if (!hasReviewWork) {
             btn.disabled = true;
-            btn.textContent = active.length === 0 ? 'Review' : 'All clear for today 🎉';
-            btn.title = active.length === 0
-                ? 'Nothing is due. Star items (★) to add new material.'
-                : (status.today.goalMet ? 'Daily goal met' : 'Nothing due right now');
+            btn.textContent = 'Review';
+            btn.title = 'Nothing is due. Star items (★) to add new material.';
         } else {
             btn.disabled = false;
-            btn.textContent = `Review · ${counts.due} due · ${counts.fresh} new`;
-            btn.title = counts.due > 0
-                ? 'Review learned material first, then new cards from your starred scope'
+            btn.textContent = 'Review';
+            btn.title = due > 0
+                ? `${due} learned card${due === 1 ? '' : 's'} due; these load before new cards`
                 : 'Learn new cards from your starred scope';
         }
     } catch (error) {
@@ -2453,6 +2614,7 @@ async function toggleActiveDeck(deckId) {
     }
     habitSettings = await saveSettings({ activeDecks: [...active] });
     await loadRepositories(); // re-renders stars + Review button
+    queueDailyPreparation().catch(error => console.warn('[Main] Star prefetch failed:', error));
 }
 
 /**
@@ -2479,13 +2641,19 @@ function subjectStarGlyph(state) {
 const chapterScope = (repo, file) => repo + SCOPE_SEP + (file || '');
 
 /** Resolve the stored active list into a Set of chapter scopes. */
-function resolveActiveScopes(cards) {
+function resolveActiveScopes(cards, decks = []) {
     const raw = habitSettings?.activeDecks || [];
     const filesByRepo = new Map();
     for (const c of cards) {
         const repo = c.source?.repo || c.deckName;
         if (!filesByRepo.has(repo)) filesByRepo.set(repo, new Set());
         filesByRepo.get(repo).add(c.source?.file || '');
+    }
+    for (const deck of decks) {
+        if (!filesByRepo.has(deck.id)) filesByRepo.set(deck.id, new Set());
+        for (const file of deck.files || []) {
+            filesByRepo.get(deck.id).add(typeof file === 'string' ? file : file.path);
+        }
     }
     const scopes = new Set();
     for (const entry of raw) {
@@ -2515,10 +2683,11 @@ function chapterIsActive(scopes, repo, file) {
 async function saveActiveScopes(scopes) {
     habitSettings = await saveSettings({ activeDecks: [...scopes] });
     await loadRepositories();
+    queueDailyPreparation().catch(error => console.warn('[Main] Star prefetch failed:', error));
 }
 
 async function toggleChapterScope(repo, file) {
-    const scopes = resolveActiveScopes(await getAllCards());
+    const scopes = resolveActiveScopes(await getAllCards(), await getAllDecks());
     const sc = chapterScope(repo, file);
     if (scopes.has(sc)) scopes.delete(sc); else scopes.add(sc);
     await saveActiveScopes(scopes);
@@ -2526,7 +2695,7 @@ async function toggleChapterScope(repo, file) {
 
 /** Bulk toggle over decks: if all their chapters are active, clear; else set. */
 async function toggleScopes(deckFiles) {
-    const scopes = resolveActiveScopes(await getAllCards());
+    const scopes = resolveActiveScopes(await getAllCards(), await getAllDecks());
     const activate = scopeStarState(scopes, deckFiles) !== 'all';
     for (const { repo, files } of deckFiles) {
         files.forEach(f => activate ? scopes.add(chapterScope(repo, f)) : scopes.delete(chapterScope(repo, f)));
@@ -2548,16 +2717,33 @@ async function toggleActiveSubject(deckIds) {
     }
     habitSettings = await saveSettings({ activeDecks: [...active] });
     await loadRepositories();
+    queueDailyPreparation().catch(error => console.warn('[Main] Star prefetch failed:', error));
 }
 
 /**
  * Start the Today session: due + capped new cards from active decks
  */
 async function startTodayStudySession() {
-    const allCards = await getAllCards();
+    const btn = document.getElementById('review-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
+    try {
+        // Reuse any idle/star-triggered work, then close the small race where
+        // settings or due state changed after that preparation began.
+        await dailyPreparationPromise;
+        await prepareDailyContent();
+    } catch (error) {
+        console.error('[Main] Failed to prepare daily review:', error);
+        alert('Review content could not be loaded. Check your connection and try again.');
+        return;
+    } finally {
+        if (btn) btn.textContent = 'Review';
+    }
+
     const allReviews = await getAllReviews();
     const status = await getHabitStatus();
     habitSettings = status.settings;
+    const now = new Date();
+    const allCards = await getAllCards();
 
     const queue = buildTodayQueue({
         cards: allCards,
@@ -2575,7 +2761,6 @@ async function startTodayStudySession() {
     // Summary covers the active scope plus learned cards that are due globally.
     const scopeSet = resolveActiveScopes(allCards);
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
-    const now = new Date();
     let total = 0, due = 0, fresh = 0;
     for (const c of allCards) {
         const repo = c.source?.repo || c.deckName;
@@ -2589,7 +2774,7 @@ async function startTodayStudySession() {
     }
 
     enterStudyArea(['home', 'Daily review'], { total, due, fresh });
-    startTodaySession(queue, onSessionComplete, () => {});
+    startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb);
 }
 
 /**
@@ -2602,6 +2787,7 @@ async function reviewDeck(deck) {
     if (!hasCards) return;
 
     isInStudySession = true;
+    setHomeReviewVisible(false);
     currentStudyFile = deck.id.split('/').pop();
 
     document.getElementById('topics-grid')?.classList.add('hidden');
@@ -2612,11 +2798,12 @@ async function reviewDeck(deck) {
     updateDeckBreadcrumb();
     setupStudyEventListeners();
 
-    await startSession(deck.id, null, onSessionComplete, () => {});
+    await startSession(deck.id, null, onSessionComplete, renderStudyCardBreadcrumb);
 }
 
 async function startStudySession(deckId, fileFilter, displayFileName) {
     isInStudySession = true;
+    setHomeReviewVisible(false);
     currentStudyFile = displayFileName;
 
     // Update URL with study state
@@ -2648,6 +2835,7 @@ async function startStudySession(deckId, fileFilter, displayFileName) {
 
     // Callback when current card changes - update breadcrumb with file name
     const onCardChange = (card) => {
+        renderStudyCardBreadcrumb(card);
         if (card && card.source?.file) {
             // Extract filename without extension from card's source
             const filePath = card.source.file;
@@ -2694,6 +2882,7 @@ async function exitStudySession(skipRender = false) {
 
     // Drill-all runs from the home level with no currentDeck — always return home
     if (wasDrillAll || !currentDeck) {
+        setHomeReviewVisible(true);
         updateDeckBreadcrumb();
         await loadRepositories();
         return;

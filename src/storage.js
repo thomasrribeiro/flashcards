@@ -241,7 +241,9 @@ async function loadReviewsFromD1(mergeWithLocalStorage = true) {
         const d1Reviews = reviews.map(r => ({
             cardHash: r.cardHash,
             fsrsCard: r.fsrsState,
-            lastReviewed: r.lastReviewed
+            lastReviewed: r.lastReviewed,
+            repo: r.repo || r.repoId || r.repo_id || null,
+            filepath: r.filepath || r.filePath || r.file_path || null
         }));
 
         if (mergeWithLocalStorage) {
@@ -267,7 +269,17 @@ async function loadReviewsFromD1(mergeWithLocalStorage = true) {
             };
             for (const r of [...d1Reviews, ...localReviews]) {
                 const existing = merged.get(r.cardHash);
-                if (!existing || ts(r) >= ts(existing)) merged.set(r.cardHash, r);
+                if (!existing) {
+                    merged.set(r.cardHash, r);
+                    continue;
+                }
+                const newer = ts(r) >= ts(existing) ? r : existing;
+                const older = newer === r ? existing : r;
+                merged.set(r.cardHash, {
+                    ...newer,
+                    repo: newer.repo || older.repo || null,
+                    filepath: newer.filepath || older.filepath || null
+                });
             }
             reviewsCache = [...merged.values()];
 
@@ -341,10 +353,13 @@ export async function getCard(hash) {
  *   with the sync payload so the worker records review_logs / daily_activity.
  */
 export async function saveReview(cardHash, fsrsCard, log = null) {
+    const reviewedCard = cardsCache.find(c => c.hash === cardHash);
     const review = {
         cardHash,
         fsrsCard,
-        lastReviewed: new Date().toISOString()
+        lastReviewed: new Date().toISOString(),
+        repo: reviewedCard?.source?.repo || reviewedCard?.deckName || null,
+        filepath: reviewedCard?.source?.file || null
     };
 
     // Update local cache
@@ -367,7 +382,7 @@ export async function saveReview(cardHash, fsrsCard, log = null) {
     if (currentUser) {
         try {
             // Find the card to get repo and filepath
-            const card = cardsCache.find(c => c.hash === cardHash);
+            const card = reviewedCard;
             if (!card) {
                 console.warn('[Storage] Card not found for hash:', cardHash);
                 return;
@@ -572,7 +587,7 @@ export async function refreshDeck(deckId, folder = null) {
 /**
  * Save repository metadata - also syncs to D1
  */
-export async function saveRepoMetadata(repo) {
+export async function saveRepoMetadata(repo, { sync = true } = {}) {
     console.log(`[Storage] saveRepoMetadata called for: ${repo.id}`);
 
     // Update local cache
@@ -598,7 +613,7 @@ export async function saveRepoMetadata(repo) {
     }
 
     // Sync to D1 if user is authenticated
-    if (currentUser && repo.id && repo.name) {
+    if (sync && currentUser && repo.id && repo.name) {
         try {
             const userId = currentUser.github_id || currentUser.id;
             const [owner, repoName] = repo.id.includes('/') ? repo.id.split('/') : [userId, repo.id];

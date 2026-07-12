@@ -118,6 +118,8 @@
                             placeholder="Search decks..."
                             autocomplete="off"
                         />
+                    </div>
+                    <div class="review-row">
                         <button id="review-btn" class="review-btn" disabled>Review</button>
                         <span id="streak-badge" class="streak-badge hidden" title="Daily streak"></span>
                     </div>
@@ -126,16 +128,28 @@
                 <!-- Deck Navigation Breadcrumb -->
                 <div class="deck-breadcrumb hidden" id="deck-breadcrumb"></div>
 
+                <div id="review-loading" class="review-loading hidden" role="status" aria-live="polite">
+                    <div class="review-loading-meta">
+                        <span id="review-loading-label">Loading review...</span>
+                        <span id="review-loading-count">0/0</span>
+                    </div>
+                    <div class="review-loading-track">
+                        <div id="review-loading-fill" class="review-loading-fill"></div>
+                    </div>
+                </div>
+
                 <!-- Analytics dashboard (swapped with the grid) -->
                 <div id="dashboard" class="dashboard hidden"></div>
 
                 <div id="topics-grid" class="projects-grid">
-                    <!-- Topics are rendered after the collection is ready. -->
+                    <div class="loading">Loading collection...</div>
                 </div>
 
                 <!-- Study Session (hidden by default) -->
                 <div id="study-area" class="study-area hidden">
-                    <div id="study-breadcrumb" class="study-breadcrumb"></div>
+                    <div class="study-header-row">
+                        <div id="study-breadcrumb" class="study-breadcrumb"></div>
+                    </div>
                     <div id="study-scope-info" class="study-scope-info"></div>
                     <div class="study-progress project-stats">
                         <span class="progress-label">Progress:</span>

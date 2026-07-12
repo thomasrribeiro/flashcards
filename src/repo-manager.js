@@ -7,6 +7,121 @@ import { hashCard } from './hasher.js';
 import * as githubClient from './github-client.js';
 import { saveCards, getAllCards, saveRepoMetadata, getRepoMetadata, getAllRepos, markRepoLoaded } from './storage.js';
 
+const SUBJECT_TOPICS = new Set(['computer-science', 'mathematics', 'physics', 'law']);
+const METADATA_CACHE_TTL_MS = 15 * 60 * 1000;
+const fileLoadPromises = new Map();
+
+function metadataCacheKey(repoString) {
+    return `flashcards_repo_metadata_${repoString.toLowerCase()}`;
+}
+
+/**
+ * Load only the information needed by the columns UI: repository metadata,
+ * canonical subject topic, and the flashcards/ file tree. No card body is read.
+ */
+export async function loadRepositoryMetadata(repoString, { sync = false } = {}) {
+    if (!sync) {
+        try {
+            const cached = JSON.parse(localStorage.getItem(metadataCacheKey(repoString)) || 'null');
+            if (cached?.deck && Date.now() - cached.savedAt < METADATA_CACHE_TTL_MS) {
+                await saveRepoMetadata(cached.deck, { sync: false });
+                return { repository: cached.deck, deck: cached.deck, cards: [], filesProcessed: cached.deck.fileCount };
+            }
+        } catch { /* malformed or unavailable cache — fetch fresh metadata */ }
+    }
+
+    const { owner, repo } = githubClient.parseRepoString(repoString);
+    const repoInfo = await githubClient.getRepository(owner, repo);
+
+    const requested = `${owner}/${repo}`.toLowerCase();
+    const actual = (repoInfo.full_name || '').toLowerCase();
+    if (actual && actual !== requested) {
+        const err = new Error(`Repository ${requested} has moved to ${repoInfo.full_name}`);
+        err.status = 404;
+        err.movedTo = repoInfo.full_name;
+        throw err;
+    }
+
+    const markdownFiles = await githubClient.getMarkdownFiles(owner, repo, 'flashcards', repoInfo.default_branch);
+    if (markdownFiles.length === 0) {
+        throw new Error(`No markdown files found in ${owner}/${repo}/flashcards/. Repos must have a flashcards/ folder.`);
+    }
+
+    const existing = await getRepoMetadata(`${owner}/${repo}`);
+    const subject = (repoInfo.topics || []).find(topic => SUBJECT_TOPICS.has(topic))
+        || existing?.subject
+        || 'misc';
+    const repoData = githubClient.createRepoData(repoInfo, markdownFiles);
+    const deck = {
+        ...repoData,
+        id: `${owner}/${repo}`,
+        name: repoInfo.name,
+        description: repoInfo.description || '',
+        subject,
+        repo: `${owner}/${repo}`,
+        cardCount: existing?.cardCount ?? null,
+        fileCount: markdownFiles.length,
+        metadataOnly: true,
+        createdAt: existing?.createdAt || new Date().toISOString()
+    };
+
+    await saveRepoMetadata(deck, { sync });
+    try {
+        localStorage.setItem(metadataCacheKey(repoString), JSON.stringify({ savedAt: Date.now(), deck }));
+    } catch { /* localStorage unavailable or full */ }
+    return { repository: deck, deck, cards: [], filesProcessed: markdownFiles.length };
+}
+
+/**
+ * Fetch and parse selected flashcard files. Calls for the same file share one
+ * in-flight promise, and GitHub blobs remain content-addressed by SHA.
+ */
+export async function loadRepositoryFiles(repoString, filePaths = null) {
+    let deck = await getRepoMetadata(repoString);
+    if (!deck?.files?.length) {
+        ({ deck } = await loadRepositoryMetadata(repoString));
+    }
+
+    const descriptors = deck.files || [];
+    const wanted = filePaths?.length ? new Set(filePaths) : null;
+    const selected = descriptors.filter(file => !wanted || wanted.has(file.path));
+    const { owner, repo } = githubClient.parseRepoString(repoString);
+
+    const batches = await Promise.all(selected.map(file => {
+        const key = `${repoString}\0${file.path}\0${file.sha || ''}`;
+        if (!fileLoadPromises.has(key)) {
+            fileLoadPromises.set(key, (async () => {
+                const existingCards = (await getAllCards()).filter(card =>
+                    (card.source?.repo || card.deckName) === repoString && card.source?.file === file.path
+                );
+                if (existingCards.length > 0) return existingCards;
+
+                const content = await githubClient.getFileContent(owner, repo, file.path, file.sha);
+                const { cards, metadata } = parseDeck(content, file.path);
+                const cardsWithMeta = cards.map(card => {
+                    const hash = hashCard(card);
+                    return {
+                        ...card,
+                        hash,
+                        source: { repo: repoString, file: file.path, sha: file.sha },
+                        deckName: repoString,
+                        deckMetadata: metadata,
+                        id: `${repoString}#${hash}`
+                    };
+                });
+                await saveCards(cardsWithMeta);
+                return cardsWithMeta;
+            })().catch(error => {
+                fileLoadPromises.delete(key);
+                throw error;
+            }));
+        }
+        return fileLoadPromises.get(key);
+    }));
+
+    return batches.flat();
+}
+
 /**
  * Load cards from a GitHub repository
  */
@@ -231,4 +346,3 @@ export async function getRepoStats(repoId) {
         clozeCards: repoCards.filter(c => c.type === 'cloze').length
     };
 }
-
