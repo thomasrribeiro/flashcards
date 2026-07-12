@@ -1963,6 +1963,9 @@ kbd {
 
 .review-btn:hover:not(:disabled) { background: #f8d96b; }
 
+.learn-new-btn { background: var(--white); }
+.learn-new-btn:hover:not(:disabled) { background: var(--light-gray); }
+
 .review-btn:disabled {
     background: var(--light-gray);
     color: #999;

@@ -95,7 +95,7 @@ async function init() {
 
         // Deep link from a push notification: jump straight into Today
         if (new URL(window.location).searchParams.get('today') === '1') {
-            startTodayStudySession();
+            startPrimaryStudySession('due');
         }
 
         // On a fresh page load (refresh or direct visit), always land at home —
@@ -611,7 +611,7 @@ function scheduleDailyPreparation() {
  * Prepare exact overdue files first, then starred files until today's new-card
  * allowance is satisfied. No unrelated card bodies are downloaded.
  */
-async function prepareDailyContent() {
+async function prepareDailyContent({ includeDue = true, includeNew = true } = {}) {
     const currentSettings = habitSettings;
     const [reviews, decks, status] = await Promise.all([
         getAllReviews(),
@@ -644,8 +644,12 @@ async function prepareDailyContent() {
         }
     }
 
-    await mapWithConcurrency([...dueFileKeys.values()], 4,
-        ({ repo, file }) => loadRepositoryFiles(repo, [file]));
+    if (includeDue) {
+        await mapWithConcurrency([...dueFileKeys.values()], 4,
+            ({ repo, file }) => loadRepositoryFiles(repo, [file]));
+    }
+
+    if (!includeNew) return;
 
     const active = new Set(habitSettings.activeDecks || []);
     const activeFiles = [];
@@ -1598,11 +1602,17 @@ function setupEventListeners() {
         });
     }
 
-    // Primary Review action: scheduled session across active decks
-    const reviewBtn = document.getElementById('review-btn');
-    if (reviewBtn) {
-        reviewBtn.addEventListener('click', () => {
-            if (!reviewBtn.disabled) startTodayStudySession();
+    // Separate time-sensitive reviews from deliberate new learning.
+    const reviewDueBtn = document.getElementById('review-due-btn');
+    const learnNewBtn = document.getElementById('learn-new-btn');
+    if (reviewDueBtn) {
+        reviewDueBtn.addEventListener('click', () => {
+            if (!reviewDueBtn.disabled) startPrimaryStudySession('due');
+        });
+    }
+    if (learnNewBtn) {
+        learnNewBtn.addEventListener('click', () => {
+            if (!learnNewBtn.disabled) startPrimaryStudySession('new');
         });
     }
 
@@ -2046,6 +2056,7 @@ async function loadLocalRepo(repoInfo) {
 let currentCategory = null; // The currently selected category folder (null = at home level)
 let currentDeck = null;
 let habitSettings = null; // Cached habit settings (active decks, daily goal)
+let lastHabitStatus = null;
 let currentPath = [];
 let folderHierarchy = null;
 let allReviewsCache = null; // Cache for reviews during navigation
@@ -2516,18 +2527,16 @@ function exitDeckNavigation() {
 /**
  * Start an inline study session
  */
-/**
- * Update the primary Review button (scheduled session across active decks)
- * and the streak badge. The Review button is the daily driver; it stays enabled
- * whenever learned material is due, even if no item is currently starred.
- */
+/** Update the independent due-review and new-learning actions. */
 async function renderReviewButton({ refreshStatus = true } = {}) {
-    const btn = document.getElementById('review-btn');
-    if (!btn) return;
+    const dueBtn = document.getElementById('review-due-btn');
+    const newBtn = document.getElementById('learn-new-btn');
+    if (!dueBtn || !newBtn) return;
 
     try {
         if (refreshStatus) {
             const status = await getHabitStatus();
+            lastHabitStatus = status;
             habitSettings = status.settings;
             updateStreakBadge(status);
         }
@@ -2537,23 +2546,26 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
         const allReviews = await getAllReviews();
         const now = new Date();
         const due = allReviews.filter(review => new Date(review.fsrsCard.due) <= now).length;
-        const hasReviewWork = due > 0 || active.length > 0;
+        const introducedToday = lastHabitStatus?.today?.newCards || 0;
+        const remainingNew = Math.max(0, (habitSettings.newPerDay || 0) - introducedToday);
 
-        if (!hasReviewWork) {
-            btn.disabled = true;
-            btn.textContent = 'Review';
-            btn.title = 'Nothing is due. Star items (★) to add new material.';
-        } else {
-            btn.disabled = false;
-            btn.textContent = 'Review';
-            btn.title = due > 0
-                ? `${due} learned card${due === 1 ? '' : 's'} due; these load before new cards`
-                : 'Learn new cards from your starred scope';
-        }
+        dueBtn.disabled = due === 0;
+        dueBtn.textContent = 'Review due';
+        dueBtn.title = due > 0
+            ? `${due} learned card${due === 1 ? '' : 's'} due now`
+            : 'No learned cards are due';
+
+        newBtn.disabled = active.length === 0 || remainingNew === 0;
+        newBtn.textContent = 'Learn new';
+        newBtn.title = active.length === 0
+            ? 'Star items (★) to choose new material'
+            : remainingNew > 0
+                ? `Introduce up to ${remainingNew} new card${remainingNew === 1 ? '' : 's'}`
+                : 'Daily new-card allowance reached';
     } catch (error) {
-        console.error('[Main] Failed to render Review button:', error);
-        btn.disabled = true;
-        btn.textContent = 'Review';
+        console.error('[Main] Failed to render study buttons:', error);
+        dueBtn.disabled = true;
+        newBtn.disabled = true;
     }
 }
 
@@ -2733,63 +2745,54 @@ async function toggleActiveSubject(deckIds) {
     await applyActiveScopes(active);
 }
 
-/**
- * Start the Today session: due + capped new cards from active decks
- */
-async function startTodayStudySession() {
-    const btn = document.getElementById('review-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
+/** Start either scheduled reviews or new learning; never mix the two. */
+async function startPrimaryStudySession(mode) {
+    const isDueReview = mode === 'due';
+    const dueBtn = document.getElementById('review-due-btn');
+    const newBtn = document.getElementById('learn-new-btn');
+    const activeBtn = isDueReview ? dueBtn : newBtn;
+    if (dueBtn) dueBtn.disabled = true;
+    if (newBtn) newBtn.disabled = true;
+    if (activeBtn) activeBtn.textContent = 'Loading...';
     try {
-        // Reuse any idle/star-triggered work, then close the small race where
-        // settings or due state changed after that preparation began.
-        await dailyPreparationPromise;
-        await prepareDailyContent();
+        await prepareDailyContent({ includeDue: isDueReview, includeNew: !isDueReview });
     } catch (error) {
-        console.error('[Main] Failed to prepare daily review:', error);
+        console.error(`[Main] Failed to prepare ${mode} session:`, error);
         alert('Review content could not be loaded. Check your connection and try again.');
+        await renderReviewButton({ refreshStatus: false });
         return;
     } finally {
-        if (btn) btn.textContent = 'Review';
+        if (activeBtn) activeBtn.textContent = isDueReview ? 'Review due' : 'Learn new';
     }
 
     const allReviews = await getAllReviews();
     const currentSettings = habitSettings;
     const status = await getHabitStatus();
+    lastHabitStatus = status;
     habitSettings = currentSettings
         ? { ...status.settings, ...currentSettings, activeDecks: currentSettings.activeDecks || [] }
         : status.settings;
-    const now = new Date();
     const allCards = await getAllCards();
 
-    const queue = buildTodayQueue({
+    const combinedQueue = buildTodayQueue({
         cards: allCards,
         reviews: allReviews,
         activeDeckIds: habitSettings.activeDecks,
         newPerDay: habitSettings.newPerDay,
         newIntroducedToday: status.today.newCards
     });
+    const queue = combinedQueue.filter(entry =>
+        isDueReview ? entry.fsrsCard !== null : entry.fsrsCard === null);
 
     if (queue.length === 0) {
         await renderReviewButton({ refreshStatus: false });
         return;
     }
 
-    // Summary covers the active scope plus learned cards that are due globally.
-    const scopeSet = resolveActiveScopes(allCards);
-    const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
-    let total = 0, due = 0, fresh = 0;
-    for (const c of allCards) {
-        const repo = c.source?.repo || c.deckName;
-        const inActiveScope = scopeSet.has(repo) || scopeSet.has(chapterScope(repo, c.source?.file || ''));
-        const r = reviewMap.get(c.hash);
-        const isDue = Boolean(r && new Date(r.fsrsCard.due) <= now);
-        if (!inActiveScope && !isDue) continue;
-        total++;
-        if (!r) fresh++;
-        else if (isDue) due++;
-    }
-
-    enterStudyArea(['home', 'Daily review'], { total, due, fresh });
+    enterStudyArea(
+        ['home', isDueReview ? 'Due review' : 'New learning'],
+        { total: queue.length, due: isDueReview ? queue.length : 0, fresh: isDueReview ? 0 : queue.length }
+    );
     startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb);
 }
 
@@ -2935,6 +2938,7 @@ function onSessionComplete() {
     if (habitLine) {
         habitLine.textContent = '';
         getHabitStatus().then(status => {
+            lastHabitStatus = status;
             updateStreakBadge(status);
             const parts = [];
             if (status.streak > 0) parts.push(`\u{1F525} ${status.streak}-day streak`);
