@@ -10,6 +10,7 @@ import { getLocalDate } from './today-queue.js';
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 const LOCAL_KEY = 'flashcards_habit';
 let settingsSaveQueue = Promise.resolve();
+const settingsRequests = new Map();
 
 const DEFAULT_SETTINGS = {
     activeDecks: [],
@@ -50,9 +51,13 @@ function loadLocal() {
     try {
         const raw = localStorage.getItem(LOCAL_KEY);
         const data = raw ? JSON.parse(raw) : {};
-        return { settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) }, days: data.days || {} };
+        return {
+            settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
+            days: data.days || {},
+            pendingSettings: data.pendingSettings || null
+        };
     } catch {
-        return { settings: { ...DEFAULT_SETTINGS }, days: {} };
+        return { settings: { ...DEFAULT_SETTINGS }, days: {}, pendingSettings: null };
     }
 }
 
@@ -74,13 +79,23 @@ function userId() {
  */
 export async function getSettings() {
     const id = userId();
-    if (!id) return loadLocal().settings;
+    const local = loadLocal();
+    if (!id) return local.settings;
+
+    if (local.pendingSettings) {
+        enqueueSettingsPersistence(id, local.pendingSettings);
+        return local.settings;
+    }
 
     try {
         const response = await fetch(`${WORKER_URL}/api/settings/${id}`);
         if (!response.ok) throw new Error(response.statusText);
         const { settings } = await response.json();
-        return { ...DEFAULT_SETTINGS, ...settings };
+        const current = loadLocal();
+        if (current.pendingSettings) return current.settings;
+        current.settings = { ...DEFAULT_SETTINGS, ...settings };
+        saveLocal(current);
+        return current.settings;
     } catch (error) {
         console.error('[Habit] Failed to load settings, using local fallback:', error);
         return loadLocal().settings;
@@ -94,31 +109,54 @@ export async function getSettings() {
 export async function saveSettings(partial) {
     const local = loadLocal();
     local.settings = { ...local.settings, ...partial };
+    const pending = {
+        version: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        partial
+    };
+    local.pendingSettings = pending;
     saveLocal(local);
 
     const id = userId();
-    if (!id) return local.settings;
+    if (!id) {
+        local.pendingSettings = null;
+        saveLocal(local);
+        return local.settings;
+    }
 
     try {
-        // Keep rapid optimistic UI changes ordered on the server. Local state
-        // above is written synchronously, while network persistence is queued.
-        settingsSaveQueue = settingsSaveQueue
-            .catch(() => {})
-            .then(async () => {
-                const response = await fetch(`${WORKER_URL}/api/settings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: id, ...partial })
-                });
-                if (!response.ok) throw new Error(response.statusText);
-                const { settings } = await response.json();
-                return { ...DEFAULT_SETTINGS, ...settings };
-            });
-        return await settingsSaveQueue;
+        return await enqueueSettingsPersistence(id, pending);
     } catch (error) {
         console.error('[Habit] Failed to save settings to worker:', error);
         return local.settings;
     }
+}
+
+function enqueueSettingsPersistence(id, pending) {
+    if (settingsRequests.has(pending.version)) return settingsRequests.get(pending.version);
+
+    const request = settingsSaveQueue = settingsSaveQueue
+        .catch(() => {})
+        .then(async () => {
+            const response = await fetch(`${WORKER_URL}/api/settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: id, ...pending.partial }),
+                keepalive: true
+            });
+            if (!response.ok) throw new Error(response.statusText);
+            const { settings } = await response.json();
+            const current = loadLocal();
+            if (current.pendingSettings?.version === pending.version) {
+                current.settings = { ...DEFAULT_SETTINGS, ...settings };
+                current.pendingSettings = null;
+                saveLocal(current);
+            }
+            return { ...DEFAULT_SETTINGS, ...settings };
+        })
+        .finally(() => settingsRequests.delete(pending.version));
+
+    settingsRequests.set(pending.version, request);
+    return request;
 }
 
 /**
@@ -133,7 +171,15 @@ export async function getHabitStatus(now = new Date()) {
             const response = await fetch(`${WORKER_URL}/api/habit/${id}?date=${date}`);
             if (!response.ok) throw new Error(response.statusText);
             const status = await response.json();
-            status.settings = { ...DEFAULT_SETTINGS, ...status.settings };
+            const local = loadLocal();
+            if (local.pendingSettings) {
+                enqueueSettingsPersistence(id, local.pendingSettings);
+                status.settings = local.settings;
+            } else {
+                status.settings = { ...DEFAULT_SETTINGS, ...status.settings };
+                local.settings = status.settings;
+                saveLocal(local);
+            }
             return status;
         } catch (error) {
             console.error('[Habit] Failed to load habit status, using local fallback:', error);
