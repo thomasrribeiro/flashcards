@@ -119,9 +119,36 @@ export async function getFileContent(owner, repo, path, sha = null) {
     const headers = getAuthHeaders();
     headers['Accept'] = 'application/vnd.github.v3.raw';
 
-    const response = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/contents/${path}`, {
-        headers
-    });
+    const fetchWithTimeout = async (url, timeoutMs) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            return await fetch(url, { headers, signal: controller.signal });
+        } finally {
+            clearTimeout(timeout);
+        }
+    };
+
+    let response = null;
+    if (sha) {
+        try {
+            // The immutable blob endpoint is substantially faster than the
+            // Contents endpoint and matches the SHA used by the local cache.
+            response = await fetchWithTimeout(
+                `${GITHUB_API}/repos/${owner}/${repo}/git/blobs/${sha}`,
+                10000
+            );
+        } catch (error) {
+            console.warn(`[GitHub Client] Blob request timed out for ${path}; trying Contents API`, error);
+        }
+    }
+
+    if (!response?.ok) {
+        response = await fetchWithTimeout(
+            `${GITHUB_API}/repos/${owner}/${repo}/contents/${path}`,
+            15000
+        );
+    }
 
     if (!response.ok) {
         throw new Error(`Failed to fetch file content: ${response.statusText}`);
