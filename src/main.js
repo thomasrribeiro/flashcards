@@ -350,7 +350,7 @@ async function loadRepositories() {
 
         // Refresh the Today hero whenever the grid re-renders (no-op until
         // habit settings have loaded in init)
-        if (habitSettings) renderReviewButton();
+        if (habitSettings) renderReviewButton({ refreshStatus: false });
 
     } catch (error) {
         console.error('Error loading repositories:', error);
@@ -612,12 +612,15 @@ function scheduleDailyPreparation() {
  * allowance is satisfied. No unrelated card bodies are downloaded.
  */
 async function prepareDailyContent() {
+    const currentSettings = habitSettings;
     const [reviews, decks, status] = await Promise.all([
         getAllReviews(),
         getAllDecks(),
         getHabitStatus()
     ]);
-    habitSettings = status.settings;
+    habitSettings = currentSettings
+        ? { ...status.settings, ...currentSettings, activeDecks: currentSettings.activeDecks || [] }
+        : status.settings;
     const deckMap = new Map(decks.map(deck => [deck.id, deck]));
     const now = new Date();
     const dueReviews = reviews.filter(review => new Date(review.fsrsCard.due) <= now);
@@ -1688,7 +1691,7 @@ async function showMainView(view) {
         controlsBar?.classList.remove('hidden');
         grid?.classList.remove('hidden');
         updateDeckBreadcrumb();
-        if (habitSettings) renderReviewButton();
+        if (habitSettings) renderReviewButton({ refreshStatus: false });
     }
 }
 
@@ -2518,14 +2521,16 @@ function exitDeckNavigation() {
  * and the streak badge. The Review button is the daily driver; it stays enabled
  * whenever learned material is due, even if no item is currently starred.
  */
-async function renderReviewButton() {
+async function renderReviewButton({ refreshStatus = true } = {}) {
     const btn = document.getElementById('review-btn');
     if (!btn) return;
 
     try {
-        const status = await getHabitStatus();
-        habitSettings = status.settings;
-        updateStreakBadge(status);
+        if (refreshStatus) {
+            const status = await getHabitStatus();
+            habitSettings = status.settings;
+            updateStreakBadge(status);
+        }
 
         const active = habitSettings.activeDecks || [];
 
@@ -2612,9 +2617,7 @@ async function toggleActiveDeck(deckId) {
     } else {
         active.add(deckId);
     }
-    habitSettings = await saveSettings({ activeDecks: [...active] });
-    await loadRepositories(); // re-renders stars + Review button
-    queueDailyPreparation().catch(error => console.warn('[Main] Star prefetch failed:', error));
+    await applyActiveScopes(active);
 }
 
 /**
@@ -2680,10 +2683,22 @@ function chapterIsActive(scopes, repo, file) {
     return scopes.has(chapterScope(repo, file));
 }
 
-async function saveActiveScopes(scopes) {
-    habitSettings = await saveSettings({ activeDecks: [...scopes] });
-    await loadRepositories();
+async function applyActiveScopes(scopes) {
+    const activeDecks = [...scopes];
+    // Paint first. Persistence and content preparation must never block a star.
+    habitSettings = { ...(habitSettings || {}), activeDecks };
+    const persistence = saveSettings({ activeDecks });
+    const render = loadRepositories();
     queueDailyPreparation().catch(error => console.warn('[Main] Star prefetch failed:', error));
+    persistence.then(saved => {
+        const stillCurrent = JSON.stringify(habitSettings?.activeDecks || []) === JSON.stringify(activeDecks);
+        if (stillCurrent) habitSettings = { ...habitSettings, ...saved, activeDecks };
+    }).catch(error => console.warn('[Main] Failed to persist starred scope:', error));
+    await render;
+}
+
+async function saveActiveScopes(scopes) {
+    await applyActiveScopes(scopes);
 }
 
 async function toggleChapterScope(repo, file) {
@@ -2715,9 +2730,7 @@ async function toggleActiveSubject(deckIds) {
     } else {
         deckIds.forEach(id => active.add(id));
     }
-    habitSettings = await saveSettings({ activeDecks: [...active] });
-    await loadRepositories();
-    queueDailyPreparation().catch(error => console.warn('[Main] Star prefetch failed:', error));
+    await applyActiveScopes(active);
 }
 
 /**
@@ -2740,8 +2753,11 @@ async function startTodayStudySession() {
     }
 
     const allReviews = await getAllReviews();
+    const currentSettings = habitSettings;
     const status = await getHabitStatus();
-    habitSettings = status.settings;
+    habitSettings = currentSettings
+        ? { ...status.settings, ...currentSettings, activeDecks: currentSettings.activeDecks || [] }
+        : status.settings;
     const now = new Date();
     const allCards = await getAllCards();
 
@@ -2754,7 +2770,7 @@ async function startTodayStudySession() {
     });
 
     if (queue.length === 0) {
-        await renderReviewButton();
+        await renderReviewButton({ refreshStatus: false });
         return;
     }
 

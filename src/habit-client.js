@@ -9,6 +9,7 @@ import { getLocalDate } from './today-queue.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 const LOCAL_KEY = 'flashcards_habit';
+let settingsSaveQueue = Promise.resolve();
 
 const DEFAULT_SETTINGS = {
     activeDecks: [],
@@ -99,14 +100,21 @@ export async function saveSettings(partial) {
     if (!id) return local.settings;
 
     try {
-        const response = await fetch(`${WORKER_URL}/api/settings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: id, ...partial })
-        });
-        if (!response.ok) throw new Error(response.statusText);
-        const { settings } = await response.json();
-        return { ...DEFAULT_SETTINGS, ...settings };
+        // Keep rapid optimistic UI changes ordered on the server. Local state
+        // above is written synchronously, while network persistence is queued.
+        settingsSaveQueue = settingsSaveQueue
+            .catch(() => {})
+            .then(async () => {
+                const response = await fetch(`${WORKER_URL}/api/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: id, ...partial })
+                });
+                if (!response.ok) throw new Error(response.statusText);
+                const { settings } = await response.json();
+                return { ...DEFAULT_SETTINGS, ...settings };
+            });
+        return await settingsSaveQueue;
     } catch (error) {
         console.error('[Habit] Failed to save settings to worker:', error);
         return local.settings;
