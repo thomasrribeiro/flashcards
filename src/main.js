@@ -266,6 +266,16 @@ async function loadRepositories() {
     const grid = document.getElementById('topics-grid');
     const controlsBar = document.getElementById('controls-bar');
 
+    // Rebuilding the columns after a star change must not jump any of the
+    // independently scrolling panes back to the top.
+    const previousColumnScroll = grid
+        ? [...grid.querySelectorAll('.columns-view .col-pane')].map(pane => ({
+            top: pane.scrollTop,
+            left: pane.scrollLeft
+        }))
+        : [];
+    const previousColumnsLeft = grid?.querySelector('.columns-view')?.scrollLeft || 0;
+
     try {
         // Get all data
         console.log('Loading repositories...');
@@ -315,7 +325,10 @@ async function loadRepositories() {
             if (deckViewMode === 'tree') {
                 renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid);
             } else if (deckViewMode === 'columns') {
-                renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid);
+                renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid, {
+                    panes: previousColumnScroll,
+                    left: previousColumnsLeft
+                });
             } else {
                 _renderCategoryGrid(displayDecks, allCards, allReviews, searchTerm, grid);
             }
@@ -943,7 +956,7 @@ function colRow({ name, star, actions, hasChildren, selected, onClick }) {
  * strip scrolls horizontally if it's too wide. Height fits the tallest column
  * up to a max, then that column scrolls.
  */
-function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid) {
+function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid, scroll = {}) {
     const scopes = resolveActiveScopes(allCards, displayDecks);
     const term = (searchTerm || '').toLowerCase();
     const fileBase = f => f.split('/').pop().replace(/\.md$/, '');
@@ -1080,6 +1093,13 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid)
     wrap.appendChild(makePane(p3));
 
     grid.appendChild(wrap);
+    wrap.scrollLeft = scroll.left || 0;
+    [...wrap.querySelectorAll('.col-pane')].forEach((pane, index) => {
+        const saved = scroll.panes?.[index];
+        if (!saved) return;
+        pane.scrollTop = saved.top;
+        pane.scrollLeft = saved.left;
+    });
     for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
     renderEvictedNotice();
 }
