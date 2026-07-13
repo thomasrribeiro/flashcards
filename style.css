@@ -265,6 +265,11 @@ a[href] {
     flex-shrink: 0;
 }
 
+.mobile-sidebar-open,
+.mobile-sidebar-close {
+    display: none;
+}
+
 .yellow-header {
     background: var(--gold);
     padding: 25px 0;
@@ -2242,6 +2247,44 @@ kbd {
     cursor: default;
 }
 
+@keyframes study-action-invite {
+    0%, 100% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 0 0 0 rgba(245, 200, 66, 0.45), 3px 3px 0 var(--black);
+    }
+    50% {
+        transform: translateY(-2px) scale(1.025);
+        box-shadow: 0 0 0 8px rgba(245, 200, 66, 0), 5px 6px 0 var(--black);
+    }
+}
+
+.review-btn.recommended-study-action:not(:disabled) {
+    height: 40px;
+    padding: 0 20px;
+    border: 2px solid var(--black);
+    background: var(--gold);
+    font-size: 0.92rem;
+    font-weight: 700;
+    animation: study-action-invite 1.9s ease-in-out infinite;
+}
+
+.review-btn.recommended-study-action:not(:disabled)::after {
+    content: ' →';
+}
+
+.review-btn.recommended-study-action:hover:not(:disabled) {
+    animation-play-state: paused;
+    transform: translateY(-2px);
+    box-shadow: 5px 6px 0 var(--black);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .review-btn.recommended-study-action:not(:disabled) {
+        animation: none;
+        box-shadow: 3px 3px 0 var(--black);
+    }
+}
+
 @media (max-width: 680px) {
     .search-input {
         width: 100%;
@@ -2270,6 +2313,51 @@ kbd {
     .pwa-install-prompt {
         align-items: flex-start;
         flex-direction: column;
+    }
+}
+
+/* Installed phones launch directly into the study surface. The explanatory
+   sidebar stays one tap away without sitting above the primary actions. */
+body.standalone-phone .layout {
+    gap: 0;
+}
+
+body.standalone-phone .sidebar {
+    display: none;
+}
+
+body.standalone-phone.mobile-sidebar-expanded .sidebar {
+    display: block;
+    width: 100%;
+}
+
+body.standalone-phone .mobile-sidebar-open {
+    display: block;
+    margin: 0 0 0 auto;
+    padding: 3px 7px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #666;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    text-decoration: underline;
+}
+
+body.standalone-phone .mobile-sidebar-close {
+    display: block;
+    margin: 0 0 8px auto;
+    padding: 3px 7px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #666;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    text-decoration: underline;
+}
+
+@media (max-width: 600px) and (display-mode: standalone) {
+    body:not(.mobile-sidebar-expanded) .sidebar {
+        display: none;
     }
 }
 

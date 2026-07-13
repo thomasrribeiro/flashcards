@@ -56,6 +56,7 @@ function registerServiceWorker() {
 
 async function init() {
     console.log('=== INIT START ===');
+    configureMobileAppShell();
     registerServiceWorker();
     try {
         await initDB();
@@ -143,6 +144,24 @@ async function init() {
     } catch (error) {
         console.error('=== INIT ERROR ===', error);
     }
+}
+
+/** Keep installed phone launches focused on the study actions, not onboarding. */
+function configureMobileAppShell() {
+    const compactPhone = Math.min(window.screen?.width || innerWidth, window.screen?.height || innerHeight) <= 600;
+    const studyFirst = isStandalone() && compactPhone;
+    document.body.classList.toggle('standalone-phone', studyFirst);
+    if (!studyFirst) return;
+
+    const open = document.getElementById('mobile-sidebar-open');
+    const close = document.getElementById('mobile-sidebar-close');
+    const setOpen = expanded => {
+        document.body.classList.toggle('mobile-sidebar-expanded', expanded);
+        open?.setAttribute('aria-expanded', String(expanded));
+        if (expanded) window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    open?.addEventListener('click', () => setOpen(true));
+    close?.addEventListener('click', () => setOpen(false));
 }
 
 /**
@@ -1736,9 +1755,10 @@ async function showMainView(view) {
     const tabDecks = document.getElementById('tab-decks');
     const tabProgress = document.getElementById('tab-progress');
 
-    // Home pauses an unfinished primary session; other navigation replaces it.
+    // Leaving the drill surface pauses an unfinished primary session. Decks
+    // and Progress are both temporary views, so neither should discard work.
     if (isInStudySession) {
-        const paused = view === 'decks' && await pausePrimaryStudySession();
+        const paused = await pausePrimaryStudySession();
         if (!paused) await exitStudySession(true);
     }
 
@@ -2603,6 +2623,9 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
     const newBtn = document.getElementById('learn-new-btn');
     if (!dueBtn || !newBtn) return;
 
+    dueBtn.classList.remove('recommended-study-action');
+    newBtn.classList.remove('recommended-study-action');
+
     try {
         if (refreshStatus) {
             const status = await getHabitStatus();
@@ -2654,6 +2677,17 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
                 newBtn.title = 'Continue the new-card session where you left off';
             }
         }
+
+        let recommended;
+        const pausedRemaining = pausedPrimaryStudySession?.queue?.length || 0;
+        if (pausedRemaining > 0) {
+            recommended = pausedPrimaryStudySession.mode === 'due' ? dueBtn : newBtn;
+        } else if (!dueBtn.disabled) {
+            recommended = dueBtn;
+        } else if (!newBtn.disabled) {
+            recommended = newBtn;
+        }
+        recommended?.classList.add('recommended-study-action');
         updateAppBadge(pausedPrimaryStudySession?.queue?.length || due);
 
     } catch (error) {
