@@ -10,7 +10,7 @@ import { getAuthenticatedUser, getUserRepositories, getOrgRepositories } from '.
 import { githubAuth } from './github-auth.js';
 import { startSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
 import { buildTodayQueue, getLocalDate, newCardSessionLimit, newLearningPlan, SCOPE_SEP } from './today-queue.js';
-import { getSettings, saveSettings, getHabitStatus, levelForXp } from './habit-client.js';
+import { getSettings, saveSettings, getHabitStatus } from './habit-client.js';
 import { renderDashboard } from './dashboard.js';
 import { getPushState, subscribeToPush } from './push-client.js';
 
@@ -2784,20 +2784,16 @@ async function renderReminderAffordance() {
 }
 
 /**
- * Update the always-visible streak/level badge in the controls bar
+ * Update the streak badge in the controls bar.
  */
 function updateStreakBadge(status) {
     const badge = document.getElementById('streak-badge');
     if (!badge) return;
-    const level = levelForXp(status.totalXp);
-    const parts = [];
-    if (status.streak > 0) parts.push(`\u{1F525} ${status.streak}`);
-    if (level > 0) parts.push(`lvl ${level}`);
-    if (parts.length === 0) {
+    if (status.streak <= 0) {
         badge.classList.add('hidden');
         return;
     }
-    badge.textContent = parts.join(' · ');
+    badge.textContent = `\u{1F525} ${status.streak} ${status.streak === 1 ? 'day' : 'days'}`;
     badge.classList.remove('hidden');
 }
 
