@@ -1798,6 +1798,7 @@ kbd {
 .streak-badge {
     display: inline-flex;
     align-items: center;
+    height: 32px;
     padding: 4px 10px;
     margin-left: 8px;
     font-size: 0.8rem;

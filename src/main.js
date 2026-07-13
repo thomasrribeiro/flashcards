@@ -2639,7 +2639,7 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
         });
 
         dueBtn.disabled = due === 0;
-        dueBtn.textContent = due > 0 ? `Review due (${due})` : 'Review due';
+        dueBtn.textContent = 'Review';
         dueBtn.title = due > 0
             ? `${due} learned card${due === 1 ? '' : 's'} due now`
             : 'No learned cards are due';
@@ -3105,7 +3105,7 @@ async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}
         await renderReviewButton({ refreshStatus: false });
         return;
     } finally {
-        if (activeBtn) activeBtn.textContent = isDueReview ? 'Review due' : 'Learn new';
+        if (activeBtn) activeBtn.textContent = isDueReview ? 'Review' : 'Learn new';
     }
 
     const allReviews = await getAllReviews();
