@@ -282,7 +282,6 @@ async function loadDueCards(deckId, fileFilter) {
 
     // Build list of cards to study
     const cardsToStudy = [];
-    let reviewedNotDueCount = 0;
 
     for (const card of deckCards) {
         const review = reviewMap.get(card.hash);
@@ -295,9 +294,6 @@ async function loadDueCards(deckId, fileFilter) {
             console.log(`[StudySession] Card ${card.hash.substring(0, 8)}: due=${dueDate.toISOString()}, now=${now.toISOString()}, isDue=${isDue}`);
             if (isDue) {
                 cardsToStudy.push({ card, fsrsCard, cardHash: card.hash });
-            } else {
-                // Card has been reviewed and is not yet due again
-                reviewedNotDueCount++;
             }
         } else {
             console.log(`[StudySession] Card ${card.hash.substring(0, 8)}: NEW (no review found)`);
@@ -307,9 +303,9 @@ async function loadDueCards(deckId, fileFilter) {
     }
 
     state.dueCards = cardsToStudy;
-    state.totalCards = deckCards.length;
-    state.reviewedCards = reviewedNotDueCount;
-    console.log(`[StudySession] Found ${state.dueCards.length} cards to study, ${state.reviewedCards} already reviewed, ${state.totalCards} total`);
+    state.totalCards = cardsToStudy.length;
+    state.reviewedCards = 0;
+    console.log(`[StudySession] Found ${state.totalCards} cards to study`);
 }
 
 /**
@@ -470,19 +466,19 @@ export async function gradeCard(grade) {
 
 /**
  * Update progress bar display
- * Progress = (already reviewed cards + cards reviewed in this session) / total cards
+ * Progress = (completed before resume + completed now) / session cards
  */
 function updateStats() {
     const progressFill = document.getElementById('study-progress-fill');
     const progressPercent = document.getElementById('study-progress-percent');
 
     if (progressFill && state.totalCards > 0) {
-        // Progress counts cards already reviewed (not due) + cards reviewed in current session
+        // reviewedCards holds work completed before a resumed session.
         const completed = state.reviewedCards + state.currentCardIndex;
         const percent = Math.round((completed / state.totalCards) * 100);
         progressFill.style.width = `${percent}%`;
         if (progressPercent) {
-            progressPercent.textContent = `${percent}%`;
+            progressPercent.innerHTML = `<span>${percent}%</span> <span class="study-progress-count">(${completed}/${state.totalCards})</span>`;
         }
         console.log(`[StudySession] Progress: ${completed}/${state.totalCards} (${percent}%) - reviewedCards=${state.reviewedCards}, currentCardIndex=${state.currentCardIndex}`);
     }

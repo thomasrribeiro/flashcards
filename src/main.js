@@ -449,11 +449,10 @@ function treeActionBtn(cls, title, html, onclick) {
 
 /**
  * Enter the shared study surface. Renders the scope breadcrumb (with a clickable
- * "home" that returns to the deck view) and a scope summary line.
+ * "home" that returns to the study view).
  * @param {Array<string>} breadcrumb - path segments, first is "home"
- * @param {Object} scope - { total, due, fresh } card counts for the scope
  */
-function enterStudyArea(breadcrumb, scope) {
+function enterStudyArea(breadcrumb) {
     isInStudySession = true;
     setHomeReviewVisible(false);
     document.getElementById('topics-grid')?.classList.add('hidden');
@@ -462,11 +461,6 @@ function enterStudyArea(breadcrumb, scope) {
     document.getElementById('session-complete')?.classList.add('hidden');
 
     renderStudyBreadcrumb(breadcrumb || ['home']);
-
-    const info = document.getElementById('study-scope-info');
-    if (info && scope) {
-        info.textContent = `${scope.total} card${scope.total === 1 ? '' : 's'} · ${scope.due} due`;
-    }
 
     setupStudyEventListeners();
 }
@@ -551,10 +545,8 @@ async function startScopedReview(filterFn, label, breadcrumb, repoIds = [], file
     const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
     const now = new Date();
     const due = [], fresh = [];
-    let total = 0;
     for (const card of allCards) {
         if (!filterFn(card)) continue;
-        total++;
         const r = reviewMap.get(card.hash);
         if (!r) fresh.push({ card, fsrsCard: null, cardHash: card.hash });
         else {
@@ -569,7 +561,7 @@ async function startScopedReview(filterFn, label, breadcrumb, repoIds = [], file
         return;
     }
     discardPausedPrimaryStudySession();
-    enterStudyArea(breadcrumb || ['home', label], { total, due: due.length, fresh: fresh.length });
+    enterStudyArea(breadcrumb || ['home', label]);
     startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb);
 }
 
@@ -1704,7 +1696,7 @@ function setupEventListeners() {
     document.getElementById('view-columns')?.addEventListener('click', () => setDeckView('columns'));
     reflectViewToggle();
 
-    // View tabs: Decks / Progress
+    // View tabs: Study / Progress
     const tabDecks = document.getElementById('tab-decks');
     const tabProgress = document.getElementById('tab-progress');
     if (tabDecks) tabDecks.addEventListener('click', () => showMainView('decks'));
@@ -1741,7 +1733,7 @@ function setDeckView(mode) {
 }
 
 /**
- * Central switcher between the Decks view and the Progress (dashboard) view.
+ * Central switcher between the Study view and the Progress dashboard.
  * Exits any in-progress study session first so returning is always clean.
  */
 let currentMainView = 'decks';
@@ -2785,14 +2777,7 @@ async function resumePrimaryStudySession(mode) {
 
     currentPrimaryStudyMode = mode;
     pausedPrimaryStudySession = null;
-    enterStudyArea(
-        ['home', mode === 'due' ? 'Due review' : 'New learning'],
-        {
-            total: paused.completedCards + queue.length,
-            due: mode === 'due' ? queue.length : 0,
-            fresh: mode === 'new' ? queue.length : 0
-        }
-    );
+    enterStudyArea(['home', mode === 'due' ? 'Due review' : 'New learning']);
     startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb, {
         completedCards: paused.completedCards,
         onProgress: persistCurrentPrimaryStudySession
@@ -3149,10 +3134,7 @@ async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}
         return;
     }
 
-    enterStudyArea(
-        ['home', isDueReview ? 'Due review' : 'New learning'],
-        { total: queue.length, due: isDueReview ? queue.length : 0, fresh: isDueReview ? 0 : queue.length }
-    );
+    enterStudyArea(['home', isDueReview ? 'Due review' : 'New learning']);
     currentPrimaryStudyMode = mode;
     pausedPrimaryStudySession = null;
     startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb, {
@@ -3163,7 +3145,7 @@ async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}
 
 /**
  * Review a single deck's due + new cards (used by the tree — no breadcrumb nav).
- * The Decks tab is the exit back to the deck list.
+ * The Study tab is the exit back to the deck list.
  */
 async function reviewDeck(deck) {
     discardPausedPrimaryStudySession();

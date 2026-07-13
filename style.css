@@ -2088,7 +2088,7 @@ kbd {
     cursor: default;
 }
 
-/* ── Decks / Progress view tabs ── */
+/* ── Study / Progress view tabs ── */
 
 .view-tabs {
     display: flex;
@@ -2225,7 +2225,7 @@ kbd {
 .review-btn {
     padding: 0 16px;
     height: 32px;
-    background: var(--gold);
+    background: var(--white);
     border: 1px solid var(--black);
     color: var(--black);
     font-family: 'IBM Plex Mono', monospace;
@@ -2235,7 +2235,7 @@ kbd {
     white-space: nowrap;
 }
 
-.review-btn:hover:not(:disabled) { background: #f8d96b; }
+.review-btn:hover:not(:disabled) { background: var(--light-gray); }
 
 .learn-new-btn { background: var(--white); }
 .learn-new-btn:hover:not(:disabled) { background: var(--light-gray); }
@@ -2247,42 +2247,12 @@ kbd {
     cursor: default;
 }
 
-@keyframes study-action-invite {
-    0%, 100% {
-        transform: translateY(0) scale(1);
-        box-shadow: 0 0 0 0 rgba(245, 200, 66, 0.45), 3px 3px 0 var(--black);
-    }
-    50% {
-        transform: translateY(-2px) scale(1.025);
-        box-shadow: 0 0 0 8px rgba(245, 200, 66, 0), 5px 6px 0 var(--black);
-    }
-}
-
 .review-btn.recommended-study-action:not(:disabled) {
-    height: 40px;
-    padding: 0 20px;
-    border: 2px solid var(--black);
     background: var(--gold);
-    font-size: 0.92rem;
-    font-weight: 700;
-    animation: study-action-invite 1.9s ease-in-out infinite;
-}
-
-.review-btn.recommended-study-action:not(:disabled)::after {
-    content: ' →';
 }
 
 .review-btn.recommended-study-action:hover:not(:disabled) {
-    animation-play-state: paused;
-    transform: translateY(-2px);
-    box-shadow: 5px 6px 0 var(--black);
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .review-btn.recommended-study-action:not(:disabled) {
-        animation: none;
-        box-shadow: 3px 3px 0 var(--black);
-    }
+    background: #f8d96b;
 }
 
 @media (max-width: 680px) {
@@ -2658,13 +2628,11 @@ body.standalone-phone .mobile-sidebar-close {
 .study-bc-sep { opacity: 0.4; }
 .study-bc-root { opacity: 0.75; }
 
-.study-scope-info {
-    font-size: 0.75rem;
-    opacity: 0.55;
-    max-width: 640px;
-    margin: 14px 0 0;
+.study-progress { margin-top: 14px; }
+.study-progress .progress-percent {
+    width: auto;
+    min-width: 12ch;
+    text-align: right;
     white-space: nowrap;
 }
-
-.study-progress { margin-top: 0; }
-.study-progress .progress-percent { width: 4ch; text-align: right; }
+.study-progress-count { opacity: 0.55; }
