@@ -2661,11 +2661,11 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
             const remaining = pausedPrimaryStudySession.queue?.length || 0;
             if (remaining > 0 && pausedPrimaryStudySession.mode === 'due') {
                 dueBtn.disabled = false;
-                dueBtn.textContent = `Resume review (${remaining})`;
+                dueBtn.textContent = 'Resume';
                 dueBtn.title = 'Continue the review session where you left off';
             } else if (remaining > 0 && pausedPrimaryStudySession.mode === 'new') {
                 newBtn.disabled = false;
-                newBtn.textContent = `Resume learning (${remaining})`;
+                newBtn.textContent = 'Resume';
                 newBtn.title = 'Continue the new-card session where you left off';
             }
         }
