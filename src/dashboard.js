@@ -1,7 +1,7 @@
 /**
  * Analytics dashboard — inline SVG, no chart library (keeps the no-framework,
  * near-zero-dependency character of the app). Renders:
- *   - a calendar-aligned, one-year review heatmap
+ *   - a calendar-aligned, current-year review heatmap
  *   - weekly retention (recall accuracy) line
  *   - projected due load over the next 30 days
  *   - per-deck reviewed counts
@@ -15,12 +15,20 @@ const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 const GOLD = '#F5C842';
 const INK = '#1a1a1a';
 
-async function fetchStats() {
+export function daysSinceYearStart(now = new Date()) {
+    const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    const januaryFirst = Date.UTC(now.getFullYear(), 0, 1);
+    return Math.max(1, Math.floor((today - januaryFirst) / 86400000));
+}
+
+async function fetchStats(now = new Date()) {
     const user = getCurrentUser();
     if (!user) return null;
     const id = user.github_id || user.id;
     try {
-        const resp = await fetch(`${WORKER_URL}/api/stats/${id}?days=365`);
+        // Include a small timezone cushion; the calendar renderer strictly
+        // clips the response to January 1 through the user's local today.
+        const resp = await fetch(`${WORKER_URL}/api/stats/${id}?days=${daysSinceYearStart(now) + 2}`);
         if (!resp.ok) throw new Error(resp.statusText);
         return await resp.json();
     } catch (error) {
@@ -34,23 +42,28 @@ function esc(s) {
 }
 
 /**
- * Calendar-aligned activity for the last year. Columns are Sunday-based weeks,
+ * Calendar-aligned activity for the current year. Columns are Sunday-based weeks,
  * matching the familiar contribution-calendar layout; rows are weekdays.
  */
 export function heatmapHtml(heatmap, now = new Date()) {
-    const byDate = new Map(heatmap.map(d => [d.date, d]));
-    const weeks = 53, cell = 11, gap = 3, size = cell + gap;
+    const cell = 11, gap = 3, size = cell + gap;
     const gridX = 34, gridY = 22;
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const rangeStart = new Date(today);
-    rangeStart.setDate(today.getDate() - 364);
+    const rangeStart = new Date(today.getFullYear(), 0, 1);
+    const firstDate = getLocalDate(rangeStart);
+    const lastDate = getLocalDate(today);
+    const visibleActivity = heatmap.filter(day => day.date >= firstDate && day.date <= lastDate);
+    const byDate = new Map(visibleActivity.map(d => [d.date, d]));
 
-    // Sunday at the beginning of the leftmost calendar column.
-    const start = new Date(today);
-    start.setDate(today.getDate() - today.getDay() - (weeks - 1) * 7);
+    // Sunday containing January 1 through the Sunday containing today.
+    const start = new Date(rangeStart);
+    start.setDate(rangeStart.getDate() - rangeStart.getDay());
+    const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+    const startUtc = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+    const weeks = Math.floor((todayUtc - startUtc) / (7 * 86400000)) + 1;
 
     let max = 1;
-    for (const d of heatmap) max = Math.max(max, d.reviews);
+    for (const d of visibleActivity) max = Math.max(max, d.reviews);
 
     const rects = [];
     const monthLabels = [];
@@ -101,16 +114,14 @@ export function heatmapHtml(heatmap, now = new Date()) {
         .map(([dow, label]) => `<text class="heatmap-weekday" x="0" y="${gridY + dow * size + cell - 1}">${label}</text>`)
         .join('');
     const width = gridX + weeks * size - gap, height = gridY + 7 * size;
-    const total = heatmap.reduce((sum, day) => sum + day.reviews, 0);
+    const total = visibleActivity.reduce((sum, day) => sum + day.reviews, 0);
     const rangeFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     const rangeLabel = `${rangeFormatter.format(rangeStart)} – ${rangeFormatter.format(today)}`;
-    const yearLabel = rangeStart.getFullYear() === today.getFullYear()
-        ? String(today.getFullYear())
-        : `${rangeStart.getFullYear()}–${today.getFullYear()}`;
+    const yearLabel = String(today.getFullYear());
 
     return `<div class="review-heatmap">
         <div class="heatmap-summary">
-            <strong>${total.toLocaleString()} ${total === 1 ? 'review' : 'reviews'} in the last year</strong>
+            <strong>${total.toLocaleString()} ${total === 1 ? 'review' : 'reviews'} in ${yearLabel}</strong>
             <span><span class="heatmap-year">${yearLabel}</span>${esc(rangeLabel)}</span>
         </div>
         <div class="heatmap-scroll" tabindex="0" aria-label="Scrollable review activity calendar">
@@ -126,6 +137,11 @@ export function heatmapHtml(heatmap, now = new Date()) {
         </div>
         <div class="heatmap-tooltip" role="tooltip" hidden></div>
     </div>`;
+}
+
+export function scrollHeatmapToPresent(root) {
+    const scroll = root?.querySelector?.('.heatmap-scroll');
+    if (scroll) scroll.scrollLeft = scroll.scrollWidth;
 }
 
 function wireHeatmapTooltip(root) {
@@ -207,7 +223,8 @@ export async function renderDashboard() {
     if (!el) return;
     el.innerHTML = '<div class="loading">Loading your stats…</div>';
 
-    const [stats, habit] = await Promise.all([fetchStats(), getHabitStatus().catch(() => null)]);
+    const now = new Date();
+    const [stats, habit] = await Promise.all([fetchStats(now), getHabitStatus().catch(() => null)]);
 
     if (!stats) {
         el.innerHTML = `<div class="dash-header"><h2>Progress</h2></div>
@@ -215,8 +232,11 @@ export async function renderDashboard() {
         return;
     }
 
-    const totalReviews = stats.heatmap.reduce((a, d) => a + d.reviews, 0);
-    const activeDays = stats.heatmap.filter(d => d.reviews > 0).length;
+    const year = now.getFullYear();
+    const yearPrefix = `${year}-`;
+    const yearActivity = stats.heatmap.filter(day => day.date.startsWith(yearPrefix));
+    const totalReviews = yearActivity.reduce((a, d) => a + d.reviews, 0);
+    const activeDays = yearActivity.filter(d => d.reviews > 0).length;
     const level = habit ? levelForXp(habit.totalXp) : 0;
 
     el.innerHTML = `
@@ -224,15 +244,16 @@ export async function renderDashboard() {
             <h2>Progress</h2>
             <div class="dash-kpis">
                 <div class="dash-kpi"><strong>${habit ? habit.streak : 0}</strong><span>day streak</span></div>
-                <div class="dash-kpi"><strong>${totalReviews}</strong><span>reviews (1y)</span></div>
+                <div class="dash-kpi"><strong>${totalReviews}</strong><span>reviews (${year})</span></div>
                 <div class="dash-kpi"><strong>${activeDays}</strong><span>active days</span></div>
                 <div class="dash-kpi"><strong>lvl ${level}</strong><span>${habit ? habit.totalXp : 0} XP</span></div>
             </div>
         </div>
-        <section class="dash-section"><h3>Review activity</h3>${heatmapHtml(stats.heatmap)}</section>
+        <section class="dash-section"><h3>Review activity</h3>${heatmapHtml(stats.heatmap, now)}</section>
         <section class="dash-section"><h3>Retention (weekly recall accuracy)</h3>${retentionSvg(stats.retention)}</section>
         <section class="dash-section"><h3>Upcoming reviews (next 30 days)</h3>${projectedSvg(stats.projectedDue)}</section>
         <section class="dash-section"><h3>Reviewed by deck</h3><div class="dash-decks">${perDeckHtml(stats.perDeck)}</div></section>
     `;
     wireHeatmapTooltip(el);
+    scrollHeatmapToPresent(el);
 }

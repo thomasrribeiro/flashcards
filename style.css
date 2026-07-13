@@ -1804,6 +1804,7 @@ kbd {
     font-family: 'IBM Plex Mono', monospace;
     background: var(--black);
     color: var(--gold);
+    border-radius: 8px;
     white-space: nowrap;
 }
 
@@ -2227,6 +2228,7 @@ kbd {
     height: 32px;
     background: var(--white);
     border: 1px solid var(--black);
+    border-radius: 8px;
     color: var(--black);
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.85rem;
