@@ -1645,8 +1645,15 @@ function setupEventListeners() {
 
     document.getElementById('study-settings-btn')?.addEventListener('click', openStudySettings);
     document.getElementById('study-settings-cancel')?.addEventListener('click', closeStudySettings);
+    document.getElementById('study-settings-close')?.addEventListener('click', closeStudySettings);
+    document.querySelector('#study-settings-modal .modal-overlay')?.addEventListener('click', closeStudySettings);
     document.getElementById('daily-new-target')?.addEventListener('change', reflectCustomTargetField);
     document.getElementById('study-settings-panel')?.addEventListener('submit', saveStudySettingsFromForm);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !document.getElementById('study-settings-modal')?.classList.contains('hidden')) {
+            closeStudySettings();
+        }
+    });
     document.getElementById('session-back-home')?.addEventListener('click', () => showMainView('decks'));
     document.getElementById('session-learn-more')?.addEventListener('click', event => {
         startPrimaryStudySession('new', {
@@ -2570,7 +2577,6 @@ function exitDeckNavigation() {
 async function renderReviewButton({ refreshStatus = true } = {}) {
     const dueBtn = document.getElementById('review-due-btn');
     const newBtn = document.getElementById('learn-new-btn');
-    const context = document.getElementById('study-context');
     if (!dueBtn || !newBtn) return;
 
     try {
@@ -2586,14 +2592,8 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
         const allReviews = await getAllReviews();
         const now = new Date();
         const due = allReviews.filter(review => new Date(review.fsrsCard.due) <= now).length;
-        const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-        const tomorrowEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
-        const dueTomorrow = allReviews.filter(review => {
-            const date = new Date(review.fsrsCard.due);
-            return date >= tomorrowStart && date < tomorrowEnd;
-        }).length;
         const introducedToday = lastHabitStatus?.today?.newCards || 0;
-        const { dailyTarget, batchSize, unlimited, targetReached, nextBatch } = newLearningPlan({
+        const { batchSize, unlimited, targetReached, nextBatch } = newLearningPlan({
             newPerDay: habitSettings.newPerDay,
             newBatchSize: habitSettings.newBatchSize,
             newIntroducedToday: introducedToday
@@ -2618,29 +2618,15 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
                     ? `Introduce up to ${batchSize} new cards in this session; no daily target`
                     : `Introduce up to ${nextBatch} new card${nextBatch === 1 ? '' : 's'} in this session`;
 
-        if (context) {
-            const parts = [];
-            if (due > 0) parts.push(`${due} due now`);
-            if (unlimited) {
-                parts.push(`${introducedToday} new today`);
-                parts.push('unlimited target');
-            } else {
-                parts.push(`${introducedToday}/${dailyTarget} new today`);
-                if (targetReached) parts.push('target reached');
-            }
-            parts.push(`${dueTomorrow} due tomorrow`);
-            context.textContent = parts.join(' · ');
-        }
     } catch (error) {
         console.error('[Main] Failed to render study buttons:', error);
         dueBtn.disabled = true;
         newBtn.disabled = true;
-        if (context) context.textContent = 'Study status unavailable';
     }
 }
 
 function closeStudySettings() {
-    document.getElementById('study-settings-panel')?.classList.add('hidden');
+    document.getElementById('study-settings-modal')?.classList.add('hidden');
     document.getElementById('study-settings-btn')?.setAttribute('aria-expanded', 'false');
 }
 
@@ -2653,14 +2639,14 @@ function reflectCustomTargetField() {
 }
 
 function openStudySettings() {
-    const panel = document.getElementById('study-settings-panel');
+    const modal = document.getElementById('study-settings-modal');
     const button = document.getElementById('study-settings-btn');
     const target = document.getElementById('daily-new-target');
     const custom = document.getElementById('daily-new-custom');
     const batch = document.getElementById('new-session-size');
-    if (!panel || !button || !target || !custom || !batch) return;
+    if (!modal || !button || !target || !custom || !batch) return;
 
-    if (!panel.classList.contains('hidden')) {
+    if (!modal.classList.contains('hidden')) {
         closeStudySettings();
         return;
     }
@@ -2676,8 +2662,9 @@ function openStudySettings() {
         ? Number(habitSettings.newBatchSize)
         : 10);
     reflectCustomTargetField();
-    panel.classList.remove('hidden');
+    modal.classList.remove('hidden');
     button.setAttribute('aria-expanded', 'true');
+    target.focus();
 }
 
 async function saveStudySettingsFromForm(event) {

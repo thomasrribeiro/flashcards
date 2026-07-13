@@ -1399,18 +1399,11 @@ kbd {
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
-}
-
-.study-context {
-    min-height: 1em;
-    margin-top: -8px;
-    color: #666;
-    font-size: 0.75rem;
-    font-variant-numeric: tabular-nums;
+    width: 100%;
 }
 
 .study-settings-btn {
+    margin-left: auto;
     height: 32px;
     padding: 0 10px;
     border: 1px solid transparent;
@@ -1427,18 +1420,14 @@ kbd {
     text-decoration: underline;
 }
 
-.study-settings-panel {
+.study-settings-modal-content {
+    max-width: 540px;
+}
+
+.study-settings-body {
     display: grid;
     grid-template-columns: repeat(2, minmax(180px, 1fr));
     gap: 12px 18px;
-    max-width: 620px;
-    padding: 14px;
-    border: 1px solid var(--black);
-    background: var(--white);
-}
-
-.study-settings-panel.hidden {
-    display: none;
 }
 
 .study-setting-field {
@@ -1476,14 +1465,6 @@ kbd {
     line-height: 1.45;
 }
 
-.study-settings-actions {
-    grid-column: 1 / -1;
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-}
-
-.study-settings-actions button,
 .session-complete-actions button {
     min-height: 32px;
     padding: 0 12px;
@@ -1496,7 +1477,6 @@ kbd {
     font-size: 0.76rem;
 }
 
-.study-settings-actions button[type="submit"],
 #session-learn-more {
     background: var(--gold);
 }
@@ -2217,12 +2197,11 @@ kbd {
 }
 
 @media (max-width: 680px) {
-    .study-settings-panel {
+    .study-settings-body {
         grid-template-columns: 1fr;
     }
 
-    .study-settings-help,
-    .study-settings-actions {
+    .study-settings-help {
         grid-column: 1;
     }
 }
