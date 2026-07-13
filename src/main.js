@@ -11,6 +11,7 @@ import { githubAuth } from './github-auth.js';
 import { startSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
 import { buildTodayQueue, getLocalDate, newCardSessionLimit, newLearningPlan, SCOPE_SEP } from './today-queue.js';
 import { getSettings, saveSettings, getHabitStatus } from './habit-client.js';
+import { clearStudySession, getStudySession, saveStudySession } from './session-client.js';
 import { renderDashboard } from './dashboard.js';
 import { getPushState, subscribeToPush } from './push-client.js';
 
@@ -67,6 +68,7 @@ async function init() {
         // Fetch the saved scope alongside repository metadata, but do not render
         // columns until both are ready. Otherwise the first paint shows no stars.
         const habitSettingsPromise = getSettings();
+        const pausedSessionPromise = getStudySession();
 
         if (!isAuthenticated) {
             // Seed the example deck on first unlogged visit so new users see
@@ -84,6 +86,7 @@ async function init() {
         }
 
         habitSettings = await habitSettingsPromise;
+        pausedPrimaryStudySession = await pausedSessionPromise;
 
         console.log('About to load repositories...');
         await loadRepositories();
@@ -1022,9 +1025,13 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
 
     const wrap = document.createElement('div');
     wrap.className = 'columns-view';
-    const makePane = rows => {
+    const makePane = (rows, label) => {
         const pane = document.createElement('div');
         pane.className = 'col-pane';
+        const heading = document.createElement('div');
+        heading.className = 'col-pane-label';
+        heading.textContent = label;
+        pane.appendChild(heading);
         if (rows.length === 0) { const e = document.createElement('div'); e.className = 'col-empty'; e.textContent = term ? 'No matches' : ''; pane.appendChild(e); }
         rows.forEach(r => pane.appendChild(r));
         return pane;
@@ -1047,7 +1054,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
                 onClick: () => { columnsSel = { subject, deck: null, chapter: null }; loadRepositories(); }
             });
         });
-    wrap.appendChild(makePane(p1));
+    wrap.appendChild(makePane(p1, 'Subjects'));
 
     // Pane 2 — decks in the selected subject (blank until a subject is picked)
     let p2 = [];
@@ -1071,7 +1078,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
             });
         });
     }
-    wrap.appendChild(makePane(p2));
+    wrap.appendChild(makePane(p2, 'Decks'));
 
     // Pane 3 — chapters in the selected deck (blank until a deck is picked)
     let p3 = [];
@@ -1096,7 +1103,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
             });
         });
     }
-    wrap.appendChild(makePane(p3));
+    wrap.appendChild(makePane(p3, 'Chapters'));
 
     grid.appendChild(wrap);
     wrap.scrollLeft = scroll.left || 0;
@@ -1721,7 +1728,7 @@ async function showMainView(view) {
 
     // Home pauses an unfinished primary session; other navigation replaces it.
     if (isInStudySession) {
-        const paused = view === 'decks' && pausePrimaryStudySession();
+        const paused = view === 'decks' && await pausePrimaryStudySession();
         if (!paused) await exitStudySession(true);
     }
 
@@ -2198,6 +2205,7 @@ async function handlePopState(event) {
         currentStudyFile = null;
         currentPrimaryStudyMode = null;
         pausedPrimaryStudySession = null;
+        clearStudySession();
         cleanupStudySession();
         removeStudyEventListeners();
 
@@ -2625,8 +2633,7 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
                     : `Introduce up to ${nextBatch} new card${nextBatch === 1 ? '' : 's'} in this session`;
 
         if (pausedPrimaryStudySession) {
-            const sessionState = getState();
-            const remaining = Math.max(0, sessionState.dueCards.length - sessionState.currentCardIndex);
+            const remaining = pausedPrimaryStudySession.queue?.length || 0;
             if (remaining > 0 && pausedPrimaryStudySession.mode === 'due') {
                 dueBtn.disabled = false;
                 dueBtn.textContent = `Resume review (${remaining})`;
@@ -2645,38 +2652,106 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
     }
 }
 
-function pausePrimaryStudySession() {
-    if (!currentPrimaryStudyMode) return false;
+function currentPrimarySessionSnapshot() {
+    if (!currentPrimaryStudyMode) return null;
     const sessionState = getState();
-    if (sessionState.currentCardIndex >= sessionState.dueCards.length) return false;
+    const queue = sessionState.dueCards.slice(sessionState.currentCardIndex).map(({ card, cardHash }) => ({
+        cardHash,
+        repo: card.source?.repo || card.deckName || '',
+        filepath: card.source?.file || ''
+    })).filter(entry => entry.cardHash && entry.repo && entry.filepath);
+    if (queue.length === 0) return null;
+    return {
+        mode: currentPrimaryStudyMode,
+        queue,
+        completedCards: sessionState.reviewedCards + sessionState.currentCardIndex
+    };
+}
 
-    pausedPrimaryStudySession = { mode: currentPrimaryStudyMode };
+function persistCurrentPrimaryStudySession() {
+    const snapshot = currentPrimarySessionSnapshot();
+    return snapshot ? saveStudySession(snapshot) : clearStudySession();
+}
+
+async function pausePrimaryStudySession() {
+    if (!currentPrimaryStudyMode) return false;
+    const snapshot = currentPrimarySessionSnapshot();
+    if (!snapshot) return false;
+
+    pausedPrimaryStudySession = { ...snapshot, inMemory: true };
     isInStudySession = false;
     removeStudyEventListeners();
     document.getElementById('study-area')?.classList.add('hidden');
     document.getElementById('session-complete')?.classList.add('hidden');
     document.getElementById('topics-grid')?.classList.remove('hidden');
+    await saveStudySession(snapshot);
     return true;
 }
 
-function resumePrimaryStudySession(mode) {
+async function resumePrimaryStudySession(mode) {
     if (!pausedPrimaryStudySession || pausedPrimaryStudySession.mode !== mode) return false;
+    const paused = pausedPrimaryStudySession;
     const sessionState = getState();
-    if (sessionState.currentCardIndex >= sessionState.dueCards.length) {
+    if (paused.inMemory && sessionState.currentCardIndex < sessionState.dueCards.length) {
         pausedPrimaryStudySession = null;
-        currentPrimaryStudyMode = null;
-        return false;
+        isInStudySession = true;
+        setHomeReviewVisible(false);
+        document.getElementById('topics-grid')?.classList.add('hidden');
+        document.getElementById('dashboard')?.classList.add('hidden');
+        document.getElementById('session-complete')?.classList.add('hidden');
+        document.getElementById('study-area')?.classList.remove('hidden');
+        renderStudyCardBreadcrumb(sessionState.currentCard);
+        setupStudyEventListeners();
+        return true;
     }
 
+    showReviewLoading('paused session');
+    try {
+        const fileSpecs = paused.queue.map(entry => ({ repo: entry.repo, path: entry.filepath }));
+        await ensureRepositoriesLoaded(
+            [...new Set(fileSpecs.map(entry => entry.repo))],
+            updateReviewLoading,
+            fileSpecs
+        );
+    } catch (error) {
+        console.error('[Main] Failed to restore paused session:', error);
+        alert('The paused session could not be loaded. Check your connection and try again.');
+        return true;
+    } finally {
+        hideReviewLoading();
+    }
+
+    const [cards, reviews] = await Promise.all([getAllCards(), getAllReviews()]);
+    const cardMap = new Map(cards.map(card => [card.hash, card]));
+    const reviewMap = new Map(reviews.map(review => [review.cardHash, review]));
+    const queue = paused.queue.map(entry => {
+        const card = cardMap.get(entry.cardHash);
+        const review = reviewMap.get(entry.cardHash);
+        if (!card || (mode === 'new' && review) || (mode === 'due' && !review)) return null;
+        return { card, cardHash: entry.cardHash, fsrsCard: review?.fsrsCard || null };
+    }).filter(Boolean);
+
+    if (queue.length === 0) {
+        discardPausedPrimaryStudySession();
+        await renderReviewButton({ refreshStatus: true });
+        return true;
+    }
+
+    currentPrimaryStudyMode = mode;
     pausedPrimaryStudySession = null;
-    isInStudySession = true;
-    setHomeReviewVisible(false);
-    document.getElementById('topics-grid')?.classList.add('hidden');
-    document.getElementById('dashboard')?.classList.add('hidden');
-    document.getElementById('session-complete')?.classList.add('hidden');
-    document.getElementById('study-area')?.classList.remove('hidden');
-    renderStudyCardBreadcrumb(sessionState.currentCard);
-    setupStudyEventListeners();
+    enterStudyArea(
+        ['home', mode === 'due' ? 'Due review' : 'New learning'],
+        {
+            total: paused.completedCards + queue.length,
+            due: mode === 'due' ? queue.length : 0,
+            fresh: mode === 'new' ? queue.length : 0
+        }
+    );
+    startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb, {
+        completedCards: paused.completedCards,
+        onProgress: persistCurrentPrimaryStudySession
+    });
+    persistCurrentPrimaryStudySession();
     return true;
 }
 
@@ -2684,6 +2759,7 @@ function discardPausedPrimaryStudySession() {
     if (pausedPrimaryStudySession) cleanupStudySession();
     pausedPrimaryStudySession = null;
     currentPrimaryStudyMode = null;
+    clearStudySession();
 }
 
 function closeStudySettings() {
@@ -2930,7 +3006,7 @@ async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}
     const newBtn = document.getElementById('learn-new-btn');
     const activeBtn = isDueReview ? dueBtn : newBtn;
 
-    if (resumePrimaryStudySession(mode)) return;
+    if (await resumePrimaryStudySession(mode)) return;
 
     if (pausedPrimaryStudySession && pausedPrimaryStudySession.mode !== mode) {
         const replace = await confirmDialog({
@@ -3009,7 +3085,10 @@ async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}
     );
     currentPrimaryStudyMode = mode;
     pausedPrimaryStudySession = null;
-    startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb);
+    startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb, {
+        onProgress: persistCurrentPrimaryStudySession
+    });
+    persistCurrentPrimaryStudySession();
 }
 
 /**
@@ -3098,6 +3177,7 @@ async function exitStudySession(skipRender = false) {
     isDrillAll = false;
     currentPrimaryStudyMode = null;
     pausedPrimaryStudySession = null;
+    clearStudySession();
 
     // Cleanup study session state
     cleanupStudySession();
@@ -3149,6 +3229,7 @@ async function exitStudySession(skipRender = false) {
 function onSessionComplete() {
     currentPrimaryStudyMode = null;
     pausedPrimaryStudySession = null;
+    clearStudySession();
     const studyArea = document.getElementById('study-area');
     const sessionComplete = document.getElementById('session-complete');
 

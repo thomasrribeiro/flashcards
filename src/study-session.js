@@ -22,7 +22,8 @@ let state = {
     deckId: null,
     fileFilter: null,
     onComplete: null,
-    onCardChange: null
+    onCardChange: null,
+    onProgress: null
 };
 
 // Step guidance tooltips
@@ -108,7 +109,8 @@ export async function startDrillSession(onComplete, onCardChange, options = {}) 
         deckId: '__drill-all__',
         fileFilter: null,
         onComplete,
-        onCardChange
+        onCardChange,
+        onProgress: null
     };
 
     const allCards = await getAllCards();
@@ -155,7 +157,11 @@ export async function startDrillSession(onComplete, onCardChange, options = {}) 
  * Start a Today session from a prebuilt queue (see today-queue.js).
  * Entries with fsrsCard === null are new cards and get a fresh FSRS card.
  */
-export function startTodaySession(queue, onComplete, onCardChange) {
+export function startTodaySession(queue, onComplete, onCardChange, {
+    completedCards = 0,
+    onProgress = null
+} = {}) {
+    const completed = Math.max(0, Math.floor(Number(completedCards) || 0));
     state = {
         currentCardIndex: 0,
         dueCards: queue.map(({ card, fsrsCard, cardHash }) => ({
@@ -163,8 +169,8 @@ export function startTodaySession(queue, onComplete, onCardChange) {
             fsrsCard: fsrsCard || createCard(),
             cardHash
         })),
-        totalCards: queue.length,
-        reviewedCards: 0,
+        totalCards: completed + queue.length,
+        reviewedCards: completed,
         reviewedCount: 0,
         isRevealed: false,
         currentCard: null,
@@ -174,7 +180,8 @@ export function startTodaySession(queue, onComplete, onCardChange) {
         deckId: '__today__',
         fileFilter: null,
         onComplete,
-        onCardChange
+        onCardChange,
+        onProgress
     };
 
     updateStats();
@@ -204,7 +211,8 @@ export async function startSession(deckId, fileFilter, onComplete, onCardChange)
         deckId,
         fileFilter,
         onComplete,
-        onCardChange
+        onCardChange,
+        onProgress: null
     };
 
     // Load due cards
@@ -454,6 +462,7 @@ export async function gradeCard(grade) {
 
     // Update progress bar (now using incremented index)
     updateStats();
+    state.onProgress?.(getState());
 
     // Show next card
     showNextCard();
@@ -497,7 +506,8 @@ export function cleanup() {
         deckId: null,
         fileFilter: null,
         onComplete: null,
-        onCardChange: null
+        onCardChange: null,
+        onProgress: null
     };
 }
 

@@ -2197,6 +2197,22 @@ kbd {
 }
 
 @media (max-width: 680px) {
+    .search-input {
+        width: 100%;
+    }
+
+    .review-row {
+        flex-wrap: wrap;
+    }
+
+    .streak-badge {
+        margin-left: 0;
+    }
+
+    .study-settings-btn {
+        flex-shrink: 0;
+    }
+
     .study-settings-body {
         grid-template-columns: 1fr;
     }
@@ -2378,6 +2394,8 @@ kbd {
 }
 .col-pane:last-child { border-right: none; }
 
+.col-pane-label { display: none; }
+
 .col-row {
     display: flex;
     align-items: center;
@@ -2443,7 +2461,28 @@ kbd {
 
 @media (max-width: 760px) {
     .columns-view { flex-direction: column; height: auto; }
-    .col-pane { flex: none; border-right: none; border-bottom: 1px solid #ddd; height: calc(var(--col-row-h) * 5); }
+    .col-pane {
+        flex: none;
+        border-right: none;
+        border-bottom: 3px solid var(--black);
+        height: calc(var(--col-row-h) * 5);
+    }
+    .col-pane:last-child { border-bottom: none; }
+    .col-pane-label {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 8px;
+        border-bottom: 2px solid var(--black);
+        background: #f2f2f2;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
 }
 
 /* ── Study session breadcrumb + scope info ── */
