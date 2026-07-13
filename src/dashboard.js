@@ -1,7 +1,7 @@
 /**
  * Analytics dashboard — inline SVG, no chart library (keeps the no-framework,
  * near-zero-dependency character of the app). Renders:
- *   - a 26-week review heatmap
+ *   - a calendar-aligned, one-year review heatmap
  *   - weekly retention (recall accuracy) line
  *   - projected due load over the next 30 days
  *   - per-deck reviewed counts
@@ -33,12 +33,19 @@ function esc(s) {
     return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-/** 26-week heatmap: columns = weeks, rows = weekday. */
-function heatmapSvg(heatmap) {
+/**
+ * Calendar-aligned activity for the last year. Columns are Sunday-based weeks,
+ * matching the familiar contribution-calendar layout; rows are weekdays.
+ */
+export function heatmapHtml(heatmap, now = new Date()) {
     const byDate = new Map(heatmap.map(d => [d.date, d]));
-    const weeks = 26, cell = 13, gap = 3, size = cell + gap;
-    const today = new Date();
-    // Sunday of the current week
+    const weeks = 53, cell = 11, gap = 3, size = cell + gap;
+    const gridX = 34, gridY = 22;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const rangeStart = new Date(today);
+    rangeStart.setDate(today.getDate() - 364);
+
+    // Sunday at the beginning of the leftmost calendar column.
     const start = new Date(today);
     start.setDate(today.getDate() - today.getDay() - (weeks - 1) * 7);
 
@@ -46,22 +53,104 @@ function heatmapSvg(heatmap) {
     for (const d of heatmap) max = Math.max(max, d.reviews);
 
     const rects = [];
+    const monthLabels = [];
+    let lastMonth = null;
     for (let w = 0; w < weeks; w++) {
+        const weekStart = new Date(start);
+        weekStart.setDate(start.getDate() + w * 7);
+
+        // Put each month name over the week that actually contains its first
+        // day. The first partial month is labeled over the leftmost column.
+        const visibleDays = [];
         for (let dow = 0; dow < 7; dow++) {
-            const day = new Date(start);
-            day.setDate(start.getDate() + w * 7 + dow);
-            if (day > today) continue;
+            const candidate = new Date(weekStart);
+            candidate.setDate(weekStart.getDate() + dow);
+            if (candidate < rangeStart || candidate > today) continue;
+            visibleDays.push(candidate);
+        }
+        const labelDay = w === 0
+            ? visibleDays[0]
+            : visibleDays.find(candidate => candidate.getDate() === 1);
+        if (labelDay) {
+            const monthKey = `${labelDay.getFullYear()}-${labelDay.getMonth()}`;
+            if (monthKey !== lastMonth) {
+                monthLabels.push(`<text class="heatmap-month" x="${gridX + w * size}" y="11">${esc(labelDay.toLocaleDateString(undefined, { month: 'short' }))}</text>`);
+                lastMonth = monthKey;
+            }
+        }
+
+        for (let dow = 0; dow < 7; dow++) {
+            const day = new Date(weekStart);
+            day.setDate(weekStart.getDate() + dow);
+            if (day < rangeStart || day > today) continue;
             const key = getLocalDate(day);
             const rec = byDate.get(key);
             const n = rec ? rec.reviews : 0;
-            const intensity = n === 0 ? 0 : 0.25 + 0.75 * (n / max);
+            const level = n === 0 ? 0 : Math.max(1, Math.ceil(4 * Math.log1p(n) / Math.log1p(max)));
+            const intensity = [1, 0.28, 0.5, 0.72, 1][level];
             const fill = n === 0 ? '#eee' : GOLD;
             const stroke = rec && rec.goalMet ? INK : 'none';
-            rects.push(`<rect x="${w * size}" y="${dow * size}" width="${cell}" height="${cell}" rx="2" fill="${fill}" fill-opacity="${intensity || 1}" stroke="${stroke}" stroke-width="${stroke === 'none' ? 0 : 1.5}"><title>${key}: ${n} reviews${rec && rec.goalMet ? ' ✓' : ''}</title></rect>`);
+            const dateLabel = day.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+            const reviewLabel = `${n} ${n === 1 ? 'review' : 'reviews'}`;
+            const label = `${dateLabel}: ${reviewLabel}${rec && rec.goalMet ? '; daily goal met' : ''}`;
+            rects.push(`<rect class="heatmap-day heatmap-level-${level}${rec && rec.goalMet ? ' goal-met' : ''}" data-label="${esc(label)}" x="${gridX + w * size}" y="${gridY + dow * size}" width="${cell}" height="${cell}" rx="2" fill="${fill}" fill-opacity="${intensity}" stroke="${stroke}" stroke-width="${stroke === 'none' ? 0 : 1.5}" tabindex="${n > 0 ? 0 : -1}" role="gridcell" aria-label="${esc(label)}"></rect>`);
         }
     }
-    const width = weeks * size, height = 7 * size;
-    return `<svg viewBox="0 0 ${width} ${height}" width="100%" style="max-width:${width}px" role="img" aria-label="Review activity heatmap">${rects.join('')}</svg>`;
+
+    const weekdays = [[1, 'Mon'], [3, 'Wed'], [5, 'Fri']]
+        .map(([dow, label]) => `<text class="heatmap-weekday" x="0" y="${gridY + dow * size + cell - 1}">${label}</text>`)
+        .join('');
+    const width = gridX + weeks * size - gap, height = gridY + 7 * size;
+    const total = heatmap.reduce((sum, day) => sum + day.reviews, 0);
+    const rangeFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    const rangeLabel = `${rangeFormatter.format(rangeStart)} – ${rangeFormatter.format(today)}`;
+    const yearLabel = rangeStart.getFullYear() === today.getFullYear()
+        ? String(today.getFullYear())
+        : `${rangeStart.getFullYear()}–${today.getFullYear()}`;
+
+    return `<div class="review-heatmap">
+        <div class="heatmap-summary">
+            <strong>${total.toLocaleString()} ${total === 1 ? 'review' : 'reviews'} in the last year</strong>
+            <span><span class="heatmap-year">${yearLabel}</span>${esc(rangeLabel)}</span>
+        </div>
+        <div class="heatmap-scroll" tabindex="0" aria-label="Scrollable review activity calendar">
+            <svg class="review-heatmap-svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="grid" aria-label="Review activity from ${esc(rangeLabel)}">${monthLabels.join('')}${weekdays}${rects.join('')}</svg>
+        </div>
+        <div class="heatmap-footer">
+            <span class="heatmap-goal-key"><span class="heatmap-legend-cell goal-met"></span> Daily goal met</span>
+            <span class="heatmap-legend" aria-label="Review count intensity: fewer to more">
+                <span>Fewer</span>
+                ${[0, 1, 2, 3, 4].map(level => `<span class="heatmap-legend-cell heatmap-level-${level}"></span>`).join('')}
+                <span>More</span>
+            </span>
+        </div>
+        <div class="heatmap-tooltip" role="tooltip" hidden></div>
+    </div>`;
+}
+
+function wireHeatmapTooltip(root) {
+    const wrapper = root.querySelector('.review-heatmap');
+    const tooltip = wrapper?.querySelector('.heatmap-tooltip');
+    if (!wrapper || !tooltip) return;
+
+    const show = event => {
+        const cell = event.currentTarget;
+        const cellRect = cell.getBoundingClientRect();
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const desiredX = cellRect.left - wrapperRect.left + cellRect.width / 2;
+        tooltip.textContent = cell.dataset.label;
+        tooltip.style.left = `${Math.max(105, Math.min(wrapper.clientWidth - 105, desiredX))}px`;
+        tooltip.style.top = `${cellRect.top - wrapperRect.top - 7}px`;
+        tooltip.hidden = false;
+    };
+    const hide = () => { tooltip.hidden = true; };
+
+    wrapper.querySelectorAll('.heatmap-day').forEach(cell => {
+        cell.addEventListener('pointerenter', show);
+        cell.addEventListener('pointerleave', hide);
+        cell.addEventListener('focus', show);
+        cell.addEventListener('blur', hide);
+    });
 }
 
 /** Weekly retention line chart. */
@@ -140,9 +229,10 @@ export async function renderDashboard() {
                 <div class="dash-kpi"><strong>lvl ${level}</strong><span>${habit ? habit.totalXp : 0} XP</span></div>
             </div>
         </div>
-        <section class="dash-section"><h3>Review activity</h3>${heatmapSvg(stats.heatmap)}</section>
+        <section class="dash-section"><h3>Review activity</h3>${heatmapHtml(stats.heatmap)}</section>
         <section class="dash-section"><h3>Retention (weekly recall accuracy)</h3>${retentionSvg(stats.retention)}</section>
         <section class="dash-section"><h3>Upcoming reviews (next 30 days)</h3>${projectedSvg(stats.projectedDue)}</section>
         <section class="dash-section"><h3>Reviewed by deck</h3><div class="dash-decks">${perDeckHtml(stats.perDeck)}</div></section>
     `;
+    wireHeatmapTooltip(el);
 }

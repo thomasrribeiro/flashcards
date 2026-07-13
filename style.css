@@ -1747,6 +1747,142 @@ kbd {
     border-bottom: 1px solid var(--black);
 }
 
+.review-heatmap {
+    position: relative;
+}
+
+.heatmap-summary,
+.heatmap-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    font-size: 0.76rem;
+}
+
+.heatmap-summary {
+    margin-bottom: 8px;
+}
+
+.heatmap-summary > span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #666;
+    white-space: nowrap;
+}
+
+.heatmap-year {
+    border: 1px solid var(--black);
+    color: var(--black);
+    padding: 2px 6px;
+}
+
+.heatmap-scroll {
+    overflow-x: auto;
+    padding: 6px 0 4px;
+    scrollbar-width: thin;
+}
+
+.review-heatmap-svg {
+    display: block;
+    max-width: none;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.heatmap-month,
+.heatmap-weekday {
+    fill: #666;
+    font-size: 9px;
+}
+
+.heatmap-day {
+    outline: none;
+}
+
+.heatmap-day:hover,
+.heatmap-day:focus {
+    stroke: var(--black);
+    stroke-width: 2px;
+}
+
+.heatmap-footer {
+    margin-top: 7px;
+    color: #666;
+}
+
+.heatmap-goal-key,
+.heatmap-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.heatmap-legend-cell {
+    width: 11px;
+    height: 11px;
+    display: inline-block;
+    border-radius: 2px;
+    background: var(--gold);
+}
+
+.heatmap-level-0 {
+    background: #eee;
+}
+
+.heatmap-level-1 {
+    background: rgba(245, 200, 66, 0.28);
+}
+
+.heatmap-level-2 {
+    background: rgba(245, 200, 66, 0.5);
+}
+
+.heatmap-level-3 {
+    background: rgba(245, 200, 66, 0.72);
+}
+
+.heatmap-level-4 {
+    background: var(--gold);
+}
+
+.heatmap-legend-cell.goal-met {
+    border: 2px solid var(--black);
+    box-sizing: border-box;
+}
+
+.heatmap-tooltip {
+    position: absolute;
+    z-index: 5;
+    width: max-content;
+    max-width: 230px;
+    transform: translate(-50%, -100%);
+    padding: 5px 8px;
+    background: var(--black);
+    color: var(--white);
+    font-size: 0.72rem;
+    line-height: 1.35;
+    pointer-events: none;
+    text-align: center;
+}
+
+.heatmap-tooltip[hidden] {
+    display: none;
+}
+
+@media (max-width: 680px) {
+    .heatmap-summary {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .heatmap-footer {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
 .dash-empty {
     font-size: 0.85rem;
     opacity: 0.6;
