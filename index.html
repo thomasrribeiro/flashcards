@@ -122,8 +122,36 @@
                     <div class="review-row">
                         <button id="review-due-btn" class="review-btn" disabled>Review due</button>
                         <button id="learn-new-btn" class="review-btn learn-new-btn" disabled>Learn new</button>
+                        <button id="study-settings-btn" class="study-settings-btn" type="button" aria-expanded="false" aria-controls="study-settings-panel">Settings</button>
                         <span id="streak-badge" class="streak-badge hidden" title="Daily streak"></span>
                     </div>
+                    <div id="study-context" class="study-context" aria-live="polite"></div>
+                    <form id="study-settings-panel" class="study-settings-panel hidden">
+                        <div class="study-setting-field">
+                            <label for="daily-new-target">Daily new-card target</label>
+                            <select id="daily-new-target">
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="custom">Custom</option>
+                                <option value="unlimited">Unlimited</option>
+                            </select>
+                            <input id="daily-new-custom" class="hidden" type="number" min="1" max="500" step="1" inputmode="numeric" aria-label="Custom daily new-card target" />
+                        </div>
+                        <div class="study-setting-field">
+                            <label for="new-session-size">New-card session size</label>
+                            <select id="new-session-size">
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                            </select>
+                        </div>
+                        <p class="study-settings-help">The target is a guide, not a lock. Extra learning stays in finite batches so future review load remains visible.</p>
+                        <div class="study-settings-actions">
+                            <button id="study-settings-cancel" type="button">Cancel</button>
+                            <button type="submit">Save</button>
+                        </div>
+                    </form>
                 </div>
 
                 <!-- Deck Navigation Breadcrumb -->
@@ -194,6 +222,10 @@
                     <h2>Session Complete!</h2>
                     <p>Great work! All cards have been reviewed.</p>
                     <p id="session-habit-line" class="session-habit-line"></p>
+                    <div class="session-complete-actions">
+                        <button id="session-back-home" type="button">Back to decks</button>
+                        <button id="session-learn-more" class="hidden" type="button">Learn more</button>
+                    </div>
                 </div>
             </main>
         </div>

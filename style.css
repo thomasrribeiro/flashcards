@@ -1399,6 +1399,113 @@ kbd {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
+}
+
+.study-context {
+    min-height: 1em;
+    margin-top: -8px;
+    color: #666;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.study-settings-btn {
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #666;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.76rem;
+}
+
+.study-settings-btn:hover,
+.study-settings-btn[aria-expanded="true"] {
+    color: var(--black);
+    text-decoration: underline;
+}
+
+.study-settings-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    gap: 12px 18px;
+    max-width: 620px;
+    padding: 14px;
+    border: 1px solid var(--black);
+    background: var(--white);
+}
+
+.study-settings-panel.hidden {
+    display: none;
+}
+
+.study-setting-field {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.76rem;
+}
+
+.study-setting-field select,
+.study-setting-field input {
+    min-width: 82px;
+    height: 30px;
+    box-sizing: border-box;
+    border: 1px solid var(--black);
+    border-radius: 0;
+    background: var(--white);
+    color: var(--black);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.76rem;
+}
+
+.study-setting-field input {
+    grid-column: 2;
+    width: 82px;
+    padding: 0 6px;
+}
+
+.study-settings-help {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: #666;
+    font-size: 0.72rem;
+    line-height: 1.45;
+}
+
+.study-settings-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.study-settings-actions button,
+.session-complete-actions button {
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--black);
+    border-radius: 0;
+    background: var(--white);
+    color: var(--black);
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.76rem;
+}
+
+.study-settings-actions button[type="submit"],
+#session-learn-more {
+    background: var(--gold);
+}
+
+.session-complete-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 18px;
 }
 
 .review-loading {
@@ -2107,6 +2214,17 @@ kbd {
     color: #999;
     border-color: #ccc;
     cursor: default;
+}
+
+@media (max-width: 680px) {
+    .study-settings-panel {
+        grid-template-columns: 1fr;
+    }
+
+    .study-settings-help,
+    .study-settings-actions {
+        grid-column: 1;
+    }
 }
 
 .view-toggle {

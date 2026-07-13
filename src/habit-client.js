@@ -15,6 +15,7 @@ const settingsRequests = new Map();
 const DEFAULT_SETTINGS = {
     activeDecks: [],
     newPerDay: 10,
+    newBatchSize: 10,
     dailyGoal: 10,
     timezone: null
 };

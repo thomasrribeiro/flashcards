@@ -9,7 +9,7 @@ import { hashCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories, getOrgRepositories } from './github-client.js';
 import { githubAuth } from './github-auth.js';
 import { startSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
-import { buildTodayQueue, SCOPE_SEP } from './today-queue.js';
+import { buildTodayQueue, getLocalDate, newCardSessionLimit, newLearningPlan, SCOPE_SEP } from './today-queue.js';
 import { getSettings, saveSettings, getHabitStatus, levelForXp } from './habit-client.js';
 import { renderDashboard } from './dashboard.js';
 import { getPushState, subscribeToPush } from './push-client.js';
@@ -624,7 +624,7 @@ function scheduleDailyPreparation() {
  * Prepare exact overdue files first, then starred files until today's new-card
  * allowance is satisfied. No unrelated card bodies are downloaded.
  */
-async function prepareDailyContent({ includeDue = true, includeNew = true } = {}) {
+async function prepareDailyContent({ includeDue = true, includeNew = true, allowBeyondTarget = false } = {}) {
     const currentSettings = habitSettings;
     const [reviews, decks, status] = await Promise.all([
         getAllReviews(),
@@ -685,7 +685,12 @@ async function prepareDailyContent({ includeDue = true, includeNew = true } = {}
         activeFileKeys.has(`${card.source?.repo || card.deckName}\0${card.source?.file || ''}`)
         && !reviewHashes.has(card.hash)
     ).length;
-    const newBudget = Math.max(0, habitSettings.newPerDay - status.today.newCards);
+    const newBudget = newCardSessionLimit({
+        newPerDay: habitSettings.newPerDay,
+        newBatchSize: habitSettings.newBatchSize,
+        newIntroducedToday: status.today.newCards,
+        allowBeyondTarget
+    });
 
     const seen = new Set(loadedFileKeys);
     for (const { repo, file } of activeFiles) {
@@ -1632,9 +1637,22 @@ function setupEventListeners() {
     }
     if (learnNewBtn) {
         learnNewBtn.addEventListener('click', () => {
-            if (!learnNewBtn.disabled) startPrimaryStudySession('new');
+            if (!learnNewBtn.disabled) startPrimaryStudySession('new', {
+                allowBeyondTarget: learnNewBtn.dataset.allowBeyondTarget === 'true'
+            });
         });
     }
+
+    document.getElementById('study-settings-btn')?.addEventListener('click', openStudySettings);
+    document.getElementById('study-settings-cancel')?.addEventListener('click', closeStudySettings);
+    document.getElementById('daily-new-target')?.addEventListener('change', reflectCustomTargetField);
+    document.getElementById('study-settings-panel')?.addEventListener('submit', saveStudySettingsFromForm);
+    document.getElementById('session-back-home')?.addEventListener('click', () => showMainView('decks'));
+    document.getElementById('session-learn-more')?.addEventListener('click', event => {
+        startPrimaryStudySession('new', {
+            allowBeyondTarget: event.currentTarget.dataset.allowBeyondTarget === 'true'
+        });
+    });
 
     // Tree / Cards / Columns view toggle
     document.getElementById('view-tree')?.addEventListener('click', () => setDeckView('tree'));
@@ -2083,6 +2101,7 @@ let allReviewsCache = null; // Cache for reviews during navigation
 let isInStudySession = false; // Track if we're in study mode
 let currentStudyFile = null; // The file being studied (for breadcrumb)
 let isDrillAll = false; // Track if we're in a cross-deck drill-all session
+let dueWarningAcknowledgedDate = null;
 
 /**
  * Restore navigation state from URL parameters
@@ -2551,6 +2570,7 @@ function exitDeckNavigation() {
 async function renderReviewButton({ refreshStatus = true } = {}) {
     const dueBtn = document.getElementById('review-due-btn');
     const newBtn = document.getElementById('learn-new-btn');
+    const context = document.getElementById('study-context');
     if (!dueBtn || !newBtn) return;
 
     try {
@@ -2566,27 +2586,121 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
         const allReviews = await getAllReviews();
         const now = new Date();
         const due = allReviews.filter(review => new Date(review.fsrsCard.due) <= now).length;
+        const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        const tomorrowEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
+        const dueTomorrow = allReviews.filter(review => {
+            const date = new Date(review.fsrsCard.due);
+            return date >= tomorrowStart && date < tomorrowEnd;
+        }).length;
         const introducedToday = lastHabitStatus?.today?.newCards || 0;
-        const remainingNew = Math.max(0, (habitSettings.newPerDay || 0) - introducedToday);
+        const { dailyTarget, batchSize, unlimited, targetReached, nextBatch } = newLearningPlan({
+            newPerDay: habitSettings.newPerDay,
+            newBatchSize: habitSettings.newBatchSize,
+            newIntroducedToday: introducedToday
+        });
 
         dueBtn.disabled = due === 0;
-        dueBtn.textContent = 'Review due';
+        dueBtn.textContent = due > 0 ? `Review due (${due})` : 'Review due';
         dueBtn.title = due > 0
             ? `${due} learned card${due === 1 ? '' : 's'} due now`
             : 'No learned cards are due';
 
-        newBtn.disabled = active.length === 0 || remainingNew === 0;
-        newBtn.textContent = 'Learn new';
+        newBtn.disabled = active.length === 0;
+        newBtn.dataset.allowBeyondTarget = targetReached ? 'true' : 'false';
+        newBtn.textContent = targetReached
+            ? `Learn ${batchSize} more`
+            : `Learn ${nextBatch} new`;
         newBtn.title = active.length === 0
             ? 'Star items (★) to choose new material'
-            : remainingNew > 0
-                ? `Introduce up to ${remainingNew} new card${remainingNew === 1 ? '' : 's'}`
-                : 'Daily new-card allowance reached';
+            : targetReached
+                ? `Daily target reached; deliberately introduce another batch of up to ${batchSize}`
+                : unlimited
+                    ? `Introduce up to ${batchSize} new cards in this session; no daily target`
+                    : `Introduce up to ${nextBatch} new card${nextBatch === 1 ? '' : 's'} in this session`;
+
+        if (context) {
+            const parts = [];
+            if (due > 0) parts.push(`${due} due now`);
+            if (unlimited) {
+                parts.push(`${introducedToday} new today`);
+                parts.push('unlimited target');
+            } else {
+                parts.push(`${introducedToday}/${dailyTarget} new today`);
+                if (targetReached) parts.push('target reached');
+            }
+            parts.push(`${dueTomorrow} due tomorrow`);
+            context.textContent = parts.join(' · ');
+        }
     } catch (error) {
         console.error('[Main] Failed to render study buttons:', error);
         dueBtn.disabled = true;
         newBtn.disabled = true;
+        if (context) context.textContent = 'Study status unavailable';
     }
+}
+
+function closeStudySettings() {
+    document.getElementById('study-settings-panel')?.classList.add('hidden');
+    document.getElementById('study-settings-btn')?.setAttribute('aria-expanded', 'false');
+}
+
+function reflectCustomTargetField() {
+    const select = document.getElementById('daily-new-target');
+    const custom = document.getElementById('daily-new-custom');
+    if (!select || !custom) return;
+    custom.classList.toggle('hidden', select.value !== 'custom');
+    custom.required = select.value === 'custom';
+}
+
+function openStudySettings() {
+    const panel = document.getElementById('study-settings-panel');
+    const button = document.getElementById('study-settings-btn');
+    const target = document.getElementById('daily-new-target');
+    const custom = document.getElementById('daily-new-custom');
+    const batch = document.getElementById('new-session-size');
+    if (!panel || !button || !target || !custom || !batch) return;
+
+    if (!panel.classList.contains('hidden')) {
+        closeStudySettings();
+        return;
+    }
+
+    const savedTarget = Number(habitSettings?.newPerDay ?? 10);
+    if (savedTarget === -1) target.value = 'unlimited';
+    else if ([5, 10, 20].includes(savedTarget)) target.value = String(savedTarget);
+    else {
+        target.value = 'custom';
+        custom.value = String(Math.max(1, savedTarget || 10));
+    }
+    batch.value = String([5, 10, 20].includes(Number(habitSettings?.newBatchSize))
+        ? Number(habitSettings.newBatchSize)
+        : 10);
+    reflectCustomTargetField();
+    panel.classList.remove('hidden');
+    button.setAttribute('aria-expanded', 'true');
+}
+
+async function saveStudySettingsFromForm(event) {
+    event.preventDefault();
+    const targetSelect = document.getElementById('daily-new-target');
+    const custom = document.getElementById('daily-new-custom');
+    const batchSelect = document.getElementById('new-session-size');
+    if (!targetSelect || !custom || !batchSelect) return;
+
+    let newPerDay;
+    if (targetSelect.value === 'unlimited') newPerDay = -1;
+    else if (targetSelect.value === 'custom') {
+        newPerDay = Math.min(500, Math.max(1, Math.floor(Number(custom.value) || 10)));
+    } else newPerDay = Number(targetSelect.value);
+    const newBatchSize = Number(batchSelect.value);
+
+    habitSettings = { ...(habitSettings || {}), newPerDay, newBatchSize };
+    closeStudySettings();
+    await renderReviewButton({ refreshStatus: false });
+    const saved = await saveSettings({ newPerDay, newBatchSize });
+    habitSettings = { ...habitSettings, ...saved, newPerDay, newBatchSize };
+    await renderReviewButton({ refreshStatus: false });
+    queueDailyPreparation().catch(error => console.warn('[Main] Settings prefetch failed:', error));
 }
 
 /**
@@ -2765,17 +2879,38 @@ async function toggleActiveSubject(deckIds) {
     await applyActiveScopes(active);
 }
 
-/** Start either scheduled reviews or new learning; never mix the two. */
-async function startPrimaryStudySession(mode) {
+/** Start either scheduled reviews or one finite new-learning batch; never mix the two. */
+async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}) {
     const isDueReview = mode === 'due';
     const dueBtn = document.getElementById('review-due-btn');
     const newBtn = document.getElementById('learn-new-btn');
     const activeBtn = isDueReview ? dueBtn : newBtn;
+
+    if (!isDueReview) {
+        const reviews = await getAllReviews();
+        const due = reviews.filter(review => new Date(review.fsrsCard.due) <= new Date()).length;
+        const today = getLocalDate();
+        if (due > 0 && dueWarningAcknowledgedDate !== today) {
+            const proceed = await confirmDialog({
+                title: 'Reviews are waiting',
+                message: `${due} learned card${due === 1 ? ' is' : 's are'} due now. Clearing due reviews first protects older memories and keeps the future workload smaller. You can still learn new material if that is your deliberate choice.`,
+                confirmText: 'Learn anyway',
+                cancelText: 'Not now'
+            });
+            if (!proceed) return;
+            dueWarningAcknowledgedDate = today;
+        }
+    }
+
     if (dueBtn) dueBtn.disabled = true;
     if (newBtn) newBtn.disabled = true;
     if (activeBtn) activeBtn.textContent = 'Loading...';
     try {
-        await prepareDailyContent({ includeDue: isDueReview, includeNew: !isDueReview });
+        await prepareDailyContent({
+            includeDue: isDueReview,
+            includeNew: !isDueReview,
+            allowBeyondTarget
+        });
     } catch (error) {
         console.error(`[Main] Failed to prepare ${mode} session:`, error);
         alert('Review content could not be loaded. Check your connection and try again.');
@@ -2799,7 +2934,9 @@ async function startPrimaryStudySession(mode) {
         reviews: allReviews,
         activeDeckIds: habitSettings.activeDecks,
         newPerDay: habitSettings.newPerDay,
-        newIntroducedToday: status.today.newCards
+        newBatchSize: habitSettings.newBatchSize,
+        newIntroducedToday: status.today.newCards,
+        allowBeyondTarget
     });
     const queue = combinedQueue.filter(entry =>
         isDueReview ? entry.fsrsCard !== null : entry.fsrsCard === null);
@@ -2959,14 +3096,40 @@ function onSessionComplete() {
         habitLine.textContent = '';
         getHabitStatus().then(status => {
             lastHabitStatus = status;
+            const currentSettings = habitSettings;
+            habitSettings = currentSettings
+                ? { ...status.settings, ...currentSettings, activeDecks: currentSettings.activeDecks || [] }
+                : status.settings;
             updateStreakBadge(status);
             const parts = [];
             if (status.streak > 0) parts.push(`\u{1F525} ${status.streak}-day streak`);
             parts.push(`+${status.today.xp} XP today`);
             parts.push(status.today.goalMet ? 'daily goal met ✓' : `${status.today.reviews}/${status.settings.dailyGoal} toward daily goal`);
             habitLine.textContent = parts.join(' · ');
+            updateSessionCompletionActions(status);
+            renderReviewButton({ refreshStatus: false }).catch(() => {});
         }).catch(() => {});
     }
+}
+
+function updateSessionCompletionActions(status) {
+    const learnMore = document.getElementById('session-learn-more');
+    if (!learnMore) return;
+    const active = habitSettings?.activeDecks || [];
+    if (active.length === 0) {
+        learnMore.classList.add('hidden');
+        return;
+    }
+
+    const { batchSize, targetReached, nextBatch } = newLearningPlan({
+        newPerDay: habitSettings?.newPerDay,
+        newBatchSize: habitSettings?.newBatchSize,
+        newIntroducedToday: status?.today?.newCards
+    });
+
+    learnMore.textContent = targetReached ? `Learn ${batchSize} more` : `Learn ${nextBatch} new`;
+    learnMore.dataset.allowBeyondTarget = targetReached ? 'true' : 'false';
+    learnMore.classList.remove('hidden');
 }
 
 /**

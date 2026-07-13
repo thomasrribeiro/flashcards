@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildTodayQueue, todayQueueCounts, getLocalDate } from './today-queue.js';
+import { buildTodayQueue, newCardSessionLimit, newLearningPlan, todayQueueCounts, getLocalDate } from './today-queue.js';
 
 const now = new Date('2026-07-08T12:00:00Z');
 const past = new Date('2026-07-01T12:00:00Z');
@@ -50,6 +50,55 @@ describe('buildTodayQueue', () => {
         const cards = [card('a', 'deck1', 0)];
         const q = buildTodayQueue({ cards, reviews: [], activeDeckIds: ['deck1'], newPerDay: 10, newIntroducedToday: 10, now });
         expect(q).toHaveLength(0);
+    });
+
+    it('keeps a large daily target in finite session batches', () => {
+        const cards = Array.from({ length: 30 }, (_, i) => card(`c${i}`, 'deck1', i));
+        const q = buildTodayQueue({
+            cards,
+            reviews: [],
+            activeDeckIds: ['deck1'],
+            newPerDay: 20,
+            newBatchSize: 10,
+            now
+        });
+        expect(q).toHaveLength(10);
+    });
+
+    it('allows another finite batch after the target on explicit request', () => {
+        const cards = Array.from({ length: 20 }, (_, i) => card(`c${i}`, 'deck1', i));
+        const q = buildTodayQueue({
+            cards,
+            reviews: [],
+            activeDeckIds: ['deck1'],
+            newPerDay: 10,
+            newBatchSize: 5,
+            newIntroducedToday: 10,
+            allowBeyondTarget: true,
+            now
+        });
+        expect(q).toHaveLength(5);
+    });
+
+    it('treats unlimited as unlimited per day but still batches each session', () => {
+        expect(newCardSessionLimit({
+            newPerDay: -1,
+            newBatchSize: 20,
+            newIntroducedToday: 200
+        })).toBe(20);
+    });
+
+    it('describes a reached soft target without eliminating the next batch', () => {
+        expect(newLearningPlan({
+            newPerDay: 10,
+            newBatchSize: 5,
+            newIntroducedToday: 12
+        })).toMatchObject({
+            dailyTarget: 10,
+            batchSize: 5,
+            targetReached: true,
+            nextBatch: 5
+        });
     });
 
     it('orders due before new, due oldest-first, new by frontmatter order', () => {

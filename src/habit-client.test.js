@@ -59,6 +59,7 @@ describe('habit settings persistence', () => {
         const settings = await getSettings();
 
         expect(settings.activeDecks).toEqual(['owner/deck']);
+        expect(settings.newBatchSize).toBe(10);
         await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
         expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/settings'), expect.objectContaining({
             method: 'POST',
