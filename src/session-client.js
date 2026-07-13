@@ -4,6 +4,7 @@ import { getCurrentUser } from './storage.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 const LOCAL_KEY = 'flashcards_study_session';
+const PENDING_KEY = 'flashcards_study_session_pending';
 let remoteQueue = Promise.resolve();
 
 function userId() {
@@ -46,15 +47,74 @@ function writeLocal(session) {
     }
 }
 
+function readPending() {
+    try { return JSON.parse(localStorage.getItem(PENDING_KEY) || 'null'); }
+    catch { return null; }
+}
+
+function writePending(action, session = null) {
+    const pending = {
+        version: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        action,
+        session
+    };
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify(pending)); }
+    catch (error) { console.error('[Session] Failed to queue session sync:', error); }
+    return pending;
+}
+
+function clearPending(version) {
+    try {
+        if (readPending()?.version === version) localStorage.removeItem(PENDING_KEY);
+    } catch { /* local fallback remains safe */ }
+}
+
 function enqueueRemote(operation) {
     remoteQueue = remoteQueue.catch(() => {}).then(operation);
     return remoteQueue;
+}
+
+async function syncPending(id, pending) {
+    if (!id || !pending) return;
+    await enqueueRemote(async () => {
+        const isSave = pending.action === 'save';
+        const response = await fetch(
+            isSave
+                ? `${WORKER_URL}/api/study-session`
+                : `${WORKER_URL}/api/study-session/${encodeURIComponent(id)}`,
+            isSave ? {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: id, session: pending.session }),
+                keepalive: true
+            } : { method: 'DELETE', keepalive: true }
+        );
+        if (!response.ok) throw new Error(response.statusText);
+        clearPending(pending.version);
+    });
+}
+
+async function flushPendingSession() {
+    const pending = readPending();
+    const id = userId();
+    if (!pending || !id || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+    try { await syncPending(id, pending); }
+    catch (error) { console.error('[Session] Pending session sync failed:', error); }
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('online', flushPendingSession);
 }
 
 export async function getStudySession() {
     const local = readLocal();
     const id = userId();
     if (!id) return local;
+    const pending = readPending();
+    if (pending) {
+        flushPendingSession();
+        return local;
+    }
     try {
         const response = await fetch(`${WORKER_URL}/api/study-session/${encodeURIComponent(id)}`);
         if (!response.ok) throw new Error(response.statusText);
@@ -72,18 +132,11 @@ export async function saveStudySession(rawSession) {
     const session = normalizePersistedStudySession(rawSession);
     if (!session) return clearStudySession();
     writeLocal(session);
+    const pending = writePending('save', session);
     const id = userId();
     if (!id) return session;
     try {
-        await enqueueRemote(async () => {
-            const response = await fetch(`${WORKER_URL}/api/study-session`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: id, session }),
-                keepalive: true
-            });
-            if (!response.ok) throw new Error(response.statusText);
-        });
+        await syncPending(id, pending);
     } catch (error) {
         console.error('[Session] Failed to save remote session:', error);
     }
@@ -92,16 +145,11 @@ export async function saveStudySession(rawSession) {
 
 export async function clearStudySession() {
     writeLocal(null);
+    const pending = writePending('clear');
     const id = userId();
     if (!id) return;
     try {
-        await enqueueRemote(async () => {
-            const response = await fetch(`${WORKER_URL}/api/study-session/${encodeURIComponent(id)}`, {
-                method: 'DELETE',
-                keepalive: true
-            });
-            if (!response.ok) throw new Error(response.statusText);
-        });
+        await syncPending(id, pending);
     } catch (error) {
         console.error('[Session] Failed to clear remote session:', error);
     }

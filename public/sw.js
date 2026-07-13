@@ -2,8 +2,8 @@
  * Service worker for the Flashcards PWA.
  *
  * Runtime-caching strategy (no build-time precache manifest — content-hashed
- * assets make cache-first safe, and the app is essentially always online at
- * review time; full offline study is intentionally out of scope for v1):
+ * assets make cache-first safe. Previously loaded deck files and the active
+ * session remain available during a connection interruption):
  *   - Worker origin (*.workers.dev)   → network-only  (never cache review/habit state)
  *   - GitHub API (api.github.com)     → stale-while-revalidate (decks load fast/offline)
  *   - same-origin navigations (HTML)  → network-first, fall back to cached shell
@@ -13,12 +13,22 @@
  * Also handles Web Push (see B3): a push shows a notification; a tap opens the app.
  */
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL_CACHE = `shell-${VERSION}`;
 const ASSET_CACHE = `assets-${VERSION}`;
 const GH_CACHE = `github-${VERSION}`;
 
-self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('install', event => {
+    const shell = new URL('./', self.registration.scope).toString();
+    const manifest = new URL('manifest.webmanifest', self.registration.scope).toString();
+    const icon = new URL('icons/icon-192.png', self.registration.scope).toString();
+    event.waitUntil(
+        caches.open(SHELL_CACHE)
+            .then(cache => cache.addAll([shell, manifest, icon]))
+            .catch(error => console.warn('[PWA] Initial shell cache failed:', error))
+            .then(() => self.skipWaiting())
+    );
+});
 
 self.addEventListener('activate', event => {
     event.waitUntil((async () => {
@@ -117,7 +127,7 @@ self.addEventListener('push', event => {
     const title = data.title || 'Flashcards';
     const body = data.body || 'Cards are due — keep your streak going.';
     const url = data.url || new URL('./?source=push', self.registration.scope).toString();
-    event.waitUntil(
+    const tasks = [
         self.registration.showNotification(title, {
             body,
             icon: new URL('icons/icon-192.png', self.registration.scope).toString(),
@@ -125,7 +135,12 @@ self.addEventListener('push', event => {
             data: { url },
             tag: 'daily-review'
         })
-    );
+    ];
+    const badgeCount = Math.max(0, Number(data.badgeCount) || 0);
+    if (badgeCount > 0 && 'setAppBadge' in self.registration) {
+        tasks.push(self.registration.setAppBadge(badgeCount));
+    }
+    event.waitUntil(Promise.all(tasks));
 });
 
 self.addEventListener('notificationclick', event => {

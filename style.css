@@ -1465,6 +1465,52 @@ kbd {
     line-height: 1.45;
 }
 
+#daily-reminder-time {
+    width: 110px;
+}
+
+.pwa-install-prompt {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--black);
+    background: #fff9df;
+    font-size: 0.74rem;
+    line-height: 1.45;
+}
+
+.pwa-install-prompt button {
+    flex-shrink: 0;
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--black);
+    background: var(--gold);
+    color: var(--black);
+    font: inherit;
+    cursor: pointer;
+}
+
+.pwa-install-modal-content {
+    max-width: 520px;
+}
+
+.pwa-install-body {
+    font-size: 0.82rem;
+    line-height: 1.6;
+}
+
+.pwa-install-body ol {
+    margin: 0;
+    padding-left: 24px;
+}
+
+.pwa-install-body p {
+    margin: 16px 0 0;
+    color: #666;
+}
+
 .session-complete-actions button {
     min-height: 32px;
     padding: 0 12px;
@@ -2219,6 +2265,11 @@ kbd {
 
     .study-settings-help {
         grid-column: 1;
+    }
+
+    .pwa-install-prompt {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }
 

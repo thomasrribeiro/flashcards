@@ -13,7 +13,7 @@ import { buildTodayQueue, getLocalDate, newCardSessionLimit, newLearningPlan, SC
 import { getSettings, saveSettings, getHabitStatus } from './habit-client.js';
 import { clearStudySession, getStudySession, saveStudySession } from './session-client.js';
 import { renderDashboard } from './dashboard.js';
-import { getPushState, subscribeToPush } from './push-client.js';
+import { getReminderPreferences, isIOSDevice, isStandalone, subscribeToPush, unsubscribeFromPush, updateAppBadge } from './push-client.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -94,10 +94,15 @@ async function init() {
 
         // Render the primary action and streak after the starred scope is shown.
         await renderReviewButton();
+        renderPwaInstallPrompt();
         scheduleDailyPreparation();
 
-        // Deep link from a push notification: jump straight into Today
-        if (new URL(window.location).searchParams.get('today') === '1') {
+        // Deep links from reminders enter due review or a persisted session.
+        const launchUrl = new URL(window.location);
+        const resumeMode = launchUrl.searchParams.get('resume');
+        if (['due', 'new'].includes(resumeMode) && pausedPrimaryStudySession?.mode === resumeMode) {
+            startPrimaryStudySession(resumeMode);
+        } else if (launchUrl.searchParams.get('today') === '1') {
             startPrimaryStudySession('due');
         }
 
@@ -107,7 +112,7 @@ async function init() {
         // intact so github-auth.js can complete the callback.
         const url = new URL(window.location);
         let stripped = false;
-        for (const key of ['deck', 'path', 'category', 'study', 'file', 'today']) {
+        for (const key of ['deck', 'path', 'category', 'study', 'file', 'today', 'resume']) {
             if (url.searchParams.has(key)) {
                 url.searchParams.delete(key);
                 stripped = true;
@@ -1657,9 +1662,14 @@ function setupEventListeners() {
     document.querySelector('#study-settings-modal .modal-overlay')?.addEventListener('click', closeStudySettings);
     document.getElementById('daily-new-target')?.addEventListener('change', reflectCustomTargetField);
     document.getElementById('study-settings-panel')?.addEventListener('submit', saveStudySettingsFromForm);
+    document.getElementById('pwa-install-btn')?.addEventListener('click', openPwaInstallGuide);
+    document.getElementById('pwa-install-close')?.addEventListener('click', closePwaInstallGuide);
+    document.getElementById('pwa-install-done')?.addEventListener('click', closePwaInstallGuide);
+    document.querySelector('#pwa-install-modal .modal-overlay')?.addEventListener('click', closePwaInstallGuide);
     document.addEventListener('keydown', event => {
-        if (event.key === 'Escape' && !document.getElementById('study-settings-modal')?.classList.contains('hidden')) {
-            closeStudySettings();
+        if (event.key === 'Escape') {
+            if (!document.getElementById('study-settings-modal')?.classList.contains('hidden')) closeStudySettings();
+            if (!document.getElementById('pwa-install-modal')?.classList.contains('hidden')) closePwaInstallGuide();
         }
     });
     document.getElementById('session-back-home')?.addEventListener('click', () => showMainView('decks'));
@@ -2644,11 +2654,13 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
                 newBtn.title = 'Continue the new-card session where you left off';
             }
         }
+        updateAppBadge(pausedPrimaryStudySession?.queue?.length || due);
 
     } catch (error) {
         console.error('[Main] Failed to render study buttons:', error);
         dueBtn.disabled = true;
         newBtn.disabled = true;
+        updateAppBadge(0);
     }
 }
 
@@ -2775,13 +2787,16 @@ function reflectCustomTargetField() {
     custom.required = select.value === 'custom';
 }
 
-function openStudySettings() {
+async function openStudySettings() {
     const modal = document.getElementById('study-settings-modal');
     const button = document.getElementById('study-settings-btn');
     const target = document.getElementById('daily-new-target');
     const custom = document.getElementById('daily-new-custom');
     const batch = document.getElementById('new-session-size');
-    if (!modal || !button || !target || !custom || !batch) return;
+    const reminderEnabled = document.getElementById('daily-reminder-enabled');
+    const reminderTime = document.getElementById('daily-reminder-time');
+    const reminderHelp = document.getElementById('reminder-settings-help');
+    if (!modal || !button || !target || !custom || !batch || !reminderEnabled || !reminderTime) return;
 
     if (!modal.classList.contains('hidden')) {
         closeStudySettings();
@@ -2799,9 +2814,27 @@ function openStudySettings() {
         ? Number(habitSettings.newBatchSize)
         : 10);
     reflectCustomTargetField();
+    reminderEnabled.value = 'false';
+    reminderTime.value = '18:00';
     modal.classList.remove('hidden');
     button.setAttribute('aria-expanded', 'true');
     target.focus();
+
+    const reminder = await getReminderPreferences();
+    if (modal.classList.contains('hidden')) return;
+    reminderEnabled.value = String(reminder.enabled);
+    reminderTime.value = reminder.reminderTime;
+    if (reminderHelp) {
+        if (reminder.state === 'needs-install') {
+            reminderHelp.textContent = 'Install the app on your Home Screen before enabling reminders on this device.';
+        } else if (reminder.state === 'denied') {
+            reminderHelp.textContent = 'Notifications are blocked in this device’s system settings.';
+        } else if (reminder.state === 'unsupported') {
+            reminderHelp.textContent = 'This browser does not support app reminders.';
+        } else {
+            reminderHelp.textContent = 'Uses this device’s timezone and only nudges you when cards are due or a session is paused.';
+        }
+    }
 }
 
 async function saveStudySettingsFromForm(event) {
@@ -2809,7 +2842,9 @@ async function saveStudySettingsFromForm(event) {
     const targetSelect = document.getElementById('daily-new-target');
     const custom = document.getElementById('daily-new-custom');
     const batchSelect = document.getElementById('new-session-size');
-    if (!targetSelect || !custom || !batchSelect) return;
+    const reminderEnabled = document.getElementById('daily-reminder-enabled');
+    const reminderTime = document.getElementById('daily-reminder-time');
+    if (!targetSelect || !custom || !batchSelect || !reminderEnabled || !reminderTime) return;
 
     let newPerDay;
     if (targetSelect.value === 'unlimited') newPerDay = -1;
@@ -2817,6 +2852,23 @@ async function saveStudySettingsFromForm(event) {
         newPerDay = Math.min(500, Math.max(1, Math.floor(Number(custom.value) || 10)));
     } else newPerDay = Number(targetSelect.value);
     const newBatchSize = Number(batchSelect.value);
+
+    const wantsReminder = reminderEnabled.value === 'true';
+    if (wantsReminder && !isStandalone()) {
+        closeStudySettings();
+        openPwaInstallGuide();
+    } else if (wantsReminder) {
+        const enabled = await subscribeToPush({
+            reminderTime: reminderTime.value,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        });
+        if (!enabled) {
+            alert('The reminder could not be enabled. Make sure you are signed in and allow notifications when prompted.');
+        }
+    } else {
+        await unsubscribeFromPush();
+        updateAppBadge(0);
+    }
 
     habitSettings = { ...(habitSettings || {}), newPerDay, newBatchSize };
     closeStudySettings();
@@ -2827,36 +2879,20 @@ async function saveStudySettingsFromForm(event) {
     queueDailyPreparation().catch(error => console.warn('[Main] Settings prefetch failed:', error));
 }
 
-/**
- * Show an "Enable reminders" control (or an install hint) inside the Today
- * hero, based on push capability. iOS only allows push from an installed PWA.
- */
-async function renderReminderAffordance() {
-    const hero = document.getElementById('today-hero');
-    if (!hero) return;
-    let state;
-    try { state = await getPushState(); } catch { return; }
-    if (state === 'unsupported' || state === 'subscribed' || state === 'denied') return;
+function renderPwaInstallPrompt() {
+    const prompt = document.getElementById('pwa-install-prompt');
+    if (!prompt) return;
+    prompt.classList.toggle('hidden', !isIOSDevice() || isStandalone());
+}
 
-    const bar = document.createElement('div');
-    bar.className = 'reminder-affordance';
-    if (state === 'needs-install') {
-        bar.innerHTML = '<span>🔔 Add to Home Screen (Share → Add to Home Screen) to get daily reminders.</span>';
-    } else {
-        bar.innerHTML = '<button id="enable-reminders-btn" class="reminder-btn">🔔 Enable daily reminders</button>';
-    }
-    hero.appendChild(bar);
+function openPwaInstallGuide() {
+    closeStudySettings();
+    document.getElementById('pwa-install-modal')?.classList.remove('hidden');
+    document.getElementById('pwa-install-close')?.focus();
+}
 
-    const btn = bar.querySelector('#enable-reminders-btn');
-    if (btn) {
-        btn.onclick = async () => {
-            btn.disabled = true;
-            btn.textContent = 'Enabling…';
-            const ok = await subscribeToPush();
-            btn.textContent = ok ? '✓ Reminders on' : 'Could not enable';
-            if (ok) setTimeout(() => bar.remove(), 1500);
-        };
-    }
+function closePwaInstallGuide() {
+    document.getElementById('pwa-install-modal')?.classList.add('hidden');
 }
 
 /**

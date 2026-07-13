@@ -11,10 +11,10 @@
     <!-- PWA -->
     <link rel="manifest" href="./manifest.webmanifest">
     <meta name="theme-color" content="#F5C842">
-    <link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Flashcards">
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png">
 </head>
 <body>
     <div class="yellow-header"></div>
@@ -128,6 +128,10 @@
                         <span id="streak-badge" class="streak-badge hidden" title="Daily streak"></span>
                         <button id="study-settings-btn" class="study-settings-btn" type="button" aria-expanded="false" aria-controls="study-settings-modal">Settings</button>
                     </div>
+                    <div id="pwa-install-prompt" class="pwa-install-prompt hidden">
+                        <span>Install Flashcards for faster access, resilient sessions, and reminders.</span>
+                        <button id="pwa-install-btn" type="button">Install on iPhone</button>
+                    </div>
                 </div>
 
                 <div id="study-settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="study-settings-title">
@@ -157,13 +161,48 @@
                                     <option value="20">20</option>
                                 </select>
                             </div>
+                            <div class="study-setting-field">
+                                <label for="daily-reminder-enabled">Reminder on this device</label>
+                                <select id="daily-reminder-enabled">
+                                    <option value="false">Off</option>
+                                    <option value="true">On</option>
+                                </select>
+                            </div>
+                            <div class="study-setting-field">
+                                <label for="daily-reminder-time">Reminder time</label>
+                                <input id="daily-reminder-time" type="time" step="900" value="18:00" />
+                            </div>
                             <p class="study-settings-help">The target is a guide, not a lock. Extra learning stays in finite batches so future review load remains visible.</p>
+                            <p id="reminder-settings-help" class="study-settings-help">Reminders use this device’s timezone and are sent only when cards are due or a session is paused.</p>
                         </div>
                         <div class="modal-footer">
                             <button id="study-settings-cancel" class="btn-cancel" type="button">Cancel</button>
                             <button class="btn-primary" type="submit">Save</button>
                         </div>
                     </form>
+                </div>
+
+                <div id="pwa-install-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="pwa-install-title">
+                    <div class="modal-overlay"></div>
+                    <div class="modal-content pwa-install-modal-content">
+                        <div class="modal-header">
+                            <h3 id="pwa-install-title">Install on iPhone</h3>
+                            <button id="pwa-install-close" class="modal-close" type="button" aria-label="Close install guide">&times;</button>
+                        </div>
+                        <div class="modal-body pwa-install-body">
+                            <ol>
+                                <li>Open this page in Safari.</li>
+                                <li>Tap the Share button <span aria-hidden="true">□↑</span>.</li>
+                                <li>Choose <strong>Add to Home Screen</strong>, then tap <strong>Add</strong>.</li>
+                                <li>Open Flashcards from its new Home Screen icon and sign in.</li>
+                                <li>Open <strong>Settings</strong> and turn on your daily reminder.</li>
+                            </ol>
+                            <p>Notifications on iPhone require the installed Home Screen app.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="pwa-install-done" class="btn-primary" type="button">Got it</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Deck Navigation Breadcrumb -->

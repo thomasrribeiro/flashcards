@@ -8,6 +8,29 @@ import { getCurrentUser } from './storage.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || '';
+const REMINDER_KEY = 'flashcards_reminder_preferences';
+
+function readReminderPreferences() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(REMINDER_KEY) || '{}');
+        return {
+            reminderTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(saved.reminderTime || '')
+                ? saved.reminderTime
+                : '18:00',
+            timezone: saved.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+    } catch {
+        return {
+            reminderTime: '18:00',
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+    }
+}
+
+function writeReminderPreferences(preferences) {
+    try { localStorage.setItem(REMINDER_KEY, JSON.stringify(preferences)); }
+    catch (error) { console.warn('[Push] Could not save reminder preferences:', error); }
+}
 
 export function pushSupported() {
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -15,6 +38,11 @@ export function pushSupported() {
 
 export function isStandalone() {
     return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+export function isIOSDevice() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -45,12 +73,23 @@ export async function getPushState() {
     return 'default';
 }
 
+export async function getReminderPreferences() {
+    const saved = readReminderPreferences();
+    let state = 'unsupported';
+    try { state = await getPushState(); } catch { /* use the safe default */ }
+    return {
+        enabled: state === 'subscribed',
+        state,
+        ...saved
+    };
+}
+
 /**
  * Request permission and subscribe. Must be called from a user gesture.
  * Returns true on success.
  */
-export async function subscribeToPush() {
-    if (!pushSupported() || !VAPID_PUBLIC_KEY) return false;
+export async function subscribeToPush({ reminderTime = '18:00', timezone = null } = {}) {
+    if (!pushSupported() || !isStandalone() || !VAPID_PUBLIC_KEY) return false;
     const id = userId();
     if (!id) {
         console.warn('[Push] Cannot subscribe: not logged in');
@@ -69,22 +108,38 @@ export async function subscribeToPush() {
         });
     }
 
+    const resolvedTimezone = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
     const resp = await fetch(`${WORKER_URL}/api/push/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: id, subscription: sub.toJSON() })
+        body: JSON.stringify({
+            userId: id,
+            subscription: sub.toJSON(),
+            reminderTime,
+            timezone: resolvedTimezone
+        })
     });
+    if (resp.ok) writeReminderPreferences({ reminderTime, timezone: resolvedTimezone });
     return resp.ok;
+}
+
+export async function updateAppBadge(count) {
+    try {
+        if (count > 0 && 'setAppBadge' in navigator) await navigator.setAppBadge(count);
+        else if ('clearAppBadge' in navigator) await navigator.clearAppBadge();
+    } catch (error) {
+        console.warn('[Push] App badge update failed:', error);
+    }
 }
 
 /**
  * Unsubscribe from push on this device.
  */
 export async function unsubscribeFromPush() {
-    if (!pushSupported()) return;
+    if (!pushSupported()) return false;
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
-    if (!sub) return;
+    if (!sub) return true;
     const endpoint = sub.endpoint;
     await sub.unsubscribe();
     try {
@@ -96,4 +151,5 @@ export async function unsubscribeFromPush() {
     } catch (error) {
         console.error('[Push] Failed to notify worker of unsubscribe:', error);
     }
+    return true;
 }
