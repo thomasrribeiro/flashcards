@@ -2633,21 +2633,7 @@ body.standalone-phone .mobile-sidebar-close {
 .study-progress .progress-bar-fill {
     position: relative;
     overflow: hidden;
-    background-image: linear-gradient(
-        90deg,
-        #8f7418 0%,
-        var(--gold) 32%,
-        #fff47a 50%,
-        var(--gold) 68%,
-        #8f7418 100%
-    );
-    background-size: 220% 100%;
-    animation: study-progress-flow 1.8s linear infinite;
-}
-
-@keyframes study-progress-flow {
-    from { background-position: 100% 0; }
-    to { background-position: -100% 0; }
+    background: var(--gold);
 }
 
 @keyframes study-progress-glow {
@@ -2664,21 +2650,18 @@ body.standalone-phone .mobile-sidebar-close {
     width: 55%;
     background: linear-gradient(
         90deg,
-        transparent,
-        rgba(255, 255, 210, 0.88),
-        transparent
+        rgba(245, 200, 66, 0) 0%,
+        rgba(255, 244, 150, 0.45) 32%,
+        rgba(255, 255, 245, 0.92) 50%,
+        rgba(255, 244, 150, 0.45) 68%,
+        rgba(245, 200, 66, 0) 100%
     );
     filter: blur(1px);
-    animation: study-progress-glow 1.8s ease-in-out infinite;
+    animation: study-progress-glow 3.5s linear infinite;
     pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .study-progress .progress-bar-fill {
-        animation: none;
-        background-position: 50% 0;
-    }
-
     .study-progress .progress-bar-fill::after {
         display: none;
     }
