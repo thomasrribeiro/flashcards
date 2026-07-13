@@ -61,7 +61,11 @@ export function getState() {
         isRevealed: state.isRevealed,
         currentCardIndex: state.currentCardIndex,
         dueCards: state.dueCards,
-        reviewedCount: state.reviewedCount
+        totalCards: state.totalCards,
+        reviewedCards: state.reviewedCards,
+        reviewedCount: state.reviewedCount,
+        currentCard: state.currentCard,
+        deckId: state.deckId
     };
 }
 
