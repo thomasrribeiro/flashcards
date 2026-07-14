@@ -254,13 +254,13 @@ If $P_c < P_e$ (binding):
 # Image displayed WITH the question (correct):
 Q: What forces act on the block on this inclined plane?
 
-![Free body diagram](../sources/chapter_2/figures/free-body-diagram.png)
+![Free body diagram](../figures/02_forces/free-body-diagram.png)
 
 A: Weight ($mg$) pointing straight down, normal force ($N$) perpendicular to surface, and friction ($f$) parallel to surface opposing motion.
 
 Q: What does the slope of this position-time graph represent?
 
-![Position-time graph](../sources/chapter_3/figures/position-time-graph.png)
+![Position-time graph](../figures/03_kinematics/position-time-graph.png)
 
 A: Velocity. Steeper slope = faster motion; horizontal line = stationary; negative slope = moving backward.
 ```
@@ -268,7 +268,7 @@ A: Velocity. Steeper slope = faster motion; horizontal line = stationary; negati
 ❌ **DON'T** put images BEFORE the Q: line - they won't display with the card:
 ```markdown
 # WRONG - image won't show with question:
-![Diagram](../sources/example/figures/diagram.png)
+![Diagram](../figures/01_foundations/diagram.png)
 
 Q: What does this diagram show?
 A: ...
@@ -346,7 +346,7 @@ For each card you create:
 ```markdown
 P: Add: $43 + 26$
 
-![Step-by-step addition showing 43 + 26 = 69](../sources/chapter_1/figures/addition-example.png)
+![Step-by-step addition showing 43 + 26 = 69](../figures/01_foundations/addition-example.png)
 
 S:
 **IDENTIFY**: Two-digit addition...
@@ -358,7 +358,7 @@ S:
 # Figure shows PROBLEM ONLY (no answer) → place with question:
 Q: What is the perimeter of this triangle?
 
-![Triangle with sides 3, 4, 5](../sources/chapter_1/figures/triangle-345.png)
+![Triangle with sides 3, 4, 5](../figures/01_foundations/triangle-345.png)
 
 A: $3 + 4 + 5 = 12$ units
 
@@ -372,7 +372,7 @@ S:
 - Tens: $4 + 2 = 6$
 **EVALUATE**: $43 + 26 = 69$ ✓
 
-![Step-by-step addition](../sources/chapter_1/figures/addition-43-26.png)
+![Step-by-step addition](../figures/01_foundations/addition-43-26.png)
 ```
 
 **Quick test**: Look at the figure - does it show the answer? If yes, place it AFTER the answer section.
@@ -458,7 +458,7 @@ S:
 - Thousands: 1 + 0 + 1 = 2
 **EVALUATE**: $1,683 + 479 = 2,162$ ✓
 
-![Addition with carrying](../sources/<source_name>/figures/addition-carrying.png)
+![Addition with carrying](../figures/01_foundations/addition-carrying.png)
 ```
 
 **The catalog's Shows field is the source of truth for worked examples.**

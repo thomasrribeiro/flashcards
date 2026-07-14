@@ -43,15 +43,25 @@ required modification notice adjacent to the asset.
 
 ## 3. Repository scaffold
 
-Each deck should contain:
+Use the deterministic CLI rather than recreating the scaffold manually:
+
+```bash
+flashcards deck create <subject> <deck>
+```
+
+The subject workspace should contain `AGENTS.md`, `ROADMAP.md`, and
+`AUTHORING_GUIDE.md`. Each deck should contain:
 
 ```text
 deck-name/
+├── .flashcards/audits/
 ├── AGENTS.md
 ├── CARD_README.md
 ├── README.md
+├── deck.toml
 ├── figures/
 │   └── NN_chapter_name/
+├── references/
 └── flashcards/
     └── NN_chapter_name.md
 ```
@@ -111,4 +121,3 @@ Before handoff:
 - run the collection validator and `git diff --check`;
 - summarize new, modified, and intentionally omitted material;
 - distinguish local changes from committed or deployed changes.
-

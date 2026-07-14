@@ -1,0 +1,19 @@
+schema_version = 1
+subject = "{{SUBJECT}}"
+deck = "{{DECK}}"
+level = "{{LEVEL}}"
+status = "scaffolded"
+created = "{{DATE}}"
+
+[standards]
+flashcards_root = "{{FLASHCARDS_ROOT}}"
+universal = "templates/guides/CARD_STANDARD.md"
+general = "templates/guides/general.md"
+subject = "templates/guides/{{SUBJECT}}.md"
+
+[identity]
+policy = "preserve-id-for-same-retrieval-target"
+
+[sources]
+require_authority = true
+require_license_record = true

@@ -29,7 +29,9 @@ const args = process.argv.slice(2);
 const quiet = args.includes('--quiet');
 const outIdx = args.indexOf('--out');
 const outPath = outIdx !== -1 ? args[outIdx + 1] : null;
-const positional = args.filter((a, i) => !a.startsWith('--') && i !== outIdx + 1);
+const positional = args.filter((a, i) =>
+    !a.startsWith('--') && !(outIdx !== -1 && i === outIdx + 1)
+);
 const root = path.resolve(positional[0] || path.join(process.env.HOME, 'notes'));
 
 const SKIP_DIRS = new Set(['.git', '.venv', 'node_modules', 'sources', 'references', '.claude', 'code']);
@@ -146,7 +148,8 @@ const report = {
     root,
     decks: [],
     summary: { decks: decks.length, files: 0, cards: 0, byType: { basic: 0, cloze: 0, problem: 0 },
-               parserWarnings: 0, katexErrors: 0, imageErrors: 0, clozeLints: 0, frontmatterLints: 0 }
+               parserWarnings: 0, katexErrors: 0, imageErrors: 0, identityErrors: 0,
+               clozeLints: 0, frontmatterLints: 0 }
 };
 
 const origWarn = console.warn;
@@ -154,12 +157,14 @@ console.warn = () => {}; // parser is chatty about warnings it also returns
 
 for (const deck of decks) {
     const deckReport = { deck: deck.name, path: deck.dir, files: [], hashInventory: [] };
+    const seenStableIds = new Map();
 
     for (const file of deck.files) {
         const filePath = path.join(deck.dir, 'flashcards', file);
         const raw = fs.readFileSync(filePath, 'utf8');
         const fileReport = { file, counts: { basic: 0, cloze: 0, problem: 0 },
-                             parserWarnings: [], katexErrors: [], imageErrors: [], clozeLints: [], frontmatterLints: [] };
+                             parserWarnings: [], katexErrors: [], imageErrors: [], identityErrors: [],
+                             clozeLints: [], frontmatterLints: [] };
 
         let parsed;
         try {
@@ -172,10 +177,35 @@ for (const deck of decks) {
         const { cards, metadata } = parsed;
         fileReport.parserWarnings.push(...(cards.warnings || []));
 
+        const missingIdentityRanges = new Set();
         for (const card of cards) {
             fileReport.counts[card.type]++;
+            if (!card.stableId && !missingIdentityRanges.has(card.range[0])) {
+                missingIdentityRanges.add(card.range[0]);
+                fileReport.identityErrors.push({
+                    msg: 'card block is missing a stable card-id',
+                    excerpt: excerptOf(card)
+                });
+            } else if (card.stableId) {
+                const prior = seenStableIds.get(card.stableId);
+                if (prior) {
+                    fileReport.identityErrors.push({
+                        msg: `duplicate stable card-id "${card.stableId}" (first seen in ${prior.file})`,
+                        excerpt: excerptOf(card)
+                    });
+                } else {
+                    seenStableIds.set(card.stableId, { file, excerpt: excerptOf(card) });
+                }
+            }
+            const contentHash = hashCard(card);
             deckReport.hashInventory.push({
-                file, type: card.type, hash: hashCard(card), excerpt: excerptOf(card)
+                file,
+                type: card.type,
+                hash: contentHash,
+                contentHash,
+                stableId: card.stableId || null,
+                aliases: card.legacyHashes || [],
+                excerpt: excerptOf(card)
             });
         }
 
@@ -263,6 +293,7 @@ for (const deck of decks) {
         report.summary.parserWarnings += fileReport.parserWarnings.length;
         report.summary.katexErrors += fileReport.katexErrors.filter(e => !e.info).length;
         report.summary.imageErrors += fileReport.imageErrors.length;
+        report.summary.identityErrors += fileReport.identityErrors.length;
         report.summary.clozeLints += fileReport.clozeLints.length;
         report.summary.frontmatterLints += fileReport.frontmatterLints.length;
 
@@ -282,7 +313,7 @@ if (outPath) {
 const s = report.summary;
 console.log(`Validated ${s.files} files in ${s.decks} decks under ${root}`);
 console.log(`Cards: ${s.cards} (basic ${s.byType.basic}, cloze ${s.byType.cloze}, problem ${s.byType.problem})`);
-console.log(`Parser warnings: ${s.parserWarnings} | KaTeX errors: ${s.katexErrors} | image errors: ${s.imageErrors} | cloze lints: ${s.clozeLints} | frontmatter lints: ${s.frontmatterLints}`);
+console.log(`Parser warnings: ${s.parserWarnings} | KaTeX errors: ${s.katexErrors} | image errors: ${s.imageErrors} | identity errors: ${s.identityErrors} | cloze lints: ${s.clozeLints} | frontmatter lints: ${s.frontmatterLints}`);
 
 if (!quiet) {
     for (const d of report.decks) {
@@ -291,6 +322,7 @@ if (!quiet) {
             f.parserWarnings.forEach(w => issues.push(`  PARSE  ${w}`));
             f.katexErrors.filter(e => !e.info).forEach(e => issues.push(`  KATEX  ${e.snippet} → ${e.error}`));
             f.imageErrors.forEach(e => issues.push(`  IMAGE  ${e.src}: ${e.msg}`));
+            f.identityErrors.forEach(e => issues.push(`  ID      ${e.msg} :: ${e.excerpt}`));
             f.clozeLints.forEach(e => issues.push(`  CLOZE  [${e.rule}] ${e.msg} :: ${e.excerpt}`));
             f.frontmatterLints.forEach(e => issues.push(`  FRONT  [${e.rule}] ${e.msg}`));
             if (issues.length) {
@@ -301,5 +333,5 @@ if (!quiet) {
     }
 }
 
-const hardFailures = s.parserWarnings + s.katexErrors + s.imageErrors;
+const hardFailures = s.parserWarnings + s.katexErrors + s.imageErrors + s.identityErrors + s.frontmatterLints;
 process.exit(hardFailures > 0 ? 1 : 0);

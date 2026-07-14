@@ -1366,7 +1366,8 @@ If any answer is "no", simplify or remove the advanced reference.
 When creating flashcards, consult:
 - Your course textbook's problem-solving sections
 - Worked examples that demonstrate systematic approaches
-- [CLAUDE.md](CLAUDE.md) for universal SRS principles and card formats
+- [CARD_STANDARD.md](CARD_STANDARD.md) and [general.md](general.md) for universal
+  SRS principles and card formats
 
 ---
 

@@ -1,307 +1,222 @@
 # Flashcards
 
-An in-browser spaced-repetition system for learning anything.
+An in-browser spaced-repetition system and a standards-driven CLI for building
+durable flashcard decks.
 
-**Live Demo:** https://thomasrribeiro.com/flashcards/
+**Live app:** https://thomasrribeiro.com/flashcards/
 
-<img src="public/screenshots/gui.png" alt="Flashcard interface" width="400">
+<img src="public/screenshots/gui.png" alt="Flashcard column viewer" width="600">
 
-*Master what's important to you and outsmart the forgetting curve.*
+## Run the application
 
-## Getting started
+Requirements: Node.js 20 or newer and npm.
 
-### Prerequisites
-
-- Node.js (v18 or higher)
-- npm
-
-### Installation
-
-**1. Install dependencies:**
 ```bash
 npm install
-```
-
-**2. Link CLI globally (optional):**
-```bash
-npm link
-```
-
-**3. Build the collection index:**
-```bash
-npm run process-submodules
-```
-
-This scans `public/collection/` and generates an index of all markdown files.
-
-**4. Run the app:**
-```bash
 npm run dev
 ```
 
-Open your browser to the URL shown in the terminal.
-
-**Note:** Whenever you add, remove, or move markdown files in `public/collection/`, run `npm run process-submodules` to update the card index.
-
-### Creating Decks
-
-Use the CLI to create a new deck with the proper structure:
+The production build is created with:
 
 ```bash
-# Create a deck (default: public/collection/<name>)
-flashcards create intro-biology
-
-# Create with subject template for specialized guidance
-flashcards create quantum-mechanics --template physics
-flashcards create organic-chem --template chemistry
-
-# Create at custom path
-flashcards create world-history --path ~/Documents/flashcards/world-history
+npm run build
 ```
 
-**Available templates:**
-- `physics` - For physics topics (mechanics, E&M, quantum, etc.)
-- More templates coming soon (chemistry, biology, math, etc.)
+When signed out, review state remains in browser storage. Signed-in users can
+sync supported study state across devices.
 
-This creates:
-- `flashcards/` - Your markdown files containing cards
-- `references/` - Reference materials such as PDFs
-- `figures/` - Relevant images
-- `CLAUDE.md` - Writing guidelines for creating effective flashcards
-- `README.md` - Documentation template
+## Install the CLI
 
-### Creating flashcards
+From this repository:
 
-#### Stable card identities
+```bash
+npm install
+npm link
+flashcards doctor
+```
 
-Cards that may be revised after study begins should carry an explicit ID:
+The CLI deliberately separates deterministic operations from agent judgment:
+
+- scaffolding, stable IDs, parsing, math, metadata, and asset checks are local
+  deterministic commands;
+- curriculum research, card writing, figures, and semantic audits use Codex and
+  the versioned `$manage-flashcard-decks` skill in `.agents/skills/`.
+
+Codex runs with the deck as its primary writable workspace and the subject
+directory as an additional workspace. The application repository is supplied
+as read-only standards and parser context.
+
+Normal local use relies on `codex login`; the CLI does not request, store, or
+forward an API key. API-key authentication is only necessary if you separately
+choose to run Codex in unattended automation.
+
+## Create a subject and deck
+
+Subjects and decks use lowercase kebab-case. By default, decks are created at
+`~/notes/<subject>/<deck>/`; override this with `--notes-root` or the
+`FLASHCARDS_NOTES_ROOT` environment variable.
+
+```bash
+flashcards subject create biology
+
+flashcards deck create biology genetics \
+  --description "Mechanistic genetics from inheritance to gene regulation"
+
+flashcards deck build ~/notes/biology/genetics
+```
+
+Create a scaffold and immediately open Codex:
+
+```bash
+flashcards deck create biology genetics --agent
+```
+
+Create initial ordered chapters when the curriculum is already known:
+
+```bash
+flashcards deck create computer-science operating-systems \
+  --chapter foundations \
+  --chapter processes-and-threads \
+  --chapter virtual-memory
+```
+
+Each deck is initialized as its own Git repository on `master` unless
+`--no-git` is supplied. The scaffold includes:
+
+```text
+deck-name/
+├── .flashcards/audits/
+├── figures/
+├── flashcards/
+├── references/              # local source material; contents gitignored
+├── AGENTS.md
+├── CARD_README.md
+├── README.md
+└── deck.toml
+```
+
+The subject directory also receives `AGENTS.md`, `ROADMAP.md`, and
+`AUTHORING_GUIDE.md` when they are missing. Existing files are never
+overwritten.
+
+## Maintain a deck
+
+```bash
+# Add the next ordered chapter and matching figures directory
+flashcards deck add-chapter ~/notes/biology/genetics gene-regulation
+
+# Add stable IDs before revising studied legacy cards
+flashcards deck stabilize ~/notes/biology/genetics
+
+# Validate IDs, parser output, frontmatter, KaTeX, clozes, and image paths
+flashcards deck validate ~/notes/biology/genetics
+
+# Save the complete machine-readable inventory
+flashcards deck validate ~/notes/biology/genetics \
+  --out ~/notes/biology/genetics/.flashcards/validation.json
+```
+
+## Build and audit with Codex
+
+Interactive sessions are the default because curriculum and correctness work
+benefits from visible judgment and feedback.
+
+```bash
+flashcards deck build ~/notes/biology/genetics
+flashcards deck audit ~/notes/physics/mechanics
+```
+
+Before any editing agent starts, the CLI gives existing card blocks stable IDs
+so later wording, figure, and correctness improvements cannot silently discard
+their schedules.
+
+`deck audit` writes a preflight inventory, loads the universal and
+domain-specific standards, and asks Codex to audit and improve the entire deck
+chapter by chapter. It validates again after Codex returns. Codex is explicitly
+told not to commit or push.
+
+Useful variants:
+
+```bash
+# Inspect without editing
+flashcards deck audit ~/notes/physics/mechanics --report-only
+
+# Run headlessly through codex exec
+flashcards deck audit ~/notes/physics/mechanics --non-interactive
+
+# Inspect the exact invocation and prompt
+flashcards deck audit ~/notes/physics/mechanics --dry-run
+
+# Add a temporary objective without changing durable standards
+flashcards deck audit ~/notes/physics/mechanics \
+  --instructions "Prioritize prerequisite gaps and graph interpretation"
+
+# Explicitly proceed when the deck already has unrelated local changes
+flashcards deck audit ~/notes/physics/mechanics --allow-dirty
+```
+
+The CLI does not pin a model. It uses the model configured in Codex so future
+audits can benefit from stronger models. Use `--model` only for an intentional
+one-run override.
+
+## Stable card identity
+
+Every new card block should carry a repository-scoped stable ID:
 
 ```markdown
 <!-- card-id: card-018f6c2a-7b1e-7000-8000-123456789abc -->
-Q: Which forces act on the block?
-A: Weight and the normal force.
+Q: Which forces act on a block resting on a level table?
+A: Its weight and the table's normal force.
 ```
 
-The app keys FSRS state by this repository-scoped ID while continuing to hash
-the content for versioning and duplicate detection. This means figures,
-formatting, alt text, and corrective wording can change without silently
-turning a learned card into a new card. A materially different retrieval task
-should receive a new ID.
+Preserve the ID for corrections, clearer wording, formatting, accessibility,
+or figures when the retrieval target remains the same. Assign a new ID when the
+learner must retrieve materially different knowledge. Keep generated
+`card-alias` comments so devices can migrate legacy content-hash schedules.
 
-Add IDs to an existing deck before editing it:
+## Card format
 
-```bash
-npm run add-card-ids -- --check /path/to/deck/flashcards
-npm run add-card-ids -- /path/to/deck/flashcards
-```
-
-The command preserves the card text and records each old content hash as a
-`card-alias`. On first load, existing local or synced review state is moved to
-the stable ID without recording a review or changing its FSRS schedule. Keep
-the generated alias comments: they let devices that skipped the intermediate
-version perform the same migration later.
-
-#### AI-Assisted Flashcard Generation ✨
-
-Generate flashcards automatically from PDF textbooks using Claude AI.
-
-**Setup:**
-1. Install a PDF processor (using uv for Python dependency management):
-   ```bash
-   uv venv
-   source .venv/bin/activate
-   uv pip install magic-pdf
-   ```
-2. Optionally set up authentication: `flashcards auth`
-
-**Workflow:**
-```bash
-# Create a deck
-flashcards create intro-physics --template physics
-cd intro-physics
-
-# Process PDF and generate flashcards
-flashcards process references/textbook.pdf --output chapter1
-
-# Optional: Add curated figures for visual flashcards
-mkdir -p sources/chapter1/figures
-# Add your figures (e.g., vector-diagram.png, force-body-1.png, force-body-2.png)
-flashcards analyze-figures sources/chapter1  # Generates manifest, renames files
-
-flashcards generate sources/chapter1 --output chapter1
-
-# Review and refine
-nano flashcards/chapter1.md
-
-# Study!
-cd .. && npm run dev
-```
-
-**Commands:**
-```bash
-# Process PDF (creates sources/<name>/ directory)
-flashcards process <pdf-path> [options]
-  --output <name>    Output name for the source (default: derived from PDF)
-  --deck <path>      Deck path (auto-detect from cwd)
-  --keep-temp        Keep temporary processing output
-
-# Generate flashcards from processed source
-flashcards generate <source-dir> [options]
-  --output <name>    Output filename (default: derived from input)
-  --model <model>    Claude model (default: claude-sonnet-4-5-20250514)
-  --template <name>  Subject-specific guide (e.g., physics, chemistry)
-  --order <number>   Order number for TOML frontmatter
-  --tags <tags...>   Tags for TOML frontmatter
-  --verbose          Show detailed progress
-
-# Reconstruct the prompt used to generate flashcards
-flashcards show-prompt <flashcard-file>
-  --output <file>    Write prompt to file instead of stdout
-
-# Analyze and catalog figures for AI-assisted generation
-flashcards analyze-figures <source-dir> [options]
-  --force            Recompute even if manifest.json exists
-  --no-rename        Skip renaming files (only generate manifest)
-  --verbose          Show detailed progress
-```
-
-**Tips:**
-- ✅ Generated flashcards need human review (AI isn't perfect!)
-- ✅ Subject guides (physics, chemistry) improve generation quality
-- ✅ Images are referenced from `sources/<name>/images/` directly
-- ✅ Generation metadata is stored in TOML frontmatter for reproducibility
-- ✅ Use `flashcards show-prompt` to see exactly what prompt was used
-- ✅ Add figures to `sources/<name>/figures/` for visual flashcards
-- ✅ Name figures descriptively; use `-1`, `-2` suffix for multi-part figures
-- ✅ Run `analyze-figures` to generate AI-readable metadata (skips if already done)
-
-#### Card format
-Flashcards are written in markdown files using Q:/A:, C:, or P:/S: formats.
-
-**Question/Answer Cards:**
-```markdown
-Q: What is the capital of France?
-A: Paris.
-
-Q: Who wrote "1984"?
-A: George Orwell (published 1949).
-```
-
-**Cloze Deletion Cards:**
-```markdown
-C: The [mitochondria] is called the powerhouse of the cell.
-
-C: Shakespeare wrote [Hamlet], [Macbeth], and [Romeo and Juliet].
-```
-
-**Problem/Solution Cards (methodology-focused):**
-
-Use for teaching systematic problem-solving approaches. Adapt the framework to your subject:
+Canonical files use TOML frontmatter and ordered `NN_snake_case.md` filenames:
 
 ```markdown
-# STEM example (ISAE framework):
-P: How do you determine if a function f(x) is continuous at point x = a?
++++
+order = 1
+subject = "physics"
+tags = ["mechanics"]
++++
 
-S:
-**IDENTIFY**: Continuity definition problem
-**SET UP**: Need three conditions satisfied
-**APPROACH**:
-  1. Check f(a) exists (function defined at a)
-  2. Check limit exists as x → a
-  3. Check limit equals f(a)
-**EVALUATE**: All three must hold; if any fails, discontinuous at a
+<!-- card-id: card-... -->
+Q: Why can acceleration be nonzero while speed is constant?
+A: Acceleration measures change in the velocity vector, including direction.
 
-# Humanities example:
-P: How do you analyze the causes of a historical event?
+<!-- card-id: card-... -->
+C: The slope of a position-time graph is [velocity].
 
-S:
-**CONTEXT**: Identify time period, key actors, immediate circumstances
-**FACTORS**: Categorize causes (political, economic, social, cultural)
-**CONNECTIONS**: How factors interrelated and influenced each other
-**CONCLUSION**: Multiple interconnected causes, distinguish triggers vs. conditions
+<!-- card-id: card-... -->
+P: A symbolic problem statement with all required givens.
+S: A transferable solution method with a genuine evaluation step.
 ```
 
-**Supported Features:**
-- **Multiline content** - Questions and answers can span multiple lines
-- **LaTeX math** - Use `$inline math$` or `$$display math$$` for equations
-- **Images** - Embed with `![alt text](image-url)`
-- **Audio** - Embed with `![audio](audio-file.mp3)`
+Read these sources of truth before authoring manually:
 
-#### File Structure (Local Development)
+- `templates/guides/CARD_STANDARD.md`
+- `templates/guides/general.md`
+- `templates/guides/new-subject.md`
+- the applicable subject guide in `templates/guides/`
 
-```
-public/collection/
-├── biology-basics/
-│   ├── flashcards/
-│   │   ├── cell-biology.md
-│   │   └── genetics.md
-│   ├── sources/                    # Parsed document content (tracked in git)
-│   │   └── chapter1/
-│   │       ├── content.json        # Document content
-│   │       ├── images/             # Extracted figures from PDF
-│   │       └── figures/            # Curated figures for flashcards
-│   │           ├── diagram.png
-│   │           └── manifest.json   # Generated by analyze-figures
-│   ├── references/                 # Original PDFs (gitignored)
-│   └── README.md
-└── us-history/
-    └── flashcards/
-        └── civil-war.md
+## Development checks
+
+```bash
+npm test
+npm run build
+git diff --check
 ```
 
-Each directory in `public/collection/` becomes a separate deck.
+## Prior work
 
-**Key directories:**
-- `flashcards/` - Generated markdown flashcard files
-- `sources/` - Parsed document content (content.json + images/ + figures/)
-- `references/` - Original PDFs (gitignored, keep local)
-
-**Note:** Flashcard writing guides are fetched automatically from this repo when generating cards.
-
-### ⚠️ Important
-
-When running locally without GitHub authentication, your review progress is stored in **localStorage only**. This means:
-
-- Progress is saved locally in your browser
-- Your FSRS scheduler state will be lost if you clear browser data
-- No cross-device sync
-
----
-
-## Community Contributions
-
-### Before Creating Your Flashcard Deck
-
-Visit [thomasrribeiro-flashcards](https://github.com/thomasrribeiro-flashcards) organization to see if a deck for your subject already exists.
-
-##### Deck Already Exists → Contribute! 🤝
-
-- **Fork** the repository
-- **Add** your flashcards following the existing structure
-- **Submit a pull request** to contribute your cards
-- Help build a comprehensive community resource!
-
-##### Deck Doesn't Exist → Create It! 🚀
-
-- **Share with community?** → Create public deck in organization
-- **Personal/private study?** → Create private GitHub repository
-
----
-
-### Guidelines
-
-**Quality standards:**
-1. Follow template/CLAUDE.md in the repository for subject-specific best practices
-2. One concept per card, self-contained with context
-3. Use proper format: Q:/A: (facts), C: (definitions), P:/S: (methodology)
-4. Test cards before committing
-
-**For public contributions:** Submit quality PRs, respect conventions, accept feedback.
-
----
-
-## Prior Work
-- [hashcards](https://github.com/eudoxia0/hashcards?tab=readme-ov-file) - Inspiration for the card format
+- [hashcards](https://github.com/eudoxia0/hashcards) inspired the plain-text
+  card format.
 
 ## License
-© 2025 by [Thomas Ribeiro](https://thomasrribeiro.com). Licensed under the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license.
+
+© 2025 Thomas Ribeiro. Licensed under the [Apache License 2.0](LICENSE).

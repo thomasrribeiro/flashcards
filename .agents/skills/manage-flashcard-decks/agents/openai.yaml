@@ -1,0 +1,4 @@
+interface:
+  display_name: "Flashcard Deck Manager"
+  short_description: "Build and audit durable SRS decks"
+  default_prompt: "Use $manage-flashcard-decks to create or audit a flashcard deck."

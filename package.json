@@ -1,12 +1,28 @@
 {
   "name": "flashcards",
-  "version": "1.0.0",
-  "description": "Browser-based spaced repetition flashcards with ts-fsrs",
+  "version": "2.0.0",
+  "description": "Spaced-repetition app and CLI for durable, agent-assisted flashcard decks",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "bin": {
     "flashcards": "./bin/flashcards.js"
   },
+  "files": [
+    ".agents/skills/manage-flashcard-decks/",
+    "bin/",
+    "scripts/add-card-ids.js",
+    "scripts/validate-notes.js",
+    "src/card-id-annotator.js",
+    "src/hasher.js",
+    "src/parser.js",
+    "templates/",
+    "AGENTS.md",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "concurrently \"vite\" \"node scripts/watch-simple.js\"",
     "dev:no-watch": "vite",
@@ -18,13 +34,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.0",
     "@noble/hashes": "^1.3.3",
     "commander": "^14.0.2",
     "dompurify": "^3.3.3",
     "katex": "^0.16.9",
     "marked": "^11.1.1",
-    "open": "^11.0.0",
     "ts-fsrs": "^4.1.0"
   },
   "devDependencies": {
