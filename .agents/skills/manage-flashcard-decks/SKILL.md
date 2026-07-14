@@ -22,14 +22,19 @@ write boundary before substantive work. Preserve unrelated user changes.
 
 ## Load context in order
 
-Read each selected file completely before editing:
+Use the ordered context manifest supplied by the CLI when present. Otherwise,
+read each applicable file completely before editing:
 
 1. `templates/guides/CARD_STANDARD.md`;
-2. `templates/guides/new-subject.md`;
-3. `templates/guides/general.md`;
-4. the applicable `templates/guides/<subject>.md`, when present;
-5. the subject's `AGENTS.md`, `ROADMAP.md`, and `AUTHORING_GUIDE.md`;
-6. the deck's `AGENTS.md`, `deck.toml`, `README.md`, and `CARD_README.md`;
+2. `templates/guides/AUTHORING_PLAYBOOK.md`;
+3. the applicable `templates/guides/<subject>.md`, when present;
+4. the subject's routing `AGENTS.md`, learner-specific `ROADMAP.md`, and
+   `SUBJECT_BRIEF.md`; use legacy `AUTHORING_GUIDE.md` only when the brief is
+   absent;
+5. the deck's routing `AGENTS.md`, machine-readable `deck.toml`, scope/source
+   `README.md`, and deck-specific `CARD_README.md`;
+6. [references/audit-workflow.md](references/audit-workflow.md) for whole-deck
+   audits;
 7. the preflight JSON report named in the prompt, when present.
 
 If a deck predates these files, infer its current contract from its README and
@@ -50,9 +55,10 @@ For build, expand, and editing audits:
 7. Identify uncertainty, contested claims, simplified models, and conditions
    of validity explicitly.
 
-When the subject authoring guide is only a scaffold, research and complete it
-before creating a large deck. Keep subject-wide decisions there and deck-wide
-decisions in `CARD_README.md`.
+When the subject brief is only a scaffold, research and complete it before
+creating a large deck. Keep reusable domain guidance in the repository subject
+guide, learner-specific choices in `SUBJECT_BRIEF.md`, sequence in `ROADMAP.md`,
+and deck-specific retrieval decisions in `CARD_README.md`.
 
 ## Design the learning progression
 
@@ -102,8 +108,7 @@ or scale-critical representations.
 
 ## Audit an existing deck
 
-Read [references/audit-workflow.md](references/audit-workflow.md) completely for
-whole-deck audits. Inventory first; then work one chapter at a time. Treat
+Inventory first; then work one chapter at a time. Treat
 incorrect claims, parser loss, broken math/assets, and identity corruption as
 critical. Treat omitted prerequisites, ambiguous cues, non-atomic prompts, and
 misleading figures as major.

@@ -1,49 +1,127 @@
-# Card Quality Standard
+# Card quality standard
 
-The acceptance checklist for every card in the collection. Distilled from `general.md`, `mathematics.md`, `physics.md` (which remain the detailed how-to guides), SuperMemo's 20 Rules of Formulating Knowledge, and the parser semantics in `src/parser.js`. This document is the source of truth for audits and for reviewing generated decks.
+This is the normative acceptance rubric for cards and decks. Use its rule IDs
+in audit findings. `AUTHORING_PLAYBOOK.md` explains the design workflow; subject
+guides add domain-specific judgment. The parser and validator remain executable
+truth where prose and behavior disagree.
 
-Each rule has an ID used in audit findings. Severity of a violation:
+Severity:
 
-- **critical** — wrong answer, parser-breaking markup, or a spurious/mis-spanned cloze. The card actively teaches something false or doesn't render as intended.
-- **major** — ambiguous cue, non-atomic card, bad cloze span, broken image or LaTeX, P:/S: without method. The card renders but drills poorly.
-- **minor** — style, verbosity, tag hygiene, alt text. Worth fixing opportunistically.
+- **critical**: teaches a false claim, loses or corrupts a card, breaks parsing,
+  or assigns review history to a materially different retrieval target;
+- **major**: the card renders but drills poorly because its cue, scope,
+  prerequisite, representation, or grading decision is defective;
+- **minor**: style, metadata, accessibility, or concision issue that does not
+  substantially distort retrieval.
 
-## Universal rules (all card types)
+## Universal card rules
 
-- **U1 — Atomic.** One retrievable fact, idea, or step per card. An answer enumerating more than ~3 items must be split into separate cards or converted to overlapping clozes. Test: could the reviewer fail *half* the card? Then it's two cards.
-- **U2 — Unambiguous cue.** Given the deck's context, the question admits exactly one correct answer. Ban "What about X?", "Explain X" with no scope, and cues where the reviewer must guess *which* fact the author meant.
-- **U3 — No yes/no-only questions.** Any question answerable with "yes" or "no" must be rephrased as *why/what/which/when* (e.g., "Is $x^2 = 1$ linear?" → "Why is $x^2 = 1$ not linear?").
-- **U4 — Correct.** The answer is technically correct; formulas are dimensionally consistent; every variable in a formula is defined on the card. Hedges ("usually", "generally") appear only when the hedge itself is the fact. Audit note: flag `incorrect-answer` only with a stated reason — a counterexample or the correct formula. "Sounds off" is a style finding, not a correctness finding.
-- **U5 — Self-contained.** No "the above", "this chapter", "as we saw". The card must survive shuffled, solo review months later. Referencing concepts established by *earlier cards in the same deck* is fine (sequential learning); referencing the source textbook's prose is not.
-- **U6 — Concise answer.** Definitional answers: 1–5 words ideal. Explanatory answers: ≤3 sentences. Length beyond that is a smell of non-atomicity (see U1) — not an automatic failure for genuinely conceptual "why" cards, but justify it.
-- **U7 — Parse-safe.** No content line may begin with bare `Q:`, `A:`, `C:`, `P:`, or `S:` (the parser treats these as card-state transitions). No `---` inside a card body (it is a separator). Blank line between cards. Every file ends in a completed card, and parsing produces zero warnings.
-- **U8 — Valid markup.** All LaTeX renders under KaTeX (`$...$` inline, `$$...$$` display). Every image link resolves relative to the file. Images carry meaningful alt text. No decorative images (if removing the image leaves the card equally good, remove it).
+- **U1 — One scheduling decision.** A card tests one independently gradable
+  retrieval target. If the learner could know one half and fail the other, split
+  it. An answer with more than about three independently gradable items is a
+  strong split signal, not an automatic numerical rule.
+- **U2 — Unambiguous cue.** The prompt identifies the requested relationship,
+  scope, and level of precision. Ban prompts such as “What about X?” and
+  unbounded “Explain X.”
+- **U3 — Productive retrieval.** Ask the learner to recall, predict, interpret,
+  discriminate, diagnose, or choose a method. Replace yes/no prompts with the
+  reason or distinction that makes the answer true.
+- **U4 — Correct and bounded.** Claims, formulas, diagrams, units, and variable
+  definitions are correct. State conditions, organism/system, jurisdiction,
+  convention, uncertainty, and important exceptions when they affect grading.
+- **U5 — Self-contained in review.** The card survives shuffled review months
+  later. Do not use “above,” “this chapter,” or an unlabeled source excerpt.
+  Established prerequisite concepts may be referenced without re-teaching them.
+- **U6 — Concise repair.** Put the direct answer first. Definitional answers are
+  usually a phrase; explanations are usually no more than three short sentences.
+  Include only what helps grade or repair the likely error.
+- **U7 — Prerequisite-ready.** Do not make failure the learner's only
+  introduction to an unexplained term, representation, or procedure. Establish
+  a prerequisite bridge or initial explanation before testing an application.
+- **U8 — No answer leak.** The front, filename, alt text, labels, neighboring
+  wording, and units do not reveal the target unless that information is a
+  deliberate cue.
+- **U9 — Parse-safe.** No content line begins with bare `Q:`, `A:`, `C:`, `P:`,
+  or `S:` unless it starts a parser block. Do not place `---` inside a card.
+  Separate blocks with blank lines and finish every started block.
+- **U10 — Valid markup and assets.** KaTeX renders, image paths resolve, and
+  meaningful alt text is present. Remove decorative media.
 
-## Cloze rules (C: cards)
+## Cloze rules
 
-- **C1 — Small spans, few deletions.** At most 2 deletions per block; prefer 1. Each deletion ≤ ~6 words / ~60 characters. A deletion spanning half the sentence tests recall-of-prose, not recall-of-fact.
-- **C2 — Delete the informative element.** The deletion is the term, number, name, symbol, or operator being learned — never filler ("the", "is called", connective phrases).
-- **C3 — Context determines the deletion.** The visible text must uniquely determine the hidden text. "The [X] is important in physics" is unanswerable.
-- **C4 — No brackets inside math or code (parser-specific).** Every `[...]` in a C: block becomes a cloze deletion except inside `![alt](...)` image syntax. Square brackets inside `$...$` — interval notation `$[0, \infty)$`, matrix literals, optional-argument syntax — create spurious or mis-spanned cards. Rewrite the notation in words, restructure the sentence, or convert the card to Q:/A:. Violations are **critical**.
-- **C5 — Answer not leaked.** The deleted text must not appear verbatim elsewhere in the same block's visible text.
+- **C1 — Small deletion.** Prefer one deletion and allow at most two per block.
+  A deletion should normally be a term, value, symbol, or short relation—not a
+  sentence fragment learned as prose.
+- **C2 — Informative deletion.** Delete the knowledge target, never filler or a
+  connective phrase.
+- **C3 — Determinate context.** Visible text uniquely constrains the deletion at
+  the intended precision.
+- **C4 — Parser-safe brackets.** Every `[...]` in a `C:` block becomes a cloze
+  except Markdown image syntax. Square brackets inside math or code therefore
+  create spurious cards; rewrite the notation or use `Q:/A:`.
+- **C5 — No duplicate reveal.** Hidden text does not appear elsewhere in the
+  visible block.
 
-## Problem/Solution rules (P:/S: cards)
+## Problem/solution rules
 
-- **P1 — IPEE does its job.** Where the full IDENTIFY / PLAN / EXECUTE / EVALUATE scaffold is used, each section is non-empty and pulls its weight: IDENTIFY names the problem type, PLAN names the method *before* executing it, EXECUTE carries the steps, EVALUATE checks the result. Faded scaffolding (dropping IDENTIFY/PLAN on later cards of an established pattern) is deliberate and allowed — see `general.md` §A2.
-- **P2 — Method over answer.** The problem teaches a transferable method; prefer symbolic/variable form over arithmetic unless the card explicitly drills computation fluency.
-- **P3 — Genuine EVALUATE.** The check is real: limiting cases, units/dimensions, a sanity bound, differentiating back, an undo path. "The answer is correct ✓" alone fails.
-- **P4 — Self-sufficient statement.** The P: block contains every given, constraint, and definition needed to attempt the problem cold.
+- **P1 — Method before execution.** A full IPEE solution uses IDENTIFY to name
+  the problem class, PLAN to choose a method, EXECUTE to carry it out, and
+  EVALUATE to check it. Fade sections only after the pattern is established.
+- **P2 — Transfer target.** The card practices method selection or execution,
+  not merely a remembered final value. Use numbers when computation fluency is
+  the target and variables when structure or transfer is the target.
+- **P3 — Genuine check.** EVALUATE uses units, limiting cases, substitution, an
+  inverse operation, a sanity bound, or another real verification. “Correct ✓”
+  is not a check.
+- **P4 — Sufficient givens.** The problem states every constraint and definition
+  needed to attempt it cold.
 
-## File and deck rules
+## Figure rules
 
-- **F1 — Canonical frontmatter.** Exactly these fields in TOML `+++` frontmatter: `order` (integer, matches the filename prefix), `subject` (the collection's canonical lowercase kebab-case subject, such as `mathematics`, `physics`, `computer-science`, `law`, or `biology`), `tags` (array of kebab-case strings). The app makes one home-screen folder per recognized subject topic, so the spelling must match the frontend registry and GitHub topic exactly. Keep `[generation]` provenance tables where present (the parser ignores them). The `name` field is dead (the app overrides it with the repo name) — remove it.
-- **F2 — Filenames.** `NN_snake_case.md`, zero-padded to 2 digits. The app sorts files with `localeCompare`, so unpadded prefixes break ordering (`10_` sorts before `1_`).
-- **F3 — Deck hygiene.** New and modernized decks have `AGENTS.md`,
-  `CARD_README.md`, `README.md` (scope, chapter map, and source register), and
-  `deck.toml`. Keep `.DS_Store` and local `references/` content gitignored.
-  Legacy decks may add this metadata during a controlled audit without changing
-  card identity.
+- **V1 — Retrieval role.** A figure earns its place only when the learner must
+  inspect, predict, label, compare, trace, estimate, or translate it.
+- **V2 — Front/back discipline.** Put setup information on the front and
+  answer-revealing labels or constructions on the back.
+- **V3 — Accurate and accessible.** Geometry, direction, axes, scale, legends,
+  and labels are correct. Do not rely on color alone; inspect at phone width.
+- **V4 — Appropriate medium.** Prefer original responsive SVG for technical
+  diagrams. Use licensed photographs or raster illustrations only when their
+  visual content is the authentic learning target.
 
-## Editing cost warning
+## Deck rules
 
-Legacy cards without an explicit `card-id` are keyed by a BLAKE3 hash of their content, so editing them resets their review history. Before revising a studied deck, run `npm run add-card-ids -- /path/to/deck/flashcards`. Keep the generated `card-id` and `card-alias` comments when editing: presentation changes, figures, formatting, and corrective wording will then preserve the FSRS schedule. A change that tests materially different knowledge must receive a new `card-id` rather than inheriting mastery it has not earned.
+- **D1 — Learning contract.** The roadmap and deck docs state the learner,
+  assumed prerequisites, desired durable capabilities, depth, and exclusions.
+- **D2 — Prerequisite graph.** Chapters and applications follow explicit
+  prerequisite edges. A failed card should expose a retrieval or reasoning gap,
+  not missing instruction.
+- **D3 — Competency coverage.** Coverage follows capabilities and high-value
+  retrieval targets, not source page count, arbitrary cards-per-chapter quotas,
+  or a requirement to convert every worked example and exercise.
+- **D4 — Representation and interference.** Where the field requires it, the
+  deck translates among authentic representations and discriminates commonly
+  confused neighbors.
+- **D5 — Evidence provenance.** Scope sources and claim-verification sources are
+  distinguished. URLs, authority, license/terms, and access dates are recorded;
+  uncertainty and simplifications are labeled.
+- **D6 — Feedback loop.** Audits use study evidence when available—repeated
+  `Again` ratings, leeches, slow responses, ambiguity reports, and unused cards—
+  while treating telemetry as a diagnostic signal rather than proof of cause.
+
+## File and identity rules
+
+- **F1 — Canonical frontmatter.** Use TOML `+++` frontmatter with `order`,
+  canonical lowercase kebab-case `subject`, and kebab-case `tags`. Preserve
+  supported provenance tables. Remove the obsolete `name` field.
+- **F2 — Ordered filenames.** Chapter files use zero-padded
+  `NN_snake_case.md` names whose prefix matches `order`.
+- **F3 — Deck metadata.** New and modernized decks contain `AGENTS.md`,
+  `CARD_README.md`, `README.md`, and `deck.toml`; local reference material and
+  `.DS_Store` remain ignored.
+- **F4 — Stable identity.** Every card block has a unique `card-id`. Preserve it
+  for the same retrieval target; assign a new ID when the knowledge or grading
+  decision materially changes. Preserve aliases and never bulk-regenerate IDs.
+
+Before revising a studied legacy deck, run
+`flashcards deck stabilize <deck-path>`. A content hash is the fallback identity
+for unstabilized cards, so editing one can otherwise reset its schedule.

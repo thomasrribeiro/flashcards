@@ -1,32 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { FLASHCARDS_ROOT, resolvePath, shellQuote } from './paths.js';
+import { buildContextManifest } from './context.js';
 import { stabilizeDeck, validateDeck } from './validation.js';
-
-function subjectRootFor(deckPath) {
-    return path.dirname(deckPath);
-}
-
-function readSubject(deckPath) {
-    const manifestPath = path.join(deckPath, 'deck.toml');
-    if (existsSync(manifestPath)) {
-        const manifest = readFileSync(manifestPath, 'utf8');
-        const subject = /^subject\s*=\s*"([^"]+)"/m.exec(manifest)?.[1];
-        if (subject) return subject;
-    }
-    const flashcardsPath = path.join(deckPath, 'flashcards');
-    if (existsSync(flashcardsPath)) {
-        const files = readdirSync(flashcardsPath).filter(name => name.endsWith('.md')).sort();
-        for (const file of files) {
-            const markdown = readFileSync(path.join(flashcardsPath, file), 'utf8');
-            const subject = /^subject\s*=\s*"([^"]+)"/m.exec(markdown)?.[1];
-            if (subject) return subject;
-        }
-    }
-    return path.basename(subjectRootFor(deckPath));
-}
 
 function auditTimestamp() {
     return new Date().toISOString().replace(/[:.]/g, '-');
@@ -57,8 +35,12 @@ export function buildAgentInvocation({
     preflightPath
 }) {
     const deckPath = resolvePath(inputPath);
-    const subjectRoot = subjectRootFor(deckPath);
-    const subject = readSubject(deckPath);
+    const contextManifest = buildContextManifest({ deckPath, mode, preflightPath });
+    const { subjectRoot, subject } = contextManifest;
+    const missingRequired = contextManifest.files.filter(file => file.required && !file.exists);
+    if (missingRequired.length) {
+        throw new Error(`Missing required authoring context: ${missingRequired.map(file => file.path).join(', ')}`);
+    }
     const modeInstruction = mode === 'build'
         ? 'Research, design, and build this deck from its current state.'
         : reportOnly
@@ -71,8 +53,10 @@ export function buildAgentInvocation({
         `Subject workspace: ${subjectRoot}`,
         `Read-only flashcards application and standards: ${FLASHCARDS_ROOT}`,
         preflightPath ? `Machine-readable preflight report: ${preflightPath}` : null,
+        'Read every present file in this ordered context manifest completely before acting:',
+        ...contextManifest.files.filter(file => file.exists).map((file, index) => `${index + 1}. [${file.role}] ${file.path}`),
         modeInstruction,
-        'Read every required guide identified by the skill before editing.',
+        'Do not load deprecated compatibility guides or unrelated subject encyclopedias unless the user explicitly asks.',
         'Do not edit the flashcards application repository; make deck and subject changes only in the target workspaces.',
         'Do not commit, push, create a remote repository, or deploy.',
         extraInstructions ? `Additional user instructions: ${extraInstructions}` : null
@@ -91,7 +75,7 @@ export function buildAgentInvocation({
     const args = nonInteractive
         ? [...globalArgs, 'exec', prompt]
         : [...globalArgs, prompt];
-    return { command: 'codex', args, prompt, deckPath, subjectRoot };
+    return { command: 'codex', args, prompt, deckPath, subjectRoot, contextManifest };
 }
 
 export function formatInvocation(invocation) {
@@ -164,6 +148,7 @@ export function codexDoctor() {
     const requiredFiles = [
         path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'),
         path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'CARD_STANDARD.md'),
+        path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'AUTHORING_PLAYBOOK.md'),
         path.join(FLASHCARDS_ROOT, 'scripts', 'validate-notes.js')
     ];
     const missingFiles = requiredFiles.filter(file => !existsSync(file));

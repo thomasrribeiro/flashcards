@@ -5,9 +5,9 @@ These instructions apply to every deck in this subject directory.
 Before creating or auditing cards, read:
 
 1. `{{FLASHCARDS_ROOT}}/templates/guides/CARD_STANDARD.md`
-2. `{{FLASHCARDS_ROOT}}/templates/guides/new-subject.md`
-3. `{{FLASHCARDS_ROOT}}/templates/guides/general.md`
-4. `AUTHORING_GUIDE.md` and `ROADMAP.md` in this directory
+2. `{{FLASHCARDS_ROOT}}/templates/guides/AUTHORING_PLAYBOOK.md`
+3. `{{FLASHCARDS_ROOT}}/templates/guides/{{SUBJECT}}.md` when it exists
+4. `SUBJECT_BRIEF.md` and `ROADMAP.md` in this directory
 5. The target deck's `AGENTS.md`, `README.md`, and `CARD_README.md`
 
 Use authoritative and legally compatible sources. Record source URLs, licenses,

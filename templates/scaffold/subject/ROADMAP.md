@@ -2,8 +2,9 @@
 
 ## Learner and destination
 
-- Intended learner: TODO
-- Prior knowledge: TODO
+Summarize the destination from `SUBJECT_BRIEF.md`; keep detailed learner and
+convention decisions there.
+
 - Long-term capabilities: TODO
 
 ## Deck sequence

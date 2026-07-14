@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { addChapter, createDeck, ensureSubject } from '../bin/lib/scaffold.js';
 import { buildAgentInvocation, formatInvocation, runDeckAgent } from '../bin/lib/codex.js';
+import { buildContextManifest, formatContextManifest } from '../bin/lib/context.js';
 import { requireKebabSlug } from '../bin/lib/paths.js';
 import { stabilizeDeck, validateDeck } from '../bin/lib/validation.js';
 
@@ -41,6 +42,7 @@ describe('flashcards CLI scaffolding', () => {
         expect(await readFile(roadmap, 'utf8')).toBe('# My roadmap\n');
         expect(await readFile(path.join(result.deckPath, 'deck.toml'), 'utf8')).toContain('subject = "earth-science"');
         expect(await readFile(path.join(result.deckPath, 'AGENTS.md'), 'utf8')).toContain('CARD_STANDARD.md');
+        expect(await stat(path.join(subject.subjectPath, 'SUBJECT_BRIEF.md'))).toBeTruthy();
         expect(await stat(path.join(result.deckPath, 'figures', '01_foundations'))).toBeTruthy();
         expect(await stat(path.join(result.deckPath, 'flashcards', '02_plate_boundaries.md'))).toBeTruthy();
     });
@@ -135,8 +137,28 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.args).toContain(deckPath);
         expect(invocation.args).not.toContain('--model');
         expect(invocation.prompt).toContain('$manage-flashcard-decks');
+        expect(invocation.prompt).toContain('AUTHORING_PLAYBOOK.md');
         expect(invocation.prompt).toContain('Check prerequisite bridges.');
         expect(formatInvocation(invocation)).toContain('codex');
+    });
+
+    it('reports the exact ordered context without deprecated compatibility guides', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'biology',
+            deck: 'genetics',
+            notesRoot,
+            initializeGit: false
+        });
+        const manifest = buildContextManifest({ deckPath, mode: 'audit' });
+        const paths = manifest.files.filter(file => file.exists).map(file => file.path);
+        expect(paths.some(file => file.endsWith('CARD_STANDARD.md'))).toBe(true);
+        expect(paths.some(file => file.endsWith('AUTHORING_PLAYBOOK.md'))).toBe(true);
+        expect(paths.some(file => file.endsWith('audit-workflow.md'))).toBe(true);
+        expect(paths.some(file => file.endsWith('general.md'))).toBe(false);
+        expect(paths.some(file => file.endsWith('new-subject.md'))).toBe(false);
+        expect(manifest.summary.missingRequired).toBe(0);
+        expect(formatContextManifest(manifest)).toContain('Total loaded context');
     });
 
     it('requires Git safety before an editing audit can launch Codex', async () => {

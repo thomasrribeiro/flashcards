@@ -65,7 +65,7 @@ export async function ensureSubject({ subject, notesRoot, title }) {
 
     await mkdir(subjectPath, { recursive: true });
     const created = [];
-    for (const name of ['AGENTS.md', 'ROADMAP.md', 'AUTHORING_GUIDE.md']) {
+    for (const name of ['AGENTS.md', 'ROADMAP.md', 'SUBJECT_BRIEF.md']) {
         const target = path.join(subjectPath, name);
         if (await writeIfMissing(target, await renderTemplate(`subject/${name}`, values))) created.push(target);
     }

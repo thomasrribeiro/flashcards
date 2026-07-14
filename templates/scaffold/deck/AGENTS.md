@@ -3,11 +3,10 @@
 Read and follow, in order:
 
 1. `{{FLASHCARDS_ROOT}}/templates/guides/CARD_STANDARD.md`
-2. `{{FLASHCARDS_ROOT}}/templates/guides/new-subject.md`
-3. `{{FLASHCARDS_ROOT}}/templates/guides/general.md`
-4. `../AUTHORING_GUIDE.md` and `../ROADMAP.md`
+2. `{{FLASHCARDS_ROOT}}/templates/guides/AUTHORING_PLAYBOOK.md`
+3. `{{FLASHCARDS_ROOT}}/templates/guides/{{SUBJECT}}.md` when it exists
+4. `../SUBJECT_BRIEF.md` and `../ROADMAP.md`
 5. This repository's `deck.toml`, `README.md`, and `CARD_README.md`
-6. `{{FLASHCARDS_ROOT}}/templates/guides/{{SUBJECT}}.md` when it exists
 
 Use the flashcards application's parser, stable-ID implementation, and
 validator as executable truth. Establish prerequisites before applications.

@@ -96,7 +96,7 @@ deck-name/
 ```
 
 The subject directory also receives `AGENTS.md`, `ROADMAP.md`, and
-`AUTHORING_GUIDE.md` when they are missing. Existing files are never
+`SUBJECT_BRIEF.md` when they are missing. Existing files are never
 overwritten.
 
 ## Maintain a deck
@@ -125,6 +125,17 @@ benefits from visible judgment and feedback.
 flashcards deck build ~/notes/biology/genetics
 flashcards deck audit ~/notes/physics/mechanics
 ```
+
+Inspect the exact ordered Markdown context before launching an agent:
+
+```bash
+flashcards deck context ~/notes/biology/genetics --mode build
+flashcards deck context ~/notes/physics/mechanics --mode audit --json
+```
+
+The command reports every present file, its role and word count, optional
+missing files, and the total context. Build and audit prompts use the same
+manifest, so documentation drift is visible instead of implicit.
 
 Before any editing agent starts, the CLI gives existing card blocks stable IDs
 so later wording, figure, and correctness improvements cannot silently discard
@@ -200,9 +211,23 @@ S: A transferable solution method with a genuine evaluation step.
 Read these sources of truth before authoring manually:
 
 - `templates/guides/CARD_STANDARD.md`
-- `templates/guides/general.md`
-- `templates/guides/new-subject.md`
+- `templates/guides/AUTHORING_PLAYBOOK.md`
 - the applicable subject guide in `templates/guides/`
+
+The context hierarchy deliberately avoids repetition:
+
+| Document | Responsibility |
+|---|---|
+| `CARD_STANDARD.md` | Normative card, deck, parser, and identity acceptance rules |
+| `AUTHORING_PLAYBOOK.md` | Universal curriculum, learning, source, figure, and audit decisions |
+| `templates/guides/<subject>.md` | Reusable domain-specific judgment |
+| subject `SUBJECT_BRIEF.md` | Learner, depth, conventions, and evidence authorities |
+| subject `ROADMAP.md` | Deck sequence, prerequisites, and durable outcomes |
+| deck `README.md` | Scope, chapter map, and source register |
+| deck `CARD_README.md` | Deck-specific retrieval design and justified exceptions |
+
+`general.md` and `new-subject.md` remain only as short compatibility pointers
+for older links; agents do not load them.
 
 ## Development checks
 

@@ -3,6 +3,7 @@
 import { Command, Option } from 'commander';
 import { addChapter, createDeck, ensureSubject } from './lib/scaffold.js';
 import { codexDoctor, formatInvocation, runDeckAgent } from './lib/codex.js';
+import { buildContextManifest, formatContextManifest } from './lib/context.js';
 import { resolveNotesRoot, resolvePath } from './lib/paths.js';
 import { stabilizeDeck, validateDeck } from './lib/validation.js';
 
@@ -59,7 +60,7 @@ function executeAgent(mode, deckPath, options) {
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('2.0.0')
+    .version('2.1.0')
     .showSuggestionAfterError();
 
 program
@@ -134,6 +135,21 @@ deck
             const result = await addChapter({ deckPath, name, order: options.order });
             console.log(`Created ${result.filePath}`);
             console.log(`Created ${result.figurePath}`);
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+deck
+    .command('context <deck-path>')
+    .description('Show the exact ordered Markdown context used by a build or audit')
+    .addOption(new Option('--mode <mode>', 'Agent operation').choices(['build', 'audit']).default('build'))
+    .option('--json', 'Print the manifest as JSON')
+    .action((deckPath, options) => {
+        try {
+            const manifest = buildContextManifest({ deckPath, mode: options.mode });
+            console.log(options.json ? JSON.stringify(manifest, null, 2) : formatContextManifest(manifest));
+            if (manifest.summary.missingRequired) process.exitCode = 1;
         } catch (error) {
             handleError(error);
         }

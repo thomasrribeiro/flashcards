@@ -8,7 +8,7 @@ created = "{{DATE}}"
 [standards]
 flashcards_root = "{{FLASHCARDS_ROOT}}"
 universal = "templates/guides/CARD_STANDARD.md"
-general = "templates/guides/general.md"
+playbook = "templates/guides/AUTHORING_PLAYBOOK.md"
 subject = "templates/guides/{{SUBJECT}}.md"
 
 [identity]

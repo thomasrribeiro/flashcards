@@ -1,7 +1,8 @@
 # {{DECK_TITLE}} card blueprint
 
-This file records decisions specific to this deck. Universal rules live in the
-flashcards repository's `CARD_STANDARD.md` and detailed authoring guides.
+This file records retrieval decisions specific to this deck. Do not copy the
+universal standard, playbook, subject brief, roadmap, or research literature
+here; link to a justified exception when one is necessary.
 
 ## Learner model
 
@@ -20,6 +21,14 @@ Establish terms and representations before asking the learner to apply them.
 For each chapter, decide which definitions, mechanisms, causal explanations,
 predictions, representation translations, comparisons, misconceptions,
 procedures, and applications genuinely deserve separate scheduling decisions.
+
+Record likely interference pairs and the contrasts that distinguish them.
+
+## Initial-learning path
+
+Describe how a learner encounters explanations and prerequisite bridges before
+applications test them. A failed card should reveal a retrieval or reasoning
+gap, not missing instruction.
 
 ## Figure policy
 

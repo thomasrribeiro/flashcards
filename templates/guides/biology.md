@@ -1,7 +1,7 @@
 # Biology flashcard writing guide
 
-This guide supplements `CARD_STANDARD.md`, `general.md`, and
-`new-subject.md`. It targets an introductory, college-level path that develops
+This guide supplements `CARD_STANDARD.md` and `AUTHORING_PLAYBOOK.md`. It
+targets an introductory, college-level path that develops
 biological literacy and prepares the learner for deeper molecular, organismal,
 and ecological study.
 
@@ -128,4 +128,3 @@ with attribution; do not use decorative stock imagery.
 
 These sources guide scope and competencies. Verify individual biological claims
 against appropriate primary literature or public scientific agencies.
-
