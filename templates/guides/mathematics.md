@@ -107,6 +107,18 @@ Label axes and scale honestly. Do not let a sketch imply a proof, a special case
 imply a theorem, or a rendered graph hide domain restrictions. Front figures
 must not display the requested label or construction.
 
+For each chapter, separately assess geometric objects, graphs, transformations,
+proof constructions, combinatorial structures, counterexamples, and changes of
+representation. Several figures are appropriate when they test distinct
+invariants or translations; one attractive graph is not a substitute for this
+coverage audit.
+
+Clozes can efficiently maintain an exact symbol, definition component, theorem
+hypothesis, or short identity when the visible context determines one answer
+and the concept is already understood. Do not cloze proof prose, long formulas,
+or steps whose justification is the real target, and do not place deletion
+brackets inside math delimiters.
+
 ## Accuracy and audit checks
 
 - Test claims with examples and adversarial boundary cases.

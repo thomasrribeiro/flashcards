@@ -92,6 +92,30 @@ Create only independently useful targets. Source headings, glossaries, and
 problem sets are candidate inventories—not obligations. More cards increase
 future review cost; every card should justify that cost.
 
+## Plan card forms and representations before authoring
+
+For every chapter, make a compact design ledger before writing cards. Account
+for:
+
+- the independently scheduled retrieval targets;
+- which targets need bounded `Q:/A:` reasoning;
+- whether any exact, compact, already-understood targets genuinely benefit from
+  `C:` recall;
+- the analyzed, completion, faded, independent, and mixed problems that are
+  appropriate;
+- authentic verbal, symbolic, numerical, graphical, spatial, structural,
+  temporal, code, data, or other representations;
+- candidate figures and the distinct retrieval role of each.
+
+This is a coverage plan, not a quota. A chapter may need no cloze or no figure,
+but that should follow from its targets rather than from agent convenience. A
+visually intensive chapter may need several figures because a graph, system
+diagram, before/after state, and spatial construction test different skills.
+Conversely, do not add a weak card or decorative image to balance a table.
+
+At handoff, compare the planned and actual card-type, problem, and figure
+inventories. Investigate unexplained omissions and report intentional ones.
+
 ## Formulate cards for reliable grading
 
 Write the cue before the answer. Ask what evidence would let the learner know
@@ -146,6 +170,13 @@ geometry. Inspect every changed figure at phone width.
 
 Do not add decorative imagery for a generic “dual coding” quota. If removing the
 figure leaves retrieval unchanged, remove it.
+
+Do not interpret that test as a reason to stop after one representative image.
+Before deciding a chapter is visually complete, check separately for diagrams,
+graphs, spatial relationships, timelines or state transitions, before/after
+comparisons, experimental or procedural setups, and translation between these
+representations. Multiple figures are justified when they support distinct
+retrieval decisions.
 
 ## Research and source policy
 

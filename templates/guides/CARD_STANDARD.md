@@ -47,6 +47,27 @@ Severity:
 - **U10 — Valid markup and assets.** KaTeX renders, image paths resolve, and
   meaningful alt text is present. Remove decorative media.
 
+## Card-form selection rules
+
+- **R1 — Target determines form.** Choose `Q:/A:`, `C:`, or `P:/S:` from the
+  retrieval decision rather than a desired type distribution. Report the final
+  type mix, but do not add a weak card merely to diversify it.
+- **R2 — Basic cards for bounded reasoning.** Use `Q:/A:` for explanations,
+  relationships, predictions, discriminations, diagnoses, method choices, and
+  figure interpretation. It is the safe default when the answer is not one
+  short insertion.
+- **R3 — Clozes for exact compact recall.** Use `C:` only when established
+  context uniquely determines a short term, value, symbol, or relation whose
+  exact recall is useful. A deck may legitimately contain no clozes; a cloze is
+  not required merely because a statement contains a formula.
+- **R4 — Problems for transfer and execution.** Use `P:/S:` when the learner
+  must classify a situation, choose a method, execute a meaningful step, or
+  evaluate a result. Do not recast a direct definition as a token problem.
+- **R5 — Planned portfolio.** The deck blueprint accounts for the intended card
+  forms, problem progression, and authentic representations chapter by chapter.
+  Large unexplained differences between the plan and final inventory require
+  review before handoff.
+
 ## Cloze rules
 
 - **C1 — Small deletion.** Prefer one deletion and allow at most two per block.
@@ -57,8 +78,10 @@ Severity:
 - **C3 — Determinate context.** Visible text uniquely constrains the deletion at
   the intended precision.
 - **C4 — Parser-safe brackets.** Every `[...]` in a `C:` block becomes a cloze
-  except Markdown image syntax. Square brackets inside math or code therefore
-  create spurious cards; rewrite the notation or use `Q:/A:`.
+  except Markdown image syntax. Do not place deletion brackets *inside* a math
+  span, because mathematical brackets and cloze markers become ambiguous. Use
+  `Q:/A:` or delete the complete math span, for example
+  `[\(v=v_0+at\)]` rather than `\(v=[v_0+at]\)`.
 - **C5 — No duplicate reveal.** Hidden text does not appear elsewhere in the
   visible block.
 
@@ -87,6 +110,12 @@ Severity:
 - **V4 — Appropriate medium.** Prefer original responsive SVG for technical
   diagrams. Use licensed photographs or raster illustrations only when their
   visual content is the authentic learning target.
+- **V5 — Representation coverage.** Before authoring, inventory each chapter's
+  spatial, temporal, structural, graphical, relational, and other authentic
+  visual targets. Include every figure that earns a distinct retrieval role;
+  do not impose either a decorative quota or an implicit one-figure cap.
+  Record why a visually important outcome is intentionally handled without a
+  figure.
 
 ## Deck rules
 

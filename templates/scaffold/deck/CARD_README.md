@@ -24,6 +24,19 @@ procedures, and applications genuinely deserve separate scheduling decisions.
 
 Record likely interference pairs and the contrasts that distinguish them.
 
+## Chapter design ledger
+
+Complete this before large-scale authoring and reconcile it at handoff. Add rows
+or split columns when a chapter has several distinct figures or problems.
+
+| Chapter | Retrieval targets | Basic-card roles | Cloze candidates | Problem progression | Representations and figure opportunities |
+|---|---|---|---|---|---|
+| TODO | TODO | TODO | TODO or none with reason | TODO or none with reason | TODO; mark each candidate include/omit with reason |
+
+Card-form diversity is not a goal by itself. Zero clozes can be correct. A
+visually rich chapter may require several figures because diagrams, graphs,
+before/after states, and spatial constructions serve different retrieval roles.
+
 ## Initial-learning path
 
 Describe how a learner encounters explanations and prerequisite bridges before
@@ -35,6 +48,11 @@ gap, not missing instruction.
 Add a figure only when inspecting, predicting, labeling, comparing, tracing, or
 translating it is part of learning. Prefer original responsive SVGs. Put setup
 figures on the front and answer-revealing annotations on the back.
+
+Do not treat one figure per chapter as a target or cap. Inventory every
+plausible spatial, temporal, structural, graphical, relational, experimental,
+and before/after representation, then include or explicitly omit it according
+to its retrieval value.
 
 ## Sources and accuracy
 
@@ -48,5 +66,6 @@ Before handoff:
 1. Run `flashcards deck stabilize . --check`.
 2. Run `flashcards deck validate .`.
 3. Inspect every changed figure at phone width.
-4. Run `git diff --check` and review the complete diff.
-5. Summarize additions, changes, omissions, and any unresolved uncertainty.
+4. Reconcile planned versus actual card types, problems, and figures by chapter.
+5. Run `git diff --check` and review the complete diff.
+6. Summarize additions, changes, omissions, and any unresolved uncertainty.

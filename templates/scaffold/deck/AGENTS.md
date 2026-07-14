@@ -11,11 +11,15 @@ Read and follow, in order:
 Use the flashcards application's parser, stable-ID implementation, and
 validator as executable truth. Establish prerequisites before applications.
 Create the smallest sufficient card set; do not optimize for card count.
+“Smallest sufficient” means removing redundant retrieval decisions, not
+minimizing authentic representations, problem progression, or useful figures.
 
 Preserve every existing `card-id` when correcting or improving the same
 retrieval target. Assign a new ID when a card tests materially new knowledge.
 Use original SVG figures where spatial, temporal, structural, or graphical
 reasoning is itself part of the target.
+Inventory figure opportunities by retrieval role before authoring; do not use
+one figure per chapter as either a target or a cap.
 
 Run `flashcards deck validate .` before handoff. Do not commit, push, create a
 remote repository, or deploy unless the user asks.

@@ -42,6 +42,7 @@ describe('flashcards CLI scaffolding', () => {
         expect(await readFile(roadmap, 'utf8')).toBe('# My roadmap\n');
         expect(await readFile(path.join(result.deckPath, 'deck.toml'), 'utf8')).toContain('subject = "earth-science"');
         expect(await readFile(path.join(result.deckPath, 'AGENTS.md'), 'utf8')).toContain('CARD_STANDARD.md');
+        expect(await readFile(path.join(result.deckPath, 'CARD_README.md'), 'utf8')).toContain('Chapter design ledger');
         expect(await stat(path.join(subject.subjectPath, 'SUBJECT_BRIEF.md'))).toBeTruthy();
         expect(await stat(path.join(result.deckPath, 'figures', '01_foundations'))).toBeTruthy();
         expect(await stat(path.join(result.deckPath, 'flashcards', '02_plate_boundaries.md'))).toBeTruthy();
@@ -116,6 +117,24 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(validateDeck(deckPath, { quiet: true, capture: true }).status).toBe(0);
     });
 
+    it('explains parser-ambiguous math-internal clozes', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['kinematics']
+        });
+        const chapterPath = path.join(deckPath, 'flashcards', '01_kinematics.md');
+        await writeFile(chapterPath, '+++\norder = 1\nsubject = "physics"\ntags = ["mechanics"]\n+++\n\n<!-- card-id: mechanics-velocity -->\nC: For constant acceleration, $v=[v_0+at]$.\n');
+        const reportPath = path.join(notesRoot, 'cloze-validation.json');
+        const result = validateDeck(deckPath, { outputPath: reportPath, quiet: true, capture: true });
+        expect(result.status).toBe(0);
+        const report = JSON.parse(await readFile(reportPath, 'utf8'));
+        expect(report.decks[0].files[0].clozeLints[0].msg).toContain('math-internal cloze is parser-ambiguous');
+    });
+
     it('builds an explicit, model-unpinned Codex invocation', async () => {
         const notesRoot = await temporaryRoot();
         const { deckPath } = await createDeck({
@@ -138,6 +157,8 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.args).not.toContain('--model');
         expect(invocation.prompt).toContain('$manage-flashcard-decks');
         expect(invocation.prompt).toContain('AUTHORING_PLAYBOOK.md');
+        expect(invocation.prompt).toContain('chapter design ledger');
+        expect(invocation.prompt).toContain('one figure per chapter');
         expect(invocation.prompt).toContain('Check prerequisite bridges.');
         expect(formatInvocation(invocation)).toContain('codex');
     });

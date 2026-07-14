@@ -88,6 +88,18 @@ relative placement, axes, labels, and scale claims must be physically correct.
 Use dashed paths or shape differences as well as color. Keep solution forces,
 trajectories, labels, and constructions off the front when they are the target.
 
+Before authoring each chapter, assess these as separate opportunities rather
+than selecting one representative image: system boundaries, free-body or field
+diagrams, coordinate/vector geometry, graph families, experimental or
+measurement setups, before/after conservation states, model comparisons, and
+translations between them. Include every distinct high-value target; record why
+an expected representation is omitted.
+
+Use clozes sparingly for compact quantities, units, notation, or relations that
+are already understood and genuinely need exact recall. Do not place deletion
+brackets inside a math span. Model choice, assumptions, equation meaning, and
+derivation cues normally belong in `Q:/A:` or `P:/S:` cards.
+
 ## Interference and misconceptions
 
 Contrast quantities and laws that share surface cues, for example:

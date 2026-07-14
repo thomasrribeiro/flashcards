@@ -257,17 +257,18 @@ for (const deck of decks) {
                     fileReport.clozeLints.push({ rule: 'C1', msg: `deletion ${delText.length} chars`, excerpt: delText.slice(0, 80) });
                 }
                 // A deletion that fully CONTAINS math spans (e.g. [$2x$]) is fine.
-                // Flag: deletion inside a math span (spurious card from bracket notation)
-                // or partially crossing a math boundary (mis-spanned deletion).
+                // A deletion inside a math span is parser-ambiguous: the brackets
+                // may be intended cloze syntax or ordinary mathematical notation.
+                // A partially crossed boundary is malformed either way.
                 for (const [ms, me] of ranges) {
                     if (start > ms && end < me) {
-                        fileReport.clozeLints.push({ rule: 'C4', msg: 'cloze deletion inside $...$ math (spurious card from bracket notation)', excerpt: delText.slice(0, 80) });
+                        fileReport.clozeLints.push({ rule: 'C4', msg: 'math-internal cloze is parser-ambiguous; use Q/A or delete the complete math span', excerpt: delText.slice(0, 80) });
                         break;
                     }
                     const overlaps = start <= me && end >= ms;
                     const contains = start <= ms && end >= me;
                     if (overlaps && !contains) {
-                        fileReport.clozeLints.push({ rule: 'C4', msg: 'cloze deletion partially crosses $...$ math boundary (mis-span)', excerpt: delText.slice(0, 80) });
+                        fileReport.clozeLints.push({ rule: 'C4', msg: 'cloze deletion partially crosses a math boundary; use Q/A or delete the complete math span', excerpt: delText.slice(0, 80) });
                         break;
                     }
                 }

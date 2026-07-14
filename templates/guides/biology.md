@@ -115,6 +115,17 @@ Photographs are useful when morphology, tissue organization, organismal
 variation, or field identification is the target. Use openly licensed images
 with attribution; do not use decorative stock imagery.
 
+Make a visual-opportunity inventory for every chapter. Treat scale, molecular
+or anatomical structure, causal pathways, compartment boundaries, chromosome
+states, experimental setups, authentic data, phylogenies, and ecological
+networks as separate candidate retrieval roles rather than collapsing them into
+one representative figure.
+
+Use clozes only for compact, uniquely cued terminology or relationships after
+the underlying mechanism has been introduced. Do not use clozes to memorize an
+unexplained vocabulary list, a whole pathway, or a sequence whose causal order
+should instead be reconstructed.
+
 ## Recommended evidence framework
 
 - NSF summary of *Vision and Change*:

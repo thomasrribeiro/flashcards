@@ -79,6 +79,15 @@ Ensure a learner encounters and understands a concept before an application
 card assumes it. Do not duplicate prerequisite decks merely to make cards feel
 self-contained.
 
+Before authoring, record a chapter design ledger in `CARD_README.md` or an
+equivalent deck-local plan. For each chapter, map retrieval targets to card
+forms, the analyzed-to-independent problem progression, authentic
+representations, and every plausible figure opportunity. Mark an opportunity as
+included or intentionally omitted with a short reason. This is not a numeric
+quota: zero clozes or figures can be correct, and a visually rich chapter can
+require several figures. Reconcile the planned and actual inventories before
+handoff.
+
 ## Author cards safely
 
 - Make one card equal one meaningful grading and scheduling decision.
@@ -100,6 +109,10 @@ Add figures wherever spatial, temporal, structural, graphical, or relational
 reasoning benefits—not according to an arbitrary cap. Prefer original SVGs for
 technical diagrams. Require a `viewBox`, meaningful `<title>` and `<desc>`,
 phone-width legibility, high contrast, and a redundant cue beyond color.
+
+Assess figure opportunities by retrieval role rather than chapter count. Do not
+stop at one figure when diagrams, graphs, before/after states, experimental
+setups, or representation translations support distinct decisions.
 
 Keep answer-revealing labels off the front. Use meaningful Markdown alt text
 that remains accessible without leaking the answer. Do not use generated
