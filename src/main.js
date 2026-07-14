@@ -5,7 +5,7 @@
 import { initDB, getAllCards, getAllReviews, getStats, getAllRepos, getAllDecks, getAllTopics, clearReviewsByDeck, saveCards, saveRepoMetadata } from './storage.js';
 import { loadRepository, loadRepositoryFiles, loadRepositoryMetadata, removeRepository } from './repo-manager.js';
 import { parseDeck } from './parser.js';
-import { hashCard } from './hasher.js';
+import { identifyCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories, getOrgRepositories } from './github-client.js';
 import { githubAuth } from './github-auth.js';
 import { startSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
@@ -2092,14 +2092,15 @@ async function loadLocalRepo(repoInfo) {
 
             // Add cards with proper deck info
             const cardsWithMeta = cards.map(card => {
-                const hash = hashCard(card);
+                const deckId = `local/${repoInfo.name}`;
+                const identity = identifyCard(card, deckId);
                 return {
                     ...card,
-                    hash,
-                    deckName: `local/${repoInfo.name}`,
+                    ...identity,
+                    deckName: deckId,
                     deckMetadata: metadata || firstMetadata,
                     source: {
-                        repo: `local/${repoInfo.name}`,
+                        repo: deckId,
                         file
                     }
                 };

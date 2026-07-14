@@ -5,22 +5,36 @@
 
 import { Parser, parseDeck } from './parser.js';
 
+function identityAnnotations(card, aliases = card.legacyHashes || []) {
+    const stableId = card.stableIdBase || card.stableId;
+    if (!stableId) return '';
+    const lines = [`<!-- card-id: ${stableId} -->`];
+    for (const alias of aliases) lines.push(`<!-- card-alias: ${alias} -->`);
+    return `${lines.join('\n')}\n`;
+}
+
+function newStableId() {
+    if (globalThis.crypto?.randomUUID) return `card-${globalThis.crypto.randomUUID()}`;
+    return `card-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`;
+}
+
 /**
  * Serialize a single card to markdown string
  * @param {object} card - Card object with type and content
  * @returns {string} - Markdown representation
  */
 export function serializeCard(card) {
+    const prefix = identityAnnotations(card);
     switch (card.type) {
         case 'basic':
-            return `Q: ${card.content.question}\nA: ${card.content.answer}`;
+            return `${prefix}Q: ${card.content.question}\nA: ${card.content.answer}`;
 
         case 'cloze':
             // For cloze cards, we need to reconstruct the original text with brackets
-            return `C: ${reconstructClozeText(card)}`;
+            return `${prefix}C: ${reconstructClozeText(card)}`;
 
         case 'problem':
-            return `P: ${card.content.problem}\nS: ${card.content.solution}`;
+            return `${prefix}P: ${card.content.problem}\nS: ${card.content.solution}`;
 
         default:
             throw new Error(`Unknown card type: ${card.type}`);
@@ -128,13 +142,15 @@ export function serializeFile(cards, metadata = null) {
     // Build an ordered list of "serializable units" — each unit is either a
     // single non-cloze card, or a group of cloze cards sharing the same text.
     const units = [];
-    const seenClozeTexts = new Map(); // text → index in units[]
+    const seenClozeTexts = new Map(); // stable group ID/content → index in units[]
 
     for (const card of cards) {
         if (card.type !== 'cloze') {
             units.push({ type: 'card', card });
         } else {
-            const key = card.content.text;
+            const key = card.stableIdBase
+                ? `stable:${card.stableIdBase}`
+                : `content:${card.content.text}`;
             if (seenClozeTexts.has(key)) {
                 // Add to the existing group
                 units[seenClozeTexts.get(key)].cards.push(card);
@@ -151,7 +167,8 @@ export function serializeFile(cards, metadata = null) {
         if (unit.type === 'card') {
             return serializeCard(unit.card);
         } else {
-            return `C: ${rebuildClozeGroup(unit.cards)}`;
+            const aliases = unit.cards.flatMap(card => card.legacyHashes || []);
+            return `${identityAnnotations(unit.cards[0], aliases)}C: ${rebuildClozeGroup(unit.cards)}`;
         }
     });
 
@@ -166,10 +183,13 @@ export function serializeFile(cards, metadata = null) {
  * @returns {object} - Card object ready for serialization
  */
 export function createCardFromForm(type, formData) {
+    const stableIdBase = newStableId();
     switch (type) {
         case 'basic':
             return {
                 type: 'basic',
+                stableId: stableIdBase,
+                stableIdBase,
                 content: {
                     question: formData.question.trim(),
                     answer: formData.answer.trim()
@@ -182,6 +202,8 @@ export function createCardFromForm(type, formData) {
             // placeholder — real start/end/text are computed by the parser on save.
             return {
                 type: 'cloze',
+                stableId: `${stableIdBase}::1`,
+                stableIdBase,
                 originalText: formData.text.trim(),
                 content: {
                     text: formData.text.trim(),
@@ -193,6 +215,8 @@ export function createCardFromForm(type, formData) {
         case 'problem':
             return {
                 type: 'problem',
+                stableId: stableIdBase,
+                stableIdBase,
                 content: {
                     problem: formData.problem.trim(),
                     solution: formData.solution.trim()
@@ -229,6 +253,15 @@ export function parseFileContent(content, filePath = 'file.md') {
 export function insertCard(fileContent, newCard, index = -1) {
     const { cards, metadata } = parseFileContent(fileContent);
 
+    if (!newCard.stableId) {
+        const stableIdBase = newStableId();
+        newCard = {
+            ...newCard,
+            stableIdBase,
+            stableId: newCard.type === 'cloze' ? `${stableIdBase}::1` : stableIdBase
+        };
+    }
+
     // Insert at specified position or end
     if (index < 0 || index >= cards.length) {
         cards.push(newCard);
@@ -253,7 +286,14 @@ export function updateCard(fileContent, cardIndex, updatedCard) {
         throw new Error(`Card index ${cardIndex} out of bounds`);
     }
 
-    cards[cardIndex] = updatedCard;
+    const existing = cards[cardIndex];
+    const stableIdBase = existing.stableIdBase || existing.stableId || newStableId();
+    cards[cardIndex] = {
+        ...updatedCard,
+        stableIdBase,
+        stableId: updatedCard.type === 'cloze' ? `${stableIdBase}::1` : stableIdBase,
+        legacyHashes: existing.legacyHashes || []
+    };
 
     return serializeFile(cards, metadata);
 }

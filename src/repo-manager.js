@@ -3,7 +3,7 @@
  */
 
 import { parseDeck } from './parser.js';
-import { hashCard } from './hasher.js';
+import { identifyCard } from './hasher.js';
 import * as githubClient from './github-client.js';
 import { saveCards, getAllCards, saveRepoMetadata, getRepoMetadata, getAllRepos, markRepoLoaded } from './storage.js';
 
@@ -99,14 +99,14 @@ export async function loadRepositoryFiles(repoString, filePaths = null) {
                 const content = await githubClient.getFileContent(owner, repo, file.path, file.sha);
                 const { cards, metadata } = parseDeck(content, file.path);
                 const cardsWithMeta = cards.map(card => {
-                    const hash = hashCard(card);
+                    const identity = identifyCard(card, repoString);
                     return {
                         ...card,
-                        hash,
+                        ...identity,
                         source: { repo: repoString, file: file.path, sha: file.sha },
                         deckName: repoString,
                         deckMetadata: metadata,
-                        id: `${repoString}#${hash}`
+                        id: `${repoString}#${identity.hash}`
                     };
                 });
                 await saveCards(cardsWithMeta);
@@ -216,17 +216,17 @@ export async function loadRepository(repoString) {
 
             // Add repository source; deckMetadata is attached after aggregation below
             const cardsWithMeta = cards.map(card => {
-                const hash = hashCard(card);
+                const identity = identifyCard(card, deckId);
                 return {
                     ...card,
-                    hash,
+                    ...identity,
                     source: {
                         repo: `${owner}/${repo}`,
                         file: file.path,
                         sha: file.sha
                     },
                     deckName: deckId,
-                    id: `${deckId}#${hash}`
+                    id: `${deckId}#${identity.hash}`
                 };
             });
 

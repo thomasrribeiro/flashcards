@@ -13,6 +13,7 @@
     "build": "vite build && node scripts/build.js",
     "preview": "vite preview",
     "process-submodules": "node scripts/build.js",
+    "add-card-ids": "node scripts/add-card-ids.js",
     "watch": "node scripts/watch-simple.js",
     "test": "vitest run"
   },

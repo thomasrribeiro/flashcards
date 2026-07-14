@@ -6,6 +6,7 @@
 
 import { State } from './fsrs-client.js';
 import { getLocalDate } from './today-queue.js';
+import { migrateLegacyReviews, rewriteStudySessionHashes } from './review-identity.js';
 
 // Get worker URL from environment
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
@@ -27,6 +28,71 @@ const UNLOGGED_REPOS_KEY = 'flashcards_unlogged_repos';
 // error). Flushed on init and whenever the browser comes back online, so a
 // review graded offline is never silently lost.
 const SYNC_OUTBOX_KEY = 'flashcards_sync_outbox';
+const IDENTITY_MIGRATIONS_KEY = 'flashcards_identity_migrations';
+const IDENTITY_MIGRATION_BATCH_SIZE = 10;
+let identityFlushPromise = null;
+
+function getIdentityMigrations() {
+    try {
+        return JSON.parse(localStorage.getItem(IDENTITY_MIGRATIONS_KEY) || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function queueIdentityMigrations(userId, migrations) {
+    if (!userId || migrations.length === 0) return;
+    const queued = getIdentityMigrations();
+    for (let index = 0; index < migrations.length; index += IDENTITY_MIGRATION_BATCH_SIZE) {
+        queued.push({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            userId,
+            migrations: migrations.slice(index, index + IDENTITY_MIGRATION_BATCH_SIZE)
+        });
+    }
+    try {
+        localStorage.setItem(IDENTITY_MIGRATIONS_KEY, JSON.stringify(queued));
+    } catch (error) {
+        console.error('[Storage] Failed to queue identity migration:', error);
+    }
+}
+
+export async function flushIdentityMigrations() {
+    if (identityFlushPromise) return identityFlushPromise;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
+    identityFlushPromise = (async () => {
+        while (true) {
+            const queued = getIdentityMigrations();
+            const item = queued[0];
+            if (!item) return;
+            try {
+                const payload = { userId: item.userId, migrations: item.migrations };
+                const response = await fetch(`${WORKER_URL}/api/reviews/migrate-identities`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(response.statusText);
+
+                // Re-read before removing so migrations queued during this
+                // request are never overwritten by an older snapshot.
+                const latest = getIdentityMigrations();
+                const remaining = item.id
+                    ? latest.filter(entry => entry.id !== item.id)
+                    : latest.slice(1); // compatibility with a pre-ID queue item
+                localStorage.setItem(IDENTITY_MIGRATIONS_KEY, JSON.stringify(remaining));
+            } catch (error) {
+                console.error('[Storage] Identity migration sync failed, will retry:', error);
+                return;
+            }
+        }
+    })().finally(() => {
+        identityFlushPromise = null;
+    });
+
+    return identityFlushPromise;
+}
 
 function getSyncOutbox() {
     try {
@@ -88,7 +154,10 @@ export async function flushSyncOutbox() {
 
 // Retry the outbox whenever connectivity returns
 if (typeof window !== 'undefined') {
-    window.addEventListener('online', () => { flushSyncOutbox(); });
+    window.addEventListener('online', () => {
+        flushSyncOutbox();
+        flushIdentityMigrations();
+    });
 }
 
 export function getUnloggedRepoList() {
@@ -179,6 +248,7 @@ export async function initDB() {
 
         // Flush any reviews queued while offline before loading fresh state
         await flushSyncOutbox();
+        flushIdentityMigrations();
 
         // Load reviews and repo list in parallel — neither depends on the other
         await Promise.all([loadReviewsFromD1(), loadReposFromD1()]);
@@ -322,9 +392,55 @@ export async function saveCards(cards) {
     console.log(`[Storage] saveCards called with ${cards.length} cards`);
     console.log(`[Storage] Cards cache before: ${cardsCache.length} cards`);
 
+    const stableIdentities = new Map();
+    for (const card of [...cardsCache, ...cards]) {
+        if (!card.stableId) continue;
+        const previous = stableIdentities.get(card.hash);
+        const location = `${card.source?.repo || card.deckName || ''}:${card.source?.file || card.filePath || ''}`;
+        if (previous && previous.location !== location) {
+            throw new Error(`Duplicate stable card-id "${card.stableId}" in ${previous.location} and ${location}`);
+        }
+        stableIdentities.set(card.hash, { location, stableId: card.stableId });
+    }
+
     const newHashes = new Set(cards.map(c => c.hash));
     cardsCache = cardsCache.filter(c => !newHashes.has(c.hash));
     cardsCache.push(...cards);
+
+    // Adding a stable ID to an existing card is a one-time, lossless identity
+    // migration. Copy the newest FSRS state locally immediately, then queue the
+    // same atomic migration for D1 and any persisted resumable session.
+    const migration = migrateLegacyReviews(cards, reviewsCache);
+    if (migration.migrations.length > 0) {
+        reviewsCache = migration.reviews;
+        try {
+            localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+
+            for (const key of ['flashcards_study_session']) {
+                const raw = JSON.parse(localStorage.getItem(key) || 'null');
+                const rewritten = rewriteStudySessionHashes(raw, migration.hashMapping);
+                if (rewritten !== raw) localStorage.setItem(key, JSON.stringify(rewritten));
+            }
+
+            const pendingKey = 'flashcards_study_session_pending';
+            const pending = JSON.parse(localStorage.getItem(pendingKey) || 'null');
+            if (pending?.session) {
+                const rewritten = rewriteStudySessionHashes(pending.session, migration.hashMapping);
+                if (rewritten !== pending.session) {
+                    localStorage.setItem(pendingKey, JSON.stringify({ ...pending, session: rewritten }));
+                }
+            }
+        } catch (error) {
+            console.error('[Storage] Failed to persist migrated identity state:', error);
+        }
+
+        if (currentUser) {
+            const userId = currentUser.github_id || currentUser.id;
+            queueIdentityMigrations(userId, migration.migrations);
+            flushIdentityMigrations();
+        }
+        console.log(`[Storage] Preserved review state across ${migration.migrations.length} stable card identity migration(s)`);
+    }
 
     console.log(`[Storage] Cards cache after: ${cardsCache.length} cards`);
     console.log(`[Storage] Deck IDs in cache:`, [...new Set(cardsCache.map(c => c.deckName))]);

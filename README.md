@@ -72,6 +72,35 @@ This creates:
 
 ### Creating flashcards
 
+#### Stable card identities
+
+Cards that may be revised after study begins should carry an explicit ID:
+
+```markdown
+<!-- card-id: card-018f6c2a-7b1e-7000-8000-123456789abc -->
+Q: Which forces act on the block?
+A: Weight and the normal force.
+```
+
+The app keys FSRS state by this repository-scoped ID while continuing to hash
+the content for versioning and duplicate detection. This means figures,
+formatting, alt text, and corrective wording can change without silently
+turning a learned card into a new card. A materially different retrieval task
+should receive a new ID.
+
+Add IDs to an existing deck before editing it:
+
+```bash
+npm run add-card-ids -- --check /path/to/deck/flashcards
+npm run add-card-ids -- /path/to/deck/flashcards
+```
+
+The command preserves the card text and records each old content hash as a
+`card-alias`. On first load, existing local or synced review state is moved to
+the stable ID without recording a review or changing its FSRS schedule. Keep
+the generated alias comments: they let devices that skipped the intermediate
+version perform the same migration later.
+
 #### AI-Assisted Flashcard Generation ✨
 
 Generate flashcards automatically from PDF textbooks using Claude AI.

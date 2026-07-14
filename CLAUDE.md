@@ -55,7 +55,7 @@ GitHub Repo → Parser → Cards (w/ BLAKE3 hash) → Local Cache + D1 Backend �
 
 **Key principles:**
 - Each GitHub repository = one deck containing all cards from all markdown files in that repo
-- Cards are content-addressable via BLAKE3 hashing (identical content = same card across repos/files)
+- Legacy cards are content-addressable via BLAKE3; explicit card IDs provide stable repository-scoped review identity
 - Review state persisted to Cloudflare D1, keyed by (user_id, card_hash)
 - Cards themselves are NOT stored in D1 (always loaded fresh from GitHub/collection)
 
@@ -174,11 +174,13 @@ FRONTEND_URL=http://localhost:3000
 
 ## Important Implementation Details
 
-### Content-Addressable Design Philosophy
-- Cards identified by content hash ONLY, not filepath
-- Editing a card creates a NEW hash (old review orphaned)
-- Moving/renaming files preserves review history (same hash)
-- Orphaned reviews cleaned up automatically via `cleanupOrphanedReviews()`
+### Card Identity Design
+- Legacy cards without `<!-- card-id: ... -->` remain identified by content hash
+- Stable-ID cards are identified by a BLAKE3 hash of repository + explicit ID
+- `<!-- card-alias: <old-content-hash> -->` migrates existing FSRS state once, without creating review activity
+- Editing a stable-ID card preserves its schedule; a materially different retrieval task must get a new ID
+- Moving/renaming files preserves review history because neither identity mode uses filepath
+- Orphaned reviews are cleaned up automatically via `cleanupOrphanedReviews()`
 
 ### Refresh Button Behavior
 - **Deck-level refresh:** Deletes ALL reviews for that deck (resets everything to New)

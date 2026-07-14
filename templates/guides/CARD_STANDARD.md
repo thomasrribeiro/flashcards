@@ -42,4 +42,4 @@ Each rule has an ID used in audit findings. Severity of a violation:
 
 ## Editing cost warning
 
-Card scheduling state is keyed by a BLAKE3 hash of the card's *content* (question+answer / problem+solution / cloze text+span). Editing a card's text resets its review history; renaming files and editing frontmatter does not. Batch content edits before drilling a deck, and treat post-drilling edits as deliberately paying that reset.
+Legacy cards without an explicit `card-id` are keyed by a BLAKE3 hash of their content, so editing them resets their review history. Before revising a studied deck, run `npm run add-card-ids -- /path/to/deck/flashcards`. Keep the generated `card-id` and `card-alias` comments when editing: presentation changes, figures, formatting, and corrective wording will then preserve the FSRS schedule. A change that tests materially different knowledge must receive a new `card-id` rather than inheriting mastery it has not earned.

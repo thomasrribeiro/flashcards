@@ -247,6 +247,57 @@ export class Parser {
         const lines = text.split('\n');
         const lastLine = lines.length === 0 ? 0 : lines.length - 1;
 
+        // Stable identity annotations deliberately live outside card content,
+        // so adding or changing one never changes the legacy content hash.
+        // Keep the lines blank to preserve parser line ranges and associate the
+        // annotations with the next Q:/C:/P: block.
+        const identityByStartLine = new Map();
+        const declaredIds = new Set();
+        let pendingIdentity = null;
+        for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+            const trimmed = lines[lineNum].trim();
+            const idMatch = trimmed.match(/^<!--\s*card-id:\s*(.*?)\s*-->$/i);
+            const aliasMatch = trimmed.match(/^<!--\s*card-alias:\s*(.*?)\s*-->$/i);
+
+            if (idMatch) {
+                const stableId = idMatch[1].trim();
+                lines[lineNum] = '';
+                if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/.test(stableId)) {
+                    warnings.push(`Invalid card-id "${stableId}". Location: ${this.filePath}:${lineNum + 1}`);
+                    pendingIdentity = null;
+                } else if (declaredIds.has(stableId)) {
+                    warnings.push(`Duplicate card-id "${stableId}". Location: ${this.filePath}:${lineNum + 1}`);
+                    pendingIdentity = null;
+                } else {
+                    declaredIds.add(stableId);
+                    pendingIdentity = { stableIdBase: stableId, legacyHashes: [] };
+                }
+                continue;
+            }
+
+            if (aliasMatch) {
+                const alias = aliasMatch[1].trim().toLowerCase();
+                lines[lineNum] = '';
+                if (!pendingIdentity) {
+                    warnings.push(`card-alias must follow a card-id. Location: ${this.filePath}:${lineNum + 1}`);
+                } else if (!/^[a-f0-9]{64}$/.test(alias)) {
+                    warnings.push(`Invalid card-alias "${alias}". Location: ${this.filePath}:${lineNum + 1}`);
+                } else if (!pendingIdentity.legacyHashes.includes(alias)) {
+                    pendingIdentity.legacyHashes.push(alias);
+                }
+                continue;
+            }
+
+            if (pendingIdentity && /^(?:Q|C|P):/.test(lines[lineNum])) {
+                identityByStartLine.set(lineNum, pendingIdentity);
+                pendingIdentity = null;
+            }
+        }
+
+        if (pendingIdentity) {
+            warnings.push(`card-id "${pendingIdentity.stableIdBase}" is not followed by a card. Location: ${this.filePath}:${lastLine + 1}`);
+        }
+
         for (let lineNum = 0; lineNum < lines.length; lineNum++) {
             const line = readLine(lines[lineNum]);
             try {
@@ -266,10 +317,32 @@ export class Parser {
             console.warn(`[Parser] Skipping incomplete trailing card: ${err.message}`);
         }
 
-        // Remove duplicates by hash
+        // Attach stable identities after parsing. A cloze block creates one
+        // schedulable card per deletion, so its persistent IDs receive stable
+        // 1-based suffixes in deletion order.
+        const clozeIndexByLine = new Map();
+        for (const card of cards) {
+            const identity = identityByStartLine.get(card.range[0]);
+            if (!identity) continue;
+
+            card.stableIdBase = identity.stableIdBase;
+            if (card.type === 'cloze') {
+                const index = (clozeIndexByLine.get(card.range[0]) || 0) + 1;
+                clozeIndexByLine.set(card.range[0], index);
+                card.stableId = `${identity.stableIdBase}::${index}`;
+                card.legacyHashes = identity.legacyHashes[index - 1]
+                    ? [identity.legacyHashes[index - 1]]
+                    : [];
+            } else {
+                card.stableId = identity.stableIdBase;
+                card.legacyHashes = [...identity.legacyHashes];
+            }
+        }
+
+        // Remove duplicates by persistent ID when present, otherwise content.
         const seen = new Set();
         const deduped = cards.filter(card => {
-            const hash = this.hashCard(card);
+            const hash = card.stableId ? `stable:${card.stableId}` : this.hashCard(card);
             if (seen.has(hash)) {
                 return false;
             }

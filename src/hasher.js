@@ -50,6 +50,40 @@ export function hashCard(card) {
 }
 
 /**
+ * Return the persistent identity hash for a card.
+ *
+ * Legacy cards remain content-addressed. Cards with an explicit stableId are
+ * instead keyed by that ID within their repository namespace, allowing
+ * presentation-only content changes to retain their review history.
+ */
+export function hashCardIdentity(card, namespace = '') {
+    if (!card.stableId) return hashCard(card);
+
+    const hasher = blake3.create({});
+    hasher.update(encoder.encode('StableCardId'));
+    hasher.update(encoder.encode(normalizeText(String(namespace))));
+    hasher.update(encoder.encode('\0'));
+    hasher.update(encoder.encode(normalizeText(String(card.stableId))));
+    return bytesToHex(hasher.digest());
+}
+
+/**
+ * Add both persistent identity and current content version information.
+ * legacyHashes are aliases from the pre-stable-ID era and are used once to
+ * migrate an existing FSRS record without resetting it.
+ */
+export function identifyCard(card, namespace = '') {
+    const contentHash = hashCard(card);
+    const hash = hashCardIdentity(card, namespace);
+    const legacyHashes = card.stableId
+        ? [...new Set([...(card.legacyHashes || []), contentHash])]
+            .filter(alias => alias !== hash)
+        : [];
+
+    return { hash, contentHash, legacyHashes };
+}
+
+/**
  * Get family hash for cloze cards
  * All cloze cards from same text share a family hash
  * Returns null for basic cards
