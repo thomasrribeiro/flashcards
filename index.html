@@ -6,11 +6,19 @@
     <title>Flashcards - Thomas</title>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+        try {
+            const savedTheme = localStorage.getItem('flashcards_theme');
+            const theme = savedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            document.documentElement.dataset.theme = theme;
+            document.documentElement.style.colorScheme = theme;
+        } catch { /* use the light theme */ }
+    </script>
     <link rel="stylesheet" href="./style.css">
 
     <!-- PWA -->
     <link rel="manifest" href="./manifest.webmanifest">
-    <meta name="theme-color" content="#F5C842">
+    <meta id="theme-color" name="theme-color" content="#F5C842">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Flashcards">
@@ -79,7 +87,10 @@
             </aside>
 
             <main class="main-content">
-                <button id="mobile-sidebar-open" class="mobile-sidebar-open" type="button" aria-controls="info-sidebar" aria-expanded="false">About</button>
+                <div class="main-utility-row">
+                    <button id="mobile-sidebar-open" class="mobile-sidebar-open" type="button" aria-controls="info-sidebar" aria-expanded="false">About</button>
+                    <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+                </div>
                 <!-- <h2 class="section-title">Collection</h2> -->
 
                 <div class="auth-header">

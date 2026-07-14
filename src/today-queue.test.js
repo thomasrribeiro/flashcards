@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildTodayQueue, newCardSessionLimit, newLearningPlan, todayQueueCounts, getLocalDate } from './today-queue.js';
+import { buildTodayQueue, freshCardAvailability, newCardSessionLimit, newLearningPlan, todayQueueCounts, getLocalDate, SCOPE_SEP } from './today-queue.js';
 
 const now = new Date('2026-07-08T12:00:00Z');
 const past = new Date('2026-07-01T12:00:00Z');
@@ -144,5 +144,43 @@ describe('getLocalDate', () => {
     it('formats YYYY-MM-DD from local components', () => {
         const d = new Date(2026, 0, 5); // Jan 5 local
         expect(getLocalDate(d)).toBe('2026-01-05');
+    });
+});
+
+describe('freshCardAvailability', () => {
+    const deck = { id: 'owner/mechanics', files: [{ path: 'flashcards/01.md' }, { path: 'flashcards/02.md' }] };
+
+    it('reports an exhausted starred chapter once that file is loaded', () => {
+        const cards = [card('a', deck.id, null, 'flashcards/01.md')];
+        expect(freshCardAvailability({
+            cards,
+            reviews: [{ cardHash: 'a' }],
+            activeDeckIds: [`${deck.id}${SCOPE_SEP}flashcards/01.md`],
+            decks: [deck]
+        })).toEqual({ freshCount: 0, fullyKnown: true });
+    });
+
+    it('does not declare a whole deck complete while a file is metadata-only', () => {
+        const cards = [card('a', deck.id, null, 'flashcards/01.md')];
+        expect(freshCardAvailability({
+            cards,
+            reviews: [{ cardHash: 'a' }],
+            activeDeckIds: [deck.id],
+            decks: [deck]
+        })).toEqual({ freshCount: 0, fullyKnown: false });
+    });
+
+    it('counts exact unseen cards after every active file is loaded', () => {
+        const cards = [
+            card('a', deck.id, null, 'flashcards/01.md'),
+            card('b', deck.id, null, 'flashcards/02.md'),
+            card('c', deck.id, null, 'flashcards/02.md')
+        ];
+        expect(freshCardAvailability({
+            cards,
+            reviews: [{ cardHash: 'a' }],
+            activeDeckIds: [deck.id],
+            decks: [deck]
+        })).toEqual({ freshCount: 2, fullyKnown: true });
     });
 });

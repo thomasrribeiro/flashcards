@@ -36,7 +36,7 @@ Each rule has an ID used in audit findings. Severity of a violation:
 
 ## File and deck rules
 
-- **F1 — Canonical frontmatter.** Exactly these fields in TOML `+++` frontmatter: `order` (integer, matches the filename prefix), `subject` (exactly one of `mathematics`, `physics`, `computer-science`, `law` — the app makes one home-screen folder per distinct value, so the spelling must match exactly), `tags` (array of kebab-case strings). Keep `[generation]` provenance tables where present (the parser ignores them). The `name` field is dead (the app overrides it with the repo name) — remove it.
+- **F1 — Canonical frontmatter.** Exactly these fields in TOML `+++` frontmatter: `order` (integer, matches the filename prefix), `subject` (the collection's canonical lowercase kebab-case subject, such as `mathematics`, `physics`, `computer-science`, `law`, or `biology`), `tags` (array of kebab-case strings). The app makes one home-screen folder per recognized subject topic, so the spelling must match the frontend registry and GitHub topic exactly. Keep `[generation]` provenance tables where present (the parser ignores them). The `name` field is dead (the app overrides it with the repo name) — remove it.
 - **F2 — Filenames.** `NN_snake_case.md`, zero-padded to 2 digits. The app sorts files with `localeCompare`, so unpadded prefixes break ordering (`10_` sorts before `1_`).
 - **F3 — Deck hygiene.** Every deck has a `README.md` (topic, source text, chapter map) and a `.gitignore` covering `.DS_Store` and, where sources exist, `references/`.
 

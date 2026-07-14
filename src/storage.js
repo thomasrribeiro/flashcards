@@ -32,6 +32,22 @@ const IDENTITY_MIGRATIONS_KEY = 'flashcards_identity_migrations';
 const IDENTITY_MIGRATION_BATCH_SIZE = 10;
 let identityFlushPromise = null;
 
+function cardLabelSnapshot(card) {
+    if (!card) return null;
+    const content = card.content || {};
+    const value = card.type === 'problem'
+        ? content.problem
+        : card.type === 'cloze'
+            ? content.text
+            : content.question;
+    const label = String(value || '')
+        .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return label ? label.slice(0, 300) : null;
+}
+
 function getIdentityMigrations() {
     try {
         return JSON.parse(localStorage.getItem(IDENTITY_MIGRATIONS_KEY) || '[]');
@@ -313,7 +329,8 @@ async function loadReviewsFromD1(mergeWithLocalStorage = true) {
             fsrsCard: r.fsrsState,
             lastReviewed: r.lastReviewed,
             repo: r.repo || r.repoId || r.repo_id || null,
-            filepath: r.filepath || r.filePath || r.file_path || null
+            filepath: r.filepath || r.filePath || r.file_path || null,
+            cardLabel: r.cardLabel || r.card_label || null
         }));
 
         if (mergeWithLocalStorage) {
@@ -348,7 +365,8 @@ async function loadReviewsFromD1(mergeWithLocalStorage = true) {
                 merged.set(r.cardHash, {
                     ...newer,
                     repo: newer.repo || older.repo || null,
-                    filepath: newer.filepath || older.filepath || null
+                    filepath: newer.filepath || older.filepath || null,
+                    cardLabel: newer.cardLabel || older.cardLabel || null
                 });
             }
             reviewsCache = [...merged.values()];
@@ -470,12 +488,14 @@ export async function getCard(hash) {
  */
 export async function saveReview(cardHash, fsrsCard, log = null) {
     const reviewedCard = cardsCache.find(c => c.hash === cardHash);
+    const cardLabel = cardLabelSnapshot(reviewedCard);
     const review = {
         cardHash,
         fsrsCard,
         lastReviewed: new Date().toISOString(),
         repo: reviewedCard?.source?.repo || reviewedCard?.deckName || null,
-        filepath: reviewedCard?.source?.file || null
+        filepath: reviewedCard?.source?.file || null,
+        cardLabel
     };
 
     // Update local cache
@@ -512,6 +532,7 @@ export async function saveReview(cardHash, fsrsCard, log = null) {
                 fsrsState: fsrsCard,
                 lastReviewed: review.lastReviewed,
                 dueDate: fsrsCard.due,
+                cardLabel,
                 log: log ? {
                     rating: log.rating,
                     prevState: log.state,
@@ -551,6 +572,7 @@ export async function saveReview(cardHash, fsrsCard, log = null) {
                 fsrsState: fsrsCard,
                 lastReviewed: review.lastReviewed,
                 dueDate: fsrsCard.due,
+                cardLabel,
                 log: log ? {
                     rating: log.rating, prevState: log.state, stability: log.stability,
                     difficulty: log.difficulty, elapsedDays: log.elapsed_days, scheduledDays: log.scheduled_days

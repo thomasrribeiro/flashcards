@@ -9,7 +9,20 @@
     --black: #1a1a1a;
     --gold: #F5C842;
     --light-gray: #f8f8f8;
+    --muted: #666666;
+    --subtle-border: #eeeeee;
+    --heatmap-empty: #eeeeee;
     --project-card-height: 200px;
+}
+
+:root[data-theme="dark"] {
+    --white: #111416;
+    --black: #f1efe8;
+    --gold: #F5C842;
+    --light-gray: #202527;
+    --muted: #a7adaf;
+    --subtle-border: #343a3d;
+    --heatmap-empty: #292f32;
 }
 
 body {
@@ -17,6 +30,35 @@ body {
     line-height: 1.6;
     color: var(--black);
     background: var(--white);
+}
+
+button,
+input,
+select,
+textarea {
+    color: var(--black);
+}
+
+.main-utility-row {
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.theme-toggle {
+    border: 1px solid var(--black);
+    background: var(--white);
+    color: var(--black);
+    padding: 4px 9px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    line-height: 1.2;
+}
+
+.theme-toggle:hover {
+    background: var(--light-gray);
 }
 
 /* Global clickable element cursor fix */
@@ -1907,7 +1949,7 @@ kbd {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #666;
+    color: var(--muted);
     white-space: nowrap;
 }
 
@@ -1931,7 +1973,7 @@ kbd {
 
 .heatmap-month,
 .heatmap-weekday {
-    fill: #666;
+    fill: var(--muted);
     font-size: 9px;
 }
 
@@ -1947,7 +1989,7 @@ kbd {
 
 .heatmap-footer {
     margin-top: 7px;
-    color: #666;
+    color: var(--muted);
 }
 
 .heatmap-goal-key,
@@ -1966,7 +2008,7 @@ kbd {
 }
 
 .heatmap-level-0 {
-    background: #eee;
+    background: var(--heatmap-empty);
 }
 
 .heatmap-level-1 {
@@ -2025,6 +2067,139 @@ kbd {
 .dash-empty {
     font-size: 0.85rem;
     opacity: 0.6;
+}
+
+.review-schedule-summary {
+    margin-bottom: 8px;
+    font-size: 0.78rem;
+    color: var(--muted);
+}
+
+.review-schedule-list {
+    max-height: 430px;
+    overflow-y: auto;
+    border: 1px solid var(--black);
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+}
+
+.review-schedule-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
+    gap: 20px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--subtle-border);
+}
+
+.review-schedule-row:last-child {
+    border-bottom: 0;
+}
+
+.review-schedule-row.is-due {
+    box-shadow: inset 3px 0 0 var(--gold);
+    background: color-mix(in srgb, var(--gold) 9%, var(--white));
+}
+
+.review-schedule-main,
+.review-schedule-time {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.review-schedule-main strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.84rem;
+    font-weight: 500;
+}
+
+.review-schedule-main span,
+.review-schedule-time span {
+    color: var(--muted);
+    font-size: 0.7rem;
+}
+
+.review-schedule-time {
+    align-items: flex-end;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.review-schedule-time strong {
+    color: var(--muted);
+    font-size: 0.74rem;
+}
+
+.review-schedule-row.is-due .review-schedule-time strong {
+    color: var(--black);
+}
+
+.review-schedule-time time {
+    font-size: 0.75rem;
+}
+
+@media (max-width: 680px) {
+    .review-schedule-row {
+        grid-template-columns: 1fr;
+        gap: 5px;
+    }
+
+    .review-schedule-time {
+        align-items: flex-start;
+        text-align: left;
+    }
+}
+
+/* Dark mode keeps authored figure canvases white, but converts application
+   chrome, controls, overlays, and muted separators to the dark palette. */
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] .modal-content,
+:root[data-theme="dark"] .user-info,
+:root[data-theme="dark"] .card-front,
+:root[data-theme="dark"] .card-back,
+:root[data-theme="dark"] .project-card {
+    background: var(--white);
+    color: var(--black);
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] button {
+    background-color: var(--white);
+    color: var(--black);
+    border-color: var(--black);
+}
+
+:root[data-theme="dark"] .recommended-study-action:not(:disabled),
+:root[data-theme="dark"] .streak-badge,
+:root[data-theme="dark"] .card-star-btn.active {
+    background: var(--gold);
+    color: #1a1a1a;
+}
+
+:root[data-theme="dark"] .tree-row,
+:root[data-theme="dark"] .tree-deck-row,
+:root[data-theme="dark"] .column-row,
+:root[data-theme="dark"] .columns-pane {
+    border-color: var(--subtle-border);
+}
+
+:root[data-theme="dark"] .review-btn:disabled {
+    color: var(--muted);
+    border-color: var(--subtle-border);
+}
+
+:root[data-theme="dark"] .heatmap-level-0 {
+    background: var(--heatmap-empty);
+}
+
+:root[data-theme="dark"] code,
+:root[data-theme="dark"] kbd {
+    background: var(--light-gray);
+    color: var(--black);
 }
 
 .dash-decks {
@@ -2533,13 +2708,28 @@ body.standalone-phone .mobile-sidebar-close {
 }
 .col-star.active { color: var(--gold); opacity: 1; }
 
-.col-name {
+.col-label {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    overflow: hidden;
+}
+
+.col-name {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.86rem;
+}
+
+.col-meta {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    opacity: 0.55;
+    white-space: nowrap;
 }
 
 .col-row-actions {

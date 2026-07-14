@@ -9,7 +9,7 @@ import { identifyCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories, getOrgRepositories } from './github-client.js';
 import { githubAuth } from './github-auth.js';
 import { startSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
-import { buildTodayQueue, getLocalDate, newCardSessionLimit, newLearningPlan, SCOPE_SEP } from './today-queue.js';
+import { buildTodayQueue, freshCardAvailability, getLocalDate, newCardSessionLimit, newLearningPlan, SCOPE_SEP } from './today-queue.js';
 import { getSettings, saveSettings, getHabitStatus } from './habit-client.js';
 import { clearStudySession, getStudySession, saveStudySession } from './session-client.js';
 import { renderDashboard } from './dashboard.js';
@@ -56,6 +56,7 @@ function registerServiceWorker() {
 
 async function init() {
     console.log('=== INIT START ===');
+    setupThemeToggle();
     configureMobileAppShell();
     registerServiceWorker();
     try {
@@ -144,6 +145,32 @@ async function init() {
     } catch (error) {
         console.error('=== INIT ERROR ===', error);
     }
+}
+
+const THEME_KEY = 'flashcards_theme';
+
+function applyTheme(theme) {
+    const resolved = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = resolved;
+    document.documentElement.style.colorScheme = resolved;
+    const button = document.getElementById('theme-toggle');
+    if (button) {
+        const dark = resolved === 'dark';
+        button.textContent = dark ? 'Light mode' : 'Dark mode';
+        button.setAttribute('aria-pressed', String(dark));
+        button.title = dark ? 'Switch to light mode' : 'Switch to dark mode';
+    }
+    document.getElementById('theme-color')?.setAttribute('content', resolved === 'dark' ? '#111416' : '#F5C842');
+}
+
+function setupThemeToggle() {
+    const current = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+    applyTheme(current);
+    document.getElementById('theme-toggle')?.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem(THEME_KEY, next); } catch { /* persistence is optional */ }
+        applyTheme(next);
+    });
 }
 
 /** Keep installed phone launches focused on the study actions, not onboarding. */
@@ -634,8 +661,9 @@ function queueDailyPreparation() {
 }
 
 function scheduleDailyPreparation() {
-    const begin = () => queueDailyPreparation().catch(error =>
-        console.warn('[Main] Background review preparation failed:', error));
+    const begin = () => queueDailyPreparation()
+        .then(() => renderReviewButton({ refreshStatus: false }))
+        .catch(error => console.warn('[Main] Background review preparation failed:', error));
     if ('requestIdleCallback' in window) window.requestIdleCallback(begin, { timeout: 1000 });
     else setTimeout(begin, 0);
 }
@@ -932,11 +960,11 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 let columnsSel = { subject: null, deck: null, chapter: null };
 
 /**
- * One columns row: optional inline star (left), name, then inline action
- * icons (gavel / reset / delete) + a chevron for drillable items. No metadata
- * — panes are pure item lists.
+ * One columns row: optional inline star (left), name and compact metadata,
+ * then inline action icons (gavel / reset / delete) + a chevron for drillable
+ * items.
  */
-function colRow({ name, star, actions, hasChildren, selected, onClick }) {
+function colRow({ name, meta, star, actions, hasChildren, selected, onClick }) {
     const row = document.createElement('div');
     row.className = 'col-row' + (selected ? ' selected' : '');
     row.onclick = onClick;
@@ -952,8 +980,14 @@ function colRow({ name, star, actions, hasChildren, selected, onClick }) {
         const sp = document.createElement('span'); sp.className = 'col-star-spacer'; row.appendChild(sp);
     }
 
+    const label = document.createElement('span'); label.className = 'col-label';
     const nm = document.createElement('span'); nm.className = 'col-name'; nm.textContent = name;
-    row.appendChild(nm);
+    label.appendChild(nm);
+    if (meta) {
+        const md = document.createElement('span'); md.className = 'col-meta'; md.textContent = meta;
+        label.appendChild(md);
+    }
+    row.appendChild(label);
 
     const acts = document.createElement('div'); acts.className = 'col-row-actions';
     for (const a of (actions || [])) {
@@ -986,6 +1020,8 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
     const term = (searchTerm || '').toLowerCase();
     const fileBase = f => f.split('/').pop().replace(/\.md$/, '');
     const filesOf = decksMap => id => ({ repo: id, files: [...decksMap.get(id).keys()] });
+    const reviewMap = new Map(allReviews.map(review => [review.cardHash, review]));
+    const now = new Date();
 
     // Build Subject → Deck → File from lightweight Git-tree metadata. Loaded
     // cards are not required to render or search the columns.
@@ -998,13 +1034,14 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
         if (!decks.has(deckId)) decks.set(deckId, new Map());
         const files = decks.get(deckId);
         const metadataFiles = (deck.files || []).map(file => typeof file === 'string' ? file : file.path);
-        const loadedFiles = allCards
-            .filter(card => (card.source?.repo || card.deckName) === deckId)
-            .map(card => card.source?.file)
-            .filter(Boolean);
+        const loadedCards = allCards.filter(card =>
+            (card.source?.repo || card.deckName) === deckId && card.source?.file
+        );
+        const loadedFiles = loadedCards.map(card => card.source.file);
         for (const file of new Set([...metadataFiles, ...loadedFiles])) {
             if (!files.has(file)) files.set(file, []);
         }
+        for (const card of loadedCards) files.get(card.source.file).push(card);
     }
     const subjectNames = [...subjects.keys()].sort((a, b) => a === 'misc' ? 1 : b === 'misc' ? -1 : a.localeCompare(b));
 
@@ -1105,10 +1142,13 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
         const deckName = deckId.split('/').pop();
         p3 = fileList.map(file => {
             const chName = fileBase(file);
+            const cards = files.get(file);
+            const completed = scopeProgress(cards, reviewMap, now).pct;
             const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, ['home', columnsSel.subject, deckName, chName], [deckId], [{ repo: deckId, path: file }]);
             const chActive = chapterIsActive(scopes, deckId, file);
             return colRow({
                 name: chName,
+                meta: `(${completed}%)`,
                 star: { glyph: chActive ? '★' : '☆', active: chActive, title: chActive ? 'Remove chapter from daily focus' : 'Add chapter to daily focus', onClick: () => toggleChapterScope(deckId, file) },
                 actions: [
                     { html: GAVEL_IMG, title: 'Review this chapter (due + new)', onClick: review },
@@ -2629,7 +2669,11 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
 
         const active = habitSettings.activeDecks || [];
 
-        const allReviews = await getAllReviews();
+        const [allReviews, allCards, allDecks] = await Promise.all([
+            getAllReviews(),
+            getAllCards(),
+            getAllDecks()
+        ]);
         const now = new Date();
         const due = allReviews.filter(review => new Date(review.fsrsCard.due) <= now).length;
         const introducedToday = lastHabitStatus?.today?.newCards || 0;
@@ -2638,6 +2682,16 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
             newBatchSize: habitSettings.newBatchSize,
             newIntroducedToday: introducedToday
         });
+        const availability = freshCardAvailability({
+            cards: allCards,
+            reviews: allReviews,
+            activeDeckIds: active,
+            decks: allDecks
+        });
+        const requestedBatch = targetReached ? batchSize : nextBatch;
+        const visibleBatch = availability.fullyKnown
+            ? Math.min(requestedBatch, availability.freshCount)
+            : requestedBatch;
 
         dueBtn.disabled = due === 0;
         dueBtn.textContent = 'Review';
@@ -2645,18 +2699,23 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
             ? `${due} learned card${due === 1 ? '' : 's'} due now`
             : 'No learned cards are due';
 
-        newBtn.disabled = active.length === 0;
+        const activeScopeComplete = availability.fullyKnown && availability.freshCount === 0;
+        newBtn.disabled = active.length === 0 || activeScopeComplete;
         newBtn.dataset.allowBeyondTarget = targetReached ? 'true' : 'false';
-        newBtn.textContent = targetReached
-            ? `Learn ${batchSize} more`
-            : `Learn ${nextBatch} new`;
+        newBtn.textContent = activeScopeComplete
+            ? 'No new cards'
+            : targetReached
+                ? `Learn ${visibleBatch} more`
+                : `Learn ${visibleBatch} new`;
         newBtn.title = active.length === 0
             ? 'Star items (★) to choose new material'
+            : activeScopeComplete
+                ? 'Every card in the starred scope has been introduced; star another chapter to continue learning'
             : targetReached
-                ? `Daily target reached; deliberately introduce another batch of up to ${batchSize}`
+                ? `Daily target reached; deliberately introduce another batch of up to ${visibleBatch}`
                 : unlimited
-                    ? `Introduce up to ${batchSize} new cards in this session; no daily target`
-                    : `Introduce up to ${nextBatch} new card${nextBatch === 1 ? '' : 's'} in this session`;
+                    ? `Introduce up to ${visibleBatch} new cards in this session; no daily target`
+                    : `Introduce up to ${visibleBatch} new card${visibleBatch === 1 ? '' : 's'} in this session`;
 
         if (pausedPrimaryStudySession) {
             const remaining = pausedPrimaryStudySession.queue?.length || 0;
@@ -2896,7 +2955,9 @@ async function saveStudySettingsFromForm(event) {
     const saved = await saveSettings({ newPerDay, newBatchSize });
     habitSettings = { ...habitSettings, ...saved, newPerDay, newBatchSize };
     await renderReviewButton({ refreshStatus: false });
-    queueDailyPreparation().catch(error => console.warn('[Main] Settings prefetch failed:', error));
+    queueDailyPreparation()
+        .then(() => renderReviewButton({ refreshStatus: false }))
+        .catch(error => console.warn('[Main] Settings prefetch failed:', error));
 }
 
 function renderPwaInstallPrompt() {
@@ -3011,7 +3072,9 @@ async function applyActiveScopes(scopes) {
     habitSettings = { ...(habitSettings || {}), activeDecks };
     const persistence = saveSettings({ activeDecks });
     const render = loadRepositories();
-    queueDailyPreparation().catch(error => console.warn('[Main] Star prefetch failed:', error));
+    queueDailyPreparation()
+        .then(() => renderReviewButton({ refreshStatus: false }))
+        .catch(error => console.warn('[Main] Star prefetch failed:', error));
     persistence.then(saved => {
         const stillCurrent = JSON.stringify(habitSettings?.activeDecks || []) === JSON.stringify(activeDecks);
         if (stillCurrent) habitSettings = { ...habitSettings, ...saved, activeDecks };
@@ -3132,6 +3195,9 @@ async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}
 
     if (queue.length === 0) {
         await renderReviewButton({ refreshStatus: false });
+        if (!isDueReview) {
+            alert('There are no unseen cards left in the starred scope. Star another chapter or deck to continue learning new material.');
+        }
         return;
     }
 
@@ -3311,7 +3377,7 @@ function onSessionComplete() {
     }
 }
 
-function updateSessionCompletionActions(status) {
+async function updateSessionCompletionActions(status) {
     const learnMore = document.getElementById('session-learn-more');
     if (!learnMore) return;
     const active = habitSettings?.activeDecks || [];
@@ -3326,7 +3392,24 @@ function updateSessionCompletionActions(status) {
         newIntroducedToday: status?.today?.newCards
     });
 
-    learnMore.textContent = targetReached ? `Learn ${batchSize} more` : `Learn ${nextBatch} new`;
+    const [cards, reviews, decks] = await Promise.all([getAllCards(), getAllReviews(), getAllDecks()]);
+    const availability = freshCardAvailability({
+        cards,
+        reviews,
+        activeDeckIds: active,
+        decks
+    });
+    if (availability.fullyKnown && availability.freshCount === 0) {
+        learnMore.classList.add('hidden');
+        return;
+    }
+
+    const requestedBatch = targetReached ? batchSize : nextBatch;
+    const visibleBatch = availability.fullyKnown
+        ? Math.min(requestedBatch, availability.freshCount)
+        : requestedBatch;
+
+    learnMore.textContent = targetReached ? `Learn ${visibleBatch} more` : `Learn ${visibleBatch} new`;
     learnMore.dataset.allowBeyondTarget = targetReached ? 'true' : 'false';
     learnMore.classList.remove('hidden');
 }

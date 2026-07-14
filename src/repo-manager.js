@@ -7,7 +7,7 @@ import { identifyCard } from './hasher.js';
 import * as githubClient from './github-client.js';
 import { saveCards, getAllCards, saveRepoMetadata, getRepoMetadata, getAllRepos, markRepoLoaded } from './storage.js';
 
-const SUBJECT_TOPICS = new Set(['computer-science', 'mathematics', 'physics', 'law']);
+const SUBJECT_TOPICS = new Set(['biology', 'computer-science', 'mathematics', 'physics', 'law']);
 const METADATA_CACHE_TTL_MS = 15 * 60 * 1000;
 const fileLoadPromises = new Map();
 

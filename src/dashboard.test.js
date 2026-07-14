@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { daysSinceYearStart, heatmapHtml, scrollHeatmapToPresent } from './dashboard.js';
+import { daysSinceYearStart, heatmapHtml, reviewScheduleHtml, scrollHeatmapToPresent } from './dashboard.js';
 
 describe('review activity calendar', () => {
     it('renders January through today with daily review details', () => {
@@ -36,5 +36,38 @@ describe('review activity calendar', () => {
         const scroll = { scrollLeft: 0, scrollWidth: 900 };
         scrollHeatmapToPresent({ querySelector: () => scroll });
         expect(scroll.scrollLeft).toBe(900);
+    });
+});
+
+describe('card review schedule', () => {
+    it('orders cards by due time and marks overdue cards', () => {
+        const now = new Date('2026-07-14T18:00:00Z');
+        const cards = [
+            { hash: 'later', type: 'basic', content: { question: 'Later card?' }, source: { repo: 'owner/mechanics', file: 'flashcards/02_vectors.md' } },
+            { hash: 'due', type: 'basic', content: { question: 'Due card?' }, source: { repo: 'owner/mechanics', file: 'flashcards/01_foundations.md' } }
+        ];
+        const reviews = [
+            { cardHash: 'later', fsrsCard: { due: '2026-07-17T18:00:00Z' }, lastReviewed: '2026-07-13T18:00:00Z' },
+            { cardHash: 'due', fsrsCard: { due: '2026-07-14T17:00:00Z' }, lastReviewed: '2026-07-13T17:00:00Z' }
+        ];
+        const html = reviewScheduleHtml(reviews, cards, now);
+        expect(html).toContain('2 introduced · 1 due now');
+        expect(html.indexOf('Due card?')).toBeLessThan(html.indexOf('Later card?'));
+        expect(html).toContain('1h overdue');
+        expect(html).toContain('in 3d');
+        expect(html).toContain('mechanics / 01_foundations');
+    });
+
+    it('falls back to a persisted label when card content is not loaded', () => {
+        const html = reviewScheduleHtml([{
+            cardHash: 'abcdef123456',
+            cardLabel: 'What is inertia?',
+            repo: 'owner/mechanics',
+            filepath: 'flashcards/05_newtons_laws.md',
+            fsrsCard: { due: '2026-07-20T12:00:00Z' },
+            lastReviewed: '2026-07-14T12:00:00Z'
+        }], [], new Date('2026-07-14T12:00:00Z'));
+        expect(html).toContain('What is inertia?');
+        expect(html).toContain('05_newtons_laws');
     });
 });

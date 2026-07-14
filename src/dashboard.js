@@ -7,13 +7,92 @@
  *   - per-deck reviewed counts
  */
 
-import { getCurrentUser } from './storage.js';
+import { getAllCards, getAllReviews, getCurrentUser } from './storage.js';
 import { getHabitStatus, levelForXp } from './habit-client.js';
 import { getLocalDate } from './today-queue.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
-const GOLD = '#F5C842';
-const INK = '#1a1a1a';
+const GOLD = 'var(--gold)';
+const INK = 'var(--black)';
+
+function plainCardText(value) {
+    return String(value || '')
+        .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/[`*_#>]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function cardPrompt(card, review) {
+    const content = card?.content || {};
+    const prompt = card?.type === 'problem'
+        ? content.problem
+        : card?.type === 'cloze'
+            ? content.text
+            : content.question;
+    const label = plainCardText(prompt || review?.cardLabel);
+    return label || `Card ${String(review?.cardHash || '').slice(0, 8)}`;
+}
+
+function reviewPath(review, card) {
+    const repo = review?.repo || card?.source?.repo || card?.deckName || 'unknown deck';
+    const deck = repo.split('/').pop();
+    const file = review?.filepath || card?.source?.file || '';
+    const chapter = file.split('/').pop().replace(/\.md$/, '');
+    return chapter ? `${deck} / ${chapter}` : deck;
+}
+
+function relativeDue(due, now) {
+    const diff = due - now;
+    if (diff <= 0) {
+        const minutes = Math.floor(Math.abs(diff) / 60000);
+        if (minutes < 60) return 'Due now';
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h overdue`;
+        const days = Math.floor(hours / 24);
+        return `${days}d overdue`;
+    }
+    const minutes = Math.ceil(diff / 60000);
+    if (minutes < 60) return `in ${minutes}m`;
+    const hours = Math.ceil(minutes / 60);
+    if (hours < 24) return `in ${hours}h`;
+    const days = Math.ceil(hours / 24);
+    return `in ${days}d`;
+}
+
+/** A scrollable ledger of every introduced card and its exact FSRS due time. */
+export function reviewScheduleHtml(reviews = [], cards = [], now = new Date()) {
+    if (reviews.length === 0) return '<p class="dash-empty">No cards have been introduced yet.</p>';
+    const cardMap = new Map(cards.map(card => [card.hash, card]));
+    const formatter = new Intl.DateTimeFormat(undefined, {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+    });
+    const rows = reviews
+        .map(review => ({ review, card: cardMap.get(review.cardHash), due: new Date(review.fsrsCard?.due) }))
+        .filter(item => !Number.isNaN(item.due.getTime()))
+        .sort((a, b) => a.due - b.due)
+        .map(({ review, card, due }) => {
+            const isDue = due <= now;
+            const last = new Date(review.lastReviewed);
+            const lastLabel = Number.isNaN(last.getTime()) ? 'Unknown' : formatter.format(last);
+            return `<article class="review-schedule-row${isDue ? ' is-due' : ''}">
+                <div class="review-schedule-main">
+                    <strong title="${esc(cardPrompt(card, review))}">${esc(cardPrompt(card, review))}</strong>
+                    <span>${esc(reviewPath(review, card))}</span>
+                </div>
+                <div class="review-schedule-time">
+                    <strong>${esc(relativeDue(due, now))}</strong>
+                    <time datetime="${esc(due.toISOString())}">${esc(formatter.format(due))}</time>
+                    <span>Last reviewed ${esc(lastLabel)}</span>
+                </div>
+            </article>`;
+        }).join('');
+    const dueCount = reviews.filter(review => new Date(review.fsrsCard?.due) <= now).length;
+    return `<div class="review-schedule-summary">${reviews.length} introduced · ${dueCount} due now</div>
+        <div class="review-schedule-list" tabindex="0" aria-label="All reviewed cards ordered by next review time">${rows}</div>`;
+}
 
 export function daysSinceYearStart(now = new Date()) {
     const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
@@ -101,7 +180,7 @@ export function heatmapHtml(heatmap, now = new Date()) {
             const n = rec ? rec.reviews : 0;
             const level = n === 0 ? 0 : Math.max(1, Math.ceil(4 * Math.log1p(n) / Math.log1p(max)));
             const intensity = [1, 0.28, 0.5, 0.72, 1][level];
-            const fill = n === 0 ? '#eee' : GOLD;
+            const fill = n === 0 ? 'var(--heatmap-empty)' : GOLD;
             const stroke = rec && rec.goalMet ? INK : 'none';
             const dateLabel = day.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
             const reviewLabel = `${n} ${n === 1 ? 'review' : 'reviews'}`;
@@ -179,7 +258,7 @@ function retentionSvg(retention) {
     const y = a => padT + innerH - a * innerH;
     const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.accuracy).toFixed(1)}`).join(' ');
     const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.accuracy).toFixed(1)}" r="3" fill="${INK}"><title>${p.week}: ${Math.round(p.accuracy * 100)}% (${p.total} reviews)</title></circle>`).join('');
-    const grid = [0, 0.5, 1].map(a => `<line x1="${padL}" y1="${y(a)}" x2="${W - 8}" y2="${y(a)}" stroke="#eee"/><text x="0" y="${y(a) + 4}" font-size="10" fill="#999">${a * 100}%</text>`).join('');
+    const grid = [0, 0.5, 1].map(a => `<line x1="${padL}" y1="${y(a)}" x2="${W - 8}" y2="${y(a)}" stroke="var(--subtle-border)"/><text x="0" y="${y(a) + 4}" font-size="10" fill="var(--muted)">${a * 100}%</text>`).join('');
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" role="img" aria-label="Weekly retention">${grid}<path d="${line}" fill="none" stroke="${GOLD}" stroke-width="2"/>${dots}</svg>`;
 }
 
@@ -202,7 +281,7 @@ function projectedSvg(projected) {
         const h = (c / max) * (H - 20);
         return `<rect x="${(i * bw).toFixed(1)}" y="${(H - 20 - h).toFixed(1)}" width="${(bw - 1.5).toFixed(1)}" height="${h.toFixed(1)}" fill="${i === 0 ? INK : GOLD}"><title>${days[i]}${i === 0 ? ' (incl. overdue)' : ''}: ${c} due</title></rect>`;
     }).join('');
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" role="img" aria-label="Projected due load">${bars}<text x="0" y="${H - 4}" font-size="10" fill="#999">today</text><text x="${W - 40}" y="${H - 4}" font-size="10" fill="#999">+30d</text></svg>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" role="img" aria-label="Projected due load">${bars}<text x="0" y="${H - 4}" font-size="10" fill="var(--muted)">today</text><text x="${W - 40}" y="${H - 4}" font-size="10" fill="var(--muted)">+30d</text></svg>`;
 }
 
 function perDeckHtml(perDeck) {
@@ -224,11 +303,18 @@ export async function renderDashboard() {
     el.innerHTML = '<div class="loading">Loading your stats…</div>';
 
     const now = new Date();
-    const [stats, habit] = await Promise.all([fetchStats(now), getHabitStatus().catch(() => null)]);
+    const [stats, habit, reviews, cards] = await Promise.all([
+        fetchStats(now),
+        getHabitStatus().catch(() => null),
+        getAllReviews(),
+        getAllCards()
+    ]);
+    const schedule = reviewScheduleHtml(reviews, cards, now);
 
     if (!stats) {
         el.innerHTML = `<div class="dash-header"><h2>Progress</h2></div>
-            <p class="dash-empty">Stats sync once you're logged in and have reviewed some cards. Keep drilling!</p>`;
+            <p class="dash-empty">Activity charts sync after login. Your local review schedule is shown below.</p>
+            <section class="dash-section"><h3>Card schedule</h3>${schedule}</section>`;
         return;
     }
 
@@ -252,6 +338,7 @@ export async function renderDashboard() {
         <section class="dash-section"><h3>Review activity</h3>${heatmapHtml(stats.heatmap, now)}</section>
         <section class="dash-section"><h3>Retention (weekly recall accuracy)</h3>${retentionSvg(stats.retention)}</section>
         <section class="dash-section"><h3>Upcoming reviews (next 30 days)</h3>${projectedSvg(stats.projectedDue)}</section>
+        <section class="dash-section"><h3>Card schedule</h3>${schedule}</section>
         <section class="dash-section"><h3>Reviewed by deck</h3><div class="dash-decks">${perDeckHtml(stats.perDeck)}</div></section>
     `;
     wireHeatmapTooltip(el);
