@@ -981,7 +981,12 @@ function colRow({ name, meta, star, actions, hasChildren, selected, onClick }) {
     }
 
     const label = document.createElement('span'); label.className = 'col-label';
-    const nm = document.createElement('span'); nm.className = 'col-name'; nm.textContent = name;
+    const nm = document.createElement('span');
+    nm.className = 'col-name';
+    nm.textContent = name;
+    // Native tooltip preserves the full subject/deck/chapter name when the
+    // flex column has to truncate it with an ellipsis.
+    nm.title = name;
     label.appendChild(nm);
     if (meta) {
         const md = document.createElement('span'); md.className = 'col-meta'; md.textContent = meta;

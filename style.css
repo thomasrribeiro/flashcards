@@ -2923,6 +2923,13 @@ body.standalone-phone .mobile-sidebar-close {
 .col-act.col-act-del { font-size: 17px; }
 .col-act img { display: block; width: 13px; height: 13px; }
 
+/* The gavel asset is transparent; keep its black silhouette legible against
+   the dark application palette without restoring a baked-in background. */
+:root[data-theme="dark"] img[alt="Review"],
+:root[data-theme="dark"] img[alt="gavel"] {
+    filter: invert(1);
+}
+
 .col-chevron { width: 12px; text-align: center; opacity: 0.4; flex-shrink: 0; }
 .col-empty { padding: 12px; font-size: 0.8rem; opacity: 0.5; }
 
