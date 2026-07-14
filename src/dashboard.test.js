@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { daysSinceYearStart, heatmapHtml, reviewScheduleHtml, scrollHeatmapToPresent } from './dashboard.js';
+import { daysSinceYearStart, heatmapHtml, reviewScheduleHtml, reviewWorkloadCalendarHtml, scrollHeatmapToPresent } from './dashboard.js';
 
 describe('review activity calendar', () => {
     it('renders January through today with daily review details', () => {
@@ -40,6 +40,23 @@ describe('review activity calendar', () => {
 });
 
 describe('card review schedule', () => {
+    it('renders a six-week workload calendar with clickable daily counts', () => {
+        const now = new Date(2026, 6, 14, 12);
+        const html = reviewWorkloadCalendarHtml([
+            { fsrsCard: { due: new Date(2026, 6, 14, 17) } },
+            { fsrsCard: { due: new Date(2026, 6, 14, 18) } },
+            { fsrsCard: { due: new Date(2026, 6, 15, 10) } },
+            { fsrsCard: { due: new Date(2026, 6, 14, 11) } }
+        ], now);
+
+        expect(html).toContain('Next six weeks');
+        expect(html).toContain('Due now (1)');
+        expect(html).toContain('data-filter-date="2026-07-14"');
+        expect(html).toContain('Tuesday, July 14, 2026: 3 cards');
+        expect(html).toContain('data-filter-date="2026-07-15"');
+        expect(html).toContain('Wednesday, July 15, 2026: 1 card');
+    });
+
     it('orders cards by due time and marks overdue cards', () => {
         const now = new Date('2026-07-14T18:00:00Z');
         const cards = [
@@ -47,15 +64,20 @@ describe('card review schedule', () => {
             { hash: 'due', type: 'basic', content: { question: 'Due card?' }, source: { repo: 'owner/mechanics', file: 'flashcards/01_foundations.md' } }
         ];
         const reviews = [
-            { cardHash: 'later', fsrsCard: { due: '2026-07-17T18:00:00Z' }, lastReviewed: '2026-07-13T18:00:00Z' },
-            { cardHash: 'due', fsrsCard: { due: '2026-07-14T17:00:00Z' }, lastReviewed: '2026-07-13T17:00:00Z' }
+            { cardHash: 'later', fsrsCard: { due: '2026-07-17T18:00:00Z' }, lastReviewed: '2026-07-13T18:00:00Z', lastRating: 3 },
+            { cardHash: 'due', fsrsCard: { due: '2026-07-14T17:00:00Z' }, lastReviewed: '2026-07-13T17:00:00Z', lastRating: 1 }
         ];
-        const html = reviewScheduleHtml(reviews, cards, now);
-        expect(html).toContain('2 introduced · 1 due now');
+        const decks = [{ id: 'owner/mechanics', name: 'mechanics', subject: 'physics' }];
+        const html = reviewScheduleHtml(reviews, cards, decks, now);
+        expect(html).toContain('2 reviewed · 1 due now · ordered by next review');
         expect(html.indexOf('Due card?')).toBeLessThan(html.indexOf('Later card?'));
         expect(html).toContain('1h overdue');
         expect(html).toContain('in 3d');
-        expect(html).toContain('mechanics / 01_foundations');
+        expect(html).toContain('subject: physics');
+        expect(html).toContain('deck: mechanics');
+        expect(html).toContain('chapter: 01_foundations');
+        expect(html).toContain('difficulty: Again');
+        expect(html).toContain('difficulty: Good');
     });
 
     it('falls back to a persisted label when card content is not loaded', () => {
@@ -66,8 +88,20 @@ describe('card review schedule', () => {
             filepath: 'flashcards/05_newtons_laws.md',
             fsrsCard: { due: '2026-07-20T12:00:00Z' },
             lastReviewed: '2026-07-14T12:00:00Z'
-        }], [], new Date('2026-07-14T12:00:00Z'));
+        }], [], [{ id: 'owner/mechanics', name: 'mechanics', subject: 'physics' }], new Date('2026-07-14T12:00:00Z'));
         expect(html).toContain('What is inertia?');
         expect(html).toContain('05_newtons_laws');
+        expect(html).toContain('abcdef123456');
+        expect(html).toContain('difficulty: Not recorded');
+    });
+
+    it('keeps reviewed cards with unavailable schedule metadata visible at the end', () => {
+        const html = reviewScheduleHtml([
+            { cardHash: 'unscheduled', repo: 'owner/mechanics', filepath: 'flashcards/01_foundations.md', fsrsCard: {}, lastReviewed: '2026-07-14T12:00:00Z' },
+            { cardHash: 'scheduled', repo: 'owner/mechanics', filepath: 'flashcards/02_vectors.md', fsrsCard: { due: '2026-07-15T12:00:00Z' }, lastReviewed: '2026-07-14T12:00:00Z' }
+        ], [], [{ id: 'owner/mechanics', name: 'mechanics', subject: 'physics' }], new Date('2026-07-14T12:00:00Z'));
+
+        expect(html.indexOf('scheduled')).toBeLessThan(html.indexOf('unscheduled'));
+        expect(html).toContain('Schedule unavailable');
     });
 });

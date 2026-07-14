@@ -7,7 +7,7 @@
  *   - per-deck reviewed counts
  */
 
-import { getAllCards, getAllReviews, getCurrentUser } from './storage.js';
+import { getAllCards, getAllDecks, getAllReviews, getCurrentUser } from './storage.js';
 import { getHabitStatus, levelForXp } from './habit-client.js';
 import { getLocalDate } from './today-queue.js';
 
@@ -35,12 +35,15 @@ function cardPrompt(card, review) {
     return label || `Card ${String(review?.cardHash || '').slice(0, 8)}`;
 }
 
-function reviewPath(review, card) {
-    const repo = review?.repo || card?.source?.repo || card?.deckName || 'unknown deck';
-    const deck = repo.split('/').pop();
-    const file = review?.filepath || card?.source?.file || '';
-    const chapter = file.split('/').pop().replace(/\.md$/, '');
-    return chapter ? `${deck} / ${chapter}` : deck;
+function reviewIdentity(review, card, deckMap) {
+    const repo = review?.repo || card?.source?.repo || card?.deckName || '';
+    const deckMetadata = deckMap.get(repo);
+    const deck = deckMetadata?.name || repo.split('/').pop() || 'unknown-deck';
+    const subject = card?.deckMetadata?.subject || deckMetadata?.subject || 'unknown-subject';
+    const file = review?.filepath || card?.source?.file || card?.filePath || '';
+    const chapter = file.split('/').pop().replace(/\.md$/, '') || 'unknown-chapter';
+    const cardId = card?.stableId || card?.id || review?.cardHash || 'unknown-card';
+    return { cardId, subject, deck, chapter };
 }
 
 function relativeDue(due, now) {
@@ -61,37 +64,167 @@ function relativeDue(due, now) {
     return `in ${days}d`;
 }
 
-/** A scrollable ledger of every introduced card and its exact FSRS due time. */
-export function reviewScheduleHtml(reviews = [], cards = [], now = new Date()) {
-    if (reviews.length === 0) return '<p class="dash-empty">No cards have been introduced yet.</p>';
+const REVIEW_RATINGS = {
+    1: 'Again',
+    2: 'Hard',
+    3: 'Good',
+    4: 'Easy'
+};
+
+function ratingLabel(review) {
+    const rating = Number(review?.lastRating);
+    return REVIEW_RATINGS[rating] || 'Not recorded';
+}
+
+/** Six calendar-aligned weeks of upcoming workload; the ledger holds all dates. */
+export function reviewWorkloadCalendarHtml(reviews = [], now = new Date()) {
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const start = new Date(today);
+    start.setDate(today.getDate() - today.getDay());
+    const end = new Date(start);
+    end.setDate(start.getDate() + 41);
+
+    const counts = new Map();
+    let dueNow = 0;
+    for (const review of reviews) {
+        const due = new Date(review.fsrsCard?.due);
+        if (Number.isNaN(due.getTime())) continue;
+        const key = getLocalDate(due);
+        counts.set(key, (counts.get(key) || 0) + 1);
+        if (due <= now) dueNow++;
+    }
+
+    const visibleCounts = [];
+    for (let offset = 0; offset < 42; offset++) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + offset);
+        visibleCounts.push(counts.get(getLocalDate(date)) || 0);
+    }
+    const maxCount = Math.max(1, ...visibleCounts);
+    const days = visibleCounts.map((count, offset) => {
+        const date = new Date(start);
+        date.setDate(start.getDate() + offset);
+        const key = getLocalDate(date);
+        const isToday = key === getLocalDate(today);
+        const isPast = date < today;
+        const level = count === 0 ? 0 : Math.max(1, Math.ceil(4 * count / maxCount));
+        const fullDate = date.toLocaleDateString(undefined, {
+            weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+        });
+        const shortDate = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const countLabel = `${count} ${count === 1 ? 'card' : 'cards'}`;
+        return `<button type="button"
+                    class="review-calendar-day level-${level}${isToday ? ' is-today' : ''}${isPast ? ' is-past' : ''}"
+                    data-schedule-filter="date"
+                    data-filter-date="${key}"
+                    data-filter-label="${esc(fullDate)}"
+                    aria-label="${esc(`${fullDate}: ${countLabel}`)}"
+                    title="${esc(`${fullDate}: ${countLabel}`)}"
+                    ${count === 0 ? 'disabled' : ''}>
+                <span>${esc(shortDate)}</span>
+                <strong>${count || ''}</strong>
+            </button>`;
+    }).join('');
+    const rangeFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+    return `<div class="review-calendar" aria-label="Scheduled review workload">
+        <div class="review-calendar-header">
+            <strong>Next six weeks</strong>
+            <span>${esc(rangeFormatter.format(start))} – ${esc(rangeFormatter.format(end))}</span>
+            <div class="review-calendar-filters">
+                <button type="button" class="review-calendar-filter active" data-schedule-filter="all">All cards</button>
+                <button type="button" class="review-calendar-filter" data-schedule-filter="due" ${dueNow === 0 ? 'disabled' : ''}>Due now (${dueNow})</button>
+            </div>
+        </div>
+        <div class="review-calendar-weekdays" aria-hidden="true">
+            ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => `<span>${day}</span>`).join('')}
+        </div>
+        <div class="review-calendar-grid">${days}</div>
+    </div>`;
+}
+
+function wireReviewScheduleFilters(root) {
+    const list = root.querySelector('.review-schedule-list');
+    const summary = root.querySelector('[data-review-schedule-summary]');
+    const controls = [...root.querySelectorAll('[data-schedule-filter]')];
+    if (!list || !summary || controls.length === 0) return;
+    const rows = [...list.querySelectorAll('.review-schedule-row')];
+    const defaultSummary = summary.textContent;
+
+    for (const control of controls) {
+        control.addEventListener('click', () => {
+            if (control.disabled) return;
+            const type = control.dataset.scheduleFilter;
+            const date = control.dataset.filterDate;
+            let visible = 0;
+            for (const row of rows) {
+                const matches = type === 'all'
+                    || (type === 'due' && row.dataset.dueNow === 'true')
+                    || (type === 'date' && row.dataset.dueDate === date);
+                row.classList.toggle('hidden', !matches);
+                if (matches) visible++;
+            }
+            controls.forEach(button => button.classList.toggle('active', button === control));
+            summary.textContent = type === 'all'
+                ? defaultSummary
+                : type === 'due'
+                    ? `${visible} ${visible === 1 ? 'card is' : 'cards are'} due now`
+                    : `${visible} ${visible === 1 ? 'card' : 'cards'} scheduled for ${control.dataset.filterLabel}`;
+            list.scrollTop = 0;
+        });
+    }
+}
+
+/** A scrollable ledger of every reviewed card and its exact FSRS due time. */
+export function reviewScheduleHtml(reviews = [], cards = [], decks = [], now = new Date()) {
+    if (reviews.length === 0) return '<p class="dash-empty">No cards have been reviewed yet.</p>';
     const cardMap = new Map(cards.map(card => [card.hash, card]));
+    const deckMap = new Map(decks.map(deck => [deck.id || deck.repo, deck]));
     const formatter = new Intl.DateTimeFormat(undefined, {
         month: 'short', day: 'numeric', year: 'numeric',
         hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
     });
     const rows = reviews
-        .map(review => ({ review, card: cardMap.get(review.cardHash), due: new Date(review.fsrsCard?.due) }))
-        .filter(item => !Number.isNaN(item.due.getTime()))
-        .sort((a, b) => a.due - b.due)
+        .map(review => {
+            const due = new Date(review.fsrsCard?.due);
+            return { review, card: cardMap.get(review.cardHash), due, hasDue: !Number.isNaN(due.getTime()) };
+        })
+        .sort((a, b) => {
+            if (a.hasDue !== b.hasDue) return a.hasDue ? -1 : 1;
+            return a.hasDue ? a.due - b.due : 0;
+        })
         .map(({ review, card, due }) => {
-            const isDue = due <= now;
+            const hasDue = !Number.isNaN(due.getTime());
+            const isDue = hasDue && due <= now;
+            const dueDate = hasDue ? getLocalDate(due) : '';
             const last = new Date(review.lastReviewed);
             const lastLabel = Number.isNaN(last.getTime()) ? 'Unknown' : formatter.format(last);
-            return `<article class="review-schedule-row${isDue ? ' is-due' : ''}">
+            const identity = reviewIdentity(review, card, deckMap);
+            return `<article class="review-schedule-row${isDue ? ' is-due' : ''}" data-due-date="${dueDate}" data-due-now="${isDue}">
                 <div class="review-schedule-main">
-                    <strong title="${esc(cardPrompt(card, review))}">${esc(cardPrompt(card, review))}</strong>
-                    <span>${esc(reviewPath(review, card))}</span>
+                    <strong class="review-card-id" title="${esc(identity.cardId)}">${esc(identity.cardId)}</strong>
+                    <div class="review-card-tags" aria-label="Card location">
+                        <span class="review-card-tag">subject: ${esc(identity.subject)}</span>
+                        <span class="review-card-tag">deck: ${esc(identity.deck)}</span>
+                        <span class="review-card-tag">chapter: ${esc(identity.chapter)}</span>
+                        <span class="review-card-tag review-rating rating-${esc(ratingLabel(review).toLowerCase().replace(/\s+/g, '-'))}">difficulty: ${esc(ratingLabel(review))}</span>
+                    </div>
+                    <span class="review-card-prompt" title="${esc(cardPrompt(card, review))}">${esc(cardPrompt(card, review))}</span>
                 </div>
                 <div class="review-schedule-time">
-                    <strong>${esc(relativeDue(due, now))}</strong>
-                    <time datetime="${esc(due.toISOString())}">${esc(formatter.format(due))}</time>
+                    <strong>${hasDue ? esc(relativeDue(due, now)) : 'Schedule unavailable'}</strong>
+                    ${hasDue ? `<time datetime="${esc(due.toISOString())}">${esc(formatter.format(due))}</time>` : ''}
                     <span>Last reviewed ${esc(lastLabel)}</span>
                 </div>
             </article>`;
         }).join('');
-    const dueCount = reviews.filter(review => new Date(review.fsrsCard?.due) <= now).length;
-    return `<div class="review-schedule-summary">${reviews.length} introduced · ${dueCount} due now</div>
-        <div class="review-schedule-list" tabindex="0" aria-label="All reviewed cards ordered by next review time">${rows}</div>`;
+    const dueCount = reviews.filter(review => {
+        const due = new Date(review.fsrsCard?.due);
+        return !Number.isNaN(due.getTime()) && due <= now;
+    }).length;
+    return `${reviewWorkloadCalendarHtml(reviews, now)}
+        <div class="review-schedule-summary" data-review-schedule-summary>${reviews.length} reviewed · ${dueCount} due now · ordered by next review</div>
+        <div class="review-schedule-list" tabindex="0" aria-label="All reviewed flashcards ordered by next review time">${rows}</div>`;
 }
 
 export function daysSinceYearStart(now = new Date()) {
@@ -303,18 +436,20 @@ export async function renderDashboard() {
     el.innerHTML = '<div class="loading">Loading your stats…</div>';
 
     const now = new Date();
-    const [stats, habit, reviews, cards] = await Promise.all([
+    const [stats, habit, reviews, cards, decks] = await Promise.all([
         fetchStats(now),
         getHabitStatus().catch(() => null),
         getAllReviews(),
-        getAllCards()
+        getAllCards(),
+        getAllDecks()
     ]);
-    const schedule = reviewScheduleHtml(reviews, cards, now);
+    const schedule = reviewScheduleHtml(reviews, cards, decks, now);
 
     if (!stats) {
         el.innerHTML = `<div class="dash-header"><h2>Progress</h2></div>
             <p class="dash-empty">Activity charts sync after login. Your local review schedule is shown below.</p>
-            <section class="dash-section"><h3>Card schedule</h3>${schedule}</section>`;
+            <section class="dash-section review-schedule-section"><h3>Reviewed flashcards</h3>${schedule}</section>`;
+        wireReviewScheduleFilters(el);
         return;
     }
 
@@ -335,12 +470,13 @@ export async function renderDashboard() {
                 <div class="dash-kpi"><strong>lvl ${level}</strong><span>${habit ? habit.totalXp : 0} XP</span></div>
             </div>
         </div>
+        <section class="dash-section review-schedule-section"><h3>Reviewed flashcards</h3>${schedule}</section>
         <section class="dash-section"><h3>Review activity</h3>${heatmapHtml(stats.heatmap, now)}</section>
         <section class="dash-section"><h3>Retention (weekly recall accuracy)</h3>${retentionSvg(stats.retention)}</section>
         <section class="dash-section"><h3>Upcoming reviews (next 30 days)</h3>${projectedSvg(stats.projectedDue)}</section>
-        <section class="dash-section"><h3>Card schedule</h3>${schedule}</section>
         <section class="dash-section"><h3>Reviewed by deck</h3><div class="dash-decks">${perDeckHtml(stats.perDeck)}</div></section>
     `;
     wireHeatmapTooltip(el);
     scrollHeatmapToPresent(el);
+    wireReviewScheduleFilters(el);
 }

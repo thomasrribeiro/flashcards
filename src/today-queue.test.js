@@ -40,16 +40,16 @@ describe('buildTodayQueue', () => {
         expect(q[0].fsrsCard).not.toBeNull();
     });
 
-    it('caps new cards by newPerDay minus already-introduced', () => {
-        const cards = ['a', 'b', 'c', 'd', 'e'].map((h, i) => card(h, 'deck1', i));
-        const q = buildTodayQueue({ cards, reviews: [], activeDeckIds: ['deck1'], newPerDay: 10, newIntroducedToday: 8, now });
-        expect(q).toHaveLength(2); // 10 - 8
+    it('keeps the configured session size independent from remaining daily target', () => {
+        const cards = Array.from({ length: 15 }, (_, i) => card(`c${i}`, 'deck1', i));
+        const q = buildTodayQueue({ cards, reviews: [], activeDeckIds: ['deck1'], newPerDay: 10, newBatchSize: 10, newIntroducedToday: 8, now });
+        expect(q).toHaveLength(10);
     });
 
-    it('introduces zero new cards when the daily budget is already spent', () => {
-        const cards = [card('a', 'deck1', 0)];
-        const q = buildTodayQueue({ cards, reviews: [], activeDeckIds: ['deck1'], newPerDay: 10, newIntroducedToday: 10, now });
-        expect(q).toHaveLength(0);
+    it('treats a reached daily target as a soft goal rather than a prohibition', () => {
+        const cards = Array.from({ length: 10 }, (_, i) => card(`c${i}`, 'deck1', i));
+        const q = buildTodayQueue({ cards, reviews: [], activeDeckIds: ['deck1'], newPerDay: 10, newBatchSize: 10, newIntroducedToday: 10, now });
+        expect(q).toHaveLength(10);
     });
 
     it('keeps a large daily target in finite session batches', () => {

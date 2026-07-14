@@ -328,6 +328,7 @@ async function loadReviewsFromD1(mergeWithLocalStorage = true) {
             cardHash: r.cardHash,
             fsrsCard: r.fsrsState,
             lastReviewed: r.lastReviewed,
+            lastRating: r.lastRating ?? r.last_rating ?? null,
             repo: r.repo || r.repoId || r.repo_id || null,
             filepath: r.filepath || r.filePath || r.file_path || null,
             cardLabel: r.cardLabel || r.card_label || null
@@ -366,7 +367,8 @@ async function loadReviewsFromD1(mergeWithLocalStorage = true) {
                     ...newer,
                     repo: newer.repo || older.repo || null,
                     filepath: newer.filepath || older.filepath || null,
-                    cardLabel: newer.cardLabel || older.cardLabel || null
+                    cardLabel: newer.cardLabel || older.cardLabel || null,
+                    lastRating: newer.lastRating ?? older.lastRating ?? null
                 });
             }
             reviewsCache = [...merged.values()];
@@ -489,17 +491,19 @@ export async function getCard(hash) {
 export async function saveReview(cardHash, fsrsCard, log = null) {
     const reviewedCard = cardsCache.find(c => c.hash === cardHash);
     const cardLabel = cardLabelSnapshot(reviewedCard);
+    const existingIndex = reviewsCache.findIndex(r => r.cardHash === cardHash);
+    const existingReview = existingIndex >= 0 ? reviewsCache[existingIndex] : null;
     const review = {
         cardHash,
         fsrsCard,
         lastReviewed: new Date().toISOString(),
+        lastRating: log?.rating ?? existingReview?.lastRating ?? null,
         repo: reviewedCard?.source?.repo || reviewedCard?.deckName || null,
         filepath: reviewedCard?.source?.file || null,
         cardLabel
     };
 
     // Update local cache
-    const existingIndex = reviewsCache.findIndex(r => r.cardHash === cardHash);
     if (existingIndex >= 0) {
         reviewsCache[existingIndex] = review;
     } else {

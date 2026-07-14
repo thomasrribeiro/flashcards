@@ -2069,6 +2069,116 @@ kbd {
     opacity: 0.6;
 }
 
+.review-calendar {
+    margin-bottom: 14px;
+    padding: 10px;
+    border: 1px solid var(--subtle-border);
+    background: var(--off-white);
+}
+
+.review-calendar-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 0.75rem;
+}
+
+.review-calendar-header > span {
+    color: var(--muted);
+}
+
+.review-calendar-filters {
+    display: flex;
+    gap: 5px;
+}
+
+.review-calendar-filter {
+    padding: 4px 7px;
+    border: 1px solid var(--subtle-border);
+    background: var(--white);
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+}
+
+.review-calendar-filter:hover:not(:disabled),
+.review-calendar-filter.active {
+    border-color: var(--black);
+    color: var(--black);
+}
+
+.review-calendar-filter:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
+.review-calendar-weekdays,
+.review-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.review-calendar-weekdays {
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 0.62rem;
+    text-align: center;
+}
+
+.review-calendar-day {
+    min-width: 0;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 3px;
+    padding: 5px;
+    border: 1px solid var(--subtle-border);
+    background: var(--white);
+    color: var(--black);
+    font: inherit;
+    cursor: pointer;
+}
+
+.review-calendar-day > span {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.62rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.review-calendar-day > strong {
+    font-size: 0.75rem;
+}
+
+.review-calendar-day.level-1 { background: color-mix(in srgb, var(--gold) 18%, var(--white)); }
+.review-calendar-day.level-2 { background: color-mix(in srgb, var(--gold) 34%, var(--white)); }
+.review-calendar-day.level-3 { background: color-mix(in srgb, var(--gold) 54%, var(--white)); }
+.review-calendar-day.level-4 { background: color-mix(in srgb, var(--gold) 76%, var(--white)); }
+
+.review-calendar-day:hover:not(:disabled),
+.review-calendar-day.active,
+.review-calendar-day.is-today {
+    border-color: var(--black);
+}
+
+.review-calendar-day.active {
+    box-shadow: inset 0 0 0 1px var(--black);
+}
+
+.review-calendar-day:disabled {
+    cursor: default;
+    opacity: 0.48;
+}
+
+.review-calendar-day.is-past:not(.is-today) {
+    opacity: 0.58;
+}
+
 .review-schedule-summary {
     margin-bottom: 8px;
     font-size: 0.78rem;
@@ -2076,11 +2186,28 @@ kbd {
 }
 
 .review-schedule-list {
-    max-height: 430px;
-    overflow-y: auto;
+    max-height: min(52vh, 560px);
+    min-height: 180px;
+    overflow-y: scroll;
     border: 1px solid var(--black);
     scrollbar-width: thin;
+    scrollbar-color: var(--muted) var(--off-white);
+    scrollbar-gutter: stable;
     overscroll-behavior: contain;
+}
+
+.review-schedule-list::-webkit-scrollbar {
+    width: 10px;
+}
+
+.review-schedule-list::-webkit-scrollbar-track {
+    background: var(--off-white);
+    border-left: 1px solid var(--subtle-border);
+}
+
+.review-schedule-list::-webkit-scrollbar-thumb {
+    background: var(--muted);
+    border: 2px solid var(--off-white);
 }
 
 .review-schedule-row {
@@ -2107,18 +2234,41 @@ kbd {
     flex-direction: column;
 }
 
-.review-schedule-main strong {
+.review-schedule-main .review-card-id {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.84rem;
-    font-weight: 500;
+    font-weight: 600;
 }
 
-.review-schedule-main span,
+.review-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+}
+
+.review-card-tags .review-card-tag {
+    padding: 2px 5px;
+    border: 1px solid var(--subtle-border);
+    background: var(--off-white);
+    color: var(--muted);
+    font-size: 0.66rem;
+    line-height: 1.25;
+}
+
+.review-schedule-main .review-card-prompt,
 .review-schedule-time span {
     color: var(--muted);
     font-size: 0.7rem;
+}
+
+.review-schedule-main .review-card-prompt {
+    margin-top: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .review-schedule-time {
@@ -2141,6 +2291,23 @@ kbd {
 }
 
 @media (max-width: 680px) {
+    .review-calendar-header {
+        grid-template-columns: 1fr;
+        gap: 5px;
+    }
+
+    .review-calendar-day {
+        min-height: 38px;
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 4px;
+    }
+
+    .review-calendar-day > span {
+        max-width: 100%;
+        font-size: 0.54rem;
+    }
+
     .review-schedule-row {
         grid-template-columns: 1fr;
         gap: 5px;
