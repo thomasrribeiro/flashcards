@@ -9,7 +9,10 @@
     <script>
         try {
             const savedTheme = localStorage.getItem('flashcards_theme');
-            const theme = savedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            // First visits always start in the deliberately designed light
+            // theme. An explicit user choice still persists for subsequent
+            // launches on this device through localStorage.
+            const theme = savedTheme === 'dark' ? 'dark' : 'light';
             document.documentElement.dataset.theme = theme;
             document.documentElement.style.colorScheme = theme;
         } catch { /* use the light theme */ }
