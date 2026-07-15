@@ -7,9 +7,13 @@ import { identifyCard } from './hasher.js';
 import * as githubClient from './github-client.js';
 import { saveCards, getAllCards, saveRepoMetadata, getRepoMetadata, getAllRepos, markRepoLoaded } from './storage.js';
 
-const SUBJECT_TOPICS = new Set(['biology', 'computer-science', 'mathematics', 'physics', 'law']);
+const SUBJECT_TOPICS = new Set(['biology', 'computer-science', 'mathematics', 'physics', 'law', 'misc']);
 const METADATA_CACHE_TTL_MS = 15 * 60 * 1000;
 const fileLoadPromises = new Map();
+
+export function resolveRepositorySubject(topics = [], existingSubject = null) {
+    return topics.find(topic => SUBJECT_TOPICS.has(topic)) || existingSubject || 'misc';
+}
 
 function metadataCacheKey(repoString) {
     return `flashcards_repo_metadata_${repoString.toLowerCase()}`;
@@ -48,9 +52,7 @@ export async function loadRepositoryMetadata(repoString, { sync = false } = {}) 
     }
 
     const existing = await getRepoMetadata(`${owner}/${repo}`);
-    const subject = (repoInfo.topics || []).find(topic => SUBJECT_TOPICS.has(topic))
-        || existing?.subject
-        || 'misc';
+    const subject = resolveRepositorySubject(repoInfo.topics || [], existing?.subject);
     const repoData = githubClient.createRepoData(repoInfo, markdownFiles);
     const deck = {
         ...repoData,

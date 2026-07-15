@@ -21,6 +21,33 @@ function readSubject(deckPath) {
     return path.basename(path.dirname(deckPath));
 }
 
+function readSubjectGuide(deckPath, subject) {
+    const fallback = path.join(FLASHCARDS_ROOT, 'templates', 'guides', `${subject}.md`);
+    const manifestPath = path.join(deckPath, 'deck.toml');
+    if (!existsSync(manifestPath)) return { path: fallback, overridden: false };
+
+    const manifest = readFileSync(manifestPath, 'utf8');
+    let inStandards = false;
+    let configured = null;
+    for (const line of manifest.split('\n')) {
+        const section = /^\[([^\]]+)\]\s*$/.exec(line.trim());
+        if (section) {
+            inStandards = section[1] === 'standards';
+            continue;
+        }
+        if (!inStandards) continue;
+        configured = /^subject\s*=\s*"([^"]+)"/.exec(line.trim())?.[1] || configured;
+    }
+    if (!configured) return { path: fallback, overridden: false };
+
+    const configuredPath = path.resolve(FLASHCARDS_ROOT, configured);
+    const relative = path.relative(FLASHCARDS_ROOT, configuredPath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        return { path: fallback, overridden: false };
+    }
+    return { path: configuredPath, overridden: true };
+}
+
 function inspectFile(filePath, role, { required = false, legacy = false } = {}) {
     if (!existsSync(filePath) || !statSync(filePath).isFile()) {
         return { path: filePath, role, required, legacy, exists: false, words: 0, bytes: 0 };
@@ -50,13 +77,14 @@ export function buildContextManifest({ deckPath: inputPath, mode = 'build', pref
     const subjectRoot = path.dirname(deckPath);
     const collectionRoot = path.dirname(subjectRoot);
     const subject = readSubject(deckPath);
+    const subjectGuide = readSubjectGuide(deckPath, subject);
     const files = [];
     const add = (filePath, role, options) => files.push(inspectFile(filePath, role, options));
 
     add(path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'), 'agent workflow', { required: true });
     add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'CARD_STANDARD.md'), 'normative card standard', { required: true });
     add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'AUTHORING_PLAYBOOK.md'), 'universal authoring playbook', { required: true });
-    add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', `${subject}.md`), `${subject} domain guide`);
+    add(subjectGuide.path, subjectGuide.overridden ? 'deck-selected domain guide' : `${subject} domain guide`);
     add(path.join(collectionRoot, 'AGENTS.md'), 'collection routing instructions');
     add(path.join(subjectRoot, 'AGENTS.md'), 'subject routing instructions');
     add(path.join(subjectRoot, 'ROADMAP.md'), 'learner-specific subject roadmap');

@@ -27,7 +27,7 @@ vi.mock('./storage.js', () => ({
     markRepoLoaded: vi.fn()
 }));
 
-import { loadRepositoryFiles } from './repo-manager.js';
+import { loadRepositoryFiles, resolveRepositorySubject } from './repo-manager.js';
 
 const markdown = `+++
 subject = "computer-science"
@@ -73,5 +73,11 @@ describe('loadRepositoryFiles', () => {
 
         expect(mocks.getFileContent).toHaveBeenCalledTimes(1);
         expect(mocks.saveCards).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('resolveRepositorySubject', () => {
+    it('recognizes misc as an explicit canonical repository topic', () => {
+        expect(resolveRepositorySubject(['flashcards', 'misc'], 'physics')).toBe('misc');
     });
 });

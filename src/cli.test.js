@@ -182,6 +182,30 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(formatContextManifest(manifest)).toContain('Total loaded context');
     });
 
+    it('honors a deck-selected domain guide when its display subject differs', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'misc',
+            deck: 'mechanics-revised',
+            notesRoot,
+            initializeGit: false
+        });
+        const manifestPath = path.join(deckPath, 'deck.toml');
+        const manifest = await readFile(manifestPath, 'utf8');
+        await writeFile(
+            manifestPath,
+            manifest.replace(
+                'subject = "templates/guides/misc.md"',
+                'subject = "templates/guides/physics.md"'
+            )
+        );
+
+        const context = buildContextManifest({ deckPath, mode: 'build' });
+        expect(context.subject).toBe('misc');
+        expect(context.files.some(file => file.path.endsWith('templates/guides/physics.md') && file.exists)).toBe(true);
+        expect(context.files.some(file => file.path.endsWith('templates/guides/misc.md'))).toBe(false);
+    });
+
     it('requires Git safety before an editing audit can launch Codex', async () => {
         const notesRoot = await temporaryRoot();
         const { deckPath } = await createDeck({
