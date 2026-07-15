@@ -14,6 +14,7 @@ import { getSettings, saveSettings, getHabitStatus } from './habit-client.js';
 import { clearStudySession, getStudySession, saveStudySession, studySessionMatchesActiveScope } from './session-client.js';
 import { renderDashboard } from './dashboard.js';
 import { getReminderPreferences, isIOSDevice, isStandalone, subscribeToPush, unsubscribeFromPush, updateAppBadge } from './push-client.js';
+import { renderBrowsableCards } from './card-browser.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -449,6 +450,7 @@ function treeToggle(key, hasActive) {
 
 const GAVEL_IMG = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review" style="width:13px;height:13px;">`;
 const RESET_IMG = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset" style="width:13px;height:13px;">`;
+const BROWSE_IMG = `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`;
 
 /** Match the lowercase kebab-case convention used by deck names. */
 function subjectSlug(subject) {
@@ -474,8 +476,10 @@ function scopeProgress(cards, reviewMap, now) {
 
 function treeActionBtn(cls, title, html, onclick) {
     const b = document.createElement('button');
+    b.type = 'button';
     b.className = cls;
     b.title = title;
+    b.setAttribute('aria-label', title);
     b.innerHTML = html;
     b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); onclick(); };
     return b;
@@ -647,6 +651,67 @@ function updateReviewLoading({ completed, total }) {
 
 function hideReviewLoading() {
     document.getElementById('review-loading')?.classList.add('hidden');
+}
+
+let chapterBrowserLoading = false;
+let chapterBrowserReturnFocus = null;
+
+/**
+ * Load one chapter and display every scheduled card with its answer. This is a
+ * deliberately read-only path: it never starts a study session or saves an
+ * FSRS review.
+ */
+async function openChapterBrowser({ deckId, file, subject, deckName, chapterName }) {
+    if (chapterBrowserLoading) return;
+    chapterBrowserLoading = true;
+    chapterBrowserReturnFocus = document.activeElement;
+    showReviewLoading(`${chapterName} preview`);
+
+    try {
+        await ensureRepositoriesLoaded(
+            [deckId],
+            updateReviewLoading,
+            [{ repo: deckId, path: file }]
+        );
+        const cards = (await getAllCards()).filter(card =>
+            (card.source?.repo || card.deckName) === deckId
+            && card.source?.file === file
+        );
+        if (cards.length === 0) {
+            alert('This chapter does not contain any flashcards yet.');
+            return;
+        }
+
+        const modal = document.getElementById('card-browser-modal');
+        const title = document.getElementById('card-browser-title');
+        const path = document.getElementById('card-browser-path');
+        const summary = document.getElementById('card-browser-summary');
+        const body = document.getElementById('card-browser-body');
+        if (!modal || !title || !path || !summary || !body) return;
+
+        title.textContent = chapterName;
+        path.textContent = `~ / ${subject} / ${deckName} / ${chapterName}`;
+        summary.textContent = `${cards.length} card${cards.length === 1 ? '' : 's'} · read-only preview · review progress will not change`;
+        body.innerHTML = renderBrowsableCards(cards);
+        modal.classList.remove('hidden');
+        document.getElementById('card-browser-close')?.focus();
+    } catch (error) {
+        console.error('[Main] Failed to browse chapter:', error);
+        alert('The chapter preview could not be loaded. Check your connection and try again.');
+    } finally {
+        chapterBrowserLoading = false;
+        hideReviewLoading();
+    }
+}
+
+function closeChapterBrowser() {
+    const modal = document.getElementById('card-browser-modal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    modal.classList.add('hidden');
+    const body = document.getElementById('card-browser-body');
+    if (body) body.innerHTML = '';
+    if (chapterBrowserReturnFocus?.isConnected) chapterBrowserReturnFocus.focus();
+    chapterBrowserReturnFocus = null;
 }
 
 async function mapWithConcurrency(items, limit, worker) {
@@ -936,7 +1001,7 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
                             title: 'Review this chapter (due + new)',
                             onBody: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, null, [deckId], [{ repo: deckId, path: file }]),
                             actions: [
-                                null,
+                                { cls: 'tree-act', title: 'Browse all cards in this chapter (read-only)', html: BROWSE_IMG, onclick: () => openChapterBrowser({ deckId, file, subject, deckName, chapterName: chName }) },
                                 { cls: 'tree-act', title: 'Review this chapter (due + new)', html: GAVEL_IMG, onclick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, null, [deckId], [{ repo: deckId, path: file }]) },
                                 { cls: 'tree-act', title: 'Reset progress in this chapter', html: RESET_IMG, onclick: () => resetScope([{ deckId, file }], `Reset progress in "${chName}"?`) },
                                 null
@@ -1004,8 +1069,10 @@ function colRow({ name, meta, star, actions, hasChildren, selected, onClick }) {
     const acts = document.createElement('div'); acts.className = 'col-row-actions';
     for (const a of (actions || [])) {
         const b = document.createElement('button');
+        b.type = 'button';
         b.className = 'col-act' + (a.danger ? ' col-act-del' : '');
         b.title = a.title;
+        b.setAttribute('aria-label', a.title);
         b.innerHTML = a.html;
         b.onclick = (e) => { e.stopPropagation(); a.onClick(); };
         acts.appendChild(b);
@@ -1157,12 +1224,20 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
             const cards = files.get(file);
             const completed = scopeProgress(cards, reviewMap, now).pct;
             const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, ['home', columnsSel.subject, deckName, chName], [deckId], [{ repo: deckId, path: file }]);
+            const browse = () => openChapterBrowser({
+                deckId,
+                file,
+                subject: columnsSel.subject,
+                deckName,
+                chapterName: chName
+            });
             const chActive = chapterIsActive(scopes, deckId, file);
             return colRow({
                 name: chName,
                 meta: `(${completed}%)`,
                 star: { glyph: chActive ? '★' : '☆', active: chActive, title: chActive ? 'Remove chapter from daily focus' : 'Add chapter to daily focus', onClick: () => toggleChapterScope(deckId, file) },
                 actions: [
+                    { html: BROWSE_IMG, title: 'Browse all cards in this chapter (read-only)', onClick: browse },
                     { html: GAVEL_IMG, title: 'Review this chapter (due + new)', onClick: review },
                     { html: RESET_IMG, title: 'Reset progress in this chapter', onClick: () => resetScope([{ deckId, file }], `Reset progress in "${chName}"?`) }
                 ],
@@ -1729,10 +1804,13 @@ function setupEventListeners() {
     document.getElementById('pwa-install-close')?.addEventListener('click', closePwaInstallGuide);
     document.getElementById('pwa-install-done')?.addEventListener('click', closePwaInstallGuide);
     document.querySelector('#pwa-install-modal .modal-overlay')?.addEventListener('click', closePwaInstallGuide);
+    document.getElementById('card-browser-close')?.addEventListener('click', closeChapterBrowser);
+    document.querySelector('#card-browser-modal .modal-overlay')?.addEventListener('click', closeChapterBrowser);
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
             if (!document.getElementById('study-settings-modal')?.classList.contains('hidden')) closeStudySettings();
             if (!document.getElementById('pwa-install-modal')?.classList.contains('hidden')) closePwaInstallGuide();
+            if (!document.getElementById('card-browser-modal')?.classList.contains('hidden')) closeChapterBrowser();
         }
     });
     document.getElementById('session-back-home')?.addEventListener('click', () => showMainView('decks'));

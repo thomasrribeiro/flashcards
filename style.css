@@ -2787,7 +2787,7 @@ body.standalone-phone .mobile-sidebar-close {
 .tree-act:hover, .tree-star:hover { opacity: 1; }
 .tree-star.active { color: var(--gold); opacity: 1; }
 .tree-act.tree-del { font-size: 18px; }
-.tree-act img { display: block; }
+.tree-act img, .tree-act svg { display: block; }
 .tree-act-empty { display: block; }
 
 /* Nesting rails: vertical guide line per level + horizontal branch per row */
@@ -2922,6 +2922,7 @@ body.standalone-phone .mobile-sidebar-close {
 .col-act:hover { opacity: 1; }
 .col-act.col-act-del { font-size: 17px; }
 .col-act img { display: block; width: 13px; height: 13px; }
+.col-act svg { display: block; }
 
 /* The gavel asset is transparent; keep its black silhouette legible against
    the dark application palette without restoring a baked-in background. */
@@ -2932,6 +2933,132 @@ body.standalone-phone .mobile-sidebar-close {
 
 .col-chevron { width: 12px; text-align: center; opacity: 0.4; flex-shrink: 0; }
 .col-empty { padding: 12px; font-size: 0.8rem; opacity: 0.5; }
+
+/* ── Read-only chapter browser ── */
+
+.card-browser-modal-content {
+    width: min(1100px, 94vw);
+    max-width: 1100px;
+    height: 92vh;
+}
+
+.card-browser-header {
+    align-items: flex-start;
+    padding: 18px 24px;
+}
+
+.card-browser-heading {
+    min-width: 0;
+}
+
+.card-browser-path {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.7rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.card-browser-header h3 {
+    margin: 2px 0 0;
+    font-size: 1.1rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.card-browser-summary {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: 0.68rem;
+}
+
+.card-browser-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 24px 32px;
+}
+
+.browser-card {
+    padding: 24px 0 28px;
+    border-bottom: 1px solid var(--subtle-border);
+}
+
+.browser-card:last-child {
+    border-bottom: none;
+}
+
+.browser-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 14px;
+    margin-bottom: 16px;
+    color: var(--muted);
+    font-size: 0.62rem;
+    overflow-wrap: anywhere;
+}
+
+.browser-card-side + .browser-card-side {
+    margin-top: 20px;
+}
+
+.browser-side-label {
+    margin-bottom: 6px;
+    color: var(--muted);
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.browser-card-answer {
+    padding-left: 14px;
+    border-left: 3px solid var(--gold);
+}
+
+.browser-card-answer .answer-separator::before {
+    display: none;
+}
+
+.browser-card .card-content {
+    font-size: 0.8rem;
+}
+
+.browser-card .card-content img {
+    max-width: 100%;
+    max-height: 65vh;
+}
+
+.browser-card .solution-step-content {
+    display: block;
+    margin: 4px 0 14px;
+}
+
+.browser-card .solution-step-label {
+    color: var(--black);
+}
+
+@media (max-width: 620px) {
+    .card-browser-modal-content {
+        width: 100vw;
+        height: 100dvh;
+        max-height: 100dvh;
+        border: none;
+    }
+
+    .card-browser-header {
+        padding: 14px 16px;
+    }
+
+    .card-browser-body {
+        padding: 0 16px 24px;
+    }
+
+    .browser-card {
+        padding: 20px 0 24px;
+    }
+}
 
 @media (max-width: 760px) {
     .columns-view { flex-direction: column; height: auto; }
