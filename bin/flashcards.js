@@ -2,8 +2,8 @@
 
 import { Command, Option } from 'commander';
 import { addChapter, createDeck, ensureSubject } from './lib/scaffold.js';
-import { codexDoctor, formatInvocation, runDeckAgent } from './lib/codex.js';
-import { buildContextManifest, formatContextManifest } from './lib/context.js';
+import { codexDoctor, formatInvocation, runDeckAgent, runSubjectAgent } from './lib/codex.js';
+import { buildContextManifest, buildSubjectContextManifest, formatContextManifest } from './lib/context.js';
 import { approvePilot } from './lib/pilot.js';
 import { resolveNotesRoot, resolvePath } from './lib/paths.js';
 import { stabilizeDeck, validateDeck } from './lib/validation.js';
@@ -27,8 +27,10 @@ function handleError(error) {
 
 function addAgentOptions(command, { audit = false, build = false } = {}) {
     command
-        .option('--non-interactive', 'Run with codex exec instead of opening an interactive session')
+        .option('--non-interactive', 'Use codex exec in legacy --no-isolated mode')
+        .option('--no-isolated', 'Use the legacy local workspace instead of a fresh staged run')
         .option('--model <model>', 'Override the model configured in Codex')
+        .option('--reasoning-effort <effort>', 'Codex reasoning effort for an isolated run', 'high')
         .option('--instructions <text>', 'Append task-specific instructions')
         .option('--dry-run', 'Print the Codex command and prompt without running it');
     if (audit) {
@@ -50,9 +52,12 @@ function executeAgent(mode, deckPath, options) {
         extraInstructions: options.instructions,
         dryRun: options.dryRun,
         allowDirty: options.allowDirty,
-        buildScope: options.full ? 'full' : 'pilot'
+        buildScope: options.full ? 'full' : 'pilot',
+        isolated: options.isolated,
+        reasoningEffort: options.reasoningEffort
     });
     if (result.dryRun) {
+        console.log('Preview only: a live isolated run replaces these source paths with hash-recorded staged copies.');
         console.log(formatInvocation(result.invocation));
         console.log('\nPrompt:\n');
         console.log(result.invocation.prompt);
@@ -63,7 +68,7 @@ function executeAgent(mode, deckPath, options) {
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('2.2.0')
+    .version('3.0.0')
     .showSuggestionAfterError();
 
 program
@@ -75,6 +80,7 @@ program
         console.log(`Notes root: ${resolveNotesRoot(options.notesRoot)}`);
         console.log(`Codex: ${status.installed ? status.version : 'not installed'}`);
         console.log(`Authentication: ${status.authenticated ? status.authStatus : 'not authenticated'}`);
+        console.log(`Isolated-run model: ${status.configuredModel}`);
         console.log(`Authoring runtime: ${status.missingFiles.length ? `missing ${status.missingFiles.join(', ')}` : 'ready'}`);
         if (!status.installed || !status.authenticated || status.missingFiles.length) process.exitCode = 1;
     });
@@ -83,14 +89,52 @@ const subject = program.command('subject').description('Manage subject-level cur
 
 subject
     .command('create <subject>')
-    .description('Create missing subject roadmap and authoring context')
+    .description('Create and research a subject roadmap and authoring context')
     .option('--notes-root <path>', 'Notes collection root')
     .option('--title <title>', 'Human-readable subject title')
+    .option('--no-agent', 'Create deterministic scaffold files without launching Codex')
+    .option('--no-isolated', 'Use the legacy local workspace instead of a fresh staged run')
+    .option('--model <model>', 'Override the model configured in Codex')
+    .option('--reasoning-effort <effort>', 'Codex reasoning effort for an isolated run', 'high')
+    .option('--instructions <text>', 'Append task-specific instructions')
+    .option('--dry-run', 'Create the scaffold and print the Codex command and prompt')
     .action(async (subjectName, options) => {
         try {
             const result = await ensureSubject({ subject: subjectName, notesRoot: options.notesRoot, title: options.title });
             console.log(`Subject workspace: ${result.subjectPath}`);
             console.log(result.created.length ? `Created ${result.created.length} context file(s).` : 'Subject context already exists.');
+            if (options.agent) {
+                const agent = runSubjectAgent({
+                    subjectPath: result.subjectPath,
+                    model: options.model,
+                    reasoningEffort: options.reasoningEffort,
+                    extraInstructions: options.instructions,
+                    dryRun: options.dryRun,
+                    isolated: options.isolated
+                });
+                if (agent.dryRun) {
+                    console.log('Preview only: a live isolated run replaces these source paths with hash-recorded staged copies.');
+                    console.log(formatInvocation(agent.invocation));
+                    console.log('\nPrompt:\n');
+                    console.log(agent.invocation.prompt);
+                }
+                if (agent.runPath) console.log(`Isolated run record: ${agent.runPath}`);
+                if (agent.status !== 0) process.exitCode = agent.status;
+            }
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+subject
+    .command('context <subject-path>')
+    .description('Show the exact ordered Markdown context used by subject creation')
+    .option('--json', 'Print the manifest as JSON')
+    .action((subjectPath, options) => {
+        try {
+            const manifest = buildSubjectContextManifest({ subjectPath });
+            console.log(options.json ? JSON.stringify(manifest, null, 2) : formatContextManifest(manifest));
+            if (manifest.summary.missingRequired) process.exitCode = 1;
         } catch (error) {
             handleError(error);
         }
@@ -106,7 +150,7 @@ addAgentOptions(deck
     .option('--description <text>', 'One-sentence deck purpose')
     .option('-c, --chapter <name>', 'Create an initial chapter; repeat for multiple chapters', collect, [])
     .option('--no-git', 'Do not initialize a Git repository')
-    .option('--agent', 'Launch Codex to research and build the new deck'))
+    .option('--no-agent', 'Create deterministic scaffold files without launching Codex'))
     .action(async (subjectName, deckName, options) => {
         try {
             const result = await createDeck({
@@ -122,8 +166,32 @@ addAgentOptions(deck
             if (result.subjectFiles.length) console.log(`Created ${result.subjectFiles.length} missing subject context file(s).`);
             if (result.chapterResults.length) console.log(`Created ${result.chapterResults.length} initial chapter(s).`);
             if (result.gitInitialized) console.log('Initialized Git on branch master.');
-            if (options.agent) executeAgent('build', result.deckPath, options);
-            else console.log(`Next: flashcards deck build ${result.deckPath}`);
+            if (options.agent) {
+                if (result.subjectFiles.length) {
+                    const subjectAgent = runSubjectAgent({
+                        subjectPath: result.subjectPath,
+                        model: options.model,
+                        reasoningEffort: options.reasoningEffort,
+                        extraInstructions: options.instructions,
+                        dryRun: options.dryRun,
+                        isolated: options.isolated
+                    });
+                    if (subjectAgent.dryRun) {
+                        console.log('Preview only: a live isolated run replaces these source paths with hash-recorded staged copies.');
+                        console.log(formatInvocation(subjectAgent.invocation));
+                        console.log('\nSubject prompt:\n');
+                        console.log(subjectAgent.invocation.prompt);
+                    }
+                    if (subjectAgent.runPath) console.log(`Subject isolated run record: ${subjectAgent.runPath}`);
+                    if (subjectAgent.status !== 0) {
+                        process.exitCode = subjectAgent.status;
+                        return;
+                    }
+                }
+                executeAgent('build', result.deckPath, options);
+            } else {
+                console.log(`Next: flashcards deck build ${result.deckPath}`);
+            }
         } catch (error) {
             handleError(error);
         }

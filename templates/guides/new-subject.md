@@ -6,4 +6,6 @@ for creating subjects and decks now lives in
 contract**, **Design the curriculum**, and **Document ownership**.
 
 Use `flashcards subject create` and `flashcards deck create` for deterministic
-scaffolding. Do not load this compatibility file as additional agent context.
+scaffolding followed by fresh isolated agent research by default; pass
+`--no-agent` for scaffolding only. Do not load this compatibility file as
+additional agent context.

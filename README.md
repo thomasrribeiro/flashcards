@@ -35,16 +35,32 @@ npm link
 flashcards doctor
 ```
 
-The CLI deliberately separates deterministic operations from agent judgment:
+The CLI separates deterministic operations from agent judgment:
 
 - scaffolding, stable IDs, parsing, math, metadata, and asset checks are local
   deterministic commands;
 - curriculum research, card writing, figures, and semantic audits use Codex and
   the versioned `$manage-flashcard-decks` skill in `.agents/skills/`.
 
-Codex runs with the deck as its primary writable workspace and the subject
-directory as an additional workspace. The application repository is supplied
-as read-only standards and parser context.
+By default every judgment-heavy command starts a fresh, non-resumable Codex
+process in a temporary copy of the target. Only the ordered Markdown context
+reported by `subject context` or `deck context` is staged alongside the target;
+the agent is instructed not to inspect any other local files. Live web research
+remains available. A clean patch is applied back after the agent succeeds, and
+the prompt, target-file snapshot, ordered context and vendored-skill hashes,
+model, Codex version, result, and patch are recorded under
+`~/.flashcards/runs/`.
+
+The isolated run uses `codex exec --ephemeral --ignore-user-config
+--ignore-rules`; it does not resume a prior conversation or persist a new one.
+Codex platform instructions and the selected model still come from Codex itself,
+while all repository- and learner-specific initial context is explicit and
+inspectable. Use `--no-isolated` only when intentionally opting into the legacy
+local interactive workspace.
+
+This makes runs input-auditable, not bit-for-bit deterministic: model behavior,
+live search results, and upstream web pages can change. The source register and
+run manifest make those differences reviewable.
 
 Normal local use relies on `codex login`; the CLI does not request, store, or
 forward an API key. API-key authentication is only necessary if you separately
@@ -61,9 +77,15 @@ flashcards subject create biology
 
 flashcards deck create biology genetics \
   --description "Mechanistic genetics from inheritance to gene regulation"
-
-flashcards deck build ~/notes/biology/genetics
 ```
+
+Both commands launch a fresh isolated agent by default. `subject create`
+researches and completes `SUBJECT_BRIEF.md` and `ROADMAP.md`; if the repository
+does not already provide a reusable `templates/guides/<subject>.md`, it also
+creates a subject-owned `DOMAIN_GUIDE.md`. `deck create` then researches the
+deck, completes its README and card blueprint, and authors only the first
+novice-first pilot chapter. Pass `--no-agent` to either command when only the
+deterministic scaffold is wanted.
 
 `deck build` intentionally authors only the first ordered chapter. The agent
 may design the full roadmap, but it must complete a concept-dependency ledger
@@ -82,10 +104,10 @@ The full build is rejected unless `deck.toml` records explicit pilot approval.
 It must produce `.flashcards/audits/full-cold-start.md` before the CLI marks the
 deck built.
 
-Create a scaffold and immediately open Codex:
+Create only the deterministic scaffold:
 
 ```bash
-flashcards deck create biology genetics --agent
+flashcards deck create biology genetics --no-agent
 ```
 
 Create initial ordered chapters when the curriculum is already known:
@@ -135,8 +157,8 @@ flashcards deck validate ~/notes/biology/genetics \
 
 ## Build and audit with Codex
 
-Interactive sessions are the default because curriculum and correctness work
-benefits from visible judgment and feedback.
+Fresh isolated runs are the default so the same declared inputs can be audited
+and reproduced without hidden conversation history.
 
 ```bash
 flashcards deck build ~/notes/biology/genetics
@@ -159,13 +181,17 @@ figures, alt text, diagram conventions, and problem contexts—not only formulas
 Inspect the exact ordered Markdown context before launching an agent:
 
 ```bash
+flashcards subject context ~/notes/biology
 flashcards deck context ~/notes/biology/genetics --mode build
 flashcards deck context ~/notes/physics/mechanics --mode audit --json
+flashcards deck build ~/notes/biology/genetics --dry-run
 ```
 
-The command reports every present file, its role and word count, optional
-missing files, and the total context. Build and audit prompts use the same
-manifest, so documentation drift is visible instead of implicit.
+The context commands report every declared Markdown file, its role and word
+count, optional missing files, and the total context. `--dry-run` also prints
+the prompt and resolved model without launching an agent. Live runs additionally
+hash every target file and every vendored skill file in the provenance record,
+so accessible local inputs are visible instead of implicit.
 
 Before any editing agent starts, the CLI gives existing card blocks stable IDs
 so later wording, figure, and correctness improvements cannot silently discard
@@ -182,8 +208,8 @@ Useful variants:
 # Inspect without editing
 flashcards deck audit ~/notes/physics/mechanics --report-only
 
-# Run headlessly through codex exec
-flashcards deck audit ~/notes/physics/mechanics --non-interactive
+# Opt into the legacy local interactive workspace
+flashcards deck audit ~/notes/physics/mechanics --no-isolated
 
 # Inspect the exact invocation and prompt
 flashcards deck audit ~/notes/physics/mechanics --dry-run
@@ -196,9 +222,11 @@ flashcards deck audit ~/notes/physics/mechanics \
 flashcards deck audit ~/notes/physics/mechanics --allow-dirty
 ```
 
-The CLI does not pin a model. It uses the model configured in Codex so future
-audits can benefit from stronger models. Use `--model` only for an intentional
-one-run override.
+The CLI does not pin a model in source. An isolated run resolves the model from
+`--model`, then `FLASHCARDS_CODEX_MODEL`, then the current Codex configuration,
+and records the resolved value in its run manifest. This permits future audits
+to benefit from stronger models while preserving the inputs of each past run.
+Use `--model` when exact cross-machine reproduction matters.
 
 ## Stable card identity
 
@@ -251,6 +279,7 @@ The context hierarchy deliberately avoids repetition:
 | `CARD_STANDARD.md` | Normative card, deck, parser, and identity acceptance rules |
 | `AUTHORING_PLAYBOOK.md` | Universal curriculum, learning, source, figure, and audit decisions |
 | `templates/guides/<subject>.md` | Reusable domain-specific judgment |
+| subject `DOMAIN_GUIDE.md` | AI-researched domain guide only when no reusable repository guide exists |
 | subject `SUBJECT_BRIEF.md` | Learner, depth, conventions, and evidence authorities |
 | subject `ROADMAP.md` | Deck sequence, prerequisites, and durable outcomes |
 | deck `README.md` | Scope, chapter map, and source register |

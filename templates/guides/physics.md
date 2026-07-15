@@ -22,6 +22,44 @@ SRS maintains concepts, representations, and method triggers. It does not
 replace laboratories, derivations, extended problems, simulation, or the
 physical judgment developed by working unfamiliar situations.
 
+## Whole-field coverage and balance
+
+This is a method guide, not a claim that all physics belongs in one deck. An
+individual deck should cover only its declared scope. A subject-wide roadmap or
+whole-collection audit, however, must not mistake the traditional introductory
+mechanics sequence for a faithful map of physics.
+
+When the learner's destination is broad physics competence, explicitly include,
+sequence, or deliberately defer each applicable domain:
+
+- measurement, classical mechanics, continuum mechanics, fluids, and nonlinear
+  dynamics;
+- oscillations, waves, acoustics, geometrical and physical optics;
+- thermodynamics, kinetic theory, statistical physics, and nonequilibrium
+  systems;
+- electricity, magnetism, circuits, electromagnetic fields, and radiation;
+- special relativity, gravitation, general relativity, and cosmology;
+- quantum foundations, quantum mechanics, quantum information, and quantum
+  field ideas at the target level;
+- atomic, molecular, optical, laser, and chemical physics;
+- condensed matter, solid-state, soft-matter, polymer, and materials physics;
+- nuclear, particle, accelerator, beam, and plasma physics;
+- astrophysics, biological physics, medical physics, climate physics, and other
+  declared interdisciplinary applications.
+
+Do not assign equal card counts to these labels mechanically. Weight them by the
+learner's destination, prerequisite graph, explanatory reach, and authentic
+practice. Record omissions in `ROADMAP.md` so that absence is a decision rather
+than an artifact of whichever textbook or early course supplied the examples.
+
+Across the selected domains, plan experimental design, instrumentation,
+measurement, uncertainty, data analysis, modeling, approximation, computation,
+simulation, visualization, and scientific communication as recurring practices.
+These are modes of doing physics, not a final miscellaneous chapter. AAPT
+specifically treats computation as complementary to theoretical and
+experimental physics; reinforce it throughout a curriculum when it is part of
+the learner's destination.
+
 ## Prerequisite and level policy
 
 Declare whether the deck is conceptual, algebra-based, calculus-based, or
@@ -96,6 +134,15 @@ High-value visual retrieval includes:
 - before/after states for conservation laws;
 - qualitative comparison of model predictions.
 
+Do not let free-body diagrams become the default meaning of a “physics figure.”
+Audit the representational grammar of the actual subfield: ray and wavefront
+constructions, spectra and energy-level diagrams, phase and state-space plots,
+field and potential maps, spacetime and causal diagrams, circuit and signal
+representations, crystal and reciprocal-space structures, Feynman or interaction
+diagrams at the appropriate level, detector readouts, probability densities,
+uncertainty visualizations, and simulation or data products may carry the real
+retrieval target.
+
 Technical figures should normally be original SVGs. Geometry, arrow direction,
 relative placement, axes, labels, and scale claims must be physically correct.
 Use dashed paths or shape differences as well as color. Keep solution forces,
@@ -126,6 +173,15 @@ Contrast quantities and laws that share surface cues, for example:
 - path-dependent/process quantities and state functions;
 - a real interaction pair and two forces acting on one object.
 
+Also inventory interference that appears outside introductory mechanics, such
+as wave speed/frequency/phase velocity, electric potential/potential energy,
+heat/temperature/entropy, state vector/observable/measurement outcome,
+classical mixture/quantum superposition, proper/coordinate quantities,
+microscopic state/macroscopic state variable, lattice/reciprocal lattice,
+accuracy/precision/resolution, and model uncertainty/measurement uncertainty.
+Use only contrasts that belong to the deck's declared scope and establish both
+members before testing discrimination.
+
 Ask for the decisive system, direction, dependence, unit, or condition. Use
 plausible wrong diagrams and reasoning only when the answer explicitly repairs
 the misconception; do not rehearse a misconception without correction.
@@ -146,6 +202,14 @@ the misconception; do not rehearse a misconception without correction.
 
 - American Association of Physics Teachers, curriculum and teaching resources:
   https://www.aapt.org/resources/
+- American Physical Society, divisions and topical groups (a breadth check for
+  physics subfields, not a prescribed course sequence):
+  https://www.aps.org/membership/units
+- AAPT, undergraduate physics curriculum resources, including laboratory and
+  computational-physics recommendations:
+  https://www.aapt.org/Resources/HigherEd/Undergraduate_Physics_Curriculum.cfm
+- U.S. National Science Foundation, physics focus areas (an additional breadth
+  check for contemporary research domains): https://www.nsf.gov/focus-areas/physics
 - PhysPort, research-based physics teaching resources:
   https://www.physport.org/
 - OpenStax Physics (openly licensed reference; verify the current license and

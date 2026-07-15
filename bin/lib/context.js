@@ -22,9 +22,11 @@ function readSubject(deckPath) {
 }
 
 function readSubjectGuide(deckPath, subject) {
-    const fallback = path.join(FLASHCARDS_ROOT, 'templates', 'guides', `${subject}.md`);
+    const canonical = path.join(FLASHCARDS_ROOT, 'templates', 'guides', `${subject}.md`);
+    const local = path.join(path.dirname(deckPath), 'DOMAIN_GUIDE.md');
+    const fallback = existsSync(local) ? local : canonical;
     const manifestPath = path.join(deckPath, 'deck.toml');
-    if (!existsSync(manifestPath)) return { path: fallback, overridden: false };
+    if (!existsSync(manifestPath)) return { path: fallback, overridden: existsSync(local), local: existsSync(local) };
 
     const manifest = readFileSync(manifestPath, 'utf8');
     let inStandards = false;
@@ -38,14 +40,17 @@ function readSubjectGuide(deckPath, subject) {
         if (!inStandards) continue;
         configured = /^subject\s*=\s*"([^"]+)"/.exec(line.trim())?.[1] || configured;
     }
-    if (!configured) return { path: fallback, overridden: false };
+    if (!configured) return { path: fallback, overridden: existsSync(local), local: existsSync(local) };
 
     const configuredPath = path.resolve(FLASHCARDS_ROOT, configured);
     const relative = path.relative(FLASHCARDS_ROOT, configuredPath);
     if (relative.startsWith('..') || path.isAbsolute(relative)) {
-        return { path: fallback, overridden: false };
+        return { path: fallback, overridden: existsSync(local), local: existsSync(local) };
     }
-    return { path: configuredPath, overridden: true };
+    if (!existsSync(configuredPath) && configuredPath === canonical && existsSync(local)) {
+        return { path: local, overridden: true, local: true };
+    }
+    return { path: configuredPath, overridden: true, local: false };
 }
 
 function inspectFile(filePath, role, { required = false, legacy = false } = {}) {
@@ -62,6 +67,52 @@ function inspectFile(filePath, role, { required = false, legacy = false } = {}) 
         exists: true,
         words: trimmed ? trimmed.split(/\s+/u).length : 0,
         bytes: Buffer.byteLength(content)
+    };
+}
+
+function subjectGuidePath(subjectPath, subject) {
+    const localGuide = path.join(subjectPath, 'DOMAIN_GUIDE.md');
+    if (existsSync(localGuide)) return { path: localGuide, role: 'subject-owned domain guide' };
+    const canonicalGuide = path.join(FLASHCARDS_ROOT, 'templates', 'guides', `${subject}.md`);
+    if (existsSync(canonicalGuide)) return { path: canonicalGuide, role: `${subject} domain guide` };
+    return { path: localGuide, role: 'subject-owned domain guide to research and create' };
+}
+
+export function buildSubjectContextManifest({ subjectPath: inputPath } = {}) {
+    const subjectPath = resolvePath(inputPath);
+    if (!existsSync(subjectPath) || !statSync(subjectPath).isDirectory()) {
+        throw new Error(`Subject path does not exist: ${subjectPath}`);
+    }
+    const collectionRoot = path.dirname(subjectPath);
+    const subject = path.basename(subjectPath);
+    const guide = subjectGuidePath(subjectPath, subject);
+    const files = [];
+    const add = (filePath, role, options) => files.push(inspectFile(filePath, role, options));
+
+    add(path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'), 'agent workflow', { required: true });
+    add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'CARD_STANDARD.md'), 'normative card standard', { required: true });
+    add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'AUTHORING_PLAYBOOK.md'), 'universal authoring playbook', { required: true });
+    add(guide.path, guide.role);
+    add(path.join(collectionRoot, 'AGENTS.md'), 'collection routing instructions');
+    add(path.join(subjectPath, 'AGENTS.md'), 'subject routing instructions');
+    add(path.join(subjectPath, 'ROADMAP.md'), 'learner-specific subject roadmap', { required: true });
+    add(path.join(subjectPath, 'SUBJECT_BRIEF.md'), 'learner-specific subject brief', { required: true });
+
+    const present = files.filter(file => file.exists);
+    return {
+        mode: 'subject',
+        subjectPath,
+        collectionRoot,
+        subject,
+        guide,
+        files,
+        summary: {
+            present: present.length,
+            missingOptional: files.filter(file => !file.exists && !file.required).length,
+            missingRequired: files.filter(file => !file.exists && file.required).length,
+            words: present.reduce((total, file) => total + file.words, 0),
+            bytes: present.reduce((total, file) => total + file.bytes, 0)
+        }
     };
 }
 
@@ -85,7 +136,10 @@ export function buildContextManifest({ deckPath: inputPath, mode = 'build', pref
     add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'CARD_STANDARD.md'), 'normative card standard', { required: true });
     add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'AUTHORING_PLAYBOOK.md'), 'universal authoring playbook', { required: true });
     add(path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'references', 'cold-start-workflow.md'), 'cold-start and pilot workflow', { required: true });
-    add(subjectGuide.path, subjectGuide.overridden ? 'deck-selected domain guide' : `${subject} domain guide`);
+    add(
+        subjectGuide.path,
+        subjectGuide.local ? 'subject-owned domain guide' : subjectGuide.overridden ? 'deck-selected domain guide' : `${subject} domain guide`
+    );
     add(path.join(collectionRoot, 'AGENTS.md'), 'collection routing instructions');
     add(path.join(subjectRoot, 'AGENTS.md'), 'subject routing instructions');
     add(path.join(subjectRoot, 'ROADMAP.md'), 'learner-specific subject roadmap');
@@ -129,7 +183,7 @@ export function buildContextManifest({ deckPath: inputPath, mode = 'build', pref
 export function formatContextManifest(manifest) {
     const lines = [
         `Context mode: ${manifest.mode}`,
-        `Deck: ${manifest.deckPath}`,
+        manifest.deckPath ? `Deck: ${manifest.deckPath}` : `Subject workspace: ${manifest.subjectPath}`,
         `Subject: ${manifest.subject}`,
         ''
     ];

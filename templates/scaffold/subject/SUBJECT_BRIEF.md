@@ -1,8 +1,9 @@
 # {{SUBJECT_TITLE}} subject brief
 
 This file records decisions specific to this learner and collection. Reusable
-domain-wide authoring guidance belongs in
-`templates/guides/{{SUBJECT}}.md`; deck sequence belongs in `ROADMAP.md`.
+domain-wide authoring guidance belongs in `templates/guides/{{SUBJECT}}.md`
+when that maintained guide exists, or in this subject's `DOMAIN_GUIDE.md` for a
+new domain. Deck sequence belongs in `ROADMAP.md`.
 
 ## Learner and destination
 

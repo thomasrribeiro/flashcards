@@ -6,7 +6,8 @@ Before creating or auditing cards, read:
 
 1. `{{FLASHCARDS_ROOT}}/templates/guides/CARD_STANDARD.md`
 2. `{{FLASHCARDS_ROOT}}/templates/guides/AUTHORING_PLAYBOOK.md`
-3. `{{FLASHCARDS_ROOT}}/templates/guides/{{SUBJECT}}.md` when it exists
+3. `DOMAIN_GUIDE.md` here when present; otherwise
+   `{{FLASHCARDS_ROOT}}/templates/guides/{{SUBJECT}}.md` when it exists
 4. `SUBJECT_BRIEF.md` and `ROADMAP.md` in this directory
 5. The target deck's `AGENTS.md`, `README.md`, and `CARD_README.md`
 

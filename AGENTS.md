@@ -31,8 +31,8 @@ interpret them using `templates/guides/CARD_STANDARD.md`.
 - `src/hasher.js` and `src/review-identity.js` define persistent identity and
   legacy schedule migration.
 - `scripts/validate-notes.js` is the deterministic collection validator.
-- `bin/flashcards.js` exposes only deterministic deck operations and explicit
-  Codex build/audit handoffs.
+- `bin/flashcards.js` exposes deterministic deck operations plus isolated,
+  provenance-recorded Codex subject/build/audit handoffs.
 - `.agents/skills/manage-flashcard-decks/` owns the reusable agent workflow.
 - `templates/guides/` owns universal and subject-specific authoring guidance.
 

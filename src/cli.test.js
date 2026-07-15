@@ -5,8 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { addChapter, createDeck, ensureSubject } from '../bin/lib/scaffold.js';
-import { buildAgentInvocation, formatInvocation, runDeckAgent } from '../bin/lib/codex.js';
-import { buildContextManifest, formatContextManifest } from '../bin/lib/context.js';
+import { buildAgentInvocation, buildSubjectAgentInvocation, formatInvocation, runDeckAgent } from '../bin/lib/codex.js';
+import { buildContextManifest, buildSubjectContextManifest, formatContextManifest } from '../bin/lib/context.js';
+import { discardIsolatedRun, finishIsolatedRun, prepareIsolatedRun } from '../bin/lib/isolation.js';
 import { approvePilot, markPilotBuilt, readDeckStatus, requireFullBuildApproval } from '../bin/lib/pilot.js';
 import { requireKebabSlug } from '../bin/lib/paths.js';
 import { stabilizeDeck, validateDeck } from '../bin/lib/validation.js';
@@ -138,7 +139,7 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(report.decks[0].files[0].clozeLints[0].msg).toContain('math-internal cloze is parser-ambiguous');
     });
 
-    it('builds an explicit, model-unpinned Codex invocation', async () => {
+    it('builds an explicit fresh isolated Codex invocation', async () => {
         const notesRoot = await temporaryRoot();
         const { deckPath } = await createDeck({
             subject: 'biology',
@@ -151,19 +152,67 @@ describe('flashcards CLI validation and Codex handoff', () => {
             deckPath,
             nonInteractive: true,
             reportOnly: false,
+            model: 'test-model',
             extraInstructions: 'Check prerequisite bridges.'
         });
         expect(invocation.args).toContain('--search');
         expect(invocation.args).toContain('exec');
         expect(invocation.args).toContain('workspace-write');
         expect(invocation.args).toContain(deckPath);
-        expect(invocation.args).not.toContain('--model');
+        expect(invocation.args).toContain('--model');
+        expect(invocation.args).toContain('test-model');
+        expect(invocation.args).toContain('--ephemeral');
+        expect(invocation.args).toContain('--ignore-user-config');
+        expect(invocation.args).toContain('--ignore-rules');
+        expect(invocation.args).toContain('--json');
         expect(invocation.prompt).toContain('$manage-flashcard-decks');
         expect(invocation.prompt).toContain('AUTHORING_PLAYBOOK.md');
         expect(invocation.prompt).toContain('chapter design ledger');
         expect(invocation.prompt).toContain('one figure per chapter');
         expect(invocation.prompt).toContain('Check prerequisite bridges.');
         expect(formatInvocation(invocation)).toContain('codex');
+    });
+
+    it('reports subject creation context and creates a fresh subject invocation', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({ subject: 'earth-science', notesRoot });
+        const manifest = buildSubjectContextManifest({ subjectPath });
+        expect(manifest.files.some(file => file.path.endsWith('ROADMAP.md') && file.required)).toBe(true);
+        expect(manifest.files.some(file => file.path.endsWith('SUBJECT_BRIEF.md') && file.required)).toBe(true);
+        expect(manifest.guide.path).toBe(path.join(subjectPath, 'DOMAIN_GUIDE.md'));
+
+        const invocation = buildSubjectAgentInvocation({ subjectPath, model: 'test-model' });
+        expect(invocation.args).toContain('--ephemeral');
+        expect(invocation.prompt).toContain('Create DOMAIN_GUIDE.md');
+        expect(invocation.prompt).toContain('Do not create a deck');
+    });
+
+    it('applies only target changes from an isolated workspace', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'biology',
+            deck: 'genetics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations']
+        });
+        const manifest = buildContextManifest({ deckPath, mode: 'build' });
+        const prepared = prepareIsolatedRun({
+            sourcePath: deckPath,
+            contextFiles: manifest.files,
+            label: 'test'
+        });
+        try {
+            await writeFile(path.join(prepared.workspacePath, 'README.md'), '# Revised in isolation\n');
+            await writeFile(prepared.stagedContext[0].path, '# Attempted context mutation\n');
+            const result = finishIsolatedRun(prepared);
+            expect(result.changed).toBe(true);
+            expect(await readFile(path.join(deckPath, 'README.md'), 'utf8')).toBe('# Revised in isolation\n');
+            expect(await readFile(manifest.files[0].path, 'utf8')).not.toBe('# Attempted context mutation\n');
+            await rm(prepared.runPath, { recursive: true, force: true });
+        } finally {
+            discardIsolatedRun(prepared);
+        }
     });
 
     it('defaults builds to one cold-start-audited pilot chapter', async () => {
@@ -254,6 +303,20 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(context.subject).toBe('misc');
         expect(context.files.some(file => file.path.endsWith('templates/guides/physics.md') && file.exists)).toBe(true);
         expect(context.files.some(file => file.path.endsWith('templates/guides/misc.md'))).toBe(false);
+    });
+
+    it('loads a subject-owned domain guide when no reusable guide exists', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath, subjectPath } = await createDeck({
+            subject: 'earth-science',
+            deck: 'plate-tectonics',
+            notesRoot,
+            initializeGit: false
+        });
+        const guidePath = path.join(subjectPath, 'DOMAIN_GUIDE.md');
+        await writeFile(guidePath, '# Earth science domain guide\n');
+        const context = buildContextManifest({ deckPath, mode: 'build' });
+        expect(context.files.some(file => file.path === guidePath && file.role === 'subject-owned domain guide')).toBe(true);
     });
 
     it('requires Git safety before an editing audit can launch Codex', async () => {

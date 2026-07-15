@@ -1,14 +1,35 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { FLASHCARDS_ROOT, resolvePath, shellQuote } from './paths.js';
-import { buildContextManifest } from './context.js';
+import { buildContextManifest, buildSubjectContextManifest } from './context.js';
+import {
+    discardIsolatedRun,
+    finishIsolatedRun,
+    isolatedResultPath,
+    prepareIsolatedRun,
+    recordIsolatedInvocation
+} from './isolation.js';
 import { markFullBuilt, markPilotBuilt, requireFullBuildApproval } from './pilot.js';
 import { stabilizeDeck, validateDeck } from './validation.js';
 
 function auditTimestamp() {
     return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function configuredModel() {
+    if (process.env.FLASHCARDS_CODEX_MODEL) return process.env.FLASHCARDS_CODEX_MODEL;
+    const configPath = path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'config.toml');
+    if (!existsSync(configPath)) return undefined;
+    return /^model\s*=\s*"([^"]+)"/m.exec(readFileSync(configPath, 'utf8'))?.[1];
+}
+
+function codexVersion() {
+    const result = spawnSync('codex', ['--version'], { encoding: 'utf8' });
+    if (result.error?.code === 'ENOENT') throw new Error('Codex CLI is not installed or not available on PATH.');
+    if (result.status !== 0) throw new Error(`Unable to inspect Codex: ${(result.stderr || result.stdout).trim()}`);
+    return result.stdout.trim();
 }
 
 function requireSafeAuditWorktree(deckPath, allowDirty) {
@@ -26,69 +47,261 @@ function requireSafeAuditWorktree(deckPath, allowDirty) {
     }
 }
 
-export function buildAgentInvocation({
-    mode,
-    deckPath: inputPath,
-    nonInteractive = false,
-    reportOnly = false,
-    model,
-    extraInstructions,
-    preflightPath,
-    buildScope = 'pilot'
-}) {
-    const deckPath = resolvePath(inputPath);
-    const contextManifest = buildContextManifest({ deckPath, mode, preflightPath });
-    const { subjectRoot, subject } = contextManifest;
-    const missingRequired = contextManifest.files.filter(file => file.required && !file.exists);
-    if (missingRequired.length) {
-        throw new Error(`Missing required authoring context: ${missingRequired.map(file => file.path).join(', ')}`);
+function deckModeInstruction(mode, buildScope, reportOnly) {
+    if (mode === 'build' && buildScope === 'pilot') {
+        return 'Research and design the curriculum, but AUTHOR ONLY THE FIRST ORDERED CHAPTER as a novice-first pilot. If no ordered chapter exists, design the chapter map and create the first chapter. Do not author, delete, or modify cards in later chapters. Complete the pilot dependency ledger and write .flashcards/audits/pilot-cold-start.md with a front-by-front audit. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains, then stop for human approval.';
     }
-    const modeInstruction = mode === 'build' && buildScope === 'pilot'
-        ? 'Research and design the curriculum, but AUTHOR ONLY THE FIRST ORDERED CHAPTER as a novice-first pilot. Do not author, delete, or modify cards in later chapters. Complete the pilot dependency ledger and write .flashcards/audits/pilot-cold-start.md with a front-by-front audit. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains, then stop for human approval.'
-        : mode === 'build'
-            ? 'Build the approved curriculum chapter by chapter. Repeat the dependency scan across every chapter boundary and write .flashcards/audits/full-cold-start.md. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains.'
-        : reportOnly
-            ? 'Audit the entire deck and write no files. Return a prioritized, evidence-backed report.'
-            : 'Audit and improve the entire deck, working chapter by chapter while preserving review history.';
-    const prompt = [
-        `Use $manage-flashcard-decks in ${mode} mode. Read the complete skill at ${path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md')} before acting.`,
-        `Target deck: ${deckPath}`,
+    if (mode === 'build') {
+        return 'Build the approved curriculum chapter by chapter. Repeat the dependency scan across every chapter boundary and write .flashcards/audits/full-cold-start.md. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains.';
+    }
+    if (reportOnly) return 'Audit the entire deck and write no files. Return a prioritized, evidence-backed report.';
+    return 'Audit and improve the entire deck, working chapter by chapter while preserving review history.';
+}
+
+function buildDeckPrompt({
+    mode,
+    targetPath,
+    subject,
+    contextFiles,
+    skillPath,
+    preflightPath,
+    reportOnly,
+    buildScope,
+    extraInstructions,
+    isolated
+}) {
+    return [
+        `Use $manage-flashcard-decks in ${mode} mode. Read the complete skill at ${skillPath} before acting.`,
+        `Target deck: ${targetPath}`,
         `Subject: ${subject}`,
-        `Subject workspace: ${subjectRoot}`,
-        `Read-only flashcards application and standards: ${FLASHCARDS_ROOT}`,
+        isolated
+            ? 'This is an isolated fresh-agent run. Use only the target workspace, the ordered staged context below, and sources you deliberately find through live web research.'
+            : `Read-only flashcards application and standards: ${FLASHCARDS_ROOT}`,
         preflightPath ? `Machine-readable preflight report: ${preflightPath}` : null,
         'Read every present file in this ordered context manifest completely before acting:',
-        ...contextManifest.files.filter(file => file.exists).map((file, index) => `${index + 1}. [${file.role}] ${file.path}`),
-        modeInstruction,
+        ...contextFiles.map((file, index) => `${index + 1}. [${file.role}] ${file.path}`),
+        deckModeInstruction(mode, buildScope, reportOnly),
         'Before large-scale authoring, complete a chapter design ledger covering retrieval targets, card-form choices, problem progression, authentic representations, and included or intentionally omitted figure opportunities.',
         'Treat all unconfirmed domain knowledge as unseen. Build a concept-dependency ledger and perform the cold-start scan without reading each answer until that front\'s dependencies are recorded.',
         'Never use terminology, symbols, representations, or examples from a later chapter to scaffold an earlier chapter unless a minimal explicit bridge establishes them first.',
         'Do not optimize for a type distribution or figure count. Zero clozes may be correct; visually rich chapters may need several figures. Do not treat one figure per chapter as a target or cap.',
         'Before handoff, reconcile and report planned versus actual card-type, problem, and figure inventories by chapter, investigating unexplained omissions.',
         'Do not load deprecated compatibility guides or unrelated subject encyclopedias unless the user explicitly asks.',
-        'Do not edit the flashcards application repository; make deck and subject changes only in the target workspaces.',
+        isolated
+            ? 'Do not inspect files outside this workspace. Do not modify .agents/, .flashcards/context/, or AGENTS.override.md.'
+            : 'Do not edit the flashcards application repository; make deck and subject changes only in the target workspaces.',
         'Do not commit, push, create a remote repository, or deploy.',
         extraInstructions ? `Additional user instructions: ${extraInstructions}` : null
     ].filter(Boolean).join('\n');
+}
 
-    const globalArgs = [
+function buildSubjectPrompt({ subject, targetPath, contextFiles, skillPath, guideExists, extraInstructions, isolated }) {
+    return [
+        `Use $manage-flashcard-decks to design the ${subject} subject workspace. Read the complete skill at ${skillPath} before acting.`,
+        `Target subject workspace: ${targetPath}`,
+        isolated
+            ? 'This is an isolated fresh-agent run. Use only the target workspace, the ordered staged context below, and sources you deliberately find through live web research.'
+            : `Read-only flashcards application and standards: ${FLASHCARDS_ROOT}`,
+        'Read every present file in this ordered context manifest completely before acting:',
+        ...contextFiles.map((file, index) => `${index + 1}. [${file.role}] ${file.path}`),
+        'Research authoritative curriculum frameworks and the current structure of the field. Complete SUBJECT_BRIEF.md and ROADMAP.md as an explicit, prerequisite-aware proposal. Treat unconfirmed learner knowledge as unseen and mark genuinely personal decisions for user confirmation rather than inventing them.',
+        guideExists
+            ? 'Use the supplied reusable domain guide; do not duplicate it into the subject workspace.'
+            : 'No reusable domain guide exists. Create DOMAIN_GUIDE.md in the subject workspace. It must cover durable domain-specific authoring judgment, breadth and subfield balance, representations, misconceptions, evidence authorities, and accuracy checks without copying the universal standards.',
+        'Do not create a deck or author cards in this run. Do not commit, push, create a remote repository, or deploy.',
+        isolated ? 'Do not inspect files outside this workspace. Do not modify .agents/, .flashcards/context/, or AGENTS.override.md.' : null,
+        extraInstructions ? `Additional user instructions: ${extraInstructions}` : null
+    ].filter(Boolean).join('\n');
+}
+
+function buildCodexInvocation({
+    workspacePath,
+    prompt,
+    reportOnly = false,
+    model,
+    reasoningEffort = 'high',
+    nonInteractive = false,
+    isolated = true,
+    resultPath
+}) {
+    const resolvedModel = model || configuredModel();
+    const args = [
         '--search',
         '--sandbox', reportOnly ? 'read-only' : 'workspace-write',
-        '--cd', deckPath,
-        '--add-dir', subjectRoot
+        '--cd', workspacePath
     ];
-    if (preflightPath && !preflightPath.startsWith(`${deckPath}${path.sep}`)) {
-        globalArgs.push('--add-dir', path.dirname(preflightPath));
+    if (resolvedModel) args.push('--model', resolvedModel);
+    if (isolated) {
+        args.push(
+            '-c', `model_reasoning_effort=${JSON.stringify(reasoningEffort)}`,
+            '-c', 'personality="none"',
+            '-c', 'features.memories=false',
+            '-c', 'features.multi_agent=false',
+            'exec',
+            '--ephemeral',
+            '--ignore-user-config',
+            '--ignore-rules',
+            '--json'
+        );
+        if (resultPath) args.push('--output-last-message', resultPath);
+        args.push(prompt);
+    } else if (nonInteractive) {
+        args.push('exec', prompt);
+    } else {
+        args.push(prompt);
     }
-    if (model) globalArgs.push('--model', model);
-    const args = nonInteractive
-        ? [...globalArgs, 'exec', prompt]
-        : [...globalArgs, prompt];
-    return { command: 'codex', args, prompt, deckPath, subjectRoot, contextManifest };
+    return { command: 'codex', args, prompt, workspacePath, model: resolvedModel, reasoningEffort, isolated };
+}
+
+export function buildAgentInvocation({
+    mode,
+    deckPath: inputPath,
+    nonInteractive = false,
+    reportOnly = false,
+    model,
+    reasoningEffort = 'high',
+    extraInstructions,
+    preflightPath,
+    buildScope = 'pilot',
+    isolated = true
+}) {
+    const deckPath = resolvePath(inputPath);
+    const contextManifest = buildContextManifest({ deckPath, mode, preflightPath });
+    const missingRequired = contextManifest.files.filter(file => file.required && !file.exists);
+    if (missingRequired.length) {
+        throw new Error(`Missing required authoring context: ${missingRequired.map(file => file.path).join(', ')}`);
+    }
+    const contextFiles = contextManifest.files.filter(file => file.exists);
+    const prompt = buildDeckPrompt({
+        mode,
+        targetPath: deckPath,
+        subject: contextManifest.subject,
+        contextFiles,
+        skillPath: path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'),
+        preflightPath,
+        reportOnly,
+        buildScope,
+        extraInstructions,
+        isolated
+    });
+    const invocation = buildCodexInvocation({
+        workspacePath: deckPath,
+        prompt,
+        reportOnly,
+        model,
+        reasoningEffort,
+        nonInteractive,
+        isolated
+    });
+    return { ...invocation, deckPath, subjectRoot: contextManifest.subjectRoot, contextManifest };
+}
+
+export function buildSubjectAgentInvocation({
+    subjectPath: inputPath,
+    model,
+    reasoningEffort = 'high',
+    extraInstructions,
+    nonInteractive = false,
+    isolated = true
+}) {
+    const subjectPath = resolvePath(inputPath);
+    const contextManifest = buildSubjectContextManifest({ subjectPath });
+    const missingRequired = contextManifest.files.filter(file => file.required && !file.exists);
+    if (missingRequired.length) {
+        throw new Error(`Missing required subject context: ${missingRequired.map(file => file.path).join(', ')}`);
+    }
+    const contextFiles = contextManifest.files.filter(file => file.exists);
+    const prompt = buildSubjectPrompt({
+        subject: contextManifest.subject,
+        targetPath: subjectPath,
+        contextFiles,
+        skillPath: path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'),
+        guideExists: existsSync(contextManifest.guide.path),
+        extraInstructions,
+        isolated
+    });
+    const invocation = buildCodexInvocation({
+        workspacePath: subjectPath,
+        prompt,
+        model,
+        reasoningEffort,
+        nonInteractive,
+        isolated
+    });
+    return { ...invocation, subjectPath, contextManifest };
 }
 
 export function formatInvocation(invocation) {
     return [invocation.command, ...invocation.args].map(shellQuote).join(' ');
+}
+
+function runPreparedInvocation(prepared, invocation, { reportOnly, metadata }) {
+    recordIsolatedInvocation(prepared, { prompt: invocation.prompt, invocation, metadata });
+    const result = spawnSync(invocation.command, invocation.args, { stdio: 'inherit' });
+    if (result.error) throw new Error(`Unable to launch Codex: ${result.error.message}`);
+    if (result.status !== 0) return { status: result.status, runPath: prepared.runPath };
+    const finished = finishIsolatedRun(prepared, { applyChanges: !reportOnly });
+    return { status: 0, ...finished };
+}
+
+export function runSubjectAgent({
+    subjectPath: inputPath,
+    model,
+    reasoningEffort = 'high',
+    extraInstructions,
+    dryRun = false,
+    isolated = true,
+    nonInteractive = false
+}) {
+    const subjectPath = resolvePath(inputPath);
+    const preview = buildSubjectAgentInvocation({
+        subjectPath,
+        model,
+        reasoningEffort,
+        extraInstructions,
+        isolated,
+        nonInteractive
+    });
+    if (dryRun) return { invocation: preview, status: 0, dryRun: true };
+    const version = codexVersion();
+    if (!isolated) {
+        const result = spawnSync(preview.command, preview.args, { stdio: 'inherit' });
+        if (result.error) throw new Error(`Unable to launch Codex: ${result.error.message}`);
+        return { invocation: preview, status: result.status };
+    }
+
+    const prepared = prepareIsolatedRun({
+        sourcePath: subjectPath,
+        contextFiles: preview.contextManifest.files,
+        label: 'subject-create',
+        includeTopLevel: ['AGENTS.md', 'ROADMAP.md', 'SUBJECT_BRIEF.md', 'DOMAIN_GUIDE.md']
+    });
+    try {
+        const prompt = buildSubjectPrompt({
+            subject: preview.contextManifest.subject,
+            targetPath: prepared.workspacePath,
+            contextFiles: prepared.stagedContext,
+            skillPath: path.join(prepared.workspacePath, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'),
+            guideExists: existsSync(preview.contextManifest.guide.path),
+            extraInstructions,
+            isolated: true
+        });
+        const invocation = buildCodexInvocation({
+            workspacePath: prepared.workspacePath,
+            prompt,
+            model,
+            reasoningEffort,
+            isolated: true,
+            resultPath: isolatedResultPath(prepared)
+        });
+        const result = runPreparedInvocation(prepared, invocation, {
+            reportOnly: false,
+            metadata: { operation: 'subject-create', codexVersion: version, model: invocation.model, reasoningEffort }
+        });
+        return { invocation, ...result };
+    } finally {
+        discardIsolatedRun(prepared);
+    }
 }
 
 export function runDeckAgent({
@@ -97,10 +310,12 @@ export function runDeckAgent({
     nonInteractive = false,
     reportOnly = false,
     model,
+    reasoningEffort = 'high',
     extraInstructions,
     dryRun = false,
     allowDirty = false,
-    buildScope = 'pilot'
+    buildScope = 'pilot',
+    isolated = true
 }) {
     const deckPath = resolvePath(inputPath);
     let preflightPath;
@@ -124,23 +339,76 @@ export function runDeckAgent({
         }
     }
 
-    const invocation = buildAgentInvocation({
+    const preview = buildAgentInvocation({
         mode,
         deckPath,
         nonInteractive,
         reportOnly,
         model,
+        reasoningEffort,
         extraInstructions,
         preflightPath,
-        buildScope
+        buildScope,
+        isolated
     });
-    if (dryRun) return { invocation, status: 0, dryRun: true };
+    if (dryRun) return { invocation: preview, status: 0, dryRun: true };
 
-    const available = spawnSync('codex', ['--version'], { encoding: 'utf8' });
-    if (available.error?.code === 'ENOENT') throw new Error('Codex CLI is not installed or not available on PATH.');
-    const result = spawnSync(invocation.command, invocation.args, { stdio: 'inherit' });
-    if (result.error) throw new Error(`Unable to launch Codex: ${result.error.message}`);
-    if (result.status !== 0) return { invocation, status: result.status };
+    const version = codexVersion();
+    let result;
+    if (isolated) {
+        const prepared = prepareIsolatedRun({
+            sourcePath: deckPath,
+            contextFiles: preview.contextManifest.files,
+            label: `${mode}-${buildScope}`
+        });
+        try {
+            const localPreflight = preflightPath
+                ? prepared.stagedContext.find(file => file.source === preflightPath)?.path
+                : undefined;
+            const prompt = buildDeckPrompt({
+                mode,
+                targetPath: prepared.workspacePath,
+                subject: preview.contextManifest.subject,
+                contextFiles: prepared.stagedContext,
+                skillPath: path.join(prepared.workspacePath, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'),
+                preflightPath: localPreflight,
+                reportOnly,
+                buildScope,
+                extraInstructions,
+                isolated: true
+            });
+            const invocation = buildCodexInvocation({
+                workspacePath: prepared.workspacePath,
+                prompt,
+                reportOnly,
+                model,
+                reasoningEffort,
+                isolated: true,
+                resultPath: isolatedResultPath(prepared)
+            });
+            result = runPreparedInvocation(prepared, invocation, {
+                reportOnly,
+                metadata: {
+                    operation: mode,
+                    buildScope,
+                    reportOnly,
+                    codexVersion: version,
+                    model: invocation.model,
+                    reasoningEffort
+                }
+            });
+            result.invocation = invocation;
+        } finally {
+            discardIsolatedRun(prepared);
+        }
+    } else {
+        const launched = spawnSync(preview.command, preview.args, { stdio: 'inherit' });
+        if (launched.error) throw new Error(`Unable to launch Codex: ${launched.error.message}`);
+        result = { invocation: preview, status: launched.status };
+    }
+
+    if (result.status !== 0) return result;
+    if (result.runPath) console.log(`Isolated run record: ${result.runPath}`);
 
     if (!reportOnly) {
         const validation = validateDeck(deckPath, { quiet: true });
@@ -156,7 +424,7 @@ export function runDeckAgent({
             else markPilotBuilt(deckPath);
         }
     }
-    return { invocation, status: 0 };
+    return result;
 }
 
 export function codexDoctor() {
@@ -175,6 +443,7 @@ export function codexDoctor() {
         version: version.stdout?.trim() || '',
         authenticated: !login.error && login.status === 0,
         authStatus: `${login.stdout || ''}${login.stderr || ''}`.trim(),
+        configuredModel: configuredModel() || 'Codex default',
         missingFiles
     };
 }
