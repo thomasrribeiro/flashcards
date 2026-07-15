@@ -11,7 +11,7 @@ import { githubAuth } from './github-auth.js';
 import { startSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
 import { buildTodayQueue, freshCardAvailability, getLocalDate, newCardSessionLimit, newLearningPlan, SCOPE_SEP } from './today-queue.js';
 import { getSettings, saveSettings, getHabitStatus } from './habit-client.js';
-import { clearStudySession, getStudySession, saveStudySession } from './session-client.js';
+import { clearStudySession, getStudySession, saveStudySession, studySessionMatchesActiveScope } from './session-client.js';
 import { renderDashboard } from './dashboard.js';
 import { getReminderPreferences, isIOSDevice, isStandalone, subscribeToPush, unsubscribeFromPush, updateAppBadge } from './push-client.js';
 
@@ -89,6 +89,13 @@ async function init() {
 
         habitSettings = await habitSettingsPromise;
         pausedPrimaryStudySession = await pausedSessionPromise;
+        if (pausedPrimaryStudySession
+            && !studySessionMatchesActiveScope(pausedPrimaryStudySession, habitSettings?.activeDecks)) {
+            // A session built for an older scope must never override the stars
+            // restored on this device (or changed on another signed-in device).
+            pausedPrimaryStudySession = null;
+            clearStudySession().catch(error => console.warn('[Main] Failed to retire stale study session:', error));
+        }
 
         console.log('About to load repositories...');
         await loadRepositories();
@@ -2767,7 +2774,8 @@ function currentPrimarySessionSnapshot() {
     return {
         mode: currentPrimaryStudyMode,
         queue,
-        completedCards: sessionState.reviewedCards + sessionState.currentCardIndex
+        completedCards: sessionState.reviewedCards + sessionState.currentCardIndex,
+        activeDecks: [...(habitSettings?.activeDecks || [])]
     };
 }
 
@@ -2793,6 +2801,12 @@ async function pausePrimaryStudySession() {
 
 async function resumePrimaryStudySession(mode) {
     if (!pausedPrimaryStudySession || pausedPrimaryStudySession.mode !== mode) return false;
+    if (!studySessionMatchesActiveScope(pausedPrimaryStudySession, habitSettings?.activeDecks)) {
+        // Scope changed while this queue was paused. Grades already submitted
+        // remain saved; the next queue is rebuilt from the current stars.
+        discardPausedPrimaryStudySession();
+        return false;
+    }
     const paused = pausedPrimaryStudySession;
     const sessionState = getState();
     if (paused.inMemory && sessionState.currentCardIndex < sessionState.dueCards.length) {
@@ -3073,8 +3087,18 @@ function chapterIsActive(scopes, repo, file) {
 
 async function applyActiveScopes(scopes) {
     const activeDecks = [...scopes];
+    const scopeChanged = !studySessionMatchesActiveScope(
+        { activeDecks: habitSettings?.activeDecks || [] },
+        activeDecks
+    );
     // Paint first. Persistence and content preparation must never block a star.
     habitSettings = { ...(habitSettings || {}), activeDecks };
+    if (scopeChanged && pausedPrimaryStudySession) {
+        // A paused batch is a snapshot of its original scope. Retire it instead
+        // of allowing Resume to surface cards that the user just unstarred (or
+        // omit cards they just starred). Completed reviews are already durable.
+        discardPausedPrimaryStudySession();
+    }
     const persistence = saveSettings({ activeDecks });
     const render = loadRepositories();
     queueDailyPreparation()

@@ -21,13 +21,30 @@ export function normalizePersistedStudySession(session) {
     })).filter(entry => entry.cardHash && entry.repo && entry.filepath);
     if (queue.length === 0) return null;
     const completedCards = Math.max(0, Math.floor(Number(session.completedCards) || 0));
+    const activeDecks = Array.isArray(session.activeDecks)
+        ? [...new Set(session.activeDecks.map(scope => String(scope || '')).filter(Boolean))]
+        : null;
     return {
         mode: session.mode,
         queue,
         completedCards,
         totalCards: completedCards + queue.length,
+        ...(activeDecks !== null && { activeDecks }),
         ...(session.updatedAt && { updatedAt: session.updatedAt })
     };
+}
+
+/**
+ * A resumable queue is valid only for the exact starred scope that created it.
+ * Comparing sets keeps harmless ordering differences from invalidating a session.
+ * Legacy sessions without a scope snapshot are intentionally retired once.
+ */
+export function studySessionMatchesActiveScope(session, activeDecks = []) {
+    if (!session || !Array.isArray(session.activeDecks)) return false;
+    const saved = new Set(session.activeDecks);
+    const current = new Set((activeDecks || []).map(scope => String(scope || '')).filter(Boolean));
+    if (saved.size !== current.size) return false;
+    return [...saved].every(scope => current.has(scope));
 }
 
 function readLocal() {
