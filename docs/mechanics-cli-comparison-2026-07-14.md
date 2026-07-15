@@ -1,5 +1,15 @@
 # Mechanics CLI comparison — revised blind trial, 2026-07-14
 
+> **Correction after learner cold-start review:** The original verdict in this
+> report overweighted transfer problems, concision, and representation counts.
+> It did not simulate a zero-mechanics-knowledge learner reading fronts in
+> order. The revised deck is **not a viable novice curriculum as generated**.
+> Chapter 1 asks about force and energy accounting, velocity and vectors, and a
+> mass–spring oscillator before those concepts are established. The existing
+> mechanics deck remains the substantially better first-learning base. The
+> quantitative inventory below remains useful; qualitative claims favoring the
+> revised deck are superseded by the correction and verdict at the end.
+
 ## Question and method
 
 How does a fresh mechanics deck produced after the representation-planning
@@ -60,7 +70,7 @@ Counts are `basic / cloze / problem / figure`.
 
 | Chapter | Revised CLI | Existing | Card-level conclusion |
 |---|---:|---:|---|
-| 01 Foundations | 9 / 0 / 3 / 2 | 22 / 11 / 1 / 3 | Revised is better centered on systems, models, uncertainty, and checking. Existing retains useful SI, significant-figure, Fermi-estimation, and scientific-method breadth. |
+| 01 Foundations | 9 / 0 / 3 / 2 | 22 / 11 / 1 / 3 | Existing is decisively better for novice entry. Revised uses force, energy, velocity, vectors, oscillators, and frequency before teaching them; its systems/model emphasis belongs only after an explicit bridge. |
 | 02 Vectors | 10 / 0 / 3 / 3 | 20 / 15 / 1 / 4 | Revised has the better compact progression and application density. Existing adds determinant form, unit/polar vectors, and more exact factual retrieval. |
 | 03 Kinematics 1D | 11 / 0 / 4 / 3 | 22 / 16 / 1 / 4 | Revised gives substantially better graph, area, constant-acceleration, and free-fall practice. Existing adds more equation-selection cases and formula retrieval. |
 | 04 Kinematics 2D | 10 / 0 / 4 / 3 | 16 / 16 / 1 / 4 | Revised is cleaner and better practiced. Existing importantly adds non-uniform circular acceleration, range conditions, and more method discrimination. |
@@ -147,18 +157,40 @@ one extra causal step. The revised deck assumes that its concise answer plus
 external problem practice will be enough. That is efficient for review, but a
 subset of novices would need a prerequisite bridge or slightly fuller repair.
 
-## Honest verdict
+## Cold-start failure found during actual study
 
-The **revised CLI deck is now the better newly authored mechanics curriculum
-card-for-card**. It has a coherent learner model, substantially better transfer
-practice, far better representation planning than the first trial, concise
-answers, and clean technical implementation. The revised context fixed the
-important problem and figure failures that motivated this second experiment.
+The qualification above was too mild. The revised deck's own blueprint treats
+reading an answer after the first failed attempt as its initial-learning path.
+That contradicts the authoring playbook: an uninformed failure is not productive
+retrieval and the revealed answer is corrective feedback, not prior instruction.
 
-The **existing deck remains the correct production base**. It contains valuable
-coverage the revised deck omits, ten more established figures, stable card
-identities, and real review history. Replacing it wholesale would discard those
-assets and turn a strong independent audit into a destructive migration.
+The first chapter contains several major prerequisite violations:
+
+- system-boundary accounting assumes forces, energy, interactions, strings,
+  and internal versus external interactions;
+- frame selection assumes position, velocity, components, and physical vectors;
+- post-calculation checking invokes limiting cases and conservation;
+- the dimensional-analysis problem assumes period, frequency, spring constant,
+  and a mass–spring oscillator from the much later oscillations chapter.
+
+These are not cosmetic wording defects. They show that the declared
+prerequisite graph was not applied to individual fronts. Parser, identity,
+KaTeX, asset, card-count, and figure-count validation cannot detect that failure.
+Future generation therefore requires a front-by-front concept-dependency ledger
+and an explicitly approved one-chapter pilot before scaling.
+
+## Corrected verdict
+
+The **existing deck is both the correct production base and the better novice
+curriculum**. It is not flawless—some definitional cards still use failure as a
+first encounter, and it needs a targeted prerequisite audit—but it begins with
+substantially more accessible ideas and has deeper explanatory scaffolding.
+
+The **revised CLI deck is a useful failed experiment, not a replacement or merge
+source by default**. Its figures and some later transfer problems may contain
+valuable isolated designs, but each must independently pass a dependency audit
+before reuse. Its clean technical implementation and polished blueprint did not
+prevent a fundamental pedagogical failure.
 
 The appropriate conclusion is to merge designs, not repositories:
 
@@ -174,10 +206,12 @@ The appropriate conclusion is to merge designs, not repositories:
    slow, ambiguous, or repeatedly failed after prerequisite repair;
 7. validate identity changes before every production merge.
 
-This approach should reduce avoidable review burden while increasing actual
-problem-solving practice. The target should not be 175, 441, or any other card
-quota; it should be the smallest set that preserves the valuable existing
-coverage and supplies the missing retrieval and transfer progression.
+No material should be merged merely because the revised deck is shorter or has
+more problems per card. First repair the generation workflow, audit the existing
+deck from the learner's true prerequisites, and pilot improvements one chapter
+at a time. The target should not be 175, 441, or any other card quota; it should
+be a sequence in which every attempted retrieval is supported by established
+knowledge.
 
 ## Reproducibility
 

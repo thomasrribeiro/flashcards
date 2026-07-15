@@ -36,8 +36,13 @@ Severity:
   usually a phrase; explanations are usually no more than three short sentences.
   Include only what helps grade or repair the likely error.
 - **U7 — Prerequisite-ready.** Do not make failure the learner's only
-  introduction to an unexplained term, representation, or procedure. Establish
-  a prerequisite bridge or initial explanation before testing an application.
+  introduction to an unexplained term, representation, or procedure. Every
+  domain-specific word, symbol, convention, representation, and method required
+  by a front must be either (a) explicitly listed as mastered inbound knowledge
+  or (b) established by an earlier explanation or worked example in the learning
+  path. An answer appearing after an uninformed guess does not satisfy this
+  rule. Later-chapter concepts may not be borrowed to make an earlier exercise
+  look realistic.
 - **U8 — No answer leak.** The front, filename, alt text, labels, neighboring
   wording, and units do not reveal the target unless that information is a
   deliberate cue.
@@ -121,9 +126,13 @@ Severity:
 
 - **D1 — Learning contract.** The roadmap and deck docs state the learner,
   assumed prerequisites, desired durable capabilities, depth, and exclusions.
+  Unconfirmed domain knowledge defaults to **not mastered**; broad labels such
+  as “introductory,” “college,” or “calculus-aware” are not prerequisite lists.
 - **D2 — Prerequisite graph.** Chapters and applications follow explicit
   prerequisite edges. A failed card should expose a retrieval or reasoning gap,
-  not missing instruction.
+  not missing instruction. Each chapter records its allowed inbound knowledge
+  and a concept ledger mapping every new term or representation to its first
+  explanation, first retrieval, and later application.
 - **D3 — Competency coverage.** Coverage follows capabilities and high-value
   retrieval targets, not source page count, arbitrary cards-per-chapter quotas,
   or a requirement to convert every worked example and exercise.
@@ -136,6 +145,12 @@ Severity:
 - **D6 — Feedback loop.** Audits use study evidence when available—repeated
   `Again` ratings, leeches, slow responses, ambiguity reports, and unused cards—
   while treating telemetry as a diagnostic signal rather than proof of cause.
+- **D7 — Cold-start gate.** Before a new deck or chapter is accepted, simulate
+  a first-time learner reading every card front in order. Record every required
+  concept and either its declared inbound source or its earlier establishment.
+  Any unexplained dependency is a major defect. A full-deck build must not begin
+  until the first authored chapter passes this gate and the learner or maintainer
+  explicitly approves the pilot.
 
 ## File and identity rules
 

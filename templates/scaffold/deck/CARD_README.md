@@ -7,14 +7,31 @@ here; link to a justified exception when one is necessary.
 ## Learner model
 
 - Level: {{LEVEL}}
-- Assumed prerequisites: TODO
+- Confirmed mathematical/tool prerequisites: TODO
+- Confirmed subject prerequisites: none unless explicitly listed
 - Capabilities this deck should produce: TODO
 - Important exclusions: TODO
+
+Unconfirmed subject knowledge is not mastered. A target level describes the
+destination, not permission to assume its vocabulary.
 
 ## Curriculum and prerequisite graph
 
 Define the ordered chapter map and the prerequisite edges between chapters.
 Establish terms and representations before asking the learner to apply them.
+
+## Concept-dependency ledger
+
+Complete the pilot chapter before authoring later chapters. Add one row for
+every technical term, symbol, convention, figure grammar, or procedure required
+to understand a card front.
+
+| Concept or representation | Front(s) requiring it | Confirmed inbound source or first explanation | First supported retrieval | Later application | Status |
+|---|---|---|---|---|---|
+| TODO | TODO | TODO | TODO | TODO | planned |
+
+Record rejected examples that depended on future chapters. The answer revealed
+after an uninformed failure is not a first explanation.
 
 ## Retrieval portfolio
 
@@ -42,6 +59,9 @@ before/after states, and spatial constructions serve different retrieval roles.
 Describe how a learner encounters explanations and prerequisite bridges before
 applications test them. A failed card should reveal a retrieval or reasoning
 gap, not missing instruction.
+
+Before full-deck authoring, complete a front-by-front cold-start simulation for
+the pilot and save it as `.flashcards/audits/pilot-cold-start.md`.
 
 ## Figure policy
 

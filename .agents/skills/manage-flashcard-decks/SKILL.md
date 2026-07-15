@@ -79,6 +79,12 @@ Ensure a learner encounters and understands a concept before an application
 card assumes it. Do not duplicate prerequisite decks merely to make cards feel
 self-contained.
 
+Unconfirmed domain knowledge defaults to not mastered. Before authoring, create
+a concept-dependency ledger listing allowed inbound knowledge and, for every new
+term, symbol, representation, or procedure, its first explanation, supported
+retrieval, and later application. Do not count revealing an answer after an
+uninformed failure as explanation.
+
 Before authoring, record a chapter design ledger in `CARD_README.md` or an
 equivalent deck-local plan. For each chapter, map retrieval targets to card
 forms, the analyzed-to-independent problem progression, authentic
@@ -87,6 +93,12 @@ included or intentionally omitted with a short reason. This is not a numeric
 quota: zero clozes or figures can be correct, and a visually rich chapter can
 require several figures. Reconcile the planned and actual inventories before
 handoff.
+
+For a new deck, author one pilot chapter before scaling. Run the cold-start
+workflow in [references/cold-start-workflow.md](references/cold-start-workflow.md),
+record its report, and stop for explicit learner or maintainer approval before
+building later chapters. A request that explicitly names a previously approved
+pilot or an established existing deck may proceed chapter by chapter.
 
 ## Author cards safely
 
@@ -141,6 +153,10 @@ figures. Before final handoff:
 5. review every diff for accidental ID or scope changes;
 6. summarize new, modified, removed, and intentionally omitted material;
 7. distinguish local edits, commits, pushes, and deployment status.
+
+For new builds and sequencing audits, also verify that the required cold-start
+report maps every front dependency to confirmed inbound knowledge or an earlier
+establishment point.
 
 Never commit, push, create a remote repository, or deploy unless the user or
 the invoking prompt explicitly authorizes it.

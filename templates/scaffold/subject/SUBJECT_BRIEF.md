@@ -7,7 +7,8 @@ domain-wide authoring guidance belongs in
 ## Learner and destination
 
 - Intended learner: TODO
-- Current prerequisite mastery: TODO
+- Current mathematical/tool mastery: TODO
+- Current domain mastery: none unless explicitly confirmed here
 - Target depth and use horizon: TODO
 - Durable capabilities: TODO
 - Deliberate exclusions: TODO
@@ -18,6 +19,9 @@ domain-wide authoring guidance belongs in
 - Simplifications that must be labeled: TODO
 - Claims requiring current verification: TODO
 - Accessibility or device constraints: TODO
+
+Do not infer domain knowledge from the target level. Anything not explicitly
+confirmed above is treated as unseen during cold-start review.
 
 ## Evidence authorities
 

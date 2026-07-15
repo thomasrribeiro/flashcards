@@ -33,6 +33,19 @@ Before an application, establish the quantity, vector/scalar status, units,
 frame, sign convention, and relevant representation. A learner should not fail
 because a diagram convention or mathematical tool was never introduced.
 
+For a zero-physics-knowledge learner, do not introduce foundations through
+force, energy, momentum, velocity, vectors, oscillators, fields, or other later
+mechanics ideas. Those may be elegant examples to an expert but are hidden
+prerequisites to a novice. Begin with observable comparisons, measurement,
+units, simple ratios, and explicitly defined everyday situations. Record every
+technical quantity and diagram convention in the chapter concept ledger before
+using it on a front.
+
+Run the cold-start audit in chapter order. A concept established in chapter
+`N` may support chapter `N+1`; a planned outcome in a later chapter does not
+count as prior knowledge. When an early chapter genuinely needs a later idea,
+either add a minimal non-circular bridge or choose a different example.
+
 ## Model-first progression
 
 For a new physical model, prefer:

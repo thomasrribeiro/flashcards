@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { FLASHCARDS_ROOT, resolvePath, shellQuote } from './paths.js';
 import { buildContextManifest } from './context.js';
+import { markFullBuilt, markPilotBuilt, requireFullBuildApproval } from './pilot.js';
 import { stabilizeDeck, validateDeck } from './validation.js';
 
 function auditTimestamp() {
@@ -32,7 +33,8 @@ export function buildAgentInvocation({
     reportOnly = false,
     model,
     extraInstructions,
-    preflightPath
+    preflightPath,
+    buildScope = 'pilot'
 }) {
     const deckPath = resolvePath(inputPath);
     const contextManifest = buildContextManifest({ deckPath, mode, preflightPath });
@@ -41,8 +43,10 @@ export function buildAgentInvocation({
     if (missingRequired.length) {
         throw new Error(`Missing required authoring context: ${missingRequired.map(file => file.path).join(', ')}`);
     }
-    const modeInstruction = mode === 'build'
-        ? 'Research, design, and build this deck from its current state.'
+    const modeInstruction = mode === 'build' && buildScope === 'pilot'
+        ? 'Research and design the curriculum, but AUTHOR ONLY THE FIRST ORDERED CHAPTER as a novice-first pilot. Do not author, delete, or modify cards in later chapters. Complete the pilot dependency ledger and write .flashcards/audits/pilot-cold-start.md with a front-by-front audit. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains, then stop for human approval.'
+        : mode === 'build'
+            ? 'Build the approved curriculum chapter by chapter. Repeat the dependency scan across every chapter boundary and write .flashcards/audits/full-cold-start.md. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains.'
         : reportOnly
             ? 'Audit the entire deck and write no files. Return a prioritized, evidence-backed report.'
             : 'Audit and improve the entire deck, working chapter by chapter while preserving review history.';
@@ -57,6 +61,8 @@ export function buildAgentInvocation({
         ...contextManifest.files.filter(file => file.exists).map((file, index) => `${index + 1}. [${file.role}] ${file.path}`),
         modeInstruction,
         'Before large-scale authoring, complete a chapter design ledger covering retrieval targets, card-form choices, problem progression, authentic representations, and included or intentionally omitted figure opportunities.',
+        'Treat all unconfirmed domain knowledge as unseen. Build a concept-dependency ledger and perform the cold-start scan without reading each answer until that front\'s dependencies are recorded.',
+        'Never use terminology, symbols, representations, or examples from a later chapter to scaffold an earlier chapter unless a minimal explicit bridge establishes them first.',
         'Do not optimize for a type distribution or figure count. Zero clozes may be correct; visually rich chapters may need several figures. Do not treat one figure per chapter as a target or cap.',
         'Before handoff, reconcile and report planned versus actual card-type, problem, and figure inventories by chapter, investigating unexplained omissions.',
         'Do not load deprecated compatibility guides or unrelated subject encyclopedias unless the user explicitly asks.',
@@ -93,10 +99,13 @@ export function runDeckAgent({
     model,
     extraInstructions,
     dryRun = false,
-    allowDirty = false
+    allowDirty = false,
+    buildScope = 'pilot'
 }) {
     const deckPath = resolvePath(inputPath);
     let preflightPath;
+
+    if (mode === 'build' && buildScope === 'full') requireFullBuildApproval(deckPath);
 
     if (!dryRun && !reportOnly) {
         if (mode === 'audit') requireSafeAuditWorktree(deckPath, allowDirty);
@@ -122,7 +131,8 @@ export function runDeckAgent({
         reportOnly,
         model,
         extraInstructions,
-        preflightPath
+        preflightPath,
+        buildScope
     });
     if (dryRun) return { invocation, status: 0, dryRun: true };
 
@@ -141,6 +151,10 @@ export function runDeckAgent({
         if (identities.status !== 0) {
             throw new Error('Codex finished, but one or more cards are missing stable IDs.');
         }
+        if (mode === 'build') {
+            if (buildScope === 'full') markFullBuilt(deckPath);
+            else markPilotBuilt(deckPath);
+        }
     }
     return { invocation, status: 0 };
 }
@@ -150,6 +164,7 @@ export function codexDoctor() {
     const login = spawnSync('codex', ['login', 'status'], { encoding: 'utf8' });
     const requiredFiles = [
         path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'),
+        path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'references', 'cold-start-workflow.md'),
         path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'CARD_STANDARD.md'),
         path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'AUTHORING_PLAYBOOK.md'),
         path.join(FLASHCARDS_ROOT, 'scripts', 'validate-notes.js')

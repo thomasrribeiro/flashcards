@@ -4,6 +4,7 @@ import { Command, Option } from 'commander';
 import { addChapter, createDeck, ensureSubject } from './lib/scaffold.js';
 import { codexDoctor, formatInvocation, runDeckAgent } from './lib/codex.js';
 import { buildContextManifest, formatContextManifest } from './lib/context.js';
+import { approvePilot } from './lib/pilot.js';
 import { resolveNotesRoot, resolvePath } from './lib/paths.js';
 import { stabilizeDeck, validateDeck } from './lib/validation.js';
 
@@ -24,7 +25,7 @@ function handleError(error) {
     process.exitCode = 1;
 }
 
-function addAgentOptions(command, { audit = false } = {}) {
+function addAgentOptions(command, { audit = false, build = false } = {}) {
     command
         .option('--non-interactive', 'Run with codex exec instead of opening an interactive session')
         .option('--model <model>', 'Override the model configured in Codex')
@@ -35,6 +36,7 @@ function addAgentOptions(command, { audit = false } = {}) {
             .option('--report-only', 'Inspect the deck without modifying it')
             .option('--allow-dirty', 'Audit despite pre-existing uncommitted deck changes');
     }
+    if (build) command.option('--full', 'Build every chapter after explicit pilot approval');
     return command;
 }
 
@@ -47,7 +49,8 @@ function executeAgent(mode, deckPath, options) {
         model: options.model,
         extraInstructions: options.instructions,
         dryRun: options.dryRun,
-        allowDirty: options.allowDirty
+        allowDirty: options.allowDirty,
+        buildScope: options.full ? 'full' : 'pilot'
     });
     if (result.dryRun) {
         console.log(formatInvocation(result.invocation));
@@ -60,7 +63,7 @@ function executeAgent(mode, deckPath, options) {
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('2.1.0')
+    .version('2.2.0')
     .showSuggestionAfterError();
 
 program
@@ -141,6 +144,20 @@ deck
     });
 
 deck
+    .command('approve-pilot <deck-path>')
+    .description('Record explicit approval of a validated novice-first pilot chapter')
+    .action(deckPath => {
+        try {
+            const result = approvePilot(deckPath);
+            console.log(`Approved pilot: ${result.chapter}`);
+            console.log(`Cold-start audit: ${result.audit}`);
+            console.log(`Next: flashcards deck build ${resolvePath(deckPath)} --full`);
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+deck
     .command('context <deck-path>')
     .description('Show the exact ordered Markdown context used by a build or audit')
     .addOption(new Option('--mode <mode>', 'Agent operation').choices(['build', 'audit']).default('build'))
@@ -185,7 +202,7 @@ deck
 
 addAgentOptions(deck
     .command('build <deck-path>')
-    .description('Launch Codex to research, design, and build a deck'))
+    .description('Build one pilot chapter by default; use --full after approval'), { build: true })
     .action((deckPath, options) => {
         try {
             executeAgent('build', resolvePath(deckPath), options);

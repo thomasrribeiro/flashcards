@@ -6,7 +6,9 @@
 
 - Subject: `{{SUBJECT}}`
 - Learner level: `{{LEVEL}}`
-- Prerequisite decks: TODO
+- Confirmed mathematical/tool prerequisites: TODO
+- Confirmed subject prerequisites: none unless explicitly listed
+- Prerequisite decks: none unless explicitly listed
 - What mastery enables: TODO
 - Deliberate exclusions: TODO
 
@@ -15,6 +17,8 @@
 | File | Topic | Prerequisites | Learning outcomes |
 |---|---|---|---|
 | TODO | TODO | TODO | TODO |
+
+Planned outcomes in later rows are not prerequisites for earlier rows.
 
 ## Source register
 

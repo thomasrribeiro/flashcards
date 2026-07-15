@@ -61,6 +61,12 @@ Do not assume that seeing an answer after failure is always adequate teaching.
 Before an application card, ensure the learner has encountered an explanation,
 example, or prerequisite bridge that makes successful retrieval possible.
 
+Unless the learner contract names and confirms a domain prerequisite, assume it
+is not known. “Introductory,” “undergraduate,” “calculus-aware,” and similar
+level labels describe destination or mathematical maturity; they do not grant
+permission to assume subject vocabulary. Common everyday language may be used,
+but technical meanings still need establishment.
+
 For a genuinely new concept:
 
 1. orient: why the concept exists and what problem it solves;
@@ -72,6 +78,38 @@ For a genuinely new concept:
 
 The first cards should be learnable, not trick questions. Desirable difficulty
 means effortful successful retrieval, not ambiguity or omitted instruction.
+
+When the application has no separate lesson surface, an initial bridge can put
+the minimum explanatory context on the front and ask the learner to infer,
+identify, or use one bounded relationship. It must not reveal the answer, but it
+must make a successful attempt possible. A later card may then retrieve the
+term or relationship with less support. Do not label “read the answer after the
+first failure” as an initial-learning path.
+
+### Build a concept-dependency ledger
+
+Before authoring a chapter, record:
+
+- allowed inbound concepts that are actually mastered, with their source;
+- each new term, symbol, convention, figure grammar, or procedure;
+- the first explanation or analyzed example that establishes it;
+- the first supported retrieval;
+- later faded or independent applications;
+- tempting examples rejected because they depend on future chapters.
+
+Then scan every card front in order. For each domain-specific dependency, point
+to the ledger row or an earlier card. Inspect alt text, axes, symbols, givens,
+and problem context as well as prose. This is a semantic cold-start audit; a
+parser or spellchecker cannot perform it.
+
+### Pilot before scaling
+
+For a new deck, design the curriculum but author only the first prerequisite
+chapter initially. Validate it, complete the cold-start audit, inspect its
+figures, and let the learner or maintainer review the actual experience before
+authoring later chapters. Treat pilot approval as evidence that the learning
+contract and sequencing are plausible—not as proof that later chapters are
+correct. If the pilot fails, repair the contract and templates before scaling.
 
 ## Choose retrieval targets, not facts to transcribe
 

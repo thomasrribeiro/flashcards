@@ -3,6 +3,7 @@ subject = "{{SUBJECT}}"
 deck = "{{DECK}}"
 level = "{{LEVEL}}"
 status = "scaffolded"
+pilot_chapter = 1
 created = "{{DATE}}"
 
 [standards]

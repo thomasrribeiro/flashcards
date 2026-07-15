@@ -84,6 +84,7 @@ export function buildContextManifest({ deckPath: inputPath, mode = 'build', pref
     add(path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'), 'agent workflow', { required: true });
     add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'CARD_STANDARD.md'), 'normative card standard', { required: true });
     add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'AUTHORING_PLAYBOOK.md'), 'universal authoring playbook', { required: true });
+    add(path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'references', 'cold-start-workflow.md'), 'cold-start and pilot workflow', { required: true });
     add(subjectGuide.path, subjectGuide.overridden ? 'deck-selected domain guide' : `${subject} domain guide`);
     add(path.join(collectionRoot, 'AGENTS.md'), 'collection routing instructions');
     add(path.join(subjectRoot, 'AGENTS.md'), 'subject routing instructions');

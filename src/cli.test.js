@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { addChapter, createDeck, ensureSubject } from '../bin/lib/scaffold.js';
 import { buildAgentInvocation, formatInvocation, runDeckAgent } from '../bin/lib/codex.js';
 import { buildContextManifest, formatContextManifest } from '../bin/lib/context.js';
+import { approvePilot, markPilotBuilt, readDeckStatus, requireFullBuildApproval } from '../bin/lib/pilot.js';
 import { requireKebabSlug } from '../bin/lib/paths.js';
 import { stabilizeDeck, validateDeck } from '../bin/lib/validation.js';
 
@@ -43,6 +44,8 @@ describe('flashcards CLI scaffolding', () => {
         expect(await readFile(path.join(result.deckPath, 'deck.toml'), 'utf8')).toContain('subject = "earth-science"');
         expect(await readFile(path.join(result.deckPath, 'AGENTS.md'), 'utf8')).toContain('CARD_STANDARD.md');
         expect(await readFile(path.join(result.deckPath, 'CARD_README.md'), 'utf8')).toContain('Chapter design ledger');
+        expect(await readFile(path.join(result.deckPath, 'CARD_README.md'), 'utf8')).toContain('Concept-dependency ledger');
+        expect(await readFile(path.join(result.deckPath, 'README.md'), 'utf8')).toContain('Confirmed subject prerequisites: none');
         expect(await stat(path.join(subject.subjectPath, 'SUBJECT_BRIEF.md'))).toBeTruthy();
         expect(await stat(path.join(result.deckPath, 'figures', '01_foundations'))).toBeTruthy();
         expect(await stat(path.join(result.deckPath, 'flashcards', '02_plate_boundaries.md'))).toBeTruthy();
@@ -163,6 +166,52 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(formatInvocation(invocation)).toContain('codex');
     });
 
+    it('defaults builds to one cold-start-audited pilot chapter', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'biology',
+            deck: 'genetics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations', 'inheritance']
+        });
+        const invocation = buildAgentInvocation({ mode: 'build', deckPath });
+        expect(invocation.prompt).toContain('AUTHOR ONLY THE FIRST ORDERED CHAPTER');
+        expect(invocation.prompt).toContain('.flashcards/audits/pilot-cold-start.md');
+        expect(invocation.prompt).toContain('all unconfirmed domain knowledge as unseen');
+        expect(invocation.prompt).toContain('later chapter');
+    });
+
+    it('requires a passing pilot artifact and explicit approval before a full build', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'biology',
+            deck: 'genetics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations']
+        });
+        expect(() => requireFullBuildApproval(deckPath)).toThrow(/approved pilot/);
+
+        const chapter = path.join(deckPath, 'flashcards', '01_foundations.md');
+        await writeFile(chapter, '+++\norder = 1\nsubject = "biology"\ntags = ["genetics"]\n+++\n\n<!-- card-id: genetics-foundation -->\nQ: Supported question?\nA: Supported answer.\n');
+        const auditPath = path.join(deckPath, '.flashcards', 'audits', 'pilot-cold-start.md');
+        await writeFile(auditPath, '# Pilot cold-start audit\n\ncold_start_status: pass\n');
+        expect(() => markPilotBuilt(deckPath)).toThrow(/unresolved_dependencies: 0/);
+        await writeFile(
+            auditPath,
+            '# Pilot cold-start audit\n\ncold_start_status: pass\nunresolved_dependencies: 0\n'
+        );
+        expect(markPilotBuilt(deckPath).stableCards).toBe(1);
+        expect(readDeckStatus(deckPath)).toBe('pilot-built');
+        approvePilot(deckPath);
+        expect(readDeckStatus(deckPath)).toBe('pilot-approved');
+        expect(() => requireFullBuildApproval(deckPath)).not.toThrow();
+
+        const full = runDeckAgent({ mode: 'build', deckPath, buildScope: 'full', dryRun: true });
+        expect(full.invocation.prompt).toContain('full-cold-start.md');
+    });
+
     it('reports the exact ordered context without deprecated compatibility guides', async () => {
         const notesRoot = await temporaryRoot();
         const { deckPath } = await createDeck({
@@ -176,6 +225,7 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(paths.some(file => file.endsWith('CARD_STANDARD.md'))).toBe(true);
         expect(paths.some(file => file.endsWith('AUTHORING_PLAYBOOK.md'))).toBe(true);
         expect(paths.some(file => file.endsWith('audit-workflow.md'))).toBe(true);
+        expect(paths.some(file => file.endsWith('cold-start-workflow.md'))).toBe(true);
         expect(paths.some(file => file.endsWith('general.md'))).toBe(false);
         expect(paths.some(file => file.endsWith('new-subject.md'))).toBe(false);
         expect(manifest.summary.missingRequired).toBe(0);

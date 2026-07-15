@@ -4,9 +4,10 @@ Read and follow, in order:
 
 1. `{{FLASHCARDS_ROOT}}/templates/guides/CARD_STANDARD.md`
 2. `{{FLASHCARDS_ROOT}}/templates/guides/AUTHORING_PLAYBOOK.md`
-3. `{{FLASHCARDS_ROOT}}/templates/guides/{{SUBJECT}}.md` when it exists
-4. `../SUBJECT_BRIEF.md` and `../ROADMAP.md`
-5. This repository's `deck.toml`, `README.md`, and `CARD_README.md`
+3. `{{FLASHCARDS_ROOT}}/.agents/skills/manage-flashcard-decks/references/cold-start-workflow.md`
+4. `{{FLASHCARDS_ROOT}}/templates/guides/{{SUBJECT}}.md` when it exists
+5. `../SUBJECT_BRIEF.md` and `../ROADMAP.md`
+6. This repository's `deck.toml`, `README.md`, and `CARD_README.md`
 
 Use the flashcards application's parser, stable-ID implementation, and
 validator as executable truth. Establish prerequisites before applications.
@@ -20,6 +21,11 @@ Use original SVG figures where spatial, temporal, structural, or graphical
 reasoning is itself part of the target.
 Inventory figure opportunities by retrieval role before authoring; do not use
 one figure per chapter as either a target or a cap.
+
+For a new deck, author only the first chapter until its concept-dependency
+ledger and `.flashcards/audits/pilot-cold-start.md` pass review and the pilot is
+explicitly approved. Never use a later chapter's vocabulary to scaffold an
+earlier one.
 
 Run `flashcards deck validate .` before handoff. Do not commit, push, create a
 remote repository, or deploy unless the user asks.

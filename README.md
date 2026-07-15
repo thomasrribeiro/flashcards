@@ -65,6 +65,23 @@ flashcards deck create biology genetics \
 flashcards deck build ~/notes/biology/genetics
 ```
 
+`deck build` intentionally authors only the first ordered chapter. The agent
+may design the full roadmap, but it must complete a concept-dependency ledger
+and `.flashcards/audits/pilot-cold-start.md` before stopping for review. This
+prevents a syntactically valid full deck from scaling an incorrect learner
+model.
+
+After studying or inspecting the pilot:
+
+```bash
+flashcards deck approve-pilot ~/notes/biology/genetics
+flashcards deck build ~/notes/biology/genetics --full
+```
+
+The full build is rejected unless `deck.toml` records explicit pilot approval.
+It must produce `.flashcards/audits/full-cold-start.md` before the CLI marks the
+deck built.
+
 Create a scaffold and immediately open Codex:
 
 ```bash
@@ -125,6 +142,19 @@ benefits from visible judgment and feedback.
 flashcards deck build ~/notes/biology/genetics
 flashcards deck audit ~/notes/physics/mechanics
 ```
+
+New builds follow a novice-first pilot lifecycle:
+
+1. unconfirmed domain knowledge is treated as unseen;
+2. the agent authors only the first chapter;
+3. every front dependency is mapped to confirmed inbound knowledge or an
+   earlier establishment point;
+4. `deck approve-pilot` records the maintainer's explicit decision;
+5. only then can `deck build --full` author later chapters.
+
+Target-level labels such as “introductory-college” or “calculus-aware” do not
+silently grant subject prerequisites. The pilot audit includes words, symbols,
+figures, alt text, diagram conventions, and problem contexts—not only formulas.
 
 Inspect the exact ordered Markdown context before launching an agent:
 
