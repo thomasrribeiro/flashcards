@@ -1,108 +1,200 @@
-# Mechanics CLI comparison — 2026-07-14
+# Mechanics CLI comparison — revised blind trial, 2026-07-14
 
-## Question
+## Question and method
 
-How does a fresh mechanics deck produced by the current `flashcards` CLI compare
-with the working deck at `/Users/thomasribeiro/notes/physics/mechanics`?
+How does a fresh mechanics deck produced after the representation-planning
+changes compare with the working deck at
+`/Users/thomasribeiro/notes/physics/mechanics`?
 
-The CLI build was deliberately blind: its agent was told not to inspect the
-existing deck. It used the standard context manifest, the physics guide, and a
-12-chapter introductory-calculus-aware specification. The comparison used the
-current local working tree of the existing deck, including its uncommitted card
-and figure improvements.
+The revised CLI build was deliberately blind. Its authoring agent was forbidden
+from inspecting either the existing mechanics deck or the first CLI trial. It
+received the standard context manifest, the physics guide, and the same
+12-chapter introductory-calculus-aware learner specification.
 
-## Results
+This assessment independently read every schedulable card in both decks:
 
-| Measure | Fresh CLI deck | Existing mechanics deck |
+- all 175 cards in the revised blind build;
+- all 441 cards in the current existing mechanics working tree;
+- all card answers and problem solutions, not only titles or aggregate counts;
+- each chapter's representation and figure inventory;
+- both validation reports and the revised build's phone-width visual QA record.
+
+The existing deck was assessed as found, including its uncommitted card and
+figure improvements. It was not modified by this experiment. Source-provenance
+compliance is outside this comparison; the verdict below concerns curriculum,
+retrieval design, correctness, representations, and implementation quality.
+
+## Aggregate results
+
+| Measure | Revised blind CLI deck | Existing mechanics deck |
 |---|---:|---:|
-| Schedulable cards | 229 | 441 |
-| Basic cards | 206 | 263 |
+| Schedulable cards | 175 | 441 |
+| Basic cards | 125 | 263 |
 | Cloze cards | 0 | 165 |
-| Progressive problems | 23 | 13 |
-| Original figure assets | 9 | 46 |
-| Median question length | 12 words | 15 words |
-| Median non-cloze answer length | 20 words | 28 words |
-| 90th-percentile answer length | 32 words | 47 words |
-| Answers over 60 words | 3 | 16 |
-| Parser/KaTeX/image/identity errors | 0 | 0 |
+| Progressive problems | 50 | 13 |
+| Original figure assets | 36 | 46 |
+| Figure references | 36 | 46 |
+| Median non-cloze front length | 18 words | 12 words |
+| 90th-percentile non-cloze front length | 35 words | 22 words |
+| Median non-cloze back length | 31 words | 32 words |
+| 90th-percentile non-cloze back length | 41 words | 62 words |
+| Non-cloze backs over 60 words | 0 | 30 |
+| Duplicate normalized fronts | 0 | 0 |
+| Parser/KaTeX/image/identity/frontmatter errors | 0 | 0 |
 | Cloze lint findings | 0 | 47 |
 
-The existing deck's 47 findings are all C4 warnings for cloze deletions placed
-inside math delimiters. They can yield confusing or spurious retrieval prompts
-and should be repaired, but they do not imply that all 165 cloze cards are bad.
+The longer revised fronts are not generally verbosity: 50 of its 175 cards are
+problems whose prompts include a situation and target. Its answers are tighter,
+with no answer or solution over 60 words. The existing deck's long tail comes
+from detailed explanations and its much longer worked solutions.
 
-## Where the fresh CLI deck is better
+The first blind CLI trial produced 229 cards, 23 problems, and only 9 figures.
+After the planning changes, the new trial produced 50 problems and 36 figures
+without a quota. The authoring ledger identified distinct retrieval roles before
+card creation and reconciled all planned versus actual representations after it.
+This resolves the earlier underproduction of both transfer practice and figures.
 
-- It has a clearer capability model: system and frame selection, model limits,
-  representation translation, qualitative prediction, method selection, and
-  independent checks recur throughout the chapters.
-- It achieves more application with less review burden. Despite having roughly
-  half as many cards, it contains 23 worked or faded problems rather than 13.
-- Its prompts and answers are more compact and usually target one gradable
-  decision. It avoids formula-only clozes and unnecessary fragmentation.
-- The synthesis chapter is particularly strong. It discriminates force,
-  energy, momentum, angular momentum, orbit, and oscillator methods through
-  mixed situations rather than chapter labels.
-- Its source register is materially better. It records what each authority was
-  used for, reuse terms, access dates, and the decision not to ingest a source
-  whose current terms prohibit generative-AI ingestion.
-- It passes every current validation gate without warnings.
+## Chapter-by-chapter inventory
 
-## Where the existing deck is better
+Counts are `basic / cloze / problem / figure`.
 
-- Its visual curriculum is substantially richer: 46 figures distributed across
-  all chapters, compared with 9 figures in the fresh deck.
-- It has broader introductory coverage. Examples missing or thinner in the
-  fresh deck include significant-figure operations, constant-angular-
-  acceleration equations, rotational static equilibrium, the physical
-  pendulum, and quantitative one-dimensional elastic-collision cases.
-- Several existing chapters provide more intermediate steps and representations
-  for a true first encounter. The fresh deck can be too compressed for a learner
-  who has not also read the non-schedulable chapter orientation or completed
-  external problems.
-- It already has stable identities, learner review history, and observed
-  difficulty data. Those are durable learning assets that a blind replacement
-  would discard or mis-map.
-- Its current `CARD_README.md` is more operationally mature in several places,
-  especially first-exposure sequencing, identity decisions, use of learner
-  telemetry, and the mechanics-specific interference map.
+| Chapter | Revised CLI | Existing | Card-level conclusion |
+|---|---:|---:|---|
+| 01 Foundations | 9 / 0 / 3 / 2 | 22 / 11 / 1 / 3 | Revised is better centered on systems, models, uncertainty, and checking. Existing retains useful SI, significant-figure, Fermi-estimation, and scientific-method breadth. |
+| 02 Vectors | 10 / 0 / 3 / 3 | 20 / 15 / 1 / 4 | Revised has the better compact progression and application density. Existing adds determinant form, unit/polar vectors, and more exact factual retrieval. |
+| 03 Kinematics 1D | 11 / 0 / 4 / 3 | 22 / 16 / 1 / 4 | Revised gives substantially better graph, area, constant-acceleration, and free-fall practice. Existing adds more equation-selection cases and formula retrieval. |
+| 04 Kinematics 2D | 10 / 0 / 4 / 3 | 16 / 16 / 1 / 4 | Revised is cleaner and better practiced. Existing importantly adds non-uniform circular acceleration, range conditions, and more method discrimination. |
+| 05 Newton's laws | 11 / 0 / 4 / 3 | 19 / 10 / 1 / 3 | Revised is the better core sequence: object isolation, net force, composite systems, elevator weight, and third-law diagnosis all transfer into problems. Existing adds non-inertial-frame context and a fuller procedural checklist. |
+| 06 Forces | 11 / 0 / 4 / 3 | 23 / 11 / 1 / 4 | Revised has much better incline, pulley, friction-circle, and terminal-speed practice. Existing preserves valuable normal/friction nuance, spring combinations, quadratic drag, and terminal-velocity detail. |
+| 07 Work and energy | 11 / 0 / 4 / 3 | 21 / 13 / 1 / 4 | Revised excels at system boundaries, force-position area, energy bars, potential landscapes, and short application. Existing gives fuller spring-work, elastic-potential, friction, and power coverage. |
+| 08 Momentum | 10 / 0 / 4 / 3 | 22 / 16 / 1 / 4 | Revised is stronger for impulse, vector conservation, recoil, and center-of-mass transfer. Existing importantly covers one-dimensional elastic-collision formulas, mass-ratio limits, and kinetic-energy loss in more depth. |
+| 09 Rotation | 13 / 0 / 5 / 4 | 27 / 18 / 1 / 4 | Revised fixes the first trial's missing constant-angular-acceleration and static-equilibrium practice. Existing remains broader on standard inertias, the parallel-axis theorem, rolling nuance, and angular momentum. |
+| 10 Gravitation | 10 / 0 / 4 / 3 | 21 / 17 / 1 / 4 | Revised adds excellent field-superposition and scaling problems. Existing is more complete on altitude, orbital energy, all three Kepler laws, periapsis/apoapsis, and orbit method selection. |
+| 11 Oscillations | 11 / 0 / 4 / 3 | 26 / 22 / 1 / 5 | Revised is a strong lean SHM sequence with real phase, energy, pendulum, and damping practice. Existing retains physical pendulums, initial-condition detail, quantitative damping regimes, and more precise resonance qualifications. |
+| 12 Synthesis | 8 / 0 / 7 / 3 | 24 / 0 / 2 / 3 | Revised is decisively better for mixed transfer: method selection, ballistic pendulum, staged collision/spring motion, angular impact, loop contact, and dimensional diagnosis. Existing supplies more short misconception and graph-discrimination prompts. |
+
+## What the revised CLI now gets right
+
+### Problems are designed as a curriculum
+
+The revised deck contains three to five problems in every content chapter and
+seven in synthesis. They are not merely longer recall cards. Across the deck
+they exercise:
+
+- representation reading before arithmetic;
+- model and system selection;
+- signs, components, and limiting cases;
+- force, energy, momentum, and angular-momentum discrimination;
+- multistage method changes;
+- concise evaluation after calculation.
+
+The existing deck usually has one polished worked problem per chapter. Those
+are valuable demonstrations, but one example is insufficient for procedural
+retrieval and transfer. The revised problem portfolio is the largest genuine
+quality improvement.
+
+### Figures are planned by retrieval role
+
+The revised build created 36 SVGs rather than the first trial's 9. The ledger
+separately considered geometry, graphs, state transitions, before/after
+comparisons, force/system diagrams, and representation translation. It did not
+treat one figure per chapter as a cap.
+
+All figures have a responsive `viewBox`, title, description, meaningful card alt
+text, and a non-color cue. Phone-width review found and corrected incline
+geometry, lever-arm geometry, collision vectors, equal-area geometry, SHM phase,
+energy labeling, clipped text, and an invalid SVG attribute before final
+validation. The visual QA gate therefore changed the output materially.
+
+The existing deck still has the richer production visual library: 46 figures,
+several of which are more detailed and already proven useful during actual
+study. The revised set contributes different high-value views—especially the
+system-boundary, elevator, potential-landscape, center-of-mass, orbital-energy,
+and method-map figures—rather than making the existing library obsolete.
+
+### Zero clozes is defensible here
+
+The revised author explicitly chose no clozes because mechanics formulas are
+better retrieved with meaning, conditions, coordinates, or method choice than
+as context-free missing substrings. After inspecting every revised card, no
+obvious target was harmed by using a bounded question or problem instead.
+
+Zero is not a universal target. A cloze remains appropriate for an exact,
+compact, unambiguous completion when surrounding context is the retrieval cue.
+The existing deck's 165 clozes include useful factual prompts, but many duplicate
+nearby basic formula cards and 47 place a deletion inside math delimiters. Those
+47 parser-ambiguous cards should be converted to explicit question/answer cards
+or whole-expression clozes while preserving stable identity where possible.
+
+## Where the revised deck is still too lean
+
+The 175-card deck is not a complete replacement for the 441-card deck. Its
+economy sometimes becomes omission. The most important retained targets from
+the existing deck are:
+
+- significant-figure operations and fuller measurement foundations;
+- non-uniform circular motion and projectile range boundaries;
+- static-friction and normal-force edge cases;
+- spring combinations, spring work, and quadratic drag;
+- one-dimensional elastic-collision outcomes and mass-ratio limits;
+- common moments of inertia and the parallel-axis theorem;
+- the complete Kepler-law and orbital-geometry set;
+- physical pendulums and quantitative damping regimes;
+- several short misconception and method-discrimination cards.
+
+Some existing cards are also better for a first encounter because they explain
+one extra causal step. The revised deck assumes that its concise answer plus
+external problem practice will be enough. That is efficient for review, but a
+subset of novices would need a prerequisite bridge or slightly fuller repair.
 
 ## Honest verdict
 
-The **fresh CLI deck is the better authored SRS deck card-for-card**. Its
-retrieval design, concision, transfer emphasis, source discipline, and technical
-cleanliness demonstrate that the new CLI and context system work well.
+The **revised CLI deck is now the better newly authored mechanics curriculum
+card-for-card**. It has a coherent learner model, substantially better transfer
+practice, far better representation planning than the first trial, concise
+answers, and clean technical implementation. The revised context fixed the
+important problem and figure failures that motivated this second experiment.
 
-The **existing deck is the better production asset to keep**. Its visual depth,
-broader coverage, stable IDs, and learner history outweigh the benefit of a
-wholesale replacement. Replacing it with the fresh deck would optimize the
-files while damaging continuity for the learner.
+The **existing deck remains the correct production base**. It contains valuable
+coverage the revised deck omits, ten more established figures, stable card
+identities, and real review history. Replacing it wholesale would discard those
+assets and turn a strong independent audit into a destructive migration.
 
-The best next step is therefore not to choose one repository wholesale. Use the
-fresh deck as an independent audit blueprint and improve the existing deck in
-place:
+The appropriate conclusion is to merge designs, not repositories:
 
-1. repair the 47 math-cloze lint findings;
-2. preserve existing stable IDs whenever the retrieval target remains the same;
-3. shorten or split the longest and most fragmented existing cards;
-4. retain the 46-figure visual curriculum and broader topic coverage;
-5. add the strongest missing model-selection, misconception, and faded-problem
-   targets from the fresh deck as genuinely new cards;
-6. keep the existing mechanics `CARD_README.md` as the base, incorporating only
-   the fresh blueprint's stronger source and chapter-contract details.
+1. preserve the existing deck, stable IDs, figure library, and review history;
+2. repair the 47 math-internal cloze warnings and remove genuinely redundant
+   formula/fact duplicates;
+3. retain the existing second-pass topics listed above;
+4. add the revised deck's strongest missing problem progressions and
+   representation cards chapter by chapter;
+5. add only revised figures with a distinct role not already served by an
+   existing figure;
+6. use learner telemetry to shorten, split, or retire existing cards that remain
+   slow, ambiguous, or repeatedly failed after prerequisite repair;
+7. validate identity changes before every production merge.
+
+This approach should reduce avoidable review burden while increasing actual
+problem-solving practice. The target should not be 175, 441, or any other card
+quota; it should be the smallest set that preserves the valuable existing
+coverage and supplies the missing retrieval and transfer progression.
 
 ## Reproducibility
 
-The blind trial deck was created at:
+The revised blind trial deck is local at:
+
+`/tmp/flashcards-mechanics-comparison-20260714-v2/physics/mechanics`
+
+The first blind trial remains at:
 
 `/tmp/flashcards-mechanics-comparison-20260714/physics/mechanics`
 
 Validation commands:
 
 ```sh
-flashcards deck validate /tmp/flashcards-mechanics-comparison-20260714/physics/mechanics
+flashcards deck validate /tmp/flashcards-mechanics-comparison-20260714-v2/physics/mechanics
 flashcards deck validate /Users/thomasribeiro/notes/physics/mechanics
 ```
 
-The trial is intentionally not wired into the application collection and was
-not pushed to a deck repository.
+The revised trial is intentionally not wired into the application collection
+and was not committed or pushed to a deck repository.
