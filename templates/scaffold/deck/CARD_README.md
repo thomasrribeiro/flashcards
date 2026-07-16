@@ -68,7 +68,11 @@ the pilot and save it as `.flashcards/audits/pilot-cold-start.md`.
 Add a figure only when inspecting, predicting, labeling, comparing, tracing, or
 translating it is part of learning. Author new technical figures in TikZ by
 default, compile them to responsive SVG before handoff, and commit source and
-output together. Put setup figures on the front and answer-revealing
+output together under repository-root `figures/NN_chapter/`; keep the shared
+style at `figures/tikz-style.tex` and never create `flashcards/figures/`. Since
+rendering runs from the repository root, load it with
+`\\input{figures/tikz-style.tex}` rather than a source-relative path. Put
+setup figures on the front and answer-revealing
 annotations on the back. Record why an authentic target requires another medium.
 
 Do not treat one figure per chapter as a target or cap. Inventory every

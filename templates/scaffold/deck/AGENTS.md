@@ -20,8 +20,11 @@ Preserve every existing `card-id` when correcting or improving the same
 retrieval target. Assign a new ID when a card tests materially new knowledge.
 Author new technical figures in TikZ and compile them to ordinary SVG before
 handoff. Commit each `.tex` source beside its same-named `.svg`, reuse a shared
-deck style, and document any authentic-target exception that needs another
-medium.
+deck style at `figures/tikz-style.tex`, and keep chapter assets under
+`figures/NN_chapter/`, never `flashcards/figures/`. Document any authentic-target
+exception that needs another medium. The renderer runs from the repository
+root, so chapter sources must use `\\input{figures/tikz-style.tex}` rather than
+a source-relative path.
 Inventory figure opportunities by retrieval role before authoring; do not use
 one figure per chapter as either a target or a cap.
 

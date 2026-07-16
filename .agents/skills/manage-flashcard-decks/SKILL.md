@@ -120,8 +120,13 @@ pilot or an established existing deck may proceed chapter by chapter.
 Add figures wherever spatial, temporal, structural, graphical, or relational
 reasoning benefits—not according to an arbitrary cap. Author every new
 technical diagram in TikZ by default and compile it to ordinary SVG before
-handoff. Reuse the deck-level TikZ style and commit the editable `.tex` source
-beside its same-named `.svg`; do not compile TikZ in the study client. Use a
+handoff. Store the shared style at repository-root `figures/tikz-style.tex`,
+and store each editable source beside its same-named SVG under
+`figures/NN_chapter/`; never put deck assets under `flashcards/figures/`.
+Because the renderer invokes LaTeX from the repository root, each chapter
+source must load the shared style as `\\input{figures/tikz-style.tex}`, not via
+a path relative to the source file. Commit source and output together and do
+not compile TikZ in the study client. Use a
 different medium only when the authentic visual target requires it, and record
 the reason. Require a `viewBox`, meaningful `<title>` and `<desc>`, phone-width
 legibility, high contrast, and a redundant cue beyond color.
