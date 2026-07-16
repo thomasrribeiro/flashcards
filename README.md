@@ -150,10 +150,26 @@ flashcards deck stabilize ~/notes/biology/genetics
 # Validate IDs, parser output, frontmatter, KaTeX, clozes, and image paths
 flashcards deck validate ~/notes/biology/genetics
 
+# Compile editable TikZ sources under figures/ to portable SVG assets
+flashcards deck render-figures ~/notes/physics/mechanics
+
+# Verify committed SVG assets exactly match their TikZ sources
+flashcards deck render-figures ~/notes/physics/mechanics --check
+
 # Save the complete machine-readable inventory
 flashcards deck validate ~/notes/biology/genetics \
   --out ~/notes/biology/genetics/.flashcards/validation.json
 ```
+
+TikZ is an authoring-time option for publication-quality technical diagrams,
+not a browser dependency. A source such as
+`figures/02_vectors/components_grid.tex` compiles to the same-named `.svg`
+using LuaLaTeX and `dvisvgm`; the app continues loading ordinary SVG files
+without runtime compilation. Each source must declare `flashcards-title` and
+`flashcards-desc` comments, which the renderer copies into accessible SVG
+metadata. `deck validate` rejects stale generated figures. Install TeX Live
+with LuaLaTeX, TikZ, the standalone class, and `dvisvgm` on authoring
+machines that maintain TikZ-backed decks.
 
 ## Build and audit with Codex
 

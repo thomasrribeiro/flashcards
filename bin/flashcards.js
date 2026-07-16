@@ -5,6 +5,7 @@ import { addChapter, createDeck, ensureSubject } from './lib/scaffold.js';
 import { codexDoctor, formatInvocation, runDeckAgent, runSubjectAgent } from './lib/codex.js';
 import { buildContextManifest, buildSubjectContextManifest, formatContextManifest } from './lib/context.js';
 import { approvePilot } from './lib/pilot.js';
+import { renderTikzFigures } from './lib/figures.js';
 import { resolveNotesRoot, resolvePath } from './lib/paths.js';
 import { stabilizeDeck, validateDeck } from './lib/validation.js';
 
@@ -257,15 +258,30 @@ deck
     });
 
 deck
+    .command('render-figures <deck-path>')
+    .description('Compile authored TikZ sources to portable, accessible SVG assets')
+    .option('--check', 'Fail when a generated SVG is missing or out of date')
+    .option('--quiet', 'Print only errors')
+    .action((deckPath, options) => {
+        try {
+            const result = renderTikzFigures(deckPath, { check: options.check, quiet: options.quiet });
+            if (result.status !== 0) process.exitCode = result.status;
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+deck
     .command('validate <deck-path>')
     .description('Validate parser behavior, metadata, math, clozes, figures, and card identities')
     .option('--out <path>', 'Write the machine-readable JSON report')
     .option('--quiet', 'Print only the validation summary')
     .action((deckPath, options) => {
         try {
+            const figures = renderTikzFigures(deckPath, { check: true, quiet: options.quiet });
             const identities = stabilizeDeck(deckPath, { check: true });
             const validation = validateDeck(deckPath, { outputPath: options.out, quiet: options.quiet });
-            if (identities.status !== 0 || validation.status !== 0) process.exitCode = 1;
+            if (figures.status !== 0 || identities.status !== 0 || validation.status !== 0) process.exitCode = 1;
         } catch (error) {
             handleError(error);
         }

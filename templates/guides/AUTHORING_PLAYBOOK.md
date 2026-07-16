@@ -201,14 +201,22 @@ include predicting a graph, tracing a process, labeling from structure,
 comparing configurations, reading scale, or translating between a diagram and a
 formal model.
 
-Prefer original SVGs for technical material. Put setup-only visuals on the
-front; reserve answer-revealing labels, paths, and constructions for the back.
-Use high contrast, redundant non-color cues, meaningful alt text, and responsive
-geometry. For arrow markers, declare the sizing mode explicitly and normally
-use fixed `userSpaceOnUse` dimensions so line-weight changes do not magnify the
-arrowheads. Use butt caps on marker-ended strokes, anchor the endpoint inside
-the arrowhead body, and paint construction guides before the primary vector.
-Inspect every changed figure at phone width.
+Prefer original SVGs for technical material. Native SVG is the simplest choice
+for small diagrams; when exact geometry, mathematical typography, or repeated
+diagram grammar makes hand-authored SVG brittle, use editable TikZ and compile
+it to SVG before handoff. Reuse one deck-level style for palette, type hierarchy,
+line weights, construction lines, and proportional arrowheads. Keep the source
+next to its same-named SVG and run the deck's stale-output check. Do not add
+TikZJax, TeX, or other runtime compilation to the study client.
+
+Put setup-only visuals on the front; reserve answer-revealing labels, paths, and
+constructions for the back. Use high contrast, redundant non-color cues,
+meaningful alt text, and responsive geometry. For hand-authored SVG arrow
+markers, declare the sizing mode explicitly and normally use fixed
+`userSpaceOnUse` dimensions so line-weight changes do not magnify the arrowheads.
+Use butt caps on marker-ended strokes, anchor the endpoint inside the arrowhead
+body, and paint construction guides before the primary vector. Inspect every
+changed figure at phone width.
 
 Do not add decorative imagery for a generic “dual coding” quota. If removing the
 figure leaves retrieval unchanged, remove it.

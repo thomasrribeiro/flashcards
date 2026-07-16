@@ -143,10 +143,20 @@ diagrams at the appropriate level, detector readouts, probability densities,
 uncertainty visualizations, and simulation or data products may carry the real
 retrieval target.
 
-Technical figures should normally be original SVGs. Geometry, arrow direction,
-relative placement, axes, labels, and scale claims must be physically correct.
-Use dashed paths or shape differences as well as color. Keep solution forces,
-trajectories, labels, and constructions off the front when they are the target.
+Technical figures should normally be original SVGs. For vector geometry,
+mechanics diagrams, plots, and other construction-heavy assets, prefer a
+deck-level TikZ style compiled to SVG at authoring time when that toolchain is
+available. Use one restrained visual grammar: consistent sans-serif labels,
+proportional `Stealth` arrowheads, stable line weights, muted construction lines,
+and the deck accent only for the primary quantity. Never compile TikZ in the
+study client.
+
+Geometry, arrow direction, relative placement, axes, labels, and scale claims
+must be physically correct. Use dashed paths or shape differences as well as
+color. Keep solution forces, trajectories, labels, and constructions off the
+front when they are the target. Inspect the rendered SVG—not merely its source—
+at phone width and reject clipped labels, oversized tips, ambiguous endpoints,
+excess whitespace, or inconsistent typography.
 
 Before authoring each chapter, assess these as separate opportunities rather
 than selecting one representative image: system boundaries, free-body or field

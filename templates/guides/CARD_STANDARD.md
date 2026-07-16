@@ -126,8 +126,14 @@ Severity:
   the primary vector so guides cannot obscure its tip.
   Never rely on the SVG default `markerUnits="strokeWidth"` accidentally.
 - **V4 — Appropriate medium.** Prefer original responsive SVG for technical
-  diagrams. Use licensed photographs or raster illustrations only when their
-  visual content is the authentic learning target.
+  diagrams. Native SVG is appropriate for simple geometry. For typography- or
+  geometry-heavy technical figures, a deck may keep editable TikZ sources and
+  compile them to ordinary SVG at authoring time. Reuse the deck's shared style
+  and commit both source and output; never require TeX or TikZ compilation in
+  the study client. Generated SVG must pass the same accessibility, phone-width,
+  and stale-output checks as hand-authored SVG. Use licensed photographs or
+  raster illustrations only when their visual content is the authentic learning
+  target.
 - **V5 — Representation coverage.** Before authoring, inventory each chapter's
   spatial, temporal, structural, graphical, relational, and other authentic
   visual targets. Include every figure that earns a distinct retrieval role;
