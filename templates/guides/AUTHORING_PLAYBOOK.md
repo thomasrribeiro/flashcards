@@ -206,7 +206,9 @@ front; reserve answer-revealing labels, paths, and constructions for the back.
 Use high contrast, redundant non-color cues, meaningful alt text, and responsive
 geometry. For arrow markers, declare the sizing mode explicitly and normally
 use fixed `userSpaceOnUse` dimensions so line-weight changes do not magnify the
-arrowheads. Inspect every changed figure at phone width.
+arrowheads. Use butt caps on marker-ended strokes, anchor the endpoint inside
+the arrowhead body, and paint construction guides before the primary vector.
+Inspect every changed figure at phone width.
 
 Do not add decorative imagery for a generic “dual coding” quota. If removing the
 figure leaves retrieval unchanged, remove it.

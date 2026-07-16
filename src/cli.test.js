@@ -146,7 +146,7 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(report.decks[0].files[0].clozeLints[0].msg).toContain('math-internal cloze is parser-ambiguous');
     });
 
-    it('rejects SVG markers whose sizing mode is implicit', async () => {
+    it('rejects unsafe SVG marker sizing and rounded marker-ended caps', async () => {
         const notesRoot = await temporaryRoot();
         const { deckPath } = await createDeck({
             subject: 'physics',
@@ -172,7 +172,15 @@ describe('flashcards CLI validation and Codex handoff', () => {
 
         await writeFile(
             figurePath,
-            '<svg viewBox="0 0 100 100"><defs><marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12"><path d="M0 0L10 5L0 10Z"/></marker></defs></svg>\n'
+            '<svg viewBox="0 0 100 100"><defs><marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12"><path d="M0 0L10 5L0 10Z"/></marker></defs><line x1="10" y1="50" x2="90" y2="50" stroke-linecap="round" marker-end="url(#arrow)"/></svg>\n'
+        );
+        const unsafeCap = validateDeck(deckPath, { quiet: true, capture: true });
+        expect(unsafeCap.status).toBe(1);
+        expect(unsafeCap.stdout).toContain('image errors: 1');
+
+        await writeFile(
+            figurePath,
+            '<svg viewBox="0 0 100 100"><defs><marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12"><path d="M0 0L10 5L0 10Z"/></marker></defs><line x1="10" y1="50" x2="90" y2="50" stroke-linecap="butt" marker-end="url(#arrow)"/></svg>\n'
         );
         expect(validateDeck(deckPath, { quiet: true, capture: true }).status).toBe(0);
     });

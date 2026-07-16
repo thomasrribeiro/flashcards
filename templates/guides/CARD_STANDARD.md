@@ -120,6 +120,10 @@ Severity:
   arrows, prefer `markerUnits="userSpaceOnUse"` so thicker strokes do not also
   inflate the arrowheads; size the fixed marker in viewBox units and visually
   keep it proportional to the line (usually about 1.5 to 4 stroke widths).
+  Marker-ended strokes must use `stroke-linecap="butt"`; rounded end caps can
+  protrude through the triangular marker. Place `refX` inside the arrowhead
+  body so the shaft terminates beneath it, and paint projection guides before
+  the primary vector so guides cannot obscure its tip.
   Never rely on the SVG default `markerUnits="strokeWidth"` accidentally.
 - **V4 — Appropriate medium.** Prefer original responsive SVG for technical
   diagrams. Use licensed photographs or raster illustrations only when their

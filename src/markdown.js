@@ -112,7 +112,33 @@ marked.setOptions({
  * - Must end with non-whitespace followed by $
  * - This prevents matching currency like "$100 bills"
  */
-function renderMath(text) {
+export function renderMath(text) {
+    // Standard TeX display delimiters (\[...\])
+    text = text.replace(/\\\[([\s\S]+?)\\\]/g, (match, math) => {
+        try {
+            return katex.renderToString(math.trim(), {
+                displayMode: true,
+                throwOnError: false,
+                output: 'html'
+            });
+        } catch (e) {
+            return `<span class="katex-error">${e.message}</span>`;
+        }
+    });
+
+    // Standard TeX inline delimiters (\(...\))
+    text = text.replace(/\\\(([\s\S]+?)\\\)/g, (match, math) => {
+        try {
+            return katex.renderToString(math.trim(), {
+                displayMode: false,
+                throwOnError: false,
+                output: 'html'
+            });
+        } catch (e) {
+            return `<span class="katex-error">${e.message}</span>`;
+        }
+    });
+
     // Display math ($$...$$)
     text = text.replace(/\$\$([\s\S]+?)\$\$/g, (match, math) => {
         try {

@@ -6,7 +6,8 @@
  *   - parses with zero parser warnings (warnings mean silently dropped cards)
  *   - every LaTeX segment renders under KaTeX (code fences/spans stripped first)
  *   - every image link resolves; images have non-empty alt text
- *   - every SVG marker declares markerUnits explicitly
+ *   - every SVG marker declares markerUnits explicitly; marker-ended strokes
+ *     do not use rounded caps that can protrude through the arrowhead
  *   - cloze lints: deletion inside $...$ math (C4), deletion > 60 chars,
  *     > 2 deletions per block, leftover unmatched '['
  *   - frontmatter/filename lints (F1/F2 of CARD_STANDARD.md)
@@ -75,6 +76,14 @@ function stripCode(text) {
 function extractMath(text) {
     const segments = [];
     let work = text.replace(/\\\$/g, '  '); // escaped dollars are literal
+    work = work.replace(/\\\[([\s\S]*?)\\\]/g, (m, body) => {
+        segments.push({ body, display: true });
+        return ' '.repeat(m.length);
+    });
+    work = work.replace(/\\\(([^\n]*?)\\\)/g, (m, body) => {
+        segments.push({ body, display: false });
+        return ' '.repeat(m.length);
+    });
     work = work.replace(/\$\$([\s\S]*?)\$\$/g, (m, body) => {
         segments.push({ body, display: true });
         return ' '.repeat(m.length);
@@ -96,7 +105,7 @@ function mathByteRanges(text) {
     const enc = new TextEncoder();
     const ranges = [];
     const stripped = stripCode(text).replace(/\\\$/g, '  ');
-    const re = /\$\$[\s\S]*?\$\$|\$[^$\n]+?\$/g;
+    const re = /\\\[[\s\S]*?\\\]|\\\([^\n]*?\\\)|\$\$[\s\S]*?\$\$|\$[^$\n]+?\$/g;
     let m;
     while ((m = re.exec(stripped)) !== null) {
         const startByte = enc.encode(stripped.slice(0, m.index)).length;
@@ -153,6 +162,17 @@ function svgMarkerErrors(raw) {
             `marker${id ? ` "${id}"` : ''} omits markerUnits; declare ` +
             '`markerUnits="userSpaceOnUse"` for fixed-size arrowheads or ' +
             '`markerUnits="strokeWidth"` when scaling with line weight is intentional'
+        );
+    }
+    const markerEndedRe = /<([a-z][\w:-]*)\b([^>]*\bmarker-(?:start|mid|end)\s*=\s*["'][^"']+["'][^>]*)>/gi;
+    while ((match = markerEndedRe.exec(raw)) !== null) {
+        const [, tag, attributes] = match;
+        const directRoundCap = /\bstroke-linecap\s*=\s*["']round["']/i.test(attributes);
+        const styledRoundCap = /\bstyle\s*=\s*["'][^"']*\bstroke-linecap\s*:\s*round\b/i.test(attributes);
+        if (!directRoundCap && !styledRoundCap) continue;
+        errors.push(
+            `${tag} with an SVG marker uses stroke-linecap="round"; use a butt cap ` +
+            'and place the marker reference point inside the arrowhead body so the line cap cannot protrude'
         );
     }
     return errors;
