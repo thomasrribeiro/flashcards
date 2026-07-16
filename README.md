@@ -177,6 +177,22 @@ The original deck snapshot remains hashed in the run record. The resulting
 chapter replaces the prior pilot and therefore receives new stable identities;
 use this only when intentionally resetting that chapter's review history.
 
+After approving the pilot, build or freshly regenerate one later chapter in a
+bounded isolated run:
+
+```bash
+flashcards deck approve-pilot ~/notes/physics/mechanics
+flashcards deck build ~/notes/physics/mechanics --chapter 2
+flashcards deck build ~/notes/physics/mechanics --chapter 2 --fresh-chapter
+```
+
+A chapter build may read scheduled cards in earlier chapters as established
+prerequisites. Its applied patch is restricted to the selected chapter, its
+figures, its chapter-boundary audit, and the deck README/blueprint; later
+chapters cannot be changed by the run. Fresh regeneration gives the selected
+chapter new review identities and should be used only after preserving any
+comparison baseline you need.
+
 New builds follow a novice-first pilot lifecycle:
 
 1. unconfirmed domain knowledge is treated as unseen;

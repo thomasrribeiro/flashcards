@@ -1,6 +1,6 @@
 {
   "name": "flashcards",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Spaced-repetition app and CLI for durable, agent-assisted flashcard decks",
   "license": "Apache-2.0",
   "engines": {

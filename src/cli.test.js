@@ -9,6 +9,7 @@ import {
     buildAgentInvocation,
     buildSubjectAgentInvocation,
     formatInvocation,
+    resetChapterForRegeneration,
     resetPilotForRegeneration,
     runDeckAgent
 } from '../bin/lib/codex.js';
@@ -256,7 +257,7 @@ describe('flashcards CLI validation and Codex handoff', () => {
 
         resetPilotForRegeneration(deckPath);
 
-        expect(await readFile(first, 'utf8')).toContain('Fresh isolated pilot regeneration');
+        expect(await readFile(first, 'utf8')).toContain('Fresh isolated chapter-1 regeneration');
         expect(await readFile(first, 'utf8')).not.toContain('card-id: old');
         expect(await readFile(second, 'utf8')).toContain('card-id: keep');
         await expect(stat(path.join(deckPath, 'figures', '01_foundations', 'old.svg'))).rejects.toMatchObject({ code: 'ENOENT' });
@@ -264,6 +265,75 @@ describe('flashcards CLI validation and Codex handoff', () => {
 
         const invocation = buildAgentInvocation({ mode: 'build', deckPath, freshPilot: true });
         expect(invocation.prompt).toContain('intentionally blanked');
+    });
+
+    it('isolates a fresh later-chapter build and its chapter-boundary audit', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations', 'vectors', 'kinematics']
+        });
+        const first = path.join(deckPath, 'flashcards', '01_foundations.md');
+        const second = path.join(deckPath, 'flashcards', '02_vectors.md');
+        const third = path.join(deckPath, 'flashcards', '03_kinematics.md');
+        await writeFile(first, '+++\norder = 1\nsubject = "physics"\ntags = ["mechanics"]\n+++\n\n<!-- card-id: keep-one -->\nQ: Keep one?\nA: Keep one.\n');
+        await writeFile(second, '+++\norder = 2\nsubject = "physics"\ntags = ["mechanics"]\n+++\n\n<!-- card-id: replace-two -->\nQ: Replace two?\nA: Replace two.\n');
+        await writeFile(third, '+++\norder = 3\nsubject = "physics"\ntags = ["mechanics"]\n+++\n\n<!-- card-id: keep-three -->\nQ: Keep three?\nA: Keep three.\n');
+        await writeFile(path.join(deckPath, 'figures', '02_vectors', 'old.svg'), '<svg/>\n');
+
+        resetChapterForRegeneration(deckPath, 2);
+
+        expect(await readFile(first, 'utf8')).toContain('keep-one');
+        expect(await readFile(second, 'utf8')).toContain('Fresh isolated chapter-2 regeneration');
+        expect(await readFile(second, 'utf8')).not.toContain('replace-two');
+        expect(await readFile(third, 'utf8')).toContain('keep-three');
+        await expect(stat(path.join(deckPath, 'figures', '02_vectors', 'old.svg'))).rejects.toMatchObject({ code: 'ENOENT' });
+
+        const invocation = buildAgentInvocation({
+            mode: 'build',
+            deckPath,
+            buildScope: 'chapter',
+            chapterNumber: 2,
+            freshChapter: true
+        });
+        expect(invocation.prompt).toContain('AUTHOR ONLY ORDERED CHAPTER 2');
+        expect(invocation.prompt).toContain('02_vectors-cold-start.md');
+        expect(invocation.prompt).toContain('scheduled cards in chapters 1 through 1');
+        expect(invocation.prompt).toContain('intentionally blanked');
+    });
+
+    it('applies only allowlisted paths from a bounded isolated run', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations']
+        });
+        const manifest = buildContextManifest({ deckPath, mode: 'build' });
+        const prepared = prepareIsolatedRun({
+            sourcePath: deckPath,
+            contextFiles: manifest.files,
+            label: 'bounded-test'
+        });
+        try {
+            await writeFile(path.join(prepared.workspacePath, 'README.md'), '# Allowed change\n');
+            await writeFile(
+                path.join(prepared.workspacePath, 'flashcards', '01_foundations.md'),
+                'Unrelated chapter change\n'
+            );
+            finishIsolatedRun(prepared, { allowedPaths: ['README.md'] });
+            expect(await readFile(path.join(deckPath, 'README.md'), 'utf8')).toBe('# Allowed change\n');
+            expect(await readFile(path.join(deckPath, 'flashcards', '01_foundations.md'), 'utf8')).not.toBe(
+                'Unrelated chapter change\n'
+            );
+        } finally {
+            discardIsolatedRun(prepared);
+        }
     });
 
     it('requires a passing pilot artifact and explicit approval before a full build', async () => {

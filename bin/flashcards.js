@@ -41,12 +41,21 @@ function addAgentOptions(command, { audit = false, build = false } = {}) {
     if (build) {
         command
             .option('--full', 'Build every chapter after explicit pilot approval')
+            .addOption(new Option('--chapter <number>', 'Build only one ordered chapter').argParser(positiveInteger))
+            .option('--fresh-chapter', 'Regenerate the selected chapter from a blank sandbox copy')
             .option('--fresh-pilot', 'Regenerate chapter 1 from a blank sandbox copy');
     }
     return command;
 }
 
 function executeAgent(mode, deckPath, options) {
+    if (options.full && options.chapter) throw new Error('--full cannot be combined with --chapter.');
+    if (options.freshChapter && !options.chapter) throw new Error('--fresh-chapter requires --chapter.');
+    if (options.freshPilot && options.chapter && options.chapter !== 1) {
+        throw new Error('--fresh-pilot cannot target a chapter other than 1.');
+    }
+    const chapterNumber = options.chapter || (options.freshPilot ? 1 : undefined);
+    const buildScope = options.full ? 'full' : options.chapter ? 'chapter' : 'pilot';
     const result = runDeckAgent({
         mode,
         deckPath,
@@ -56,7 +65,9 @@ function executeAgent(mode, deckPath, options) {
         extraInstructions: options.instructions,
         dryRun: options.dryRun,
         allowDirty: options.allowDirty,
-        buildScope: options.full ? 'full' : 'pilot',
+        buildScope,
+        chapterNumber,
+        freshChapter: options.freshChapter,
         freshPilot: options.freshPilot,
         isolated: options.isolated,
         reasoningEffort: options.reasoningEffort
@@ -73,7 +84,7 @@ function executeAgent(mode, deckPath, options) {
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('3.1.0')
+    .version('3.2.0')
     .showSuggestionAfterError();
 
 program

@@ -47,9 +47,26 @@ function requireSafeAuditWorktree(deckPath, allowDirty) {
     }
 }
 
-function deckModeInstruction(mode, buildScope, reportOnly) {
+function chapterNameForOrder(deckPath, chapterNumber) {
+    const prefix = `${String(chapterNumber).padStart(2, '0')}_`;
+    const chapterName = readdirSync(path.join(deckPath, 'flashcards'))
+        .filter(name => /^\d{2}_.+\.md$/.test(name))
+        .find(name => name.startsWith(prefix));
+    if (!chapterName) throw new Error(`No ordered chapter ${chapterNumber} exists in ${deckPath}.`);
+    return chapterName;
+}
+
+function chapterAuditName(chapterName) {
+    return `${chapterName.replace(/\.md$/, '')}-cold-start.md`;
+}
+
+function deckModeInstruction(mode, buildScope, reportOnly, chapterNumber, chapterName) {
     if (mode === 'build' && buildScope === 'pilot') {
         return 'Research and design the curriculum, but AUTHOR ONLY THE FIRST ORDERED CHAPTER as a novice-first pilot. If no ordered chapter exists, design the chapter map and create the first chapter. Do not author, delete, or modify cards in later chapters. Complete the pilot dependency ledger and write .flashcards/audits/pilot-cold-start.md with a front-by-front audit. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains, then stop for human approval.';
+    }
+    if (mode === 'build' && buildScope === 'chapter') {
+        const auditName = chapterAuditName(chapterName);
+        return `AUTHOR ONLY ORDERED CHAPTER ${chapterNumber} (${chapterName}). Treat the scheduled cards in chapters 1 through ${chapterNumber - 1} as the only established subject prerequisites, together with the declared learner contract. Do not author, delete, inspect for scaffolding, or modify later chapters, and do not modify earlier chapter cards or figures. Complete a chapter-boundary dependency ledger and write .flashcards/audits/${auditName} with a front-by-front audit. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains.`;
     }
     if (mode === 'build') {
         return 'Build the approved curriculum chapter by chapter. Repeat the dependency scan across every chapter boundary and write .flashcards/audits/full-cold-start.md. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains.';
@@ -58,26 +75,27 @@ function deckModeInstruction(mode, buildScope, reportOnly) {
     return 'Audit and improve the entire deck, working chapter by chapter while preserving review history.';
 }
 
-export function resetPilotForRegeneration(deckPath) {
+export function resetChapterForRegeneration(deckPath, chapterNumber) {
+    const chapterName = chapterNameForOrder(deckPath, chapterNumber);
     const flashcardsPath = path.join(deckPath, 'flashcards');
-    const chapterName = readdirSync(flashcardsPath)
-        .filter(name => /^\d{2}_.+\.md$/.test(name))
-        .sort((a, b) => a.localeCompare(b))[0];
-    if (!chapterName) throw new Error('Fresh pilot regeneration requires an ordered chapter file.');
     const chapterPath = path.join(flashcardsPath, chapterName);
     const markdown = readFileSync(chapterPath, 'utf8');
     const frontmatter = /^\+\+\+\n[\s\S]*?\n\+\+\+\n/.exec(markdown)?.[0];
-    if (!frontmatter) throw new Error(`Fresh pilot regeneration requires TOML frontmatter: ${chapterPath}`);
+    if (!frontmatter) throw new Error(`Fresh chapter regeneration requires TOML frontmatter: ${chapterPath}`);
     writeFileSync(
         chapterPath,
-        `${frontmatter}\n<!-- Fresh isolated pilot regeneration: author cards from the declared context. -->\n`
+        `${frontmatter}\n<!-- Fresh isolated chapter-${chapterNumber} regeneration: author cards from the declared context. -->\n`
     );
 
     const figurePath = path.join(deckPath, 'figures', chapterName.replace(/\.md$/, ''));
     rmSync(figurePath, { recursive: true, force: true });
     mkdirSync(figurePath, { recursive: true });
     writeFileSync(path.join(figurePath, '.gitkeep'), '');
-    return { chapterPath, figurePath };
+    return { chapterName, chapterPath, figurePath };
+}
+
+export function resetPilotForRegeneration(deckPath) {
+    return resetChapterForRegeneration(deckPath, 1);
 }
 
 function buildDeckPrompt({
@@ -89,6 +107,9 @@ function buildDeckPrompt({
     preflightPath,
     reportOnly,
     buildScope,
+    chapterNumber,
+    chapterName,
+    freshChapter,
     freshPilot,
     extraInstructions,
     isolated
@@ -103,7 +124,10 @@ function buildDeckPrompt({
         preflightPath ? `Machine-readable preflight report: ${preflightPath}` : null,
         'Read every present file in this ordered context manifest completely before acting:',
         ...contextFiles.map((file, index) => `${index + 1}. [${file.role}] ${file.path}`),
-        deckModeInstruction(mode, buildScope, reportOnly),
+        deckModeInstruction(mode, buildScope, reportOnly, chapterNumber, chapterName),
+        freshChapter
+            ? `Chapter ${chapterNumber} (${chapterName}) was intentionally blanked inside this temporary workspace. Design and author it from the declared learner model, the scheduled prerequisites in earlier chapters, standards, domain guide, and current research; do not reconstruct or recover the previous implementation from outside the workspace.`
+            : null,
         freshPilot
             ? 'The pilot chapter was intentionally blanked inside this temporary workspace. Design and author it from the declared learner model, standards, domain guide, and current research; do not reconstruct or recover the previous pilot from outside the workspace. Work only on chapter 1, its figures, the deck planning documents, and the pilot audit.'
             : null,
@@ -190,6 +214,8 @@ export function buildAgentInvocation({
     extraInstructions,
     preflightPath,
     buildScope = 'pilot',
+    chapterNumber,
+    freshChapter = false,
     freshPilot = false,
     isolated = true
 }) {
@@ -200,6 +226,7 @@ export function buildAgentInvocation({
         throw new Error(`Missing required authoring context: ${missingRequired.map(file => file.path).join(', ')}`);
     }
     const contextFiles = contextManifest.files.filter(file => file.exists);
+    const chapterName = buildScope === 'chapter' ? chapterNameForOrder(deckPath, chapterNumber) : undefined;
     const prompt = buildDeckPrompt({
         mode,
         targetPath: deckPath,
@@ -209,6 +236,9 @@ export function buildAgentInvocation({
         preflightPath,
         reportOnly,
         buildScope,
+        chapterNumber,
+        chapterName,
+        freshChapter,
         freshPilot,
         extraInstructions,
         isolated
@@ -264,12 +294,12 @@ export function formatInvocation(invocation) {
     return [invocation.command, ...invocation.args].map(shellQuote).join(' ');
 }
 
-function runPreparedInvocation(prepared, invocation, { reportOnly, metadata }) {
+function runPreparedInvocation(prepared, invocation, { reportOnly, metadata, allowedPaths }) {
     recordIsolatedInvocation(prepared, { prompt: invocation.prompt, invocation, metadata });
     const result = spawnSync(invocation.command, invocation.args, { stdio: 'inherit' });
     if (result.error) throw new Error(`Unable to launch Codex: ${result.error.message}`);
     if (result.status !== 0) return { status: result.status, runPath: prepared.runPath };
-    const finished = finishIsolatedRun(prepared, { applyChanges: !reportOnly });
+    const finished = finishIsolatedRun(prepared, { applyChanges: !reportOnly, allowedPaths });
     return { status: 0, ...finished };
 }
 
@@ -344,6 +374,8 @@ export function runDeckAgent({
     dryRun = false,
     allowDirty = false,
     buildScope = 'pilot',
+    chapterNumber,
+    freshChapter = false,
     freshPilot = false,
     isolated = true
 }) {
@@ -351,8 +383,12 @@ export function runDeckAgent({
     let preflightPath;
 
     if (freshPilot && buildScope === 'full') throw new Error('--fresh-pilot cannot be combined with --full.');
+    if (freshChapter && buildScope !== 'chapter') throw new Error('--fresh-chapter requires a chapter build.');
+    if (buildScope === 'chapter' && !chapterNumber) throw new Error('A chapter build requires --chapter.');
     if (freshPilot && !isolated) throw new Error('--fresh-pilot requires the default isolated run.');
+    if (freshChapter && !isolated) throw new Error('--fresh-chapter requires the default isolated run.');
     if (mode === 'build' && buildScope === 'full') requireFullBuildApproval(deckPath);
+    if (mode === 'build' && buildScope === 'chapter') requireFullBuildApproval(deckPath);
 
     if (!dryRun && !reportOnly) {
         if (mode === 'audit') requireSafeAuditWorktree(deckPath, allowDirty);
@@ -381,6 +417,8 @@ export function runDeckAgent({
         extraInstructions,
         preflightPath,
         buildScope,
+        chapterNumber,
+        freshChapter,
         freshPilot,
         isolated
     });
@@ -389,14 +427,18 @@ export function runDeckAgent({
     const version = codexVersion();
     let result;
     if (isolated) {
+        const chapterName = buildScope === 'chapter' ? chapterNameForOrder(deckPath, chapterNumber) : undefined;
         const prepared = prepareIsolatedRun({
             sourcePath: deckPath,
             contextFiles: preview.contextManifest.files,
-            label: `${mode}-${buildScope}`
+            label: chapterName ? `${mode}-${chapterName.replace(/\.md$/, '')}` : `${mode}-${buildScope}`
         });
         try {
             if (mode === 'build' && buildScope === 'pilot' && freshPilot) {
                 resetPilotForRegeneration(prepared.workspacePath);
+            }
+            if (mode === 'build' && buildScope === 'chapter' && freshChapter) {
+                resetChapterForRegeneration(prepared.workspacePath, chapterNumber);
             }
             const localPreflight = preflightPath
                 ? prepared.stagedContext.find(file => file.source === preflightPath)?.path
@@ -410,6 +452,9 @@ export function runDeckAgent({
                 preflightPath: localPreflight,
                 reportOnly,
                 buildScope,
+                chapterNumber,
+                chapterName,
+                freshChapter,
                 freshPilot,
                 extraInstructions,
                 isolated: true
@@ -423,11 +468,22 @@ export function runDeckAgent({
                 isolated: true,
                 resultPath: isolatedResultPath(prepared)
             });
+            const allowedPaths = buildScope === 'chapter' ? [
+                path.join('flashcards', chapterName),
+                path.join('figures', chapterName.replace(/\.md$/, '')),
+                path.join('.flashcards', 'audits', chapterAuditName(chapterName)),
+                'README.md',
+                'CARD_README.md'
+            ] : undefined;
             result = runPreparedInvocation(prepared, invocation, {
                 reportOnly,
+                allowedPaths,
                 metadata: {
                     operation: mode,
                     buildScope,
+                    chapterNumber,
+                    chapterName,
+                    freshChapter,
                     freshPilot,
                     reportOnly,
                     codexVersion: version,
@@ -459,7 +515,7 @@ export function runDeckAgent({
         }
         if (mode === 'build') {
             if (buildScope === 'full') markFullBuilt(deckPath);
-            else markPilotBuilt(deckPath);
+            else if (buildScope === 'pilot') markPilotBuilt(deckPath);
         }
     }
     return result;

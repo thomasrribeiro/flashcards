@@ -135,14 +135,16 @@ function restoreProtectedContext(workspacePath) {
     runGit(['clean', '-q', '-fd', '--', ...protectedPaths], workspacePath);
 }
 
-function createPatch(workspacePath) {
+function createPatch(workspacePath, allowedPaths) {
     runGit(['add', '-N', '--all'], workspacePath);
-    const result = runGit([
-        'diff', '--binary', '--no-ext-diff', 'HEAD', '--', '.',
-        ':(exclude).agents',
-        ':(exclude).flashcards/context',
-        ':(exclude)AGENTS.override.md'
-    ], workspacePath, { maxBuffer: 100 * 1024 * 1024 });
+    const pathspec = allowedPaths?.length
+        ? allowedPaths
+        : ['.', ':(exclude).agents', ':(exclude).flashcards/context', ':(exclude)AGENTS.override.md'];
+    const result = runGit(
+        ['diff', '--binary', '--no-ext-diff', 'HEAD', '--', ...pathspec],
+        workspacePath,
+        { maxBuffer: 100 * 1024 * 1024 }
+    );
     return result.stdout;
 }
 
@@ -214,9 +216,9 @@ export function recordIsolatedInvocation(prepared, { prompt, invocation, metadat
     }, null, 2)}\n`);
 }
 
-export function finishIsolatedRun(prepared, { applyChanges = true } = {}) {
+export function finishIsolatedRun(prepared, { applyChanges = true, allowedPaths } = {}) {
     restoreProtectedContext(prepared.workspacePath);
-    const patch = createPatch(prepared.workspacePath);
+    const patch = createPatch(prepared.workspacePath, allowedPaths);
     writeFileSync(path.join(prepared.runPath, 'changes.patch'), patch);
     if (applyChanges) applyPatch(prepared.sourcePath, patch);
     return { patch, runPath: prepared.runPath, changed: Boolean(patch.trim()) };
