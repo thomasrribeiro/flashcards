@@ -42,7 +42,11 @@ Severity:
   or (b) established by an earlier explanation or worked example in the learning
   path. An answer appearing after an uninformed guess does not satisfy this
   rule. Later-chapter concepts may not be borrowed to make an earlier exercise
-  look realistic.
+  look realistic. The application schedules only `Q:/A:`, `C:`, and `P:/S:`
+  blocks: headings, lesson prose, tables, equations, and figures outside those
+  blocks are ignored by the parser and cannot establish a prerequisite. Put a
+  minimal teaching bridge on a scheduled front or establish the concept in an
+  earlier scheduled card.
 - **U8 — No answer leak.** The front, filename, alt text, labels, neighboring
   wording, and units do not reveal the target unless that information is a
   deliberate cue.

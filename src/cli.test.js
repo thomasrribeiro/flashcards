@@ -5,7 +5,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { addChapter, createDeck, ensureSubject } from '../bin/lib/scaffold.js';
-import { buildAgentInvocation, buildSubjectAgentInvocation, formatInvocation, runDeckAgent } from '../bin/lib/codex.js';
+import {
+    buildAgentInvocation,
+    buildSubjectAgentInvocation,
+    formatInvocation,
+    resetPilotForRegeneration,
+    runDeckAgent
+} from '../bin/lib/codex.js';
 import { buildContextManifest, buildSubjectContextManifest, formatContextManifest } from '../bin/lib/context.js';
 import { discardIsolatedRun, finishIsolatedRun, prepareIsolatedRun } from '../bin/lib/isolation.js';
 import { approvePilot, markPilotBuilt, readDeckStatus, requireFullBuildApproval } from '../bin/lib/pilot.js';
@@ -228,7 +234,36 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.prompt).toContain('AUTHOR ONLY THE FIRST ORDERED CHAPTER');
         expect(invocation.prompt).toContain('.flashcards/audits/pilot-cold-start.md');
         expect(invocation.prompt).toContain('all unconfirmed domain knowledge as unseen');
+        expect(invocation.prompt).toContain('ignored by the parser');
+        expect(invocation.prompt).toContain('minimal teaching bridge on a scheduled front');
         expect(invocation.prompt).toContain('later chapter');
+    });
+
+    it('blanks only the first chapter and its figures for fresh pilot regeneration', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations', 'vectors']
+        });
+        const first = path.join(deckPath, 'flashcards', '01_foundations.md');
+        const second = path.join(deckPath, 'flashcards', '02_vectors.md');
+        await writeFile(first, '+++\norder = 1\nsubject = "physics"\ntags = ["mechanics"]\n+++\n\n<!-- card-id: old -->\nQ: Old?\nA: Old.\n');
+        await writeFile(second, '+++\norder = 2\nsubject = "physics"\ntags = ["mechanics"]\n+++\n\n<!-- card-id: keep -->\nQ: Keep?\nA: Keep.\n');
+        await writeFile(path.join(deckPath, 'figures', '01_foundations', 'old.svg'), '<svg/>\n');
+
+        resetPilotForRegeneration(deckPath);
+
+        expect(await readFile(first, 'utf8')).toContain('Fresh isolated pilot regeneration');
+        expect(await readFile(first, 'utf8')).not.toContain('card-id: old');
+        expect(await readFile(second, 'utf8')).toContain('card-id: keep');
+        await expect(stat(path.join(deckPath, 'figures', '01_foundations', 'old.svg'))).rejects.toMatchObject({ code: 'ENOENT' });
+        expect(await stat(path.join(deckPath, 'figures', '01_foundations', '.gitkeep'))).toBeTruthy();
+
+        const invocation = buildAgentInvocation({ mode: 'build', deckPath, freshPilot: true });
+        expect(invocation.prompt).toContain('intentionally blanked');
     });
 
     it('requires a passing pilot artifact and explicit approval before a full build', async () => {

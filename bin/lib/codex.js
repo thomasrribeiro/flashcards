@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -58,6 +58,28 @@ function deckModeInstruction(mode, buildScope, reportOnly) {
     return 'Audit and improve the entire deck, working chapter by chapter while preserving review history.';
 }
 
+export function resetPilotForRegeneration(deckPath) {
+    const flashcardsPath = path.join(deckPath, 'flashcards');
+    const chapterName = readdirSync(flashcardsPath)
+        .filter(name => /^\d{2}_.+\.md$/.test(name))
+        .sort((a, b) => a.localeCompare(b))[0];
+    if (!chapterName) throw new Error('Fresh pilot regeneration requires an ordered chapter file.');
+    const chapterPath = path.join(flashcardsPath, chapterName);
+    const markdown = readFileSync(chapterPath, 'utf8');
+    const frontmatter = /^\+\+\+\n[\s\S]*?\n\+\+\+\n/.exec(markdown)?.[0];
+    if (!frontmatter) throw new Error(`Fresh pilot regeneration requires TOML frontmatter: ${chapterPath}`);
+    writeFileSync(
+        chapterPath,
+        `${frontmatter}\n<!-- Fresh isolated pilot regeneration: author cards from the declared context. -->\n`
+    );
+
+    const figurePath = path.join(deckPath, 'figures', chapterName.replace(/\.md$/, ''));
+    rmSync(figurePath, { recursive: true, force: true });
+    mkdirSync(figurePath, { recursive: true });
+    writeFileSync(path.join(figurePath, '.gitkeep'), '');
+    return { chapterPath, figurePath };
+}
+
 function buildDeckPrompt({
     mode,
     targetPath,
@@ -67,6 +89,7 @@ function buildDeckPrompt({
     preflightPath,
     reportOnly,
     buildScope,
+    freshPilot,
     extraInstructions,
     isolated
 }) {
@@ -81,8 +104,12 @@ function buildDeckPrompt({
         'Read every present file in this ordered context manifest completely before acting:',
         ...contextFiles.map((file, index) => `${index + 1}. [${file.role}] ${file.path}`),
         deckModeInstruction(mode, buildScope, reportOnly),
+        freshPilot
+            ? 'The pilot chapter was intentionally blanked inside this temporary workspace. Design and author it from the declared learner model, standards, domain guide, and current research; do not reconstruct or recover the previous pilot from outside the workspace. Work only on chapter 1, its figures, the deck planning documents, and the pilot audit.'
+            : null,
         'Before large-scale authoring, complete a chapter design ledger covering retrieval targets, card-form choices, problem progression, authentic representations, and included or intentionally omitted figure opportunities.',
         'Treat all unconfirmed domain knowledge as unseen. Build a concept-dependency ledger and perform the cold-start scan without reading each answer until that front\'s dependencies are recorded.',
+        'The application schedules only Q:/A:, C:, and P:/S: blocks. Headings, lesson prose, tables, equations, and figures outside those blocks are ignored by the parser and cannot satisfy initial-learning prerequisites; embed a minimal teaching bridge on a scheduled front or establish it in an earlier scheduled card.',
         'Never use terminology, symbols, representations, or examples from a later chapter to scaffold an earlier chapter unless a minimal explicit bridge establishes them first.',
         'Do not optimize for a type distribution or figure count. Zero clozes may be correct; visually rich chapters may need several figures. Do not treat one figure per chapter as a target or cap.',
         'Before handoff, reconcile and report planned versus actual card-type, problem, and figure inventories by chapter, investigating unexplained omissions.',
@@ -163,6 +190,7 @@ export function buildAgentInvocation({
     extraInstructions,
     preflightPath,
     buildScope = 'pilot',
+    freshPilot = false,
     isolated = true
 }) {
     const deckPath = resolvePath(inputPath);
@@ -181,6 +209,7 @@ export function buildAgentInvocation({
         preflightPath,
         reportOnly,
         buildScope,
+        freshPilot,
         extraInstructions,
         isolated
     });
@@ -315,11 +344,14 @@ export function runDeckAgent({
     dryRun = false,
     allowDirty = false,
     buildScope = 'pilot',
+    freshPilot = false,
     isolated = true
 }) {
     const deckPath = resolvePath(inputPath);
     let preflightPath;
 
+    if (freshPilot && buildScope === 'full') throw new Error('--fresh-pilot cannot be combined with --full.');
+    if (freshPilot && !isolated) throw new Error('--fresh-pilot requires the default isolated run.');
     if (mode === 'build' && buildScope === 'full') requireFullBuildApproval(deckPath);
 
     if (!dryRun && !reportOnly) {
@@ -349,6 +381,7 @@ export function runDeckAgent({
         extraInstructions,
         preflightPath,
         buildScope,
+        freshPilot,
         isolated
     });
     if (dryRun) return { invocation: preview, status: 0, dryRun: true };
@@ -362,6 +395,9 @@ export function runDeckAgent({
             label: `${mode}-${buildScope}`
         });
         try {
+            if (mode === 'build' && buildScope === 'pilot' && freshPilot) {
+                resetPilotForRegeneration(prepared.workspacePath);
+            }
             const localPreflight = preflightPath
                 ? prepared.stagedContext.find(file => file.source === preflightPath)?.path
                 : undefined;
@@ -374,6 +410,7 @@ export function runDeckAgent({
                 preflightPath: localPreflight,
                 reportOnly,
                 buildScope,
+                freshPilot,
                 extraInstructions,
                 isolated: true
             });
@@ -391,6 +428,7 @@ export function runDeckAgent({
                 metadata: {
                     operation: mode,
                     buildScope,
+                    freshPilot,
                     reportOnly,
                     codexVersion: version,
                     model: invocation.model,

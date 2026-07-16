@@ -38,7 +38,11 @@ function addAgentOptions(command, { audit = false, build = false } = {}) {
             .option('--report-only', 'Inspect the deck without modifying it')
             .option('--allow-dirty', 'Audit despite pre-existing uncommitted deck changes');
     }
-    if (build) command.option('--full', 'Build every chapter after explicit pilot approval');
+    if (build) {
+        command
+            .option('--full', 'Build every chapter after explicit pilot approval')
+            .option('--fresh-pilot', 'Regenerate chapter 1 from a blank sandbox copy');
+    }
     return command;
 }
 
@@ -53,6 +57,7 @@ function executeAgent(mode, deckPath, options) {
         dryRun: options.dryRun,
         allowDirty: options.allowDirty,
         buildScope: options.full ? 'full' : 'pilot',
+        freshPilot: options.freshPilot,
         isolated: options.isolated,
         reasoningEffort: options.reasoningEffort
     });
@@ -68,7 +73,7 @@ function executeAgent(mode, deckPath, options) {
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('3.0.0')
+    .version('3.1.0')
     .showSuggestionAfterError();
 
 program

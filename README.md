@@ -165,6 +165,18 @@ flashcards deck build ~/notes/biology/genetics
 flashcards deck audit ~/notes/physics/mechanics
 ```
 
+To compare a genuinely fresh pilot design against an existing chapter without
+letting the agent paraphrase the old cards, blank chapter 1 only inside the
+temporary sandbox:
+
+```bash
+flashcards deck build ~/notes/physics/mechanics --fresh-pilot
+```
+
+The original deck snapshot remains hashed in the run record. The resulting
+chapter replaces the prior pilot and therefore receives new stable identities;
+use this only when intentionally resetting that chapter's review history.
+
 New builds follow a novice-first pilot lifecycle:
 
 1. unconfirmed domain knowledge is treated as unseen;
@@ -284,9 +296,6 @@ The context hierarchy deliberately avoids repetition:
 | subject `ROADMAP.md` | Deck sequence, prerequisites, and durable outcomes |
 | deck `README.md` | Scope, chapter map, and source register |
 | deck `CARD_README.md` | Deck-specific retrieval design and justified exceptions |
-
-`general.md` and `new-subject.md` remain only as short compatibility pointers
-for older links; agents do not load them.
 
 ## Development checks
 
