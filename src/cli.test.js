@@ -146,6 +146,37 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(report.decks[0].files[0].clozeLints[0].msg).toContain('math-internal cloze is parser-ambiguous');
     });
 
+    it('rejects SVG markers whose sizing mode is implicit', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['vectors']
+        });
+        const figurePath = path.join(deckPath, 'figures', '01_vectors', 'vector.svg');
+        await writeFile(
+            figurePath,
+            '<svg viewBox="0 0 100 100"><defs><marker id="arrow" markerWidth="8" markerHeight="8"><path d="M0 0L10 5L0 10Z"/></marker></defs></svg>\n'
+        );
+        const chapterPath = path.join(deckPath, 'flashcards', '01_vectors.md');
+        await writeFile(
+            chapterPath,
+            '+++\norder = 1\nsubject = "physics"\ntags = ["mechanics"]\n+++\n\n<!-- card-id: marker-sizing -->\nQ: ![Vector](../figures/01_vectors/vector.svg)\n\nWhich way does it point?\nA: Right.\n'
+        );
+
+        const invalid = validateDeck(deckPath, { quiet: true, capture: true });
+        expect(invalid.status).toBe(1);
+        expect(invalid.stdout).toContain('image errors: 1');
+
+        await writeFile(
+            figurePath,
+            '<svg viewBox="0 0 100 100"><defs><marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12"><path d="M0 0L10 5L0 10Z"/></marker></defs></svg>\n'
+        );
+        expect(validateDeck(deckPath, { quiet: true, capture: true }).status).toBe(0);
+    });
+
     it('builds an explicit fresh isolated Codex invocation', async () => {
         const notesRoot = await temporaryRoot();
         const { deckPath } = await createDeck({

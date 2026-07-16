@@ -6,6 +6,7 @@
  *   - parses with zero parser warnings (warnings mean silently dropped cards)
  *   - every LaTeX segment renders under KaTeX (code fences/spans stripped first)
  *   - every image link resolves; images have non-empty alt text
+ *   - every SVG marker declares markerUnits explicitly
  *   - cloze lints: deletion inside $...$ math (C4), deletion > 60 chars,
  *     > 2 deletions per block, leftover unmatched '['
  *   - frontmatter/filename lints (F1/F2 of CARD_STANDARD.md)
@@ -140,6 +141,23 @@ function checkFrontmatter(raw, fileName, metadata) {
     return lints;
 }
 
+function svgMarkerErrors(raw) {
+    const errors = [];
+    const markerRe = /<marker\b([^>]*)>/gi;
+    let match;
+    while ((match = markerRe.exec(raw)) !== null) {
+        const attributes = match[1];
+        if (/\bmarkerUnits\s*=/.test(attributes)) continue;
+        const id = attributes.match(/\bid\s*=\s*["']([^"']+)["']/i)?.[1];
+        errors.push(
+            `marker${id ? ` "${id}"` : ''} omits markerUnits; declare ` +
+            '`markerUnits="userSpaceOnUse"` for fixed-size arrowheads or ' +
+            '`markerUnits="strokeWidth"` when scaling with line weight is intentional'
+        );
+    }
+    return errors;
+}
+
 // --- main ---
 
 const decks = findDecks(root);
@@ -225,6 +243,7 @@ for (const deck of decks) {
 
         // Image links
         const imgRe = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
+        const checkedSvgPaths = new Set();
         let im;
         while ((im = imgRe.exec(raw)) !== null) {
             const [, alt, src] = im;
@@ -235,6 +254,16 @@ for (const deck of decks) {
             }
             if (!alt.trim()) {
                 fileReport.imageErrors.push({ src, msg: 'empty alt text' });
+            }
+            if (
+                fs.existsSync(resolved) &&
+                path.extname(resolved).toLowerCase() === '.svg' &&
+                !checkedSvgPaths.has(resolved)
+            ) {
+                checkedSvgPaths.add(resolved);
+                for (const msg of svgMarkerErrors(fs.readFileSync(resolved, 'utf8'))) {
+                    fileReport.imageErrors.push({ src, msg });
+                }
             }
         }
 

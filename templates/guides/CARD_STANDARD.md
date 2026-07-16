@@ -116,6 +116,11 @@ Severity:
   answer-revealing labels or constructions on the back.
 - **V3 — Accurate and accessible.** Geometry, direction, axes, scale, legends,
   and labels are correct. Do not rely on color alone; inspect at phone width.
+  SVG markers must declare `markerUnits` explicitly. For ordinary diagram
+  arrows, prefer `markerUnits="userSpaceOnUse"` so thicker strokes do not also
+  inflate the arrowheads; size the fixed marker in viewBox units and visually
+  keep it proportional to the line (usually about 1.5 to 4 stroke widths).
+  Never rely on the SVG default `markerUnits="strokeWidth"` accidentally.
 - **V4 — Appropriate medium.** Prefer original responsive SVG for technical
   diagrams. Use licensed photographs or raster illustrations only when their
   visual content is the authentic learning target.
