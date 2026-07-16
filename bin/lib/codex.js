@@ -12,6 +12,12 @@ import {
     recordIsolatedInvocation
 } from './isolation.js';
 import { markFullBuilt, markPilotBuilt, requireFullBuildApproval } from './pilot.js';
+import {
+    constrainWorkspaceToChapter,
+    formatPrerequisiteGraph,
+    resolveChapterClosure,
+    stageExternalPrerequisites
+} from './prerequisites.js';
 import { stabilizeDeck, validateDeck } from './validation.js';
 
 function auditTimestamp() {
@@ -60,13 +66,22 @@ function chapterAuditName(chapterName) {
     return `${chapterName.replace(/\.md$/, '')}-cold-start.md`;
 }
 
-function deckModeInstruction(mode, buildScope, reportOnly, chapterNumber, chapterName) {
+function deckModeInstruction(mode, buildScope, reportOnly, chapterNumber, chapterName, prerequisiteResolution) {
     if (mode === 'build' && buildScope === 'pilot') {
         return 'Research and design the curriculum, but AUTHOR ONLY THE FIRST ORDERED CHAPTER as a novice-first pilot. If no ordered chapter exists, design the chapter map and create the first chapter. Do not author, delete, or modify cards in later chapters. Complete the pilot dependency ledger and write .flashcards/audits/pilot-cold-start.md with a front-by-front audit. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains, then stop for human approval.';
     }
     if (mode === 'build' && buildScope === 'chapter') {
         const auditName = chapterAuditName(chapterName);
-        return `AUTHOR ONLY ORDERED CHAPTER ${chapterNumber} (${chapterName}). Treat the scheduled cards in chapters 1 through ${chapterNumber - 1} as the only established subject prerequisites, together with the declared learner contract. Do not author, delete, inspect for scaffolding, or modify later chapters, and do not modify earlier chapter cards or figures. Complete a chapter-boundary dependency ledger and write .flashcards/audits/${auditName} with a front-by-front audit. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains.`;
+        const local = prerequisiteResolution.localChapterIds.length
+            ? prerequisiteResolution.localChapterIds.join(', ')
+            : 'none';
+        const external = prerequisiteResolution.externalDeckIds.length
+            ? prerequisiteResolution.externalDeckIds.join(', ')
+            : 'none';
+        const tools = prerequisiteResolution.assumedTools.length
+            ? prerequisiteResolution.assumedTools.join(', ')
+            : 'none';
+        return `AUTHOR ONLY ORDERED CHAPTER ${chapterNumber} (${chapterName}). Treat only the scheduled cards in the resolved local prerequisite closure (${local}), the staged external deck closure (${external}), and the explicitly assumed tools (${tools}) as established inbound knowledge. Earlier order alone is not permission to assume an unlisted chapter when explicit edges are present. Do not author, delete, inspect for scaffolding, or modify unavailable/later chapters, and do not modify prerequisite cards or figures. Complete a chapter-boundary dependency ledger and write .flashcards/audits/${auditName} with a front-by-front audit. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains.`;
     }
     if (mode === 'build') {
         return 'Build the approved curriculum chapter by chapter. Repeat the dependency scan across every chapter boundary and write .flashcards/audits/full-cold-start.md. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains.';
@@ -112,7 +127,9 @@ function buildDeckPrompt({
     freshChapter,
     freshPilot,
     extraInstructions,
-    isolated
+    isolated,
+    prerequisiteGraph,
+    prerequisiteResolution
 }) {
     return [
         `Use $manage-flashcard-decks in ${mode} mode. Read the complete skill at ${skillPath} before acting.`,
@@ -122,11 +139,20 @@ function buildDeckPrompt({
             ? 'This is an isolated fresh-agent run. Use only the target workspace, the ordered staged context below, and sources you deliberately find through live web research.'
             : `Read-only flashcards application and standards: ${FLASHCARDS_ROOT}`,
         preflightPath ? `Machine-readable preflight report: ${preflightPath}` : null,
+        prerequisiteGraph ? `Machine-resolved prerequisite graph:\n${formatPrerequisiteGraph(prerequisiteGraph, {
+            chapter: prerequisiteResolution?.chapter?.order
+        })}` : null,
+        isolated && prerequisiteGraph
+            ? 'Read .flashcards/prerequisites/graph.json and the applicable scheduled cards in the available local/external prerequisite closure before authoring. Chapters outside the resolved local closure are absent from bounded chapter workspaces.'
+            : null,
+        isolated && prerequisiteResolution
+            ? 'Do not add an inbound prerequisite that was not present when this sandbox was resolved. Record the proposed edge as unresolved and stop rather than assuming unavailable knowledge; rerun after the metadata is updated and validated.'
+            : null,
         'Read every present file in this ordered context manifest completely before acting:',
         ...contextFiles.map((file, index) => `${index + 1}. [${file.role}] ${file.path}`),
-        deckModeInstruction(mode, buildScope, reportOnly, chapterNumber, chapterName),
+        deckModeInstruction(mode, buildScope, reportOnly, chapterNumber, chapterName, prerequisiteResolution),
         freshChapter
-            ? `Chapter ${chapterNumber} (${chapterName}) was intentionally blanked inside this temporary workspace. Design and author it from the declared learner model, the scheduled prerequisites in earlier chapters, standards, domain guide, and current research; do not reconstruct or recover the previous implementation from outside the workspace.`
+            ? `Chapter ${chapterNumber} (${chapterName}) was intentionally blanked inside this temporary workspace. Design and author it from the declared learner model, the machine-resolved prerequisite closure, standards, domain guide, and current research; do not reconstruct or recover the previous implementation from outside the workspace.`
             : null,
         freshPilot
             ? 'The pilot chapter was intentionally blanked inside this temporary workspace. Design and author it from the declared learner model, standards, domain guide, and current research; do not reconstruct or recover the previous pilot from outside the workspace. Work only on chapter 1, its figures, the deck planning documents, and the pilot audit.'
@@ -139,7 +165,7 @@ function buildDeckPrompt({
         'Before handoff, reconcile and report planned versus actual card-type, problem, and figure inventories by chapter, investigating unexplained omissions.',
         'Do not load deprecated compatibility guides or unrelated subject encyclopedias unless the user explicitly asks.',
         isolated
-            ? 'Do not inspect files outside this workspace. Do not modify .agents/, .flashcards/context/, or AGENTS.override.md.'
+            ? 'Do not inspect files outside this workspace. Do not modify .agents/, .flashcards/context/, .flashcards/prerequisites/, or AGENTS.override.md.'
             : 'Do not edit the flashcards application repository; make deck and subject changes only in the target workspaces.',
         'Do not commit, push, create a remote repository, or deploy.',
         extraInstructions ? `Additional user instructions: ${extraInstructions}` : null
@@ -220,13 +246,21 @@ export function buildAgentInvocation({
     isolated = true
 }) {
     const deckPath = resolvePath(inputPath);
-    const contextManifest = buildContextManifest({ deckPath, mode, preflightPath });
+    const contextManifest = buildContextManifest({ deckPath, mode, preflightPath, chapterNumber });
     const missingRequired = contextManifest.files.filter(file => file.required && !file.exists);
     if (missingRequired.length) {
         throw new Error(`Missing required authoring context: ${missingRequired.map(file => file.path).join(', ')}`);
     }
+    if (mode === 'build' && contextManifest.prerequisiteGraph.errors.length) {
+        throw new Error(`Invalid prerequisite graph:\n- ${contextManifest.prerequisiteGraph.errors.join('\n- ')}`);
+    }
     const contextFiles = contextManifest.files.filter(file => file.exists);
     const chapterName = buildScope === 'chapter' ? chapterNameForOrder(deckPath, chapterNumber) : undefined;
+    const prerequisiteResolution = mode === 'build' && buildScope === 'chapter'
+        ? resolveChapterClosure(contextManifest.prerequisiteGraph, chapterNumber)
+        : mode === 'build' && buildScope === 'pilot' && contextManifest.prerequisiteGraph.chapters.length
+            ? resolveChapterClosure(contextManifest.prerequisiteGraph, 1)
+            : undefined;
     const prompt = buildDeckPrompt({
         mode,
         targetPath: deckPath,
@@ -241,7 +275,9 @@ export function buildAgentInvocation({
         freshChapter,
         freshPilot,
         extraInstructions,
-        isolated
+        isolated,
+        prerequisiteGraph: contextManifest.prerequisiteGraph,
+        prerequisiteResolution
     });
     const invocation = buildCodexInvocation({
         workspacePath: deckPath,
@@ -252,7 +288,13 @@ export function buildAgentInvocation({
         nonInteractive,
         isolated
     });
-    return { ...invocation, deckPath, subjectRoot: contextManifest.subjectRoot, contextManifest };
+    return {
+        ...invocation,
+        deckPath,
+        subjectRoot: contextManifest.subjectRoot,
+        contextManifest,
+        prerequisiteResolution
+    };
 }
 
 export function buildSubjectAgentInvocation({
@@ -431,7 +473,17 @@ export function runDeckAgent({
         const prepared = prepareIsolatedRun({
             sourcePath: deckPath,
             contextFiles: preview.contextManifest.files,
-            label: chapterName ? `${mode}-${chapterName.replace(/\.md$/, '')}` : `${mode}-${buildScope}`
+            label: chapterName ? `${mode}-${chapterName.replace(/\.md$/, '')}` : `${mode}-${buildScope}`,
+            prepareWorkspace(workspacePath) {
+                if (preview.prerequisiteResolution) {
+                    constrainWorkspaceToChapter(workspacePath, preview.prerequisiteResolution);
+                }
+                return stageExternalPrerequisites(
+                    workspacePath,
+                    preview.contextManifest.prerequisiteGraph,
+                    preview.prerequisiteResolution
+                );
+            }
         });
         try {
             if (mode === 'build' && buildScope === 'pilot' && freshPilot) {
@@ -457,7 +509,9 @@ export function runDeckAgent({
                 freshChapter,
                 freshPilot,
                 extraInstructions,
-                isolated: true
+                isolated: true,
+                prerequisiteGraph: preview.contextManifest.prerequisiteGraph,
+                prerequisiteResolution: preview.prerequisiteResolution
             });
             const invocation = buildCodexInvocation({
                 workspacePath: prepared.workspacePath,
@@ -488,7 +542,14 @@ export function runDeckAgent({
                     reportOnly,
                     codexVersion: version,
                     model: invocation.model,
-                    reasoningEffort
+                    reasoningEffort,
+                    prerequisiteResolution: preview.prerequisiteResolution ? {
+                        targetChapter: preview.prerequisiteResolution.chapter.id,
+                        edgeMode: preview.prerequisiteResolution.mode,
+                        localChapters: preview.prerequisiteResolution.localChapterIds,
+                        externalDecks: preview.prerequisiteResolution.externalDeckIds,
+                        assumedTools: preview.prerequisiteResolution.assumedTools
+                    } : null
                 }
             });
             result.invocation = invocation;

@@ -17,8 +17,11 @@ destination, not permission to assume its vocabulary.
 
 ## Curriculum and prerequisite graph
 
-Define the ordered chapter map and the prerequisite edges between chapters.
-Establish terms and representations before asking the learner to apply them.
+Define prerequisite decks and assumed tools in `deck.toml`; define chapter
+edges and provided concepts in each chapter's TOML frontmatter. Inspect the
+resolved, human-readable graph with `flashcards deck prerequisites .`. Do not
+duplicate that graph here. Use this section only to explain important design
+decisions, boundaries, or rejected edges that the metadata cannot express.
 
 ## Concept-dependency ledger
 

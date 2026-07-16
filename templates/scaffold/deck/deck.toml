@@ -1,10 +1,14 @@
-schema_version = 1
+schema_version = 2
 subject = "{{SUBJECT}}"
 deck = "{{DECK}}"
 level = "{{LEVEL}}"
 status = "scaffolded"
 pilot_chapter = 1
 created = "{{DATE}}"
+
+[prerequisites]
+decks = [{{PREREQUISITE_DECKS}}]
+assumed_tools = [{{ASSUMED_TOOLS}}]
 
 [standards]
 flashcards_root = "{{FLASHCARDS_ROOT}}"

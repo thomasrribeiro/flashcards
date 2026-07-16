@@ -5,6 +5,11 @@ import { addChapter, createDeck, ensureSubject } from './lib/scaffold.js';
 import { codexDoctor, formatInvocation, runDeckAgent, runSubjectAgent } from './lib/codex.js';
 import { buildContextManifest, buildSubjectContextManifest, formatContextManifest } from './lib/context.js';
 import { approvePilot } from './lib/pilot.js';
+import {
+    formatPrerequisiteGraph,
+    migratePrerequisites,
+    resolvePrerequisiteGraph
+} from './lib/prerequisites.js';
 import { renderTikzFigures } from './lib/figures.js';
 import { resolveNotesRoot, resolvePath } from './lib/paths.js';
 import { stabilizeDeck, validateDeck } from './lib/validation.js';
@@ -85,7 +90,7 @@ function executeAgent(mode, deckPath, options) {
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('3.2.0')
+    .version('3.3.0')
     .showSuggestionAfterError();
 
 program
@@ -165,6 +170,8 @@ addAgentOptions(deck
     .option('--notes-root <path>', 'Notes collection root')
     .option('--level <level>', 'Learner level', 'introductory-college')
     .option('--description <text>', 'One-sentence deck purpose')
+    .option('--prerequisite-deck <subject/deck>', 'Declare a prerequisite deck; repeat as needed', collect, [])
+    .option('--assumed-tool <tool>', 'Declare a mastered mathematical/tool prerequisite; repeat as needed', collect, [])
     .option('-c, --chapter <name>', 'Create an initial chapter; repeat for multiple chapters', collect, [])
     .option('--no-git', 'Do not initialize a Git repository')
     .option('--no-agent', 'Create deterministic scaffold files without launching Codex'))
@@ -177,7 +184,9 @@ addAgentOptions(deck
                 level: options.level,
                 description: options.description,
                 initializeGit: options.git,
-                chapters: options.chapter
+                chapters: options.chapter,
+                prerequisiteDecks: options.prerequisiteDeck,
+                assumedTools: options.assumedTool
             });
             console.log(`Created deck: ${result.deckPath}`);
             if (result.subjectFiles.length) console.log(`Created ${result.subjectFiles.length} missing subject context file(s).`);
@@ -218,9 +227,23 @@ deck
     .command('add-chapter <deck-path> <name>')
     .description('Add an ordered chapter file and matching figure directory')
     .addOption(new Option('--order <number>', 'Explicit chapter order').argParser(positiveInteger))
+    .option('--prerequisite <reference>', 'Add chapter:, concept:, deck:, or tool: prerequisite; repeat as needed', collect, [])
+    .option('--provides <concept>', 'Declare a concept provided by this chapter; repeat as needed', collect, [])
+    .option('--independent', 'Create the chapter with no default preceding-chapter edge')
     .action(async (deckPath, name, options) => {
         try {
-            const result = await addChapter({ deckPath, name, order: options.order });
+            if (options.independent && options.prerequisite.length) {
+                throw new Error('--independent cannot be combined with --prerequisite.');
+            }
+            const result = await addChapter({
+                deckPath,
+                name,
+                order: options.order,
+                prerequisites: options.independent
+                    ? []
+                    : options.prerequisite.length ? options.prerequisite : undefined,
+                provides: options.provides
+            });
             console.log(`Created ${result.filePath}`);
             console.log(`Created ${result.figurePath}`);
         } catch (error) {
@@ -246,12 +269,53 @@ deck
     .command('context <deck-path>')
     .description('Show the exact ordered Markdown context used by a build or audit')
     .addOption(new Option('--mode <mode>', 'Agent operation').choices(['build', 'audit']).default('build'))
+    .addOption(new Option('--chapter <number>', 'Resolve context for one ordered chapter').argParser(positiveInteger))
     .option('--json', 'Print the manifest as JSON')
     .action((deckPath, options) => {
         try {
-            const manifest = buildContextManifest({ deckPath, mode: options.mode });
+            const manifest = buildContextManifest({ deckPath, mode: options.mode, chapterNumber: options.chapter });
             console.log(options.json ? JSON.stringify(manifest, null, 2) : formatContextManifest(manifest));
             if (manifest.summary.missingRequired) process.exitCode = 1;
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+deck
+    .command('prerequisites <deck-path>')
+    .description('Resolve and validate deck, chapter, concept, and tool prerequisites')
+    .addOption(new Option('--chapter <number>', 'Show the transitive closure for one ordered chapter').argParser(positiveInteger))
+    .option('--json', 'Print the resolved graph as JSON')
+    .action((deckPath, options) => {
+        try {
+            const graph = resolvePrerequisiteGraph(deckPath);
+            if (options.chapter && !graph.errors.length) {
+                // Formatting resolves the requested closure and verifies the chapter exists.
+                formatPrerequisiteGraph(graph, { chapter: options.chapter });
+            }
+            console.log(options.json
+                ? JSON.stringify(graph, null, 2)
+                : formatPrerequisiteGraph(graph, { chapter: options.chapter }));
+            if (graph.errors.length) process.exitCode = 1;
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+deck
+    .command('migrate-prerequisites <deck-path>')
+    .description('Upgrade a legacy deck to explicit schema-v2 prerequisite metadata')
+    .option('--check', 'Report files that require migration without changing them')
+    .action((deckPath, options) => {
+        try {
+            const result = migratePrerequisites(deckPath, { check: options.check });
+            if (result.changed.length) {
+                console.log(`${options.check ? 'Would update' : 'Updated'} ${result.changed.length} file(s):`);
+                for (const file of result.changed) console.log(`- ${file}`);
+                if (options.check) process.exitCode = 1;
+            } else {
+                console.log('Prerequisite metadata is already explicit and current.');
+            }
         } catch (error) {
             handleError(error);
         }
@@ -273,7 +337,7 @@ deck
 
 deck
     .command('validate <deck-path>')
-    .description('Validate parser behavior, metadata, math, clozes, figures, and card identities')
+    .description('Validate prerequisites, parser behavior, metadata, math, figures, and identities')
     .option('--out <path>', 'Write the machine-readable JSON report')
     .option('--quiet', 'Print only the validation summary')
     .action((deckPath, options) => {

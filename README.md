@@ -44,11 +44,13 @@ The CLI separates deterministic operations from agent judgment:
 
 By default every judgment-heavy command starts a fresh, non-resumable Codex
 process in a temporary copy of the target. Only the ordered Markdown context
-reported by `subject context` or `deck context` is staged alongside the target;
-the agent is instructed not to inspect any other local files. Live web research
-remains available. A clean patch is applied back after the agent succeeds, and
-the prompt, target-file snapshot, ordered context and vendored-skill hashes,
-model, Codex version, result, and patch are recorded under
+reported by `subject context` or `deck context`, the target chapter, and its
+machine-resolved transitive prerequisite closure are staged. Unrelated chapters
+are absent from bounded chapter workspaces. Live web research remains
+available. A clean patch is applied back after the agent succeeds, and the
+prompt, constrained target snapshot, prerequisite-closure hashes, ordered
+context and vendored-skill hashes, model, Codex version, result, and patch are
+recorded under
 `~/.flashcards/runs/`.
 
 The isolated run uses `codex exec --ephemeral --ignore-user-config
@@ -76,8 +78,13 @@ Subjects and decks use lowercase kebab-case. By default, decks are created at
 flashcards subject create biology
 
 flashcards deck create biology genetics \
-  --description "Mechanistic genetics from inheritance to gene regulation"
+  --description "Mechanistic genetics from inheritance to gene regulation" \
+  --assumed-tool basic-statistics
 ```
+
+When a prerequisite deck already exists in the same notes collection, declare
+it with a repeatable flag such as
+`--prerequisite-deck biology/cell-biology`.
 
 Both commands launch a fresh isolated agent by default. `subject create`
 researches and completes `SUBJECT_BRIEF.md` and `ROADMAP.md`; if the repository
@@ -141,8 +148,17 @@ overwritten.
 ## Maintain a deck
 
 ```bash
-# Add the next ordered chapter and matching figures directory
-flashcards deck add-chapter ~/notes/biology/genetics gene-regulation
+# Add a chapter with explicit edges and a concept it establishes
+flashcards deck add-chapter ~/notes/biology/genetics gene-regulation \
+  --prerequisite chapter:02_molecular_inheritance \
+  --provides gene-regulation
+
+# Inspect the graph or one chapter's transitive closure
+flashcards deck prerequisites ~/notes/biology/genetics
+flashcards deck prerequisites ~/notes/biology/genetics --chapter 3
+
+# Upgrade schema-v1 metadata while preserving its effective closure
+flashcards deck migrate-prerequisites ~/notes/biology/genetics
 
 # Add stable IDs before revising studied legacy cards
 flashcards deck stabilize ~/notes/biology/genetics
@@ -204,12 +220,14 @@ flashcards deck build ~/notes/physics/mechanics --chapter 2
 flashcards deck build ~/notes/physics/mechanics --chapter 2 --fresh-chapter
 ```
 
-A chapter build may read scheduled cards in earlier chapters as established
-prerequisites. Its applied patch is restricted to the selected chapter, its
-figures, its chapter-boundary audit, and the deck README/blueprint; later
-chapters cannot be changed by the run. Fresh regeneration gives the selected
-chapter new review identities and should be used only after preserving any
-comparison baseline you need.
+A schema-v2 chapter build may read only scheduled cards in its resolved local
+prerequisite closure, plus external decks and tools declared in `deck.toml`.
+Earlier order alone does not grant access. Its patch is restricted to the
+selected chapter, figures, chapter-boundary audit, and deck README/blueprint;
+unrelated chapters are absent from the sandbox. Schema-v1 decks remain
+compatible by inferring the former behavior—all earlier ordered chapters—until
+they are migrated. Fresh regeneration gives the selected chapter new review
+identities and should be used only after preserving any comparison baseline.
 
 New builds follow a novice-first pilot lifecycle:
 
@@ -229,15 +247,17 @@ Inspect the exact ordered Markdown context before launching an agent:
 ```bash
 flashcards subject context ~/notes/biology
 flashcards deck context ~/notes/biology/genetics --mode build
+flashcards deck context ~/notes/biology/genetics --mode build --chapter 3
 flashcards deck context ~/notes/physics/mechanics --mode audit --json
 flashcards deck build ~/notes/biology/genetics --dry-run
 ```
 
 The context commands report every declared Markdown file, its role and word
-count, optional missing files, and the total context. `--dry-run` also prints
-the prompt and resolved model without launching an agent. Live runs additionally
-hash every target file and every vendored skill file in the provenance record,
-so accessible local inputs are visible instead of implicit.
+count, optional missing files, the resolved prerequisite graph, and the total
+context. `--dry-run` also prints the prompt and resolved model without launching
+an agent. Live runs additionally hash every accessible target, prerequisite,
+and vendored skill file in the provenance record, so local inputs are visible
+instead of implicit.
 
 Before any editing agent starts, the CLI gives existing card blocks stable IDs
 so later wording, figure, and correctness improvements cannot silently discard
@@ -298,6 +318,8 @@ Canonical files use TOML frontmatter and ordered `NN_snake_case.md` filenames:
 order = 1
 subject = "physics"
 tags = ["mechanics"]
+prerequisites = []
+provides = ["one-dimensional-coordinate"]
 +++
 
 <!-- card-id: card-... -->
@@ -311,6 +333,19 @@ C: The slope of a position-time graph is [velocity].
 P: A symbolic problem statement with all required givens.
 S: A transferable solution method with a genuine evaluation step.
 ```
+
+Deck-wide edges and confirmed tools live in `deck.toml`:
+
+```toml
+[prerequisites]
+decks = ["mathematics/algebra", "mathematics/trigonometry"]
+assumed_tools = ["introductory-calculus"]
+```
+
+Chapter references support `chapter:NN_name`, `concept:kebab-name`,
+`deck:subject/deck`, and `tool:kebab-name`. A concept must have exactly one
+earlier local provider. Validation rejects missing or ambiguous references,
+later-chapter edges, undeclared external dependencies/tools, and cycles.
 
 Read these sources of truth before authoring manually:
 
@@ -328,8 +363,10 @@ The context hierarchy deliberately avoids repetition:
 | subject `DOMAIN_GUIDE.md` | AI-researched domain guide only when no reusable repository guide exists |
 | subject `SUBJECT_BRIEF.md` | Learner, depth, conventions, and evidence authorities |
 | subject `ROADMAP.md` | Deck sequence, prerequisites, and durable outcomes |
+| deck `deck.toml` | Machine-readable identity, external deck prerequisites, and assumed tools |
 | deck `README.md` | Scope, chapter map, and source register |
 | deck `CARD_README.md` | Deck-specific retrieval design and justified exceptions |
+| chapter frontmatter | Machine-readable chapter edges and provided concepts |
 
 ## Development checks
 

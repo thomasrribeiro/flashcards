@@ -147,8 +147,11 @@ Severity:
   assumed prerequisites, desired durable capabilities, depth, and exclusions.
   Unconfirmed domain knowledge defaults to **not mastered**; broad labels such
   as “introductory,” “college,” or “calculus-aware” are not prerequisite lists.
-- **D2 — Prerequisite graph.** Chapters and applications follow explicit
-  prerequisite edges. A failed card should expose a retrieval or reasoning gap,
+- **D2 — Prerequisite graph.** Deck dependencies and assumed tools live in
+  `deck.toml`; chapter edges and optionally provided concepts live in chapter
+  frontmatter. These machine-readable declarations are the source of truth and
+  must resolve without missing references, later-chapter edges, ambiguity, or
+  cycles. A failed card should expose a retrieval or reasoning gap,
   not missing instruction. Each chapter records its allowed inbound knowledge
   and a concept ledger mapping every new term or representation to its first
   explanation, first retrieval, and later application.
@@ -174,8 +177,10 @@ Severity:
 ## File and identity rules
 
 - **F1 — Canonical frontmatter.** Use TOML `+++` frontmatter with `order`,
-  canonical lowercase kebab-case `subject`, and kebab-case `tags`. Preserve
-  supported provenance tables. Remove the obsolete `name` field.
+  canonical lowercase kebab-case `subject`, kebab-case `tags`, explicit
+  `prerequisites`, and `provides`. Preserve supported provenance tables. Remove
+  the obsolete `name` field. Prerequisite references use `chapter:`, `concept:`,
+  `deck:`, or `tool:` prefixes.
 - **F2 — Ordered filenames.** Chapter files use zero-padded
   `NN_snake_case.md` names whose prefix matches `order`.
 - **F3 — Deck metadata.** New and modernized decks contain `AGENTS.md`,

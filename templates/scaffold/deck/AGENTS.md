@@ -12,6 +12,9 @@ Read and follow, in order:
 
 Use the flashcards application's parser, stable-ID implementation, and
 validator as executable truth. Establish prerequisites before applications.
+Run `flashcards deck prerequisites .` and use only its resolved transitive
+closure as inbound deck/chapter knowledge. Earlier file order alone is not a
+prerequisite when explicit edges are present.
 Create the smallest sufficient card set; do not optimize for card count.
 “Smallest sufficient” means removing redundant retrieval decisions, not
 minimizing authentic representations, problem progression, or useful figures.

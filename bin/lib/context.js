@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { FLASHCARDS_ROOT, resolvePath } from './paths.js';
+import { formatPrerequisiteGraph, resolvePrerequisiteGraph } from './prerequisites.js';
 
 function readSubject(deckPath) {
     const manifestPath = path.join(deckPath, 'deck.toml');
@@ -116,7 +117,7 @@ export function buildSubjectContextManifest({ subjectPath: inputPath } = {}) {
     };
 }
 
-export function buildContextManifest({ deckPath: inputPath, mode = 'build', preflightPath } = {}) {
+export function buildContextManifest({ deckPath: inputPath, mode = 'build', preflightPath, chapterNumber } = {}) {
     if (!['build', 'audit'].includes(mode)) throw new Error(`Unknown context mode: ${mode}`);
     const deckPath = resolvePath(inputPath);
     if (!existsSync(deckPath) || !statSync(deckPath).isDirectory()) {
@@ -163,12 +164,15 @@ export function buildContextManifest({ deckPath: inputPath, mode = 'build', pref
     }
 
     const present = files.filter(file => file.exists);
+    const prerequisiteGraph = resolvePrerequisiteGraph(deckPath);
     return {
         mode,
         deckPath,
         subjectRoot,
         collectionRoot,
         subject,
+        prerequisiteGraph,
+        chapterNumber,
         files,
         summary: {
             present: present.length,
@@ -200,5 +204,8 @@ export function formatContextManifest(manifest) {
     }
     lines.push('');
     lines.push(`Total loaded context: ${manifest.summary.words} words across ${manifest.summary.present} files`);
+    if (manifest.prerequisiteGraph) {
+        lines.push('', formatPrerequisiteGraph(manifest.prerequisiteGraph, { chapter: manifest.chapterNumber }));
+    }
     return lines.join('\n');
 }

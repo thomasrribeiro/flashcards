@@ -8,17 +8,19 @@
 - Learner level: `{{LEVEL}}`
 - Confirmed mathematical/tool prerequisites: TODO
 - Confirmed subject prerequisites: none unless explicitly listed
-- Prerequisite decks: none unless explicitly listed
+- Machine-readable deck and tool prerequisites: `deck.toml`
 - What mastery enables: TODO
 - Deliberate exclusions: TODO
 
 ## Chapter map
 
-| File | Topic | Prerequisites | Learning outcomes |
-|---|---|---|---|
-| TODO | TODO | TODO | TODO |
+| File | Topic | Learning outcomes |
+|---|---|---|
+| TODO | TODO | TODO |
 
-Planned outcomes in later rows are not prerequisites for earlier rows.
+Chapter prerequisite edges and provided concepts live only in chapter
+frontmatter. Inspect the generated human-readable graph with
+`flashcards deck prerequisites .`; do not maintain a second prose graph here.
 
 ## Source register
 

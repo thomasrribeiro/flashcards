@@ -43,7 +43,14 @@ async function writeIfMissing(target, content) {
     return true;
 }
 
-function commonValues({ subject, deck = '', level = '', description = '' }) {
+function commonValues({
+    subject,
+    deck = '',
+    level = '',
+    description = '',
+    prerequisiteDecks = [],
+    assumedTools = []
+}) {
     return {
         SUBJECT: subject,
         SUBJECT_TITLE: titleFromSlug(subject),
@@ -51,6 +58,8 @@ function commonValues({ subject, deck = '', level = '', description = '' }) {
         DECK_TITLE: deck ? titleFromSlug(deck) : '',
         LEVEL: level,
         DESCRIPTION: description,
+        PREREQUISITE_DECKS: prerequisiteDecks.map(tomlString).join(', '),
+        ASSUMED_TOOLS: assumedTools.map(tomlString).join(', '),
         DATE: new Date().toISOString().slice(0, 10),
         FLASHCARDS_ROOT
     };
@@ -79,10 +88,18 @@ export async function createDeck({
     level = 'introductory-college',
     description,
     initializeGit = true,
-    chapters = []
+    chapters = [],
+    prerequisiteDecks = [],
+    assumedTools = []
 }) {
     requireKebabSlug(subject, 'Subject');
     requireKebabSlug(deck, 'Deck');
+    for (const reference of prerequisiteDecks) {
+        if (!/^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(reference)) {
+            throw new Error(`Prerequisite deck must use subject/deck lowercase kebab-case: ${reference}`);
+        }
+    }
+    for (const tool of assumedTools) requireKebabSlug(tool, 'Assumed tool');
     const root = resolveNotesRoot(notesRoot);
     const subjectPath = path.join(root, subject);
     const deckPath = path.join(subjectPath, deck);
@@ -95,7 +112,7 @@ export async function createDeck({
     const { created: subjectFiles } = await ensureSubject({ subject, notesRoot: root });
 
     const summary = description || `Spaced-repetition deck for ${titleFromSlug(deck)}.`;
-    const values = commonValues({ subject, deck, level, description: summary });
+    const values = commonValues({ subject, deck, level, description: summary, prerequisiteDecks, assumedTools });
     await mkdir(path.join(deckPath, 'flashcards'), { recursive: true });
     await mkdir(path.join(deckPath, 'figures'), { recursive: true });
     await mkdir(path.join(deckPath, 'references'), { recursive: true });
@@ -160,7 +177,7 @@ async function readDeckSubject(deckPath) {
     return requireKebabSlug(path.basename(path.dirname(deckPath)), 'Subject');
 }
 
-export async function addChapter({ deckPath: inputPath, name, order }) {
+export async function addChapter({ deckPath: inputPath, name, order, prerequisites, provides = [] }) {
     const deckPath = resolvePath(inputPath);
     const flashcardsPath = path.join(deckPath, 'flashcards');
     if (!(await exists(flashcardsPath))) {
@@ -179,7 +196,23 @@ export async function addChapter({ deckPath: inputPath, name, order }) {
     if (await exists(figurePath)) throw new Error(`Chapter figure directory already exists: ${figurePath}`);
     const subject = await readDeckSubject(deckPath);
     const deck = path.basename(deckPath);
-    const content = `+++\norder = ${resolvedOrder}\nsubject = ${tomlString(subject)}\ntags = [${tomlString(deck)}]\n+++\n\n<!-- Add atomic card blocks here. Every new block requires a stable card-id. -->\n`;
+    const entries = (await readdir(flashcardsPath))
+        .map(entry => /^(\d{2}_.+)\.md$/.exec(entry)?.[1])
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
+    const previous = entries
+        .filter(entry => Number(entry.slice(0, 2)) < resolvedOrder)
+        .at(-1);
+    const resolvedPrerequisites = prerequisites == null
+        ? previous ? [`chapter:${previous}`] : []
+        : prerequisites;
+    for (const reference of resolvedPrerequisites) {
+        if (!/^(?:chapter:\d{2}_[a-z0-9]+(?:_[a-z0-9]+)*|concept:[a-z0-9]+(?:-[a-z0-9]+)*|deck:[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*|tool:[a-z0-9]+(?:-[a-z0-9]+)*)$/.test(reference)) {
+            throw new Error(`Invalid chapter prerequisite reference: ${reference}`);
+        }
+    }
+    for (const concept of provides) requireKebabSlug(concept, 'Provided concept');
+    const content = `+++\norder = ${resolvedOrder}\nsubject = ${tomlString(subject)}\ntags = [${tomlString(deck)}]\nprerequisites = [${resolvedPrerequisites.map(tomlString).join(', ')}]\nprovides = [${provides.map(tomlString).join(', ')}]\n+++\n\n<!-- Add atomic card blocks here. Every new block requires a stable card-id. -->\n`;
     await writeNewFile(filePath, content);
     await mkdir(figurePath, { recursive: true });
     await writeNewFile(path.join(figurePath, '.gitkeep'), '');

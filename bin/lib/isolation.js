@@ -111,9 +111,11 @@ function writeOverride(workspacePath) {
     writeFileSync(target, `# Isolated flashcard-agent workspace
 
 This is a temporary, provenance-recorded workspace. Work only inside this
-directory. Use the vendored \`$manage-flashcard-decks\` skill and only the
-ordered files in \`.flashcards/context/\` as supplied project context. Live web
-research is allowed and must be recorded in the appropriate source register.
+directory. Use the vendored \`$manage-flashcard-decks\` skill, the target files
+present in this workspace, the machine-resolved closure under
+\`.flashcards/prerequisites/\`, and only the ordered files in
+\`.flashcards/context/\` as supplied project context. Live web research is
+allowed and must be recorded in the appropriate source register.
 Do not inspect parent directories, the user's home directory, unrelated local
 repositories, saved conversations, or unlisted project files outside this
 workspace. Do not commit, push, deploy, or modify the staged context files.
@@ -130,8 +132,14 @@ function initializeBaseline(workspacePath) {
 }
 
 function restoreProtectedContext(workspacePath) {
-    const protectedPaths = ['.agents', path.join('.flashcards', 'context'), 'AGENTS.override.md'];
-    runGit(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...protectedPaths], workspacePath);
+    const protectedPaths = [
+        '.agents',
+        path.join('.flashcards', 'context'),
+        path.join('.flashcards', 'prerequisites'),
+        'AGENTS.override.md'
+    ];
+    const presentPaths = protectedPaths.filter(target => existsSync(path.join(workspacePath, target)));
+    runGit(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...presentPaths], workspacePath);
     runGit(['clean', '-q', '-fd', '--', ...protectedPaths], workspacePath);
 }
 
@@ -139,7 +147,13 @@ function createPatch(workspacePath, allowedPaths) {
     runGit(['add', '-N', '--all'], workspacePath);
     const pathspec = allowedPaths?.length
         ? allowedPaths
-        : ['.', ':(exclude).agents', ':(exclude).flashcards/context', ':(exclude)AGENTS.override.md'];
+        : [
+            '.',
+            ':(exclude).agents',
+            ':(exclude).flashcards/context',
+            ':(exclude).flashcards/prerequisites',
+            ':(exclude)AGENTS.override.md'
+        ];
     const result = runGit(
         ['diff', '--binary', '--no-ext-diff', 'HEAD', '--', ...pathspec],
         workspacePath,
@@ -170,11 +184,18 @@ function applyPatch(targetPath, patch) {
     }
 }
 
-export function prepareIsolatedRun({ sourcePath, contextFiles, label = 'agent', includeTopLevel }) {
+export function prepareIsolatedRun({
+    sourcePath,
+    contextFiles,
+    label = 'agent',
+    includeTopLevel,
+    prepareWorkspace
+}) {
     const source = path.resolve(sourcePath);
     const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'flashcards-isolated-'));
     const workspacePath = path.join(temporaryRoot, 'workspace');
     copyWorkspace(source, workspacePath, includeTopLevel);
+    const preparedWorkspace = prepareWorkspace ? prepareWorkspace(workspacePath) : undefined;
     const sourceSnapshot = inventoryFiles(workspacePath);
     const stagedContext = stageContext(workspacePath, contextFiles);
     const skillPath = vendorSkill(workspacePath);
@@ -192,6 +213,7 @@ export function prepareIsolatedRun({ sourcePath, contextFiles, label = 'agent', 
         stagedContext,
         skillPath,
         sourceSnapshot,
+        preparedWorkspace,
         vendoredSkill,
         override: { path: 'AGENTS.override.md', sha256: sha256(overridePath) }
     };
@@ -210,6 +232,7 @@ export function recordIsolatedInvocation(prepared, { prompt, invocation, metadat
         workspacePath: prepared.workspacePath,
         context: prepared.stagedContext,
         sourceSnapshot: prepared.sourceSnapshot,
+        preparedWorkspace: prepared.preparedWorkspace,
         vendoredSkill: prepared.vendoredSkill,
         override: prepared.override,
         ...metadata

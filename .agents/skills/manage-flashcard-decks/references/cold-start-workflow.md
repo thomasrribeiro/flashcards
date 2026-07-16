@@ -10,6 +10,11 @@ mastered. Separate mathematical or tool prerequisites from domain knowledge.
 Everything else is unknown. Do not infer physics knowledge from “calculus-aware”
 or biology knowledge from “college-level.”
 
+Resolve `deck.toml` and chapter frontmatter with
+`flashcards deck prerequisites <deck> --chapter <number>`. The resulting
+transitive closure is the maximum allowed inbound subject knowledge. Do not add
+an undeclared earlier chapter to the learner contract during the audit.
+
 ## 2. Build the chapter dependency ledger
 
 For every chapter, record:

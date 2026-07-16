@@ -41,6 +41,13 @@ For each chapter, write outcomes and inbound prerequisite edges. Introduce
 recurring concepts early and revisit them only when the later context demands a
 new retrieval target.
 
+Treat the resolved CLI graph as executable truth. Declare whole-deck
+dependencies and confirmed tools in `deck.toml`; declare local chapter edges
+and optional concept providers in chapter frontmatter. During an isolated
+chapter build, only the target, its transitive local closure, and staged
+external deck closure are available. File order is presentation order, not an
+implicit edge in schema-v2 decks.
+
 A useful chapter arc, when the domain supports it, is:
 
 1. motivating phenomenon and prerequisite bridge;
@@ -273,11 +280,12 @@ Keep each fact in one durable home:
 | `AUTHORING_PLAYBOOK.md` | universal learning, curriculum, research, figure, and audit decisions | parser minutiae or domain encyclopedias |
 | `templates/guides/<subject>.md` | reusable domain-specific epistemic and representation guidance | one learner's roadmap |
 | subject `AGENTS.md` | short routing instructions | authoring content |
-| subject `ROADMAP.md` | learner-specific deck sequence and prerequisite graph | universal card rules |
+| subject `ROADMAP.md` | learner-facing sequence rationale and proposed deck relationships | machine-readable edges or universal card rules |
 | subject `SUBJECT_BRIEF.md` | learner, depth, conventions, constraints, and evidence authorities | chapter map or universal rules |
-| deck `README.md` | scope, chapter map, source register, and use | generic SRS advice |
+| deck `README.md` | scope, chapter map, source register, and use | machine-readable prerequisite edges or generic SRS advice |
 | deck `CARD_README.md` | deck-specific retrieval design and justified deviations | copied research literature |
-| deck `deck.toml` | machine-readable identity and standards paths | prose guidance |
+| deck `deck.toml` | machine-readable identity, deck prerequisites, assumed tools, and standards paths | prose guidance |
+| chapter frontmatter | machine-readable chapter prerequisites and provided concepts | curriculum essays or duplicate dependency tables |
 
 `AGENTS.md` files should route an agent to the canonical documents and state
 write/validation boundaries. They should remain short.

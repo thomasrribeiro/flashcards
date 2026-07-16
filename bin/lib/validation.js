@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { FLASHCARDS_ROOT, resolvePath } from './paths.js';
+import { resolvePrerequisiteGraph } from './prerequisites.js';
 
 function runNode(script, args, options = {}) {
     const result = spawnSync(process.execPath, [path.join(FLASHCARDS_ROOT, script), ...args], {
@@ -30,7 +31,46 @@ export function validateDeck(inputPath, { outputPath, quiet = false, capture = f
     }
     if (quiet) args.push('--quiet');
     const result = runNode('scripts/validate-notes.js', args, { capture });
-    return { ...result, deckPath };
+    const prerequisiteGraph = resolvePrerequisiteGraph(deckPath);
+    const prerequisiteReport = {
+        valid: prerequisiteGraph.errors.length === 0,
+        schemaVersion: prerequisiteGraph.root?.schemaVersion ?? null,
+        deck: prerequisiteGraph.root?.id ?? null,
+        deckDependencies: prerequisiteGraph.root?.deckDependencies || [],
+        assumedTools: prerequisiteGraph.root?.assumedTools || [],
+        chapters: prerequisiteGraph.chapters.map(chapter => ({
+            id: chapter.id,
+            order: chapter.order,
+            mode: chapter.prerequisiteMode,
+            prerequisites: chapter.prerequisites,
+            provides: chapter.provides,
+            resolvedLocalDependencies: chapter.dependencies
+        })),
+        warnings: prerequisiteGraph.warnings,
+        errors: prerequisiteGraph.errors
+    };
+    if (outputPath && existsSync(resolvePath(outputPath))) {
+        const resolvedOutput = resolvePath(outputPath);
+        const report = JSON.parse(readFileSync(resolvedOutput, 'utf8'));
+        report.prerequisites = prerequisiteReport;
+        writeFileSync(resolvedOutput, `${JSON.stringify(report, null, 2)}\n`);
+    }
+    let stdout = result.stdout;
+    if (prerequisiteGraph.errors.length) {
+        const message = `Prerequisite errors: ${prerequisiteGraph.errors.length}\n${prerequisiteGraph.errors.map(error => `  - ${error}`).join('\n')}\n`;
+        if (capture) stdout = `${stdout || ''}${message}`;
+        else console.error(message.trimEnd());
+    } else if (!quiet && !capture) {
+        console.log(`Prerequisite graph: valid (${prerequisiteGraph.chapters.length} chapter(s), ${prerequisiteGraph.externalDecks.length} external deck(s))`);
+    }
+    return {
+        ...result,
+        stdout,
+        status: result.status !== 0 || prerequisiteGraph.errors.length ? 1 : 0,
+        deckPath,
+        prerequisiteGraph,
+        prerequisiteReport
+    };
 }
 
 export function stabilizeDeck(inputPath, { check = false, capture = false } = {}) {

@@ -33,9 +33,12 @@ read each applicable file completely before editing:
    absent;
 5. the deck's routing `AGENTS.md`, machine-readable `deck.toml`, scope/source
    `README.md`, and deck-specific `CARD_README.md`;
-6. [references/audit-workflow.md](references/audit-workflow.md) for whole-deck
+6. the resolved prerequisite graph and staged transitive prerequisite closure
+   supplied by the CLI; treat it as executable truth and do not infer knowledge
+   from file order or unavailable chapters;
+7. [references/audit-workflow.md](references/audit-workflow.md) for whole-deck
    audits;
-7. the preflight JSON report named in the prompt, when present.
+8. the preflight JSON report named in the prompt, when present.
 
 If a deck predates these files, infer its current contract from its README and
 cards. Add missing metadata only when the requested mode permits edits. Do not
@@ -62,7 +65,11 @@ and deck-specific retrieval decisions in `CARD_README.md`.
 
 ## Design the learning progression
 
-Arrange material as a prerequisite graph. Within a chapter, prefer this arc
+Arrange material as a prerequisite graph. Declare deck prerequisites and
+assumed tools in `deck.toml`, and declare chapter/concept edges in chapter
+frontmatter. Use only the CLI-resolved transitive closure during generation;
+an earlier chapter is not inbound merely because its order number is smaller.
+Within a chapter, prefer this arc
 where applicable:
 
 1. motivation and prerequisite bridge;
