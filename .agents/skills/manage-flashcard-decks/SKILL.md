@@ -118,9 +118,13 @@ pilot or an established existing deck may proceed chapter by chapter.
 ## Use figures for retrieval
 
 Add figures wherever spatial, temporal, structural, graphical, or relational
-reasoning benefits—not according to an arbitrary cap. Prefer original SVGs for
-technical diagrams. Require a `viewBox`, meaningful `<title>` and `<desc>`,
-phone-width legibility, high contrast, and a redundant cue beyond color.
+reasoning benefits—not according to an arbitrary cap. Author every new
+technical diagram in TikZ by default and compile it to ordinary SVG before
+handoff. Reuse the deck-level TikZ style and commit the editable `.tex` source
+beside its same-named `.svg`; do not compile TikZ in the study client. Use a
+different medium only when the authentic visual target requires it, and record
+the reason. Require a `viewBox`, meaningful `<title>` and `<desc>`, phone-width
+legibility, high contrast, and a redundant cue beyond color.
 
 Assess figure opportunities by retrieval role rather than chapter count. Do not
 stop at one figure when diagrams, graphs, before/after states, experimental

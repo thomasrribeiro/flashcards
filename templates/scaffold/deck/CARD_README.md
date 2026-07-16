@@ -66,8 +66,10 @@ the pilot and save it as `.flashcards/audits/pilot-cold-start.md`.
 ## Figure policy
 
 Add a figure only when inspecting, predicting, labeling, comparing, tracing, or
-translating it is part of learning. Prefer original responsive SVGs. Put setup
-figures on the front and answer-revealing annotations on the back.
+translating it is part of learning. Author new technical figures in TikZ by
+default, compile them to responsive SVG before handoff, and commit source and
+output together. Put setup figures on the front and answer-revealing
+annotations on the back. Record why an authentic target requires another medium.
 
 Do not treat one figure per chapter as a target or cap. Inventory every
 plausible spatial, temporal, structural, graphical, relational, experimental,

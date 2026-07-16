@@ -143,13 +143,14 @@ diagrams at the appropriate level, detector readouts, probability densities,
 uncertainty visualizations, and simulation or data products may carry the real
 retrieval target.
 
-Technical figures should normally be original SVGs. For vector geometry,
-mechanics diagrams, plots, and other construction-heavy assets, prefer a
-deck-level TikZ style compiled to SVG at authoring time when that toolchain is
-available. Use one restrained visual grammar: consistent sans-serif labels,
-proportional `Stealth` arrowheads, stable line weights, muted construction lines,
-and the deck accent only for the primary quantity. Never compile TikZ in the
-study client.
+Author new technical figures in TikZ by default and compile them to ordinary
+SVG at authoring time. This applies to vector geometry, mechanics diagrams,
+plots, and other generated physics constructions. Use one restrained deck-level
+visual grammar: consistent sans-serif labels, proportional `Stealth`
+arrowheads, stable line weights, muted construction lines, and the deck accent
+only for the primary quantity. Use another medium only when the authentic
+visual target requires it, and document the exception. Never compile TikZ in
+the study client.
 
 Geometry, arrow direction, relative placement, axes, labels, and scale claims
 must be physically correct. Use dashed paths or shape differences as well as

@@ -201,13 +201,13 @@ include predicting a graph, tracing a process, labeling from structure,
 comparing configurations, reading scale, or translating between a diagram and a
 formal model.
 
-Prefer original SVGs for technical material. Native SVG is the simplest choice
-for small diagrams; when exact geometry, mathematical typography, or repeated
-diagram grammar makes hand-authored SVG brittle, use editable TikZ and compile
-it to SVG before handoff. Reuse one deck-level style for palette, type hierarchy,
-line weights, construction lines, and proportional arrowheads. Keep the source
-next to its same-named SVG and run the deck's stale-output check. Do not add
-TikZJax, TeX, or other runtime compilation to the study client.
+For every new generated technical figure, use editable TikZ and compile it to
+SVG before handoff. Reuse one deck-level style for palette, type hierarchy, line
+weights, construction lines, and proportional arrowheads. Keep the source next
+to its same-named SVG and run the deck's stale-output check. Use hand-authored
+SVG or another medium only when the authentic visual target requires it, and
+record that exception in the figure ledger. Do not add TikZJax, TeX, or other
+runtime compilation to the study client.
 
 Put setup-only visuals on the front; reserve answer-revealing labels, paths, and
 constructions for the back. Use high contrast, redundant non-color cues,

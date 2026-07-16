@@ -18,8 +18,10 @@ minimizing authentic representations, problem progression, or useful figures.
 
 Preserve every existing `card-id` when correcting or improving the same
 retrieval target. Assign a new ID when a card tests materially new knowledge.
-Use original SVG figures where spatial, temporal, structural, or graphical
-reasoning is itself part of the target.
+Author new technical figures in TikZ and compile them to ordinary SVG before
+handoff. Commit each `.tex` source beside its same-named `.svg`, reuse a shared
+deck style, and document any authentic-target exception that needs another
+medium.
 Inventory figure opportunities by retrieval role before authoring; do not use
 one figure per chapter as either a target or a cap.
 

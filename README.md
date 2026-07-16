@@ -161,15 +161,17 @@ flashcards deck validate ~/notes/biology/genetics \
   --out ~/notes/biology/genetics/.flashcards/validation.json
 ```
 
-TikZ is an authoring-time option for publication-quality technical diagrams,
-not a browser dependency. A source such as
+TikZ is the default authoring path for new generated technical diagrams, not a
+browser dependency. A source such as
 `figures/02_vectors/components_grid.tex` compiles to the same-named `.svg`
 using LuaLaTeX and `dvisvgm`; the app continues loading ordinary SVG files
 without runtime compilation. Each source must declare `flashcards-title` and
 `flashcards-desc` comments, which the renderer copies into accessible SVG
 metadata. `deck validate` rejects stale generated figures. Install TeX Live
 with LuaLaTeX, TikZ, the standalone class, and `dvisvgm` on authoring
-machines that maintain TikZ-backed decks.
+machines that maintain decks with technical figures. Use another medium only
+when the authentic visual target requires it and document that exception in the
+deck's figure ledger.
 
 ## Build and audit with Codex
 
