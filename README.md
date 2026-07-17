@@ -87,12 +87,14 @@ it with a repeatable flag such as
 `--prerequisite-deck biology/cell-biology`.
 
 Both commands launch a fresh isolated agent by default. `subject create`
-researches and completes `SUBJECT_BRIEF.md` and `ROADMAP.md`; if the repository
-does not already provide a reusable `templates/guides/<subject>.md`, it also
-creates a subject-owned `DOMAIN_GUIDE.md`. `deck create` then researches the
-deck, completes its README and card blueprint, and authors only the first
-novice-first pilot chapter. Pass `--no-agent` to either command when only the
-deterministic scaffold is wanted.
+researches and completes `SUBJECT_BRIEF.md`, the explanatory `ROADMAP.md`, and
+the synchronized executable dependency graph in `subject.toml`; if the
+repository does not already provide a reusable `templates/guides/<subject>.md`,
+it also creates a subject-owned `DOMAIN_GUIDE.md`. `deck create` inherits its
+declared direct prerequisites from that graph, then researches the deck,
+completes its README and card blueprint, and authors only the first novice-first
+pilot chapter. Pass `--no-agent` to either command when only the deterministic
+scaffold is wanted.
 
 `deck build` intentionally authors only the first ordered chapter. The agent
 may design the full roadmap, but it must complete a concept-dependency ledger
@@ -141,9 +143,24 @@ deck-name/
 └── deck.toml
 ```
 
-The subject directory also receives `AGENTS.md`, `ROADMAP.md`, and
-`SUBJECT_BRIEF.md` when they are missing. Existing files are never
-overwritten.
+The subject directory also receives `AGENTS.md`, `ROADMAP.md`,
+`SUBJECT_BRIEF.md`, and `subject.toml` when they are missing. Existing files are
+never overwritten by deterministic scaffolding; the isolated subject agent may
+subsequently complete or update the curriculum files.
+
+Inspect or validate the AI-authored curriculum graph:
+
+```bash
+flashcards subject prerequisites ~/notes/biology
+flashcards subject prerequisites ~/notes/biology --deck molecular-biology
+flashcards subject validate ~/notes/biology
+```
+
+Deck orders in `subject.toml` must be topological. Every prerequisite names an
+earlier deck in the same subject, and cycles, missing references, duplicate
+orders, and duplicate ids are rejected. When a declared deck is created, its
+direct edges are copied into `deck.toml`; transitive prerequisites remain
+available through the normal deck resolver.
 
 ## Maintain a deck
 
@@ -242,7 +259,7 @@ Target-level labels such as “introductory-college” or “calculus-aware” d
 silently grant subject prerequisites. The pilot audit includes words, symbols,
 figures, alt text, diagram conventions, and problem contexts—not only formulas.
 
-Inspect the exact ordered Markdown context before launching an agent:
+Inspect the exact ordered context before launching an agent:
 
 ```bash
 flashcards subject context ~/notes/biology
@@ -362,7 +379,8 @@ The context hierarchy deliberately avoids repetition:
 | `templates/guides/<subject>.md` | Reusable domain-specific judgment |
 | subject `DOMAIN_GUIDE.md` | AI-researched domain guide only when no reusable repository guide exists |
 | subject `SUBJECT_BRIEF.md` | Learner, depth, conventions, and evidence authorities |
-| subject `ROADMAP.md` | Deck sequence, prerequisites, and durable outcomes |
+| subject `ROADMAP.md` | Learner-facing explanation of deck sequence and durable outcomes |
+| subject `subject.toml` | AI-authored executable deck order and direct prerequisite graph |
 | deck `deck.toml` | Machine-readable identity, external deck prerequisites, and assumed tools |
 | deck `README.md` | Scope, chapter map, and source register |
 | deck `CARD_README.md` | Deck-specific retrieval design and justified exceptions |

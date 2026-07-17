@@ -7,7 +7,7 @@ Read and follow, in order:
 3. `{{FLASHCARDS_ROOT}}/.agents/skills/manage-flashcard-decks/references/cold-start-workflow.md`
 4. `../DOMAIN_GUIDE.md` when present; otherwise
    `{{FLASHCARDS_ROOT}}/templates/guides/{{SUBJECT}}.md` when it exists
-5. `../SUBJECT_BRIEF.md` and `../ROADMAP.md`
+5. `../SUBJECT_BRIEF.md`, `../ROADMAP.md`, and `../subject.toml`
 6. This repository's `deck.toml`, `README.md`, and `CARD_README.md`
 
 Use the flashcards application's parser, stable-ID implementation, and

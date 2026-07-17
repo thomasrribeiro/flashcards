@@ -25,6 +25,11 @@ import {
     stageExternalPrerequisites
 } from '../bin/lib/prerequisites.js';
 import { stabilizeDeck, validateDeck } from '../bin/lib/validation.js';
+import {
+    resolveSubjectCurriculum,
+    resolveSubjectDeckClosure,
+    syncDeckPrerequisitesFromSubject
+} from '../bin/lib/subject-curriculum.js';
 
 const temporaryRoots = [];
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -43,7 +48,7 @@ describe('flashcards CLI scaffolding', () => {
     it('creates subject context and a complete deck without overwriting subject files', async () => {
         const notesRoot = await temporaryRoot();
         const subject = await ensureSubject({ subject: 'earth-science', notesRoot });
-        expect(subject.created).toHaveLength(3);
+        expect(subject.created).toHaveLength(4);
 
         const roadmap = path.join(subject.subjectPath, 'ROADMAP.md');
         await writeFile(roadmap, '# My roadmap\n');
@@ -63,6 +68,7 @@ describe('flashcards CLI scaffolding', () => {
         expect(await readFile(path.join(result.deckPath, 'CARD_README.md'), 'utf8')).toContain('Concept-dependency ledger');
         expect(await readFile(path.join(result.deckPath, 'README.md'), 'utf8')).toContain('Confirmed subject prerequisites: none');
         expect(await stat(path.join(subject.subjectPath, 'SUBJECT_BRIEF.md'))).toBeTruthy();
+        expect(await stat(path.join(subject.subjectPath, 'subject.toml'))).toBeTruthy();
         expect(await stat(path.join(result.deckPath, 'figures', '01_foundations'))).toBeTruthy();
         expect(await stat(path.join(result.deckPath, 'flashcards', '02_plate_boundaries.md'))).toBeTruthy();
         expect(await readFile(path.join(result.deckPath, 'flashcards', '02_plate_boundaries.md'), 'utf8'))
@@ -98,6 +104,104 @@ describe('flashcards CLI scaffolding', () => {
             chapters: ['World War I', 'world-war-i']
         })).rejects.toThrow(/must be unique/);
         await expect(stat(path.join(notesRoot, 'history'))).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
+    it('validates an AI-authored subject graph and resolves transitive deck prerequisites', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({ subject: 'biology', notesRoot });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 1
+subject = "biology"
+
+[[decks]]
+id = "biology-foundations"
+order = 1
+prerequisites = []
+status = "proposed"
+description = "Scientific and chemical foundations."
+
+[[decks]]
+id = "cell-biology"
+order = 2
+prerequisites = ["biology-foundations"]
+status = "proposed"
+
+[[decks]]
+id = "molecular-biology"
+order = 3
+prerequisites = ["cell-biology"]
+status = "proposed"
+`);
+
+        const graph = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+        expect(graph.errors).toEqual([]);
+        expect(resolveSubjectDeckClosure(graph, 'molecular-biology')).toMatchObject({
+            direct: ['cell-biology'],
+            transitive: ['biology-foundations', 'cell-biology']
+        });
+    });
+
+    it('rejects missing, later, duplicate, and cyclic subject deck edges', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({ subject: 'biology', notesRoot });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 1
+subject = "biology"
+
+[[decks]]
+id = "foundations"
+order = 1
+prerequisites = ["advanced"]
+status = "proposed"
+
+[[decks]]
+id = "advanced"
+order = 1
+prerequisites = ["foundations", "missing"]
+status = "proposed"
+`);
+
+        const errors = resolveSubjectCurriculum(subjectPath, { requireDecks: true }).errors.join('\n');
+        expect(errors).toContain('duplicate value 1');
+        expect(errors).toContain('references missing prerequisite deck missing');
+        expect(errors).toContain('must have a lower order');
+        expect(errors).toContain('subject curriculum cycle');
+    });
+
+    it('inherits direct subject prerequisites when creating a declared deck', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({ subject: 'biology', notesRoot });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 1
+subject = "biology"
+
+[[decks]]
+id = "biology-foundations"
+order = 1
+prerequisites = []
+status = "active"
+
+[[decks]]
+id = "cell-biology"
+order = 2
+prerequisites = ["biology-foundations"]
+status = "proposed"
+`);
+        await createDeck({
+            subject: 'biology',
+            deck: 'biology-foundations',
+            notesRoot,
+            initializeGit: false
+        });
+        const { deckPath, inferredPrerequisiteDecks } = await createDeck({
+            subject: 'biology',
+            deck: 'cell-biology',
+            notesRoot,
+            initializeGit: false
+        });
+
+        expect(inferredPrerequisiteDecks).toEqual(['biology/biology-foundations']);
+        expect(await readFile(path.join(deckPath, 'deck.toml'), 'utf8'))
+            .toContain('decks = ["biology/biology-foundations"]');
+        expect(syncDeckPrerequisitesFromSubject(deckPath, { requireEntry: true }).inferred)
+            .toEqual(['biology/biology-foundations']);
     });
 
     it('resolves sparse chapter and concept edges instead of assuming file order', async () => {
@@ -397,11 +501,13 @@ describe('flashcards CLI validation and Codex handoff', () => {
         const manifest = buildSubjectContextManifest({ subjectPath });
         expect(manifest.files.some(file => file.path.endsWith('ROADMAP.md') && file.required)).toBe(true);
         expect(manifest.files.some(file => file.path.endsWith('SUBJECT_BRIEF.md') && file.required)).toBe(true);
+        expect(manifest.files.some(file => file.path.endsWith('subject.toml') && file.required)).toBe(true);
         expect(manifest.guide.path).toBe(path.join(subjectPath, 'DOMAIN_GUIDE.md'));
 
         const invocation = buildSubjectAgentInvocation({ subjectPath, model: 'test-model' });
         expect(invocation.args).toContain('--ephemeral');
         expect(invocation.prompt).toContain('Create DOMAIN_GUIDE.md');
+        expect(invocation.prompt).toContain('subject.toml');
         expect(invocation.prompt).toContain('Do not create a deck');
     });
 

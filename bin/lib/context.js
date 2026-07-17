@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { FLASHCARDS_ROOT, resolvePath } from './paths.js';
 import { formatPrerequisiteGraph, resolvePrerequisiteGraph } from './prerequisites.js';
+import { formatSubjectCurriculum, resolveSubjectCurriculum } from './subject-curriculum.js';
 
 function readSubject(deckPath) {
     const manifestPath = path.join(deckPath, 'deck.toml');
@@ -98,14 +99,17 @@ export function buildSubjectContextManifest({ subjectPath: inputPath } = {}) {
     add(path.join(subjectPath, 'AGENTS.md'), 'subject routing instructions');
     add(path.join(subjectPath, 'ROADMAP.md'), 'learner-specific subject roadmap', { required: true });
     add(path.join(subjectPath, 'SUBJECT_BRIEF.md'), 'learner-specific subject brief', { required: true });
+    add(path.join(subjectPath, 'subject.toml'), 'machine-readable subject curriculum', { required: true });
 
     const present = files.filter(file => file.exists);
+    const subjectCurriculum = resolveSubjectCurriculum(subjectPath);
     return {
         mode: 'subject',
         subjectPath,
         collectionRoot,
         subject,
         guide,
+        subjectCurriculum,
         files,
         summary: {
             present: present.length,
@@ -144,6 +148,7 @@ export function buildContextManifest({ deckPath: inputPath, mode = 'build', pref
     add(path.join(collectionRoot, 'AGENTS.md'), 'collection routing instructions');
     add(path.join(subjectRoot, 'AGENTS.md'), 'subject routing instructions');
     add(path.join(subjectRoot, 'ROADMAP.md'), 'learner-specific subject roadmap');
+    add(path.join(subjectRoot, 'subject.toml'), 'machine-readable subject curriculum');
 
     const subjectBrief = path.join(subjectRoot, 'SUBJECT_BRIEF.md');
     const legacyAuthoringGuide = path.join(subjectRoot, 'AUTHORING_GUIDE.md');
@@ -206,6 +211,9 @@ export function formatContextManifest(manifest) {
     lines.push(`Total loaded context: ${manifest.summary.words} words across ${manifest.summary.present} files`);
     if (manifest.prerequisiteGraph) {
         lines.push('', formatPrerequisiteGraph(manifest.prerequisiteGraph, { chapter: manifest.chapterNumber }));
+    }
+    if (manifest.subjectCurriculum) {
+        lines.push('', formatSubjectCurriculum(manifest.subjectCurriculum));
     }
     return lines.join('\n');
 }

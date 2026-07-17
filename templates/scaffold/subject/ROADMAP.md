@@ -10,8 +10,9 @@ convention decisions there.
 ## Deck sequence
 
 Define a prerequisite graph rather than an arbitrary textbook chapter list.
-This table explains the learner-facing sequence. Once a deck exists, its
-`deck.toml` is the machine-readable source of truth for actual deck edges.
+This table explains the learner-facing sequence. Keep it synchronized with
+`subject.toml`, which is the executable source of truth for the subject graph.
+Each created deck then records its inherited direct edges in `deck.toml`.
 
 | Order | Deck | Prerequisites | Durable capabilities | Status |
 |---:|---|---|---|---|

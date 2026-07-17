@@ -8,7 +8,7 @@ Before creating or auditing cards, read:
 2. `{{FLASHCARDS_ROOT}}/templates/guides/AUTHORING_PLAYBOOK.md`
 3. `DOMAIN_GUIDE.md` here when present; otherwise
    `{{FLASHCARDS_ROOT}}/templates/guides/{{SUBJECT}}.md` when it exists
-4. `SUBJECT_BRIEF.md` and `ROADMAP.md` in this directory
+4. `SUBJECT_BRIEF.md`, `ROADMAP.md`, and `subject.toml` in this directory
 5. The target deck's `AGENTS.md`, `README.md`, and `CARD_README.md`
 
 Use authoritative and legally compatible sources. Record source URLs, licenses,

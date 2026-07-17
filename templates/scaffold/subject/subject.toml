@@ -1,0 +1,12 @@
+schema_version = 1
+subject = "{{SUBJECT}}"
+
+# The subject agent replaces this empty scaffold with a topologically ordered
+# curriculum. Each prerequisite is another deck id in this same subject.
+#
+# [[decks]]
+# id = "foundations"
+# order = 1
+# prerequisites = []
+# status = "proposed"
+# description = "Durable capabilities established by this deck."

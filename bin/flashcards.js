@@ -13,6 +13,11 @@ import {
 import { renderTikzFigures } from './lib/figures.js';
 import { resolveNotesRoot, resolvePath } from './lib/paths.js';
 import { stabilizeDeck, validateDeck } from './lib/validation.js';
+import {
+    formatSubjectCurriculum,
+    resolveSubjectCurriculum,
+    syncDeckPrerequisitesFromSubject
+} from './lib/subject-curriculum.js';
 
 const program = new Command();
 
@@ -90,7 +95,7 @@ function executeAgent(mode, deckPath, options) {
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('3.3.0')
+    .version('3.4.0')
     .showSuggestionAfterError();
 
 program
@@ -143,6 +148,13 @@ subject
                 if (agent.runPath) console.log(`Isolated run record: ${agent.runPath}`);
                 if (agent.status !== 0) process.exitCode = agent.status;
             }
+            if (!process.exitCode) {
+                const curriculum = resolveSubjectCurriculum(result.subjectPath, {
+                    requireDecks: options.agent && !options.dryRun
+                });
+                console.log(formatSubjectCurriculum(curriculum));
+                if (curriculum.errors.length) process.exitCode = 1;
+            }
         } catch (error) {
             handleError(error);
         }
@@ -150,13 +162,40 @@ subject
 
 subject
     .command('context <subject-path>')
-    .description('Show the exact ordered Markdown context used by subject creation')
+    .description('Show the exact ordered context used by subject creation')
     .option('--json', 'Print the manifest as JSON')
     .action((subjectPath, options) => {
         try {
             const manifest = buildSubjectContextManifest({ subjectPath });
             console.log(options.json ? JSON.stringify(manifest, null, 2) : formatContextManifest(manifest));
             if (manifest.summary.missingRequired) process.exitCode = 1;
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+subject
+    .command('prerequisites <subject-path>')
+    .description('Show the AI-authored subject curriculum and resolved deck prerequisites')
+    .option('--deck <deck>', 'Show one deck and its transitive prerequisite closure')
+    .action((subjectPath, options) => {
+        try {
+            const graph = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+            console.log(formatSubjectCurriculum(graph, { deck: options.deck }));
+            if (graph.errors.length) process.exitCode = 1;
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+subject
+    .command('validate <subject-path>')
+    .description('Validate subject.toml deck identities, order, references, and cycles')
+    .action(subjectPath => {
+        try {
+            const graph = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+            console.log(formatSubjectCurriculum(graph));
+            if (graph.errors.length) process.exitCode = 1;
         } catch (error) {
             handleError(error);
         }
@@ -194,11 +233,15 @@ addAgentOptions(deck
             if (result.gitInitialized) console.log('Initialized Git on branch master.');
             if (options.agent) {
                 if (result.subjectFiles.length) {
+                    const subjectInstructions = [
+                        `The requested deck is ${subjectName}/${deckName}. Include it in the proposed subject curriculum with its true direct prerequisites.`,
+                        options.instructions
+                    ].filter(Boolean).join(' ');
                     const subjectAgent = runSubjectAgent({
                         subjectPath: result.subjectPath,
                         model: options.model,
                         reasoningEffort: options.reasoningEffort,
-                        extraInstructions: options.instructions,
+                        extraInstructions: subjectInstructions,
                         dryRun: options.dryRun,
                         isolated: options.isolated
                     });
@@ -214,8 +257,16 @@ addAgentOptions(deck
                         return;
                     }
                 }
+                const synced = syncDeckPrerequisitesFromSubject(result.deckPath, { requireEntry: !options.dryRun });
+                if (synced.inferred.length) {
+                    console.log(`Inherited subject prerequisites: ${synced.inferred.join(', ')}`);
+                }
                 executeAgent('build', result.deckPath, options);
             } else {
+                const synced = syncDeckPrerequisitesFromSubject(result.deckPath);
+                if (synced.inferred.length) {
+                    console.log(`Inherited subject prerequisites: ${synced.inferred.join(', ')}`);
+                }
                 console.log(`Next: flashcards deck build ${result.deckPath}`);
             }
         } catch (error) {

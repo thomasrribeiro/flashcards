@@ -18,6 +18,7 @@ import {
     resolveChapterClosure,
     stageExternalPrerequisites
 } from './prerequisites.js';
+import { resolveSubjectCurriculum } from './subject-curriculum.js';
 import { stabilizeDeck, validateDeck } from './validation.js';
 
 function auditTimestamp() {
@@ -182,6 +183,7 @@ function buildSubjectPrompt({ subject, targetPath, contextFiles, skillPath, guid
         'Read every present file in this ordered context manifest completely before acting:',
         ...contextFiles.map((file, index) => `${index + 1}. [${file.role}] ${file.path}`),
         'Research authoritative curriculum frameworks and the current structure of the field. Complete SUBJECT_BRIEF.md and ROADMAP.md as an explicit, prerequisite-aware proposal. Treat unconfirmed learner knowledge as unseen and mark genuinely personal decisions for user confirmation rather than inventing them.',
+        'Create or update subject.toml as the executable copy of that curriculum. Keep it synchronized with ROADMAP.md. Use schema_version = 1 and the canonical subject slug, then one [[decks]] table per proposed deck with id, positive topological order, direct prerequisites, status, and a concise description. Deck ids, statuses, and prerequisite ids use lowercase kebab-case. Declare only direct prerequisites; every prerequisite must name an earlier deck in the same file. Do not create cycles, missing references, or duplicate ids/orders.',
         guideExists
             ? 'Use the supplied reusable domain guide; do not duplicate it into the subject workspace.'
             : 'No reusable domain guide exists. Create DOMAIN_GUIDE.md in the subject workspace. It must cover durable domain-specific authoring judgment, breadth and subfield balance, representations, misconceptions, evidence authorities, and accuracy checks without copying the universal standards.',
@@ -368,6 +370,12 @@ export function runSubjectAgent({
     if (!isolated) {
         const result = spawnSync(preview.command, preview.args, { stdio: 'inherit' });
         if (result.error) throw new Error(`Unable to launch Codex: ${result.error.message}`);
+        if (result.status === 0) {
+            const curriculum = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+            if (curriculum.errors.length) {
+                throw new Error(`Codex finished, but subject curriculum validation failed:\n- ${curriculum.errors.join('\n- ')}`);
+            }
+        }
         return { invocation: preview, status: result.status };
     }
 
@@ -375,7 +383,7 @@ export function runSubjectAgent({
         sourcePath: subjectPath,
         contextFiles: preview.contextManifest.files,
         label: 'subject-create',
-        includeTopLevel: ['AGENTS.md', 'ROADMAP.md', 'SUBJECT_BRIEF.md', 'DOMAIN_GUIDE.md']
+        includeTopLevel: ['AGENTS.md', 'ROADMAP.md', 'SUBJECT_BRIEF.md', 'DOMAIN_GUIDE.md', 'subject.toml']
     });
     try {
         const prompt = buildSubjectPrompt({
@@ -399,6 +407,12 @@ export function runSubjectAgent({
             reportOnly: false,
             metadata: { operation: 'subject-create', codexVersion: version, model: invocation.model, reasoningEffort }
         });
+        if (result.status === 0) {
+            const curriculum = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+            if (curriculum.errors.length) {
+                throw new Error(`Codex finished, but subject curriculum validation failed:\n- ${curriculum.errors.join('\n- ')}`);
+            }
+        }
         return { invocation, ...result };
     } finally {
         discardIsolatedRun(prepared);

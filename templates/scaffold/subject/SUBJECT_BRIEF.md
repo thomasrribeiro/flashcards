@@ -3,7 +3,8 @@
 This file records decisions specific to this learner and collection. Reusable
 domain-wide authoring guidance belongs in `templates/guides/{{SUBJECT}}.md`
 when that maintained guide exists, or in this subject's `DOMAIN_GUIDE.md` for a
-new domain. Deck sequence belongs in `ROADMAP.md`.
+new domain. The explained deck sequence belongs in `ROADMAP.md`; its executable
+dependency graph belongs in `subject.toml`.
 
 ## Learner and destination
 

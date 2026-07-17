@@ -11,6 +11,7 @@ import {
     titleFromSlug,
     tomlString
 } from './paths.js';
+import { resolveSubjectCurriculum } from './subject-curriculum.js';
 
 const TEMPLATE_ROOT = path.join(FLASHCARDS_ROOT, 'templates', 'scaffold');
 
@@ -74,7 +75,7 @@ export async function ensureSubject({ subject, notesRoot, title }) {
 
     await mkdir(subjectPath, { recursive: true });
     const created = [];
-    for (const name of ['AGENTS.md', 'ROADMAP.md', 'SUBJECT_BRIEF.md']) {
+    for (const name of ['AGENTS.md', 'ROADMAP.md', 'SUBJECT_BRIEF.md', 'subject.toml']) {
         const target = path.join(subjectPath, name);
         if (await writeIfMissing(target, await renderTemplate(`subject/${name}`, values))) created.push(target);
     }
@@ -110,9 +111,28 @@ export async function createDeck({
     }
     if (normalizedChapters.length > 99) throw new Error('A deck may contain at most 99 ordered chapter files.');
     const { created: subjectFiles } = await ensureSubject({ subject, notesRoot: root });
+    const curriculum = resolveSubjectCurriculum(subjectPath);
+    if (curriculum.errors.length) {
+        throw new Error(`Invalid subject curriculum:\n- ${curriculum.errors.join('\n- ')}`);
+    }
+    const curriculumDeck = curriculum.decks.find(candidate => candidate.id === deck);
+    if (curriculum.decks.length > 0 && !curriculumDeck) {
+        throw new Error(`Deck ${subject}/${deck} is not declared in ${curriculum.manifestPath}; update the subject curriculum before creating it.`);
+    }
+    const inferredPrerequisiteDecks = curriculumDeck
+        ? curriculumDeck.prerequisites.map(id => `${subject}/${id}`)
+        : [];
+    const resolvedPrerequisiteDecks = [...new Set([...inferredPrerequisiteDecks, ...prerequisiteDecks])];
 
     const summary = description || `Spaced-repetition deck for ${titleFromSlug(deck)}.`;
-    const values = commonValues({ subject, deck, level, description: summary, prerequisiteDecks, assumedTools });
+    const values = commonValues({
+        subject,
+        deck,
+        level,
+        description: summary,
+        prerequisiteDecks: resolvedPrerequisiteDecks,
+        assumedTools
+    });
     await mkdir(path.join(deckPath, 'flashcards'), { recursive: true });
     await mkdir(path.join(deckPath, 'figures'), { recursive: true });
     await mkdir(path.join(deckPath, 'references'), { recursive: true });
@@ -146,7 +166,15 @@ export async function createDeck({
         gitInitialized = true;
     }
 
-    return { deckPath, subjectPath, subjectFiles, chapterResults, gitInitialized };
+    return {
+        deckPath,
+        subjectPath,
+        subjectFiles,
+        chapterResults,
+        gitInitialized,
+        prerequisiteDecks: resolvedPrerequisiteDecks,
+        inferredPrerequisiteDecks
+    };
 }
 
 async function nextChapterOrder(deckPath) {

@@ -28,9 +28,9 @@ read each applicable file completely before editing:
 1. `templates/guides/CARD_STANDARD.md`;
 2. `templates/guides/AUTHORING_PLAYBOOK.md`;
 3. the applicable `templates/guides/<subject>.md`, when present;
-4. the subject's routing `AGENTS.md`, learner-specific `ROADMAP.md`, and
-   `SUBJECT_BRIEF.md`; use legacy `AUTHORING_GUIDE.md` only when the brief is
-   absent;
+4. the subject's routing `AGENTS.md`, learner-specific `ROADMAP.md`, executable
+   `subject.toml` curriculum, and `SUBJECT_BRIEF.md`; use legacy
+   `AUTHORING_GUIDE.md` only when the brief is absent;
 5. the deck's routing `AGENTS.md`, machine-readable `deck.toml`, scope/source
    `README.md`, and deck-specific `CARD_README.md`;
 6. the resolved prerequisite graph and staged transitive prerequisite closure
@@ -60,7 +60,8 @@ For build, expand, and editing audits:
 
 When the subject brief is only a scaffold, research and complete it before
 creating a large deck. Keep reusable domain guidance in the repository subject
-guide, learner-specific choices in `SUBJECT_BRIEF.md`, sequence in `ROADMAP.md`,
+guide, learner-specific choices in `SUBJECT_BRIEF.md`, the explained sequence
+in `ROADMAP.md`, its synchronized executable dependency graph in `subject.toml`,
 and deck-specific retrieval decisions in `CARD_README.md`.
 
 ## Design the learning progression
