@@ -420,6 +420,18 @@ export function revealAnswer() {
                 gradeButtons.classList.remove('hidden');
                 state.isRevealed = true;
             }
+        } else if (state.solutionSteps.length === 0) {
+            // A legacy or externally authored problem may not use recognized
+            // IPEE headings. Never leave the learner on an inert Reveal button:
+            // show the complete solution as a safe fallback and allow grading.
+            setCardContext(state.currentCard);
+            cardBack.innerHTML = `<div class="solution-step-content">${
+                markdownToHtml(state.currentCard.content.solution || '')
+            }</div>`;
+            cardBack.classList.remove('hidden');
+            revealPrompt.classList.add('hidden');
+            gradeButtons.classList.remove('hidden');
+            state.isRevealed = true;
         }
     } else {
         // For basic and cloze cards, single reveal

@@ -228,8 +228,11 @@ export function parseSolutionSteps(solution) {
     let currentStep = null;
 
     for (const line of lines) {
-        // Match lines like "**IDENTIFY**: content" or "**PLAN**: content"
-        const match = line.match(/^\*\*([^*]+)\*\*:\s*(.*)$/);
+        // Accept both established spellings:
+        //   **IDENTIFY**: content
+        //   **IDENTIFY:** content
+        // The latter is what the current deck-authoring pipeline emits.
+        const match = line.match(/^\*\*([^*]+?)(?::\*\*|\*\*:)\s*(.*)$/);
 
         if (match) {
             // Save previous step if exists
