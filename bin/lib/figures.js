@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import {
     existsSync,
+    mkdirSync,
     mkdtempSync,
     readFileSync,
     readdirSync,
@@ -65,8 +66,8 @@ function findTikzSources(dir) {
     return sources.sort((a, b) => a.localeCompare(b));
 }
 
-function run(command, args, cwd) {
-    const result = spawnSync(command, args, { cwd, encoding: 'utf8' });
+function run(command, args, cwd, env = process.env) {
+    const result = spawnSync(command, args, { cwd, env, encoding: 'utf8' });
     if (result.error?.code === 'ENOENT') {
         throw new Error('Missing TikZ rendering dependency: ' + command);
     }
@@ -83,13 +84,30 @@ function renderOne(deckPath, sourcePath) {
     const temporary = mkdtempSync(path.join(os.tmpdir(), 'flashcards-tikz-'));
     const base = path.basename(sourcePath, '.tex');
     try {
+        const home = path.join(temporary, 'home');
+        const texmfVar = path.join(temporary, 'texmf-var');
+        const texmfCache = path.join(temporary, 'texmf-cache');
+        mkdirSync(home);
+        mkdirSync(texmfVar);
+        mkdirSync(texmfCache);
+        const env = {
+            ...process.env,
+            HOME: home,
+            TEXMFVAR: texmfVar,
+            TEXMFCACHE: texmfCache,
+            // Sources deliberately load the shared style as
+            // \input{figures/tikz-style.tex}. Running from the isolated
+            // temporary directory keeps every TeX write there; this search
+            // path still lets TeX resolve deck-owned inputs read-only.
+            TEXINPUTS: `${deckPath}//:${process.env.TEXINPUTS || ''}`
+        };
         run('lualatex', [
             '--output-format=dvi',
             '--interaction=batchmode',
             '--halt-on-error',
             '--output-directory=' + temporary,
             sourcePath
-        ], deckPath);
+        ], temporary, env);
         const dviPath = path.join(temporary, base + '.dvi');
         const svgPath = path.join(temporary, base + '.svg');
         run('dvisvgm', [
@@ -99,7 +117,7 @@ function renderOne(deckPath, sourcePath) {
             '--verbosity=0',
             '--output=' + svgPath,
             dviPath
-        ], deckPath);
+        ], temporary, env);
         const relativeSource = path.relative(deckPath, sourcePath);
         return decorateTikzSvg(readFileSync(svgPath, 'utf8'), metadata, relativeSource);
     } finally {

@@ -469,12 +469,16 @@ order = 2
 prerequisites = ["biology-foundations"]
 status = "proposed"
 `);
-        await createDeck({
+        const foundation = await createDeck({
             subject: 'biology',
             deck: 'biology-foundations',
             notesRoot,
             initializeGit: false
         });
+        expect(syncDeckPrerequisitesFromSubject(foundation.deckPath, { requireEntry: true }).inferred)
+            .toEqual([]);
+        expect(await readFile(path.join(foundation.deckPath, 'deck.toml'), 'utf8'))
+            .toContain('[prerequisites]\ndecks = []\nassumed_tools = []');
         const { deckPath, inferredPrerequisiteDecks } = await createDeck({
             subject: 'biology',
             deck: 'cell-biology',

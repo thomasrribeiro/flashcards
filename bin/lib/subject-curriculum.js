@@ -471,7 +471,7 @@ export function subjectPrerequisiteDecks(subjectPath, deckId) {
 }
 
 function replaceDeckPrerequisites(content, prerequisites) {
-    const section = /^\[prerequisites\]\s*$/m.exec(content);
+    const section = /^\[prerequisites\][ \t]*$/m.exec(content);
     if (!section) throw new Error('deck.toml: missing [prerequisites] section');
     const start = section.index + section[0].length;
     const tail = content.slice(start);
@@ -480,7 +480,7 @@ function replaceDeckPrerequisites(content, prerequisites) {
     const body = content.slice(start, end);
     if (!/^\s*decks\s*=/m.test(body)) throw new Error('deck.toml: missing [prerequisites].decks');
     const rendered = `decks = [${prerequisites.map(value => JSON.stringify(value)).join(', ')}]`;
-    const updatedBody = body.replace(/^\s*decks\s*=\s*\[[\s\S]*?\]\s*$/m, rendered);
+    const updatedBody = body.replace(/^[ \t]*decks[ \t]*=[ \t]*\[[\s\S]*?\][ \t]*$/m, rendered);
     return `${content.slice(0, start)}${updatedBody}${content.slice(end)}`;
 }
 
@@ -489,7 +489,7 @@ function manifestString(content, key) {
 }
 
 function manifestPrerequisites(content) {
-    const section = /^\[prerequisites\]\s*$/m.exec(content);
+    const section = /^\[prerequisites\][ \t]*$/m.exec(content);
     if (!section) return [];
     const start = section.index + section[0].length;
     const tail = content.slice(start);
