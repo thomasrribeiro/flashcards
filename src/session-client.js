@@ -1,6 +1,7 @@
 /** Cross-device persistence for one resumable primary study session. */
 
 import { getCurrentUser } from './storage.js';
+import { setCriticalLocalStorageItem } from './browser-storage.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 const LOCAL_KEY = 'flashcards_study_session';
@@ -57,7 +58,7 @@ function readLocal() {
 
 function writeLocal(session) {
     try {
-        if (session) localStorage.setItem(LOCAL_KEY, JSON.stringify(session));
+        if (session) setCriticalLocalStorageItem(LOCAL_KEY, JSON.stringify(session));
         else localStorage.removeItem(LOCAL_KEY);
     } catch (error) {
         console.error('[Session] Failed to persist local session:', error);
@@ -75,7 +76,7 @@ function writePending(action, session = null) {
         action,
         session
     };
-    try { localStorage.setItem(PENDING_KEY, JSON.stringify(pending)); }
+    try { setCriticalLocalStorageItem(PENDING_KEY, JSON.stringify(pending)); }
     catch (error) { console.error('[Session] Failed to queue session sync:', error); }
     return pending;
 }

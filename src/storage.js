@@ -7,6 +7,7 @@
 import { State } from './fsrs-client.js';
 import { getLocalDate } from './today-queue.js';
 import { migrateLegacyReviews, rewriteStudySessionHashes } from './review-identity.js';
+import { setCriticalLocalStorageItem } from './browser-storage.js';
 
 // Get worker URL from environment
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
@@ -67,7 +68,7 @@ function queueIdentityMigrations(userId, migrations) {
         });
     }
     try {
-        localStorage.setItem(IDENTITY_MIGRATIONS_KEY, JSON.stringify(queued));
+        setCriticalLocalStorageItem(IDENTITY_MIGRATIONS_KEY, JSON.stringify(queued));
     } catch (error) {
         console.error('[Storage] Failed to queue identity migration:', error);
     }
@@ -97,7 +98,7 @@ export async function flushIdentityMigrations() {
                 const remaining = item.id
                     ? latest.filter(entry => entry.id !== item.id)
                     : latest.slice(1); // compatibility with a pre-ID queue item
-                localStorage.setItem(IDENTITY_MIGRATIONS_KEY, JSON.stringify(remaining));
+                setCriticalLocalStorageItem(IDENTITY_MIGRATIONS_KEY, JSON.stringify(remaining));
             } catch (error) {
                 console.error('[Storage] Identity migration sync failed, will retry:', error);
                 return;
@@ -123,7 +124,7 @@ function enqueueSync(userId, reviewPayload) {
     try {
         const outbox = getSyncOutbox();
         outbox.push({ userId, review: reviewPayload });
-        localStorage.setItem(SYNC_OUTBOX_KEY, JSON.stringify(outbox));
+        setCriticalLocalStorageItem(SYNC_OUTBOX_KEY, JSON.stringify(outbox));
         console.log('[Storage] Queued review for later sync; outbox size:', outbox.length);
     } catch (error) {
         console.error('[Storage] Failed to enqueue review for sync:', error);
@@ -162,7 +163,7 @@ export async function flushSyncOutbox() {
     }
 
     try {
-        localStorage.setItem(SYNC_OUTBOX_KEY, JSON.stringify(remaining));
+        setCriticalLocalStorageItem(SYNC_OUTBOX_KEY, JSON.stringify(remaining));
     } catch (error) {
         console.error('[Storage] Failed to persist outbox after flush:', error);
     }
@@ -187,7 +188,7 @@ export function getUnloggedRepoList() {
 
 function setUnloggedRepoList(ids) {
     try {
-        localStorage.setItem(UNLOGGED_REPOS_KEY, JSON.stringify([...new Set(ids)]));
+        setCriticalLocalStorageItem(UNLOGGED_REPOS_KEY, JSON.stringify([...new Set(ids)]));
     } catch (error) {
         console.error('[Storage] Failed to persist unlogged repo list:', error);
     }
@@ -232,7 +233,7 @@ export async function initDB() {
 
                 if (cleanedReviews.length !== reviews.length) {
                     console.log(`[Storage] Migration: Removed ${reviews.length - cleanedReviews.length} old "basics" deck reviews`);
-                    localStorage.setItem(oldReviewsKey, JSON.stringify(cleanedReviews));
+                    setCriticalLocalStorageItem(oldReviewsKey, JSON.stringify(cleanedReviews));
                 }
 
                 reviewsCache = cleanedReviews;
@@ -434,12 +435,12 @@ export async function saveCards(cards) {
     if (migration.migrations.length > 0) {
         reviewsCache = migration.reviews;
         try {
-            localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+            setCriticalLocalStorageItem('flashcards_reviews', JSON.stringify(reviewsCache));
 
             for (const key of ['flashcards_study_session']) {
                 const raw = JSON.parse(localStorage.getItem(key) || 'null');
                 const rewritten = rewriteStudySessionHashes(raw, migration.hashMapping);
-                if (rewritten !== raw) localStorage.setItem(key, JSON.stringify(rewritten));
+                if (rewritten !== raw) setCriticalLocalStorageItem(key, JSON.stringify(rewritten));
             }
 
             const pendingKey = 'flashcards_study_session_pending';
@@ -447,7 +448,7 @@ export async function saveCards(cards) {
             if (pending?.session) {
                 const rewritten = rewriteStudySessionHashes(pending.session, migration.hashMapping);
                 if (rewritten !== pending.session) {
-                    localStorage.setItem(pendingKey, JSON.stringify({ ...pending, session: rewritten }));
+                    setCriticalLocalStorageItem(pendingKey, JSON.stringify({ ...pending, session: rewritten }));
                 }
             }
         } catch (error) {
@@ -512,7 +513,7 @@ export async function saveReview(cardHash, fsrsCard, log = null) {
 
     // Always save to localStorage as backup
     try {
-        localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+        setCriticalLocalStorageItem('flashcards_reviews', JSON.stringify(reviewsCache));
         console.log('[Storage] Review saved to localStorage');
     } catch (error) {
         console.error('[Storage] Failed to save to localStorage:', error);
@@ -671,7 +672,7 @@ export async function refreshDeck(deckId, folder = null) {
 
         // Save to localStorage
         try {
-            localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+            setCriticalLocalStorageItem('flashcards_reviews', JSON.stringify(reviewsCache));
         } catch (error) {
             console.error('[Storage] Failed to save to localStorage:', error);
         }
@@ -719,7 +720,7 @@ export async function refreshDeck(deckId, folder = null) {
     reviewsCache = reviewsCache.filter(r => !cardHashSet.has(r.cardHash));
 
     try {
-        localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+        setCriticalLocalStorageItem('flashcards_reviews', JSON.stringify(reviewsCache));
         console.log('[Storage] Updated localStorage after refresh');
     } catch (error) {
         console.error('[Storage] Failed to update localStorage after refresh:', error);
@@ -885,7 +886,7 @@ export async function removeRepo(repoId) {
     // Save to localStorage if not authenticated
     if (!currentUser) {
         try {
-            localStorage.setItem('flashcards_reviews', JSON.stringify(reviewsCache));
+            setCriticalLocalStorageItem('flashcards_reviews', JSON.stringify(reviewsCache));
             console.log('[Storage] Saved updated reviews to localStorage after deletion');
         } catch (error) {
             console.error('[Storage] Failed to save to localStorage:', error);

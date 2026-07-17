@@ -6,6 +6,7 @@
 
 import { getCurrentUser } from './storage.js';
 import { getLocalDate } from './today-queue.js';
+import { setCriticalLocalStorageItem } from './browser-storage.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 const LOCAL_KEY = 'flashcards_habit';
@@ -64,7 +65,7 @@ function loadLocal() {
 
 function saveLocal(data) {
     try {
-        localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
+        setCriticalLocalStorageItem(LOCAL_KEY, JSON.stringify(data));
     } catch (error) {
         console.error('[Habit] Failed to persist local habit data:', error);
     }

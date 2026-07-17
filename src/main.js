@@ -15,6 +15,7 @@ import { clearStudySession, getStudySession, saveStudySession, studySessionMatch
 import { renderDashboard } from './dashboard.js';
 import { getReminderPreferences, isIOSDevice, isStandalone, subscribeToPush, unsubscribeFromPush, updateAppBadge } from './push-client.js';
 import { renderBrowsableCards } from './card-browser.js';
+import { evictLegacyBlobLocalStorage } from './browser-storage.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -57,6 +58,12 @@ function registerServiceWorker() {
 
 async function init() {
     console.log('=== INIT START ===');
+    // Older releases stored full Markdown blobs in localStorage. Reclaim that
+    // space before reviews, stars, and resumable sessions need to persist.
+    const evictedLegacyBlobs = evictLegacyBlobLocalStorage();
+    if (evictedLegacyBlobs > 0) {
+        console.log(`[Storage] Removed ${evictedLegacyBlobs} legacy Markdown cache item(s)`);
+    }
     setupThemeToggle();
     configureMobileAppShell();
     registerServiceWorker();

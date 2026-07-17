@@ -3,6 +3,34 @@
  */
 
 const GITHUB_API = 'https://api.github.com';
+const GITHUB_BLOB_CACHE = 'flashcards-github-blobs-v1';
+
+function blobCacheRequest(sha) {
+    return new Request(`https://flashcards.invalid/github-blob/${encodeURIComponent(sha)}`);
+}
+
+async function readCachedBlob(sha) {
+    if (!sha || typeof caches === 'undefined') return null;
+    try {
+        const response = await caches.open(GITHUB_BLOB_CACHE)
+            .then(cache => cache.match(blobCacheRequest(sha)));
+        return response ? response.text() : null;
+    } catch {
+        return null;
+    }
+}
+
+async function cacheBlob(sha, text) {
+    if (!sha || typeof caches === 'undefined') return;
+    try {
+        const cache = await caches.open(GITHUB_BLOB_CACHE);
+        await cache.put(blobCacheRequest(sha), new Response(text, {
+            headers: { 'Content-Type': 'text/markdown; charset=utf-8' }
+        }));
+    } catch {
+        // Content caching is optional; review/session persistence is not.
+    }
+}
 
 /**
  * Get authentication headers for GitHub API
@@ -105,15 +133,14 @@ export async function getMarkdownFiles(owner, repo, path = 'flashcards', treeRef
 
 /**
  * Fetch the content of a file from GitHub.
- * If sha is provided, content is cached in localStorage by SHA (content-addressed —
- * same SHA always means same bytes, so the cache never goes stale).
+ * If sha is provided, content is cached in the browser Cache API by SHA
+ * (content-addressed — same SHA always means same bytes). Card bodies never
+ * consume localStorage, which is reserved for small critical state.
  */
 export async function getFileContent(owner, repo, path, sha = null) {
     if (sha) {
-        try {
-            const cached = localStorage.getItem(`gh_blob_${sha}`);
-            if (cached !== null) return cached;
-        } catch (e) { /* localStorage unavailable */ }
+        const cached = await readCachedBlob(sha);
+        if (cached !== null) return cached;
     }
 
     const headers = getAuthHeaders();
@@ -156,11 +183,7 @@ export async function getFileContent(owner, repo, path, sha = null) {
 
     const text = await response.text();
 
-    if (sha) {
-        try {
-            localStorage.setItem(`gh_blob_${sha}`, text);
-        } catch (e) { /* quota exceeded — skip caching */ }
-    }
+    if (sha) await cacheBlob(sha, text);
 
     return text;
 }
