@@ -18,7 +18,11 @@ import {
     resolveChapterClosure,
     stageExternalPrerequisites
 } from './prerequisites.js';
-import { resolveSubjectCurriculum } from './subject-curriculum.js';
+import {
+    DECK_GRANULARITY_RANGES,
+    resolveSubjectCurriculum,
+    validateSubjectExtension
+} from './subject-curriculum.js';
 import { stabilizeDeck, validateDeck } from './validation.js';
 
 function auditTimestamp() {
@@ -166,29 +170,49 @@ function buildDeckPrompt({
         'Before handoff, reconcile and report planned versus actual card-type, problem, and figure inventories by chapter, investigating unexplained omissions.',
         'Do not load deprecated compatibility guides or unrelated subject encyclopedias unless the user explicitly asks.',
         isolated
-            ? 'Do not inspect files outside this workspace. Do not modify .agents/, .flashcards/context/, .flashcards/prerequisites/, or AGENTS.override.md.'
+            ? 'Do not inspect files outside this workspace. Use workspace-relative paths for edits so operating-system path aliases cannot be mistaken for out-of-workspace writes. Do not modify .agents/, .flashcards/context/, .flashcards/prerequisites/, or AGENTS.override.md.'
             : 'Do not edit the flashcards application repository; make deck and subject changes only in the target workspaces.',
         'Do not commit, push, create a remote repository, or deploy.',
         extraInstructions ? `Additional user instructions: ${extraInstructions}` : null
     ].filter(Boolean).join('\n');
 }
 
-function buildSubjectPrompt({ subject, targetPath, contextFiles, skillPath, guideExists, extraInstructions, isolated }) {
+function buildSubjectPrompt({
+    operation,
+    subject,
+    targetPath,
+    contextFiles,
+    skillPath,
+    guideExists,
+    destination,
+    deckGranularity,
+    focus,
+    extraInstructions,
+    isolated
+}) {
+    const chapterRange = DECK_GRANULARITY_RANGES[deckGranularity];
     return [
         `Use $manage-flashcard-decks to design the ${subject} subject workspace. Read the complete skill at ${skillPath} before acting.`,
         `Target subject workspace: ${targetPath}`,
+        `Requested curriculum destination: ${destination}.`,
+        `Requested focus branches: ${focus.length ? focus.join(', ') : 'none specified'}.`,
+        `Required deck granularity: ${deckGranularity}${chapterRange ? `, with ${chapterRange[0]}-${chapterRange[1]} estimated chapters per coherent deck` : ''}.`,
         isolated
             ? 'This is an isolated fresh-agent run. Use only the target workspace, the ordered staged context below, and sources you deliberately find through live web research.'
             : `Read-only flashcards application and standards: ${FLASHCARDS_ROOT}`,
         'Read every present file in this ordered context manifest completely before acting:',
         ...contextFiles.map((file, index) => `${index + 1}. [${file.role}] ${file.path}`),
-        'Research authoritative curriculum frameworks and the current structure of the field. Complete SUBJECT_BRIEF.md and ROADMAP.md as an explicit, prerequisite-aware proposal. Treat unconfirmed learner knowledge as unseen and mark genuinely personal decisions for user confirmation rather than inventing them.',
-        'Create or update subject.toml as the executable copy of that curriculum. Keep it synchronized with ROADMAP.md. Use schema_version = 1 and the canonical subject slug, then one [[decks]] table per proposed deck with id, positive topological order, direct prerequisites, status, and a concise description. Deck ids, statuses, and prerequisite ids use lowercase kebab-case. Declare only direct prerequisites; every prerequisite must name an earlier deck in the same file. Do not create cycles, missing references, or duplicate ids/orders.',
+        'Follow the supplied subject curriculum workflow. Research authoritative curriculum frameworks and the current structure of the field, map material domains before naming decks, and stress-test every proposed deck for coherence and false prerequisites.',
+        'Complete SUBJECT_BRIEF.md and ROADMAP.md for the requested destination and granularity. Treat unconfirmed learner knowledge as unseen and mark genuinely personal decisions for user confirmation rather than inventing them.',
+        operation === 'extend'
+            ? 'Extend the existing curriculum rather than regenerating it. Preserve every valid existing deck id, level, status, and prerequisite edge; approved or active entries are especially immutable. Tiers may change because they express priority for the new destination. Add the requested advanced route and only the bridge decks it honestly requires; document any necessary correction to existing metadata.'
+            : 'Design a layered curriculum that can grow across learning levels. Destination controls the current route, not who is permitted to learn the subject and not the permanent ceiling of the roadmap.',
+        'Create or update subject.toml as the synchronized executable curriculum using schema_version = 3. Include destination, focus, deck_granularity, deck tier, deck level, hard prerequisites, recommended_after, estimated_chapters, status, description, and a complete [[coverage]] matrix. Keep level separate from tier: level describes assumed maturity; tier describes priority for this destination. Use only direct, minimal earlier-deck references. The validator will reject malformed metadata, oversized or undersized deck estimates, missing coverage, false reference types, later-level hard prerequisites, redundant hard edges, cycles, missing references, and duplicate ids or orders.',
         guideExists
             ? 'Use the supplied reusable domain guide; do not duplicate it into the subject workspace.'
             : 'No reusable domain guide exists. Create DOMAIN_GUIDE.md in the subject workspace. It must cover durable domain-specific authoring judgment, breadth and subfield balance, representations, misconceptions, evidence authorities, and accuracy checks without copying the universal standards.',
         'Do not create a deck or author cards in this run. Do not commit, push, create a remote repository, or deploy.',
-        isolated ? 'Do not inspect files outside this workspace. Do not modify .agents/, .flashcards/context/, or AGENTS.override.md.' : null,
+        isolated ? 'Do not inspect files outside this workspace. Use workspace-relative paths for edits so operating-system path aliases cannot be mistaken for out-of-workspace writes. Do not modify .agents/, .flashcards/context/, or AGENTS.override.md.' : null,
         extraInstructions ? `Additional user instructions: ${extraInstructions}` : null
     ].filter(Boolean).join('\n');
 }
@@ -303,10 +327,17 @@ export function buildSubjectAgentInvocation({
     subjectPath: inputPath,
     model,
     reasoningEffort = 'high',
+    operation = 'create',
+    destination = 'whole-field',
+    deckGranularity = 'course',
+    focus = [],
     extraInstructions,
     nonInteractive = false,
     isolated = true
 }) {
+    if (!['create', 'extend'].includes(operation)) {
+        throw new Error(`Unsupported subject agent operation: ${operation}`);
+    }
     const subjectPath = resolvePath(inputPath);
     const contextManifest = buildSubjectContextManifest({ subjectPath });
     const missingRequired = contextManifest.files.filter(file => file.required && !file.exists);
@@ -315,11 +346,15 @@ export function buildSubjectAgentInvocation({
     }
     const contextFiles = contextManifest.files.filter(file => file.exists);
     const prompt = buildSubjectPrompt({
+        operation,
         subject: contextManifest.subject,
         targetPath: subjectPath,
         contextFiles,
         skillPath: path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'),
         guideExists: existsSync(contextManifest.guide.path),
+        destination,
+        deckGranularity,
+        focus,
         extraInstructions,
         isolated
     });
@@ -338,11 +373,17 @@ export function formatInvocation(invocation) {
     return [invocation.command, ...invocation.args].map(shellQuote).join(' ');
 }
 
-function runPreparedInvocation(prepared, invocation, { reportOnly, metadata, allowedPaths }) {
+function runPreparedInvocation(prepared, invocation, {
+    reportOnly,
+    metadata,
+    allowedPaths,
+    validateWorkspace
+}) {
     recordIsolatedInvocation(prepared, { prompt: invocation.prompt, invocation, metadata });
     const result = spawnSync(invocation.command, invocation.args, { stdio: 'inherit' });
     if (result.error) throw new Error(`Unable to launch Codex: ${result.error.message}`);
     if (result.status !== 0) return { status: result.status, runPath: prepared.runPath };
+    if (validateWorkspace) validateWorkspace(prepared.workspacePath);
     const finished = finishIsolatedRun(prepared, { applyChanges: !reportOnly, allowedPaths });
     return { status: 0, ...finished };
 }
@@ -351,16 +392,30 @@ export function runSubjectAgent({
     subjectPath: inputPath,
     model,
     reasoningEffort = 'high',
+    operation = 'create',
+    destination = 'whole-field',
+    deckGranularity = 'course',
+    focus = [],
     extraInstructions,
     dryRun = false,
     isolated = true,
     nonInteractive = false
 }) {
     const subjectPath = resolvePath(inputPath);
+    const baseline = operation === 'extend'
+        ? resolveSubjectCurriculum(subjectPath, { requireDecks: true })
+        : null;
+    if (baseline?.errors.length) {
+        throw new Error(`Cannot extend an invalid subject curriculum:\n- ${baseline.errors.join('\n- ')}`);
+    }
     const preview = buildSubjectAgentInvocation({
         subjectPath,
         model,
         reasoningEffort,
+        operation,
+        destination,
+        deckGranularity,
+        focus,
         extraInstructions,
         isolated,
         nonInteractive
@@ -372,6 +427,12 @@ export function runSubjectAgent({
         if (result.error) throw new Error(`Unable to launch Codex: ${result.error.message}`);
         if (result.status === 0) {
             const curriculum = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+            if (operation === 'extend') {
+                const preservationErrors = validateSubjectExtension(baseline, curriculum);
+                if (preservationErrors.length) {
+                    throw new Error(`Subject extension violated preservation rules:\n- ${preservationErrors.join('\n- ')}`);
+                }
+            }
             if (curriculum.errors.length) {
                 throw new Error(`Codex finished, but subject curriculum validation failed:\n- ${curriculum.errors.join('\n- ')}`);
             }
@@ -382,16 +443,20 @@ export function runSubjectAgent({
     const prepared = prepareIsolatedRun({
         sourcePath: subjectPath,
         contextFiles: preview.contextManifest.files,
-        label: 'subject-create',
+        label: `subject-${operation}`,
         includeTopLevel: ['AGENTS.md', 'ROADMAP.md', 'SUBJECT_BRIEF.md', 'DOMAIN_GUIDE.md', 'subject.toml']
     });
     try {
         const prompt = buildSubjectPrompt({
+            operation,
             subject: preview.contextManifest.subject,
             targetPath: prepared.workspacePath,
             contextFiles: prepared.stagedContext,
             skillPath: path.join(prepared.workspacePath, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'),
             guideExists: existsSync(preview.contextManifest.guide.path),
+            destination,
+            deckGranularity,
+            focus,
             extraInstructions,
             isolated: true
         });
@@ -405,7 +470,24 @@ export function runSubjectAgent({
         });
         const result = runPreparedInvocation(prepared, invocation, {
             reportOnly: false,
-            metadata: { operation: 'subject-create', codexVersion: version, model: invocation.model, reasoningEffort }
+            metadata: {
+                operation: `subject-${operation}`,
+                codexVersion: version,
+                model: invocation.model,
+                reasoningEffort,
+                destination,
+                deckGranularity,
+                focus
+            },
+            validateWorkspace: operation === 'extend'
+                ? workspacePath => {
+                    const extended = resolveSubjectCurriculum(workspacePath, { requireDecks: true });
+                    const errors = validateSubjectExtension(baseline, extended);
+                    if (errors.length) {
+                        throw new Error(`Subject extension violated preservation rules:\n- ${errors.join('\n- ')}`);
+                    }
+                }
+                : undefined
         });
         if (result.status === 0) {
             const curriculum = resolveSubjectCurriculum(subjectPath, { requireDecks: true });

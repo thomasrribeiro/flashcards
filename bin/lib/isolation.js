@@ -193,7 +193,7 @@ export function prepareIsolatedRun({
 }) {
     const source = path.resolve(sourcePath);
     const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'flashcards-isolated-'));
-    const workspacePath = path.join(temporaryRoot, 'workspace');
+    const workspacePath = path.join(temporaryRoot, safeLabel(path.basename(source)));
     copyWorkspace(source, workspacePath, includeTopLevel);
     const preparedWorkspace = prepareWorkspace ? prepareWorkspace(workspacePath) : undefined;
     const sourceSnapshot = inventoryFiles(workspacePath);

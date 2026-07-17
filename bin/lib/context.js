@@ -92,6 +92,11 @@ export function buildSubjectContextManifest({ subjectPath: inputPath } = {}) {
     const add = (filePath, role, options) => files.push(inspectFile(filePath, role, options));
 
     add(path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'), 'agent workflow', { required: true });
+    add(
+        path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'references', 'subject-workflow.md'),
+        'subject curriculum workflow',
+        { required: true }
+    );
     add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'CARD_STANDARD.md'), 'normative card standard', { required: true });
     add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'AUTHORING_PLAYBOOK.md'), 'universal authoring playbook', { required: true });
     add(guide.path, guide.role);

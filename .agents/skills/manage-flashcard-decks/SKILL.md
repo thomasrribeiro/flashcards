@@ -12,6 +12,11 @@ stable-ID implementation, and validator as executable truth.
 
 Infer one mode from the request and CLI prompt:
 
+- **subject-design**: research a layered subject roadmap and executable
+  curriculum without creating decks or cards;
+- **subject-extend**: add a graduate or research route to an existing subject
+  while preserving valid existing deck identities and especially immutable
+  approved or active entries;
 - **build**: research and create a new or incomplete deck;
 - **expand**: add a chapter or close a defined coverage gap;
 - **audit**: inspect and improve an existing deck end to end;
@@ -36,9 +41,11 @@ read each applicable file completely before editing:
 6. the resolved prerequisite graph and staged transitive prerequisite closure
    supplied by the CLI; treat it as executable truth and do not infer knowledge
    from file order or unavailable chapters;
-7. [references/audit-workflow.md](references/audit-workflow.md) for whole-deck
+7. [references/subject-workflow.md](references/subject-workflow.md) for new or
+   revised subject curricula;
+8. [references/audit-workflow.md](references/audit-workflow.md) for whole-deck
    audits;
-8. the preflight JSON report named in the prompt, when present.
+9. the preflight JSON report named in the prompt, when present.
 
 If a deck predates these files, infer its current contract from its README and
 cards. Add missing metadata only when the requested mode permits edits. Do not

@@ -14,8 +14,10 @@ import { renderTikzFigures } from './lib/figures.js';
 import { resolveNotesRoot, resolvePath } from './lib/paths.js';
 import { stabilizeDeck, validateDeck } from './lib/validation.js';
 import {
+    DECK_GRANULARITY_RANGES,
     formatSubjectCurriculum,
     resolveSubjectCurriculum,
+    SUBJECT_DESTINATIONS,
     syncDeckPrerequisitesFromSubject
 } from './lib/subject-curriculum.js';
 
@@ -29,6 +31,17 @@ function positiveInteger(value) {
     const parsed = Number(value);
     if (!Number.isInteger(parsed) || parsed < 1) throw new Error(`Expected a positive integer, received: ${value}`);
     return parsed;
+}
+
+function validateSubjectOptions(destination, focus) {
+    for (const item of focus) {
+        if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item)) {
+            throw new Error(`--focus must use lowercase kebab-case: ${item}`);
+        }
+    }
+    if (destination === 'research-specialization' && focus.length === 0) {
+        throw new Error('--destination research-specialization requires at least one --focus.');
+    }
 }
 
 function handleError(error) {
@@ -95,7 +108,7 @@ function executeAgent(mode, deckPath, options) {
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('3.4.0')
+    .version('3.6.0')
     .showSuggestionAfterError();
 
 program
@@ -123,11 +136,26 @@ subject
     .option('--no-isolated', 'Use the legacy local workspace instead of a fresh staged run')
     .option('--model <model>', 'Override the model configured in Codex')
     .option('--reasoning-effort <effort>', 'Codex reasoning effort for an isolated run', 'high')
+    .addOption(new Option('--destination <destination>', 'Curriculum destination')
+        .choices(SUBJECT_DESTINATIONS)
+        .default('whole-field'))
+    .addOption(new Option('--deck-granularity <granularity>', 'Target size for one deck repository')
+        .choices(Object.keys(DECK_GRANULARITY_RANGES))
+        .default('course'))
+    .option('--focus <area>', 'Graduate or research focus in lowercase kebab-case; repeat as needed', collect, [])
     .option('--instructions <text>', 'Append task-specific instructions')
     .option('--dry-run', 'Create the scaffold and print the Codex command and prompt')
     .action(async (subjectName, options) => {
         try {
-            const result = await ensureSubject({ subject: subjectName, notesRoot: options.notesRoot, title: options.title });
+            validateSubjectOptions(options.destination, options.focus);
+            const result = await ensureSubject({
+                subject: subjectName,
+                notesRoot: options.notesRoot,
+                title: options.title,
+                destination: options.destination,
+                deckGranularity: options.deckGranularity,
+                focus: options.focus
+            });
             console.log(`Subject workspace: ${result.subjectPath}`);
             console.log(result.created.length ? `Created ${result.created.length} context file(s).` : 'Subject context already exists.');
             if (options.agent) {
@@ -135,6 +163,9 @@ subject
                     subjectPath: result.subjectPath,
                     model: options.model,
                     reasoningEffort: options.reasoningEffort,
+                    destination: options.destination,
+                    deckGranularity: options.deckGranularity,
+                    focus: options.focus,
                     extraInstructions: options.instructions,
                     dryRun: options.dryRun,
                     isolated: options.isolated
@@ -152,6 +183,62 @@ subject
                 const curriculum = resolveSubjectCurriculum(result.subjectPath, {
                     requireDecks: options.agent && !options.dryRun
                 });
+                console.log(formatSubjectCurriculum(curriculum));
+                if (curriculum.errors.length) process.exitCode = 1;
+            }
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+subject
+    .command('extend <subject-path>')
+    .description('Extend an existing subject with graduate or research-level routes')
+    .addOption(new Option('--destination <destination>', 'Destination for the extension')
+        .choices(SUBJECT_DESTINATIONS))
+    .addOption(new Option('--deck-granularity <granularity>', 'Target size for new deck repositories')
+        .choices(Object.keys(DECK_GRANULARITY_RANGES)))
+    .option('--focus <area>', 'Graduate or research focus in lowercase kebab-case; repeat as needed', collect, [])
+    .option('--no-isolated', 'Use the legacy local workspace instead of a fresh staged run')
+    .option('--model <model>', 'Override the model configured in Codex')
+    .option('--reasoning-effort <effort>', 'Codex reasoning effort for an isolated run', 'high')
+    .option('--instructions <text>', 'Append task-specific instructions')
+    .option('--dry-run', 'Print the Codex command and extension prompt')
+    .action((subjectPath, options) => {
+        try {
+            const current = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+            if (current.errors.length) {
+                throw new Error(`Invalid subject curriculum:\n- ${current.errors.join('\n- ')}`);
+            }
+            const destination = options.destination || current.destination || 'whole-field';
+            const deckGranularity = options.deckGranularity || current.deckGranularity || 'course';
+            const focus = [...new Set([...(current.focus || []), ...options.focus])];
+            validateSubjectOptions(destination, focus);
+            const agent = runSubjectAgent({
+                subjectPath: current.subjectPath,
+                operation: 'extend',
+                model: options.model,
+                reasoningEffort: options.reasoningEffort,
+                destination,
+                deckGranularity,
+                focus,
+                extraInstructions: options.instructions,
+                dryRun: options.dryRun,
+                isolated: options.isolated
+            });
+            if (agent.dryRun) {
+                console.log('Preview only: a live isolated run replaces these source paths with hash-recorded staged copies.');
+                console.log(formatInvocation(agent.invocation));
+                console.log('\nPrompt:\n');
+                console.log(agent.invocation.prompt);
+            }
+            if (agent.runPath) console.log(`Isolated run record: ${agent.runPath}`);
+            if (agent.status !== 0) {
+                process.exitCode = agent.status;
+                return;
+            }
+            if (!options.dryRun) {
+                const curriculum = resolveSubjectCurriculum(current.subjectPath, { requireDecks: true });
                 console.log(formatSubjectCurriculum(curriculum));
                 if (curriculum.errors.length) process.exitCode = 1;
             }
@@ -207,7 +294,7 @@ addAgentOptions(deck
     .command('create <subject> <deck>')
     .description('Create a standards-compliant deck repository')
     .option('--notes-root <path>', 'Notes collection root')
-    .option('--level <level>', 'Learner level', 'introductory-college')
+    .option('--level <level>', 'Override the learning level declared by the subject curriculum')
     .option('--description <text>', 'One-sentence deck purpose')
     .option('--prerequisite-deck <subject/deck>', 'Declare a prerequisite deck; repeat as needed', collect, [])
     .option('--assumed-tool <tool>', 'Declare a mastered mathematical/tool prerequisite; repeat as needed', collect, [])

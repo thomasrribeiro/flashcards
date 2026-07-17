@@ -281,8 +281,8 @@ Keep each fact in one durable home:
 | `templates/guides/<subject>.md` | reusable domain-specific epistemic and representation guidance | one learner's roadmap |
 | subject `AGENTS.md` | short routing instructions | authoring content |
 | subject `SUBJECT_BRIEF.md` | learner, depth, conventions, constraints, and evidence authorities | chapter map or universal rules |
-| subject `ROADMAP.md` | learner-facing deck sequence, outcomes, and rationale | machine-only edges or deck-local retrieval design |
-| subject `subject.toml` | executable deck order and direct prerequisite graph synchronized with the roadmap | prose rationale or chapter-level edges |
+| subject `ROADMAP.md` | learner-facing field coverage, deck sequence, outcomes, and rationale | machine-only edges or deck-local retrieval design |
+| subject `subject.toml` | executable destination, focus, independent deck levels and tiers, hard and recommended edges, and coverage synchronized with the roadmap | prose rationale or chapter-level edges |
 | deck `README.md` | scope, chapter map, source register, and use | machine-readable prerequisite edges or generic SRS advice |
 | deck `CARD_README.md` | deck-specific retrieval design and justified deviations | copied research literature |
 | deck `deck.toml` | machine-readable identity, deck prerequisites, assumed tools, and standards paths | prose guidance |

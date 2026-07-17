@@ -1,12 +1,27 @@
-schema_version = 1
+schema_version = 3
 subject = "{{SUBJECT}}"
+destination = "{{DESTINATION}}"
+deck_granularity = "{{DECK_GRANULARITY}}"
+focus = [{{FOCUS}}]
 
 # The subject agent replaces this empty scaffold with a topologically ordered
-# curriculum. Each prerequisite is another deck id in this same subject.
+# curriculum. Hard prerequisites and recommended sequencing name earlier deck
+# ids in this same subject. The default course granularity expects a coherent
+# deck estimated at 6-14 ordered chapters.
 #
 # [[decks]]
 # id = "foundations"
 # order = 1
+# tier = "core"
+# level = "foundational"
 # prerequisites = []
+# recommended_after = []
+# estimated_chapters = 8
 # status = "proposed"
 # description = "Durable capabilities established by this deck."
+#
+# [[coverage]]
+# domain = "foundations"
+# disposition = "included"
+# decks = ["foundations"]
+# rationale = "Required foundation for the requested destination."

@@ -3,6 +3,31 @@ import path from 'node:path';
 import { resolvePath } from './paths.js';
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export const SUBJECT_DESTINATIONS = Object.freeze([
+    'literacy',
+    'undergraduate-core',
+    'graduate-core',
+    'whole-field',
+    'research-specialization'
+]);
+export const SUBJECT_LEVELS = Object.freeze([
+    'foundational',
+    'undergraduate-core',
+    'undergraduate-advanced',
+    'graduate',
+    'research-specialization'
+]);
+export const DECK_GRANULARITY_RANGES = Object.freeze({
+    module: Object.freeze([3, 7]),
+    course: Object.freeze([6, 14]),
+    'broad-area': Object.freeze([10, 20])
+});
+const DESTINATIONS = new Set(SUBJECT_DESTINATIONS);
+const LEVELS = new Set(SUBJECT_LEVELS);
+const LEVEL_RANK = new Map(SUBJECT_LEVELS.map((level, index) => [level, index]));
+const GRANULARITY_RANGES = new Map(Object.entries(DECK_GRANULARITY_RANGES));
+const TIERS = new Set(['core', 'recommended', 'specialization']);
+const COVERAGE_DISPOSITIONS = new Set(['included', 'deferred', 'out-of-scope']);
 
 function assignmentSource(content, key) {
     const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -76,12 +101,13 @@ function parseStringArray(content, key, { required = false, sourceName = 'subjec
     throw new Error(`${sourceName}: unterminated array for ${key}`);
 }
 
-function deckBlocks(content) {
-    const matches = [...content.matchAll(/^\[\[decks\]\]\s*$/gm)];
-    return matches.map((match, index) => {
+function tableBlocks(content, table) {
+    const matches = [...content.matchAll(/^\[\[([a-z0-9_-]+)\]\]\s*$/gm)];
+    return matches.flatMap((match, index) => {
+        if (match[1] !== table) return [];
         const start = match.index + match[0].length;
         const end = matches[index + 1]?.index ?? content.length;
-        return content.slice(start, end);
+        return [content.slice(start, end)];
     });
 }
 
@@ -124,40 +150,162 @@ export function resolveSubjectCurriculum(inputPath, { requireDecks = false } = {
     const errors = [];
     const warnings = [];
     if (!existsSync(subjectPath) || !statSync(subjectPath).isDirectory()) {
-        return { subjectPath, manifestPath, subject: path.basename(subjectPath), schemaVersion: null, decks: [], errors: [`Subject path does not exist: ${subjectPath}`], warnings };
+        return {
+            subjectPath,
+            manifestPath,
+            subject: path.basename(subjectPath),
+            schemaVersion: null,
+            destination: null,
+            deckGranularity: null,
+            focus: [],
+            decks: [],
+            coverage: [],
+            errors: [`Subject path does not exist: ${subjectPath}`],
+            warnings
+        };
     }
     if (!existsSync(manifestPath)) {
-        return { subjectPath, manifestPath, subject: path.basename(subjectPath), schemaVersion: null, decks: [], errors: [`Missing subject.toml: ${subjectPath}`], warnings };
+        return {
+            subjectPath,
+            manifestPath,
+            subject: path.basename(subjectPath),
+            schemaVersion: null,
+            destination: null,
+            deckGranularity: null,
+            focus: [],
+            decks: [],
+            coverage: [],
+            errors: [`Missing subject.toml: ${subjectPath}`],
+            warnings
+        };
     }
 
     const content = readFileSync(manifestPath, 'utf8');
     let schemaVersion = null;
     let subject = path.basename(subjectPath);
+    let destination;
+    let deckGranularity;
+    let focus = [];
     const decks = [];
+    const coverage = [];
     try {
-        const firstDeck = /^\[\[decks\]\]\s*$/m.exec(content)?.index ?? content.length;
-        const header = content.slice(0, firstDeck);
+        const firstTable = /^\[\[[a-z0-9_-]+\]\]\s*$/m.exec(content)?.index ?? content.length;
+        const header = content.slice(0, firstTable);
         schemaVersion = parseInteger(header, 'schema_version', { required: true, sourceName: manifestPath });
         subject = parseString(header, 'subject', { required: true, sourceName: manifestPath });
-        if (schemaVersion !== 1) errors.push(`${manifestPath}: unsupported schema_version ${schemaVersion}; expected 1`);
+        if (![1, 2, 3].includes(schemaVersion)) {
+            errors.push(`${manifestPath}: unsupported schema_version ${schemaVersion}; expected 1, 2, or 3`);
+        }
         if (!SLUG.test(subject)) errors.push(`${manifestPath}: subject must be lowercase kebab-case`);
         if (subject !== path.basename(subjectPath)) errors.push(`${manifestPath}: subject ${JSON.stringify(subject)} must match directory ${JSON.stringify(path.basename(subjectPath))}`);
+        if (schemaVersion >= 2) {
+            destination = parseString(header, 'destination', { required: true, sourceName: manifestPath });
+            deckGranularity = parseString(header, 'deck_granularity', { required: true, sourceName: manifestPath });
+            focus = schemaVersion >= 3
+                ? parseStringArray(header, 'focus', { required: true, sourceName: manifestPath })
+                : [];
+            if (!DESTINATIONS.has(destination)) {
+                errors.push(`${manifestPath}: destination must be one of ${[...DESTINATIONS].join(', ')}`);
+            }
+            if (!GRANULARITY_RANGES.has(deckGranularity)) {
+                errors.push(`${manifestPath}: deck_granularity must be one of ${[...GRANULARITY_RANGES.keys()].join(', ')}`);
+            }
+            unique(focus, `${manifestPath} focus`, errors);
+            for (const item of focus) {
+                if (!SLUG.test(item)) errors.push(`${manifestPath}: focus must contain lowercase kebab-case values`);
+            }
+            if (schemaVersion >= 3 && destination === 'research-specialization' && focus.length === 0) {
+                errors.push(`${manifestPath}: research-specialization requires at least one focus`);
+            }
+        } else if (schemaVersion === 1) {
+            warnings.push(`${manifestPath}: schema version 1 has no curriculum tiers, soft sequencing, deck-size estimates, or coverage matrix`);
+        }
 
-        deckBlocks(content).forEach((block, index) => {
+        tableBlocks(content, 'decks').forEach((block, index) => {
             const sourceName = `${manifestPath} [[decks]] #${index + 1}`;
             const id = parseString(block, 'id', { required: true, sourceName });
             const order = parseInteger(block, 'order', { required: true, sourceName });
             const prerequisites = parseStringArray(block, 'prerequisites', { required: true, sourceName });
+            const recommendedAfter = parseStringArray(block, 'recommended_after', {
+                required: schemaVersion >= 2,
+                sourceName
+            });
+            const tier = parseString(block, 'tier', {
+                required: schemaVersion >= 2,
+                sourceName
+            }) || null;
+            const level = parseString(block, 'level', {
+                required: schemaVersion >= 3,
+                sourceName
+            }) || null;
+            const estimatedChapters = parseInteger(block, 'estimated_chapters', {
+                required: schemaVersion >= 2,
+                sourceName
+            });
             const status = parseString(block, 'status', { sourceName }) || 'proposed';
             const description = parseString(block, 'description', { sourceName }) || '';
             if (!SLUG.test(id)) errors.push(`${sourceName}: id must be lowercase kebab-case`);
             if (!Number.isInteger(order) || order < 1) errors.push(`${sourceName}: order must be a positive integer`);
             if (!SLUG.test(status)) errors.push(`${sourceName}: status must be lowercase kebab-case`);
-            for (const dependency of prerequisites) {
+            if (schemaVersion >= 2 && !TIERS.has(tier)) {
+                errors.push(`${sourceName}: tier must be one of ${[...TIERS].join(', ')}`);
+            }
+            if (schemaVersion >= 3 && !LEVELS.has(level)) {
+                errors.push(`${sourceName}: level must be one of ${[...LEVELS].join(', ')}`);
+            }
+            if (schemaVersion >= 2 && !description.trim()) errors.push(`${sourceName}: description must not be empty`);
+            if (schemaVersion >= 2 && (!Number.isInteger(estimatedChapters) || estimatedChapters < 1)) {
+                errors.push(`${sourceName}: estimated_chapters must be a positive integer`);
+            }
+            const range = GRANULARITY_RANGES.get(deckGranularity);
+            if (schemaVersion >= 2 && range && (estimatedChapters < range[0] || estimatedChapters > range[1])) {
+                errors.push(`${sourceName}: estimated_chapters ${estimatedChapters} is outside the ${deckGranularity} range ${range[0]}-${range[1]}`);
+            }
+            for (const dependency of [...prerequisites, ...recommendedAfter]) {
                 if (!SLUG.test(dependency)) errors.push(`${sourceName}: invalid prerequisite ${JSON.stringify(dependency)}`);
             }
             unique(prerequisites, `${sourceName} prerequisites`, errors);
-            decks.push({ id, order, prerequisites, status, description });
+            unique(recommendedAfter, `${sourceName} recommended_after`, errors);
+            for (const dependency of recommendedAfter) {
+                if (prerequisites.includes(dependency)) {
+                    errors.push(`${sourceName}: ${dependency} cannot be both a prerequisite and recommended_after`);
+                }
+            }
+            decks.push({
+                id,
+                order,
+                tier,
+                level,
+                prerequisites,
+                recommendedAfter,
+                estimatedChapters,
+                status,
+                description
+            });
+        });
+
+        tableBlocks(content, 'coverage').forEach((block, index) => {
+            const sourceName = `${manifestPath} [[coverage]] #${index + 1}`;
+            const domain = parseString(block, 'domain', { required: true, sourceName });
+            const disposition = parseString(block, 'disposition', { required: true, sourceName });
+            const deckIds = parseStringArray(block, 'decks', { required: true, sourceName });
+            const rationale = parseString(block, 'rationale', { required: true, sourceName });
+            if (!SLUG.test(domain)) errors.push(`${sourceName}: domain must be lowercase kebab-case`);
+            if (!COVERAGE_DISPOSITIONS.has(disposition)) {
+                errors.push(`${sourceName}: disposition must be one of ${[...COVERAGE_DISPOSITIONS].join(', ')}`);
+            }
+            unique(deckIds, `${sourceName} decks`, errors);
+            for (const deckId of deckIds) {
+                if (!SLUG.test(deckId)) errors.push(`${sourceName}: invalid deck reference ${JSON.stringify(deckId)}`);
+            }
+            if (disposition === 'included' && deckIds.length === 0) {
+                errors.push(`${sourceName}: included coverage must name at least one deck`);
+            }
+            if (disposition !== 'included' && deckIds.length > 0) {
+                errors.push(`${sourceName}: ${disposition} coverage must not name decks`);
+            }
+            if (!rationale.trim()) errors.push(`${sourceName}: rationale must not be empty`);
+            coverage.push({ domain, disposition, decks: deckIds, rationale });
         });
     } catch (error) {
         errors.push(error.message);
@@ -173,17 +321,90 @@ export function resolveSubjectCurriculum(inputPath, { requireDecks = false } = {
                 errors.push(`${manifestPath}: ${deck.id} references missing prerequisite deck ${prerequisite}`);
             } else if (dependency.order >= deck.order) {
                 errors.push(`${manifestPath}: ${deck.id} prerequisite ${prerequisite} must have a lower order`);
+            } else if (
+                schemaVersion >= 3
+                && LEVEL_RANK.get(dependency.level) > LEVEL_RANK.get(deck.level)
+            ) {
+                errors.push(`${manifestPath}: ${deck.id} cannot require later-level deck ${prerequisite}`);
+            }
+        }
+        for (const recommendation of deck.recommendedAfter) {
+            const dependency = byId.get(recommendation);
+            if (!dependency) {
+                errors.push(`${manifestPath}: ${deck.id} references missing recommended deck ${recommendation}`);
+            } else if (dependency.order >= deck.order) {
+                errors.push(`${manifestPath}: ${deck.id} recommended_after ${recommendation} must have a lower order`);
+            } else if (
+                schemaVersion >= 3
+                && LEVEL_RANK.get(dependency.level) > LEVEL_RANK.get(deck.level)
+            ) {
+                errors.push(`${manifestPath}: ${deck.id} cannot be recommended after later-level deck ${recommendation}`);
             }
         }
     }
     findCycles(decks, errors);
     decks.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+
+    const ancestors = new Map();
+    for (const deck of decks) {
+        const deckAncestors = new Set();
+        for (const prerequisite of deck.prerequisites) {
+            deckAncestors.add(prerequisite);
+            for (const ancestor of ancestors.get(prerequisite) || []) deckAncestors.add(ancestor);
+        }
+        for (const prerequisite of deck.prerequisites) {
+            const redundantVia = deck.prerequisites.filter(other =>
+                other !== prerequisite && ancestors.get(other)?.has(prerequisite)
+            );
+            if (redundantVia.length) {
+                errors.push(`${manifestPath}: ${deck.id} prerequisite ${prerequisite} is transitively redundant via ${redundantVia.join(', ')}`);
+            }
+        }
+        for (const recommendation of deck.recommendedAfter) {
+            if (deckAncestors.has(recommendation)) {
+                errors.push(`${manifestPath}: ${deck.id} recommended_after ${recommendation} is already guaranteed by hard prerequisites`);
+            }
+        }
+        ancestors.set(deck.id, deckAncestors);
+    }
+
+    unique(coverage.map(item => item.domain), `${manifestPath} coverage domains`, errors);
+    const coveredDecks = new Set();
+    for (const item of coverage) {
+        for (const deckId of item.decks) {
+            if (!byId.has(deckId)) {
+                errors.push(`${manifestPath}: coverage domain ${item.domain} references missing deck ${deckId}`);
+            } else {
+                coveredDecks.add(deckId);
+            }
+        }
+    }
+    if (schemaVersion >= 2 && decks.length > 0) {
+        if (coverage.length === 0) errors.push(`${manifestPath}: schema version ${schemaVersion} requires at least one [[coverage]] entry`);
+        for (const deck of decks) {
+            if (!coveredDecks.has(deck.id)) {
+                errors.push(`${manifestPath}: deck ${deck.id} is not assigned to any included coverage domain`);
+            }
+        }
+    }
     if (decks.length === 0) {
         const message = `${manifestPath}: curriculum contains no decks`;
         if (requireDecks) errors.push(message);
         else warnings.push(message);
     }
-    return { subjectPath, manifestPath, subject, schemaVersion, decks, errors, warnings };
+    return {
+        subjectPath,
+        manifestPath,
+        subject,
+        schemaVersion,
+        destination,
+        deckGranularity,
+        focus,
+        decks,
+        coverage,
+        errors,
+        warnings
+    };
 }
 
 export function resolveSubjectDeckClosure(graph, deckId) {
@@ -203,8 +424,42 @@ export function resolveSubjectDeckClosure(graph, deckId) {
     return {
         deck: target,
         direct: [...target.prerequisites],
-        transitive: graph.decks.filter(deck => closure.has(deck.id)).map(deck => deck.id)
+        transitive: graph.decks.filter(deck => closure.has(deck.id)).map(deck => deck.id),
+        recommendedAfter: [...target.recommendedAfter]
     };
+}
+
+export function validateSubjectExtension(before, after) {
+    const errors = [];
+    if (before.errors.length) {
+        errors.push(`baseline curriculum is invalid: ${before.errors.join('; ')}`);
+        return errors;
+    }
+    if (after.errors.length) {
+        errors.push(`extended curriculum is invalid: ${after.errors.join('; ')}`);
+        return errors;
+    }
+    const afterById = new Map(after.decks.map(deck => [deck.id, deck]));
+    for (const original of before.decks) {
+        const extended = afterById.get(original.id);
+        if (!extended) {
+            errors.push(`extension removed existing deck ${original.id}`);
+            continue;
+        }
+        if (original.level && extended.level !== original.level) {
+            errors.push(`extension changed ${original.id} level from ${original.level} to ${extended.level}`);
+        }
+        if (extended.status !== original.status) {
+            errors.push(`extension changed ${original.id} status from ${original.status} to ${extended.status}`);
+        }
+        if (
+            original.prerequisites.length !== extended.prerequisites.length
+            || original.prerequisites.some((id, index) => extended.prerequisites[index] !== id)
+        ) {
+            errors.push(`extension changed ${original.id} hard prerequisites`);
+        }
+    }
+    return errors;
 }
 
 export function subjectPrerequisiteDecks(subjectPath, deckId) {
@@ -271,20 +526,38 @@ export function formatSubjectCurriculum(graph, { deck } = {}) {
         `Schema: ${graph.schemaVersion ?? 'invalid'}`,
         `Subject: ${graph.subject}`
     ];
+    if (graph.destination) lines.push(`Destination: ${graph.destination}`);
+    if (graph.deckGranularity) lines.push(`Deck granularity: ${graph.deckGranularity}`);
+    if (graph.focus?.length) lines.push(`Focus: ${graph.focus.join(', ')}`);
     if (deck && !graph.errors.length) {
         try {
             const closure = resolveSubjectDeckClosure(graph, deck);
             lines.push(`Target deck: ${deck}`);
             lines.push(`Direct prerequisites: ${closure.direct.length ? closure.direct.join(', ') : 'none'}`);
             lines.push(`Transitive closure: ${closure.transitive.length ? closure.transitive.join(', ') : 'none'}`);
+            lines.push(`Recommended after: ${closure.recommendedAfter.length ? closure.recommendedAfter.join(', ') : 'none'}`);
         } catch (error) {
             lines.push(`Target error: ${error.message}`);
         }
     }
     lines.push('', 'Decks:');
     for (const item of graph.decks) {
-        lines.push(`${item.order}. ${item.id} [${item.status}]: ${item.prerequisites.length ? item.prerequisites.join(', ') : 'none'}`);
+        const metadata = [
+            item.level,
+            item.tier,
+            item.status,
+            item.estimatedChapters ? `${item.estimatedChapters} chapters` : null
+        ].filter(Boolean).join(', ');
+        lines.push(`${item.order}. ${item.id} [${metadata}]: ${item.prerequisites.length ? item.prerequisites.join(', ') : 'none'}`);
+        if (item.recommendedAfter.length) lines.push(`   Recommended after: ${item.recommendedAfter.join(', ')}`);
         if (item.description) lines.push(`   ${item.description}`);
+    }
+    if (graph.coverage.length) {
+        lines.push('', 'Coverage:');
+        for (const item of graph.coverage) {
+            const placement = item.decks.length ? item.decks.join(', ') : item.disposition;
+            lines.push(`- ${item.domain} [${item.disposition}]: ${placement}`);
+        }
     }
     if (graph.warnings.length) lines.push('', 'Warnings:', ...graph.warnings.map(warning => `- ${warning}`));
     if (graph.errors.length) lines.push('', 'Errors:', ...graph.errors.map(error => `- ${error}`));

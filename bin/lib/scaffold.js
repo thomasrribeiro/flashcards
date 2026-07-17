@@ -50,7 +50,10 @@ function commonValues({
     level = '',
     description = '',
     prerequisiteDecks = [],
-    assumedTools = []
+    assumedTools = [],
+    destination = 'whole-field',
+    deckGranularity = 'course',
+    focus = []
 }) {
     return {
         SUBJECT: subject,
@@ -61,16 +64,26 @@ function commonValues({
         DESCRIPTION: description,
         PREREQUISITE_DECKS: prerequisiteDecks.map(tomlString).join(', '),
         ASSUMED_TOOLS: assumedTools.map(tomlString).join(', '),
+        DESTINATION: destination,
+        DECK_GRANULARITY: deckGranularity,
+        FOCUS: focus.map(tomlString).join(', '),
         DATE: new Date().toISOString().slice(0, 10),
         FLASHCARDS_ROOT
     };
 }
 
-export async function ensureSubject({ subject, notesRoot, title }) {
+export async function ensureSubject({
+    subject,
+    notesRoot,
+    title,
+    destination = 'whole-field',
+    deckGranularity = 'course',
+    focus = []
+}) {
     requireKebabSlug(subject, 'Subject');
     const root = resolveNotesRoot(notesRoot);
     const subjectPath = path.join(root, subject);
-    const values = commonValues({ subject });
+    const values = commonValues({ subject, destination, deckGranularity, focus });
     if (title) values.SUBJECT_TITLE = title;
 
     await mkdir(subjectPath, { recursive: true });
@@ -86,7 +99,7 @@ export async function createDeck({
     subject,
     deck,
     notesRoot,
-    level = 'introductory-college',
+    level,
     description,
     initializeGit = true,
     chapters = [],
@@ -123,12 +136,13 @@ export async function createDeck({
         ? curriculumDeck.prerequisites.map(id => `${subject}/${id}`)
         : [];
     const resolvedPrerequisiteDecks = [...new Set([...inferredPrerequisiteDecks, ...prerequisiteDecks])];
+    const resolvedLevel = level || curriculumDeck?.level || 'introductory-college';
 
     const summary = description || `Spaced-repetition deck for ${titleFromSlug(deck)}.`;
     const values = commonValues({
         subject,
         deck,
-        level,
+        level: resolvedLevel,
         description: summary,
         prerequisiteDecks: resolvedPrerequisiteDecks,
         assumedTools
@@ -173,7 +187,8 @@ export async function createDeck({
         chapterResults,
         gitInitialized,
         prerequisiteDecks: resolvedPrerequisiteDecks,
-        inferredPrerequisiteDecks
+        inferredPrerequisiteDecks,
+        level: resolvedLevel
     };
 }
 

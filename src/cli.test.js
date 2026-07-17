@@ -28,7 +28,8 @@ import { stabilizeDeck, validateDeck } from '../bin/lib/validation.js';
 import {
     resolveSubjectCurriculum,
     resolveSubjectDeckClosure,
-    syncDeckPrerequisitesFromSubject
+    syncDeckPrerequisitesFromSubject,
+    validateSubjectExtension
 } from '../bin/lib/subject-curriculum.js';
 
 const temporaryRoots = [];
@@ -69,6 +70,10 @@ describe('flashcards CLI scaffolding', () => {
         expect(await readFile(path.join(result.deckPath, 'README.md'), 'utf8')).toContain('Confirmed subject prerequisites: none');
         expect(await stat(path.join(subject.subjectPath, 'SUBJECT_BRIEF.md'))).toBeTruthy();
         expect(await stat(path.join(subject.subjectPath, 'subject.toml'))).toBeTruthy();
+        expect(await readFile(path.join(subject.subjectPath, 'subject.toml'), 'utf8'))
+            .toContain('schema_version = 3');
+        expect(await readFile(path.join(subject.subjectPath, 'subject.toml'), 'utf8'))
+            .toContain('destination = "whole-field"');
         expect(await stat(path.join(result.deckPath, 'figures', '01_foundations'))).toBeTruthy();
         expect(await stat(path.join(result.deckPath, 'flashcards', '02_plate_boundaries.md'))).toBeTruthy();
         expect(await readFile(path.join(result.deckPath, 'flashcards', '02_plate_boundaries.md'), 'utf8'))
@@ -138,6 +143,286 @@ status = "proposed"
             direct: ['cell-biology'],
             transitive: ['biology-foundations', 'cell-biology']
         });
+    });
+
+    it('validates schema-v2 subject tiers, soft sequencing, scope, and field coverage', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({
+            subject: 'biology',
+            notesRoot,
+            destination: 'undergraduate-core',
+            deckGranularity: 'course'
+        });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 2
+subject = "biology"
+destination = "undergraduate-core"
+deck_granularity = "course"
+
+[[decks]]
+id = "biology-foundations"
+order = 1
+tier = "core"
+prerequisites = []
+recommended_after = []
+estimated_chapters = 8
+status = "proposed"
+description = "Establish inquiry and the chemistry of life."
+
+[[decks]]
+id = "cell-biology"
+order = 2
+tier = "core"
+prerequisites = ["biology-foundations"]
+recommended_after = []
+estimated_chapters = 10
+status = "proposed"
+description = "Reason about cells, membranes, and cellular systems."
+
+[[decks]]
+id = "field-biology"
+order = 3
+tier = "specialization"
+prerequisites = []
+recommended_after = ["cell-biology"]
+estimated_chapters = 6
+status = "proposed"
+description = "Practice observation, sampling, and organismal comparison."
+
+[[coverage]]
+domain = "biological-foundations"
+disposition = "included"
+decks = ["biology-foundations"]
+rationale = "Required entry knowledge."
+
+[[coverage]]
+domain = "cellular-systems"
+disposition = "included"
+decks = ["cell-biology"]
+rationale = "Core biological organization."
+
+[[coverage]]
+domain = "field-practice"
+disposition = "included"
+decks = ["field-biology"]
+rationale = "Optional authentic-practice branch."
+
+[[coverage]]
+domain = "clinical-medicine"
+disposition = "out-of-scope"
+decks = []
+rationale = "The destination is biology rather than clinical practice."
+`);
+
+        const graph = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+        expect(graph.errors).toEqual([]);
+        expect(graph).toMatchObject({
+            schemaVersion: 2,
+            destination: 'undergraduate-core',
+            deckGranularity: 'course'
+        });
+        expect(graph.decks[2]).toMatchObject({
+            tier: 'specialization',
+            recommendedAfter: ['cell-biology'],
+            estimatedChapters: 6
+        });
+        expect(resolveSubjectDeckClosure(graph, 'field-biology')).toMatchObject({
+            direct: [],
+            transitive: [],
+            recommendedAfter: ['cell-biology']
+        });
+        expect(graph.coverage).toHaveLength(4);
+    });
+
+    it('rejects incoherent schema-v2 curriculum metadata', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({ subject: 'physics', notesRoot });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 2
+subject = "physics"
+destination = "undergraduate-core"
+deck_granularity = "course"
+
+[[decks]]
+id = "foundations"
+order = 1
+tier = "core"
+prerequisites = []
+recommended_after = []
+estimated_chapters = 2
+status = "proposed"
+description = "Foundations."
+
+[[decks]]
+id = "mechanics"
+order = 2
+tier = "required"
+prerequisites = ["foundations"]
+recommended_after = ["foundations"]
+estimated_chapters = 18
+status = "proposed"
+description = "Mechanics."
+
+[[coverage]]
+domain = "mechanics"
+disposition = "included"
+decks = []
+rationale = "Core domain."
+
+[[coverage]]
+domain = "medicine"
+disposition = "deferred"
+decks = ["mechanics"]
+rationale = "Later."
+`);
+
+        const errors = resolveSubjectCurriculum(subjectPath, { requireDecks: true }).errors.join('\n');
+        expect(errors).toContain('outside the course range 6-14');
+        expect(errors).toContain('tier must be one of core, recommended, specialization');
+        expect(errors).toContain('cannot be both a prerequisite and recommended_after');
+        expect(errors).toContain('included coverage must name at least one deck');
+        expect(errors).toContain('deferred coverage must not name decks');
+        expect(errors).toContain('deck foundations is not assigned to any included coverage domain');
+    });
+
+    it('validates schema-v3 learning levels independently from destination tiers', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({
+            subject: 'physics',
+            notesRoot,
+            destination: 'research-specialization',
+            focus: ['quantum-field-theory']
+        });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 3
+subject = "physics"
+destination = "research-specialization"
+deck_granularity = "course"
+focus = ["quantum-field-theory"]
+
+[[decks]]
+id = "quantum-foundations"
+order = 1
+tier = "recommended"
+level = "undergraduate-advanced"
+prerequisites = []
+recommended_after = []
+estimated_chapters = 10
+status = "active"
+description = "Establish quantum mechanics needed by later field theory."
+
+[[decks]]
+id = "quantum-field-theory"
+order = 2
+tier = "core"
+level = "graduate"
+prerequisites = ["quantum-foundations"]
+recommended_after = []
+estimated_chapters = 12
+status = "proposed"
+description = "Develop the shared graduate foundations of quantum field theory."
+
+[[decks]]
+id = "conformal-field-theory"
+order = 3
+tier = "specialization"
+level = "research-specialization"
+prerequisites = ["quantum-field-theory"]
+recommended_after = []
+estimated_chapters = 8
+status = "proposed"
+description = "Build a literature-facing conformal field theory route."
+
+[[coverage]]
+domain = "quantum-foundations"
+disposition = "included"
+decks = ["quantum-foundations"]
+rationale = "Minimum honest bridge."
+
+[[coverage]]
+domain = "quantum-field-theory"
+disposition = "included"
+decks = ["quantum-field-theory", "conformal-field-theory"]
+rationale = "Requested focus and one research branch."
+`);
+
+        const graph = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+        expect(graph.errors).toEqual([]);
+        expect(graph).toMatchObject({
+            schemaVersion: 3,
+            destination: 'research-specialization',
+            focus: ['quantum-field-theory']
+        });
+        expect(graph.decks.map(deck => deck.level)).toEqual([
+            'undergraduate-advanced',
+            'graduate',
+            'research-specialization'
+        ]);
+
+        const created = await createDeck({
+            subject: 'physics',
+            deck: 'quantum-field-theory',
+            notesRoot,
+            initializeGit: false
+        });
+        expect(created.level).toBe('graduate');
+        expect(await readFile(path.join(created.deckPath, 'deck.toml'), 'utf8'))
+            .toContain('level = "graduate"');
+
+        expect(validateSubjectExtension(graph, {
+            ...graph,
+            decks: [...graph.decks, {
+                ...graph.decks.at(-1),
+                id: 'new-research-branch',
+                order: 4
+            }]
+        })).toEqual([]);
+        expect(validateSubjectExtension(graph, {
+            ...graph,
+            decks: graph.decks.map(deck => deck.id === 'quantum-foundations'
+                ? { ...deck, prerequisites: ['quantum-field-theory'] }
+                : deck)
+        }).join('\n')).toContain('changed quantum-foundations hard prerequisites');
+    });
+
+    it('rejects research routes without focus and later-level hard prerequisites', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({ subject: 'biology', notesRoot });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 3
+subject = "biology"
+destination = "research-specialization"
+deck_granularity = "course"
+focus = []
+
+[[decks]]
+id = "advanced-genomics"
+order = 1
+tier = "specialization"
+level = "research-specialization"
+prerequisites = []
+recommended_after = []
+estimated_chapters = 8
+status = "proposed"
+description = "Research genomics."
+
+[[decks]]
+id = "genetics"
+order = 2
+tier = "core"
+level = "undergraduate-core"
+prerequisites = ["advanced-genomics"]
+recommended_after = []
+estimated_chapters = 8
+status = "proposed"
+description = "Undergraduate genetics."
+
+[[coverage]]
+domain = "genetics"
+disposition = "included"
+decks = ["advanced-genomics", "genetics"]
+rationale = "Test fixture."
+`);
+
+        const graph = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+        expect(graph.errors.join('\n')).toContain('research-specialization requires at least one focus');
+        expect(graph.errors.join('\n')).toContain('cannot require later-level deck advanced-genomics');
     });
 
     it('rejects missing, later, duplicate, and cyclic subject deck edges', async () => {
@@ -499,16 +784,37 @@ describe('flashcards CLI validation and Codex handoff', () => {
         const notesRoot = await temporaryRoot();
         const { subjectPath } = await ensureSubject({ subject: 'earth-science', notesRoot });
         const manifest = buildSubjectContextManifest({ subjectPath });
+        expect(manifest.files.some(file => file.path.endsWith('subject-workflow.md') && file.required)).toBe(true);
         expect(manifest.files.some(file => file.path.endsWith('ROADMAP.md') && file.required)).toBe(true);
         expect(manifest.files.some(file => file.path.endsWith('SUBJECT_BRIEF.md') && file.required)).toBe(true);
         expect(manifest.files.some(file => file.path.endsWith('subject.toml') && file.required)).toBe(true);
         expect(manifest.guide.path).toBe(path.join(subjectPath, 'DOMAIN_GUIDE.md'));
 
-        const invocation = buildSubjectAgentInvocation({ subjectPath, model: 'test-model' });
+        const invocation = buildSubjectAgentInvocation({
+            subjectPath,
+            model: 'test-model',
+            destination: 'whole-field',
+            deckGranularity: 'module'
+        });
         expect(invocation.args).toContain('--ephemeral');
         expect(invocation.prompt).toContain('Create DOMAIN_GUIDE.md');
         expect(invocation.prompt).toContain('subject.toml');
+        expect(invocation.prompt).toContain('Requested curriculum destination: whole-field');
+        expect(invocation.prompt).toContain('Required deck granularity: module, with 3-7 estimated chapters');
+        expect(invocation.prompt).toContain('schema_version = 3');
+        expect(invocation.prompt).toContain('deck level');
+        expect(invocation.prompt).toContain('complete [[coverage]] matrix');
         expect(invocation.prompt).toContain('Do not create a deck');
+
+        const extension = buildSubjectAgentInvocation({
+            subjectPath,
+            operation: 'extend',
+            destination: 'research-specialization',
+            focus: ['plate-tectonics']
+        });
+        expect(extension.prompt).toContain('Requested focus branches: plate-tectonics');
+        expect(extension.prompt).toContain('Extend the existing curriculum rather than regenerating it');
+        expect(extension.prompt).toContain('Preserve every valid existing deck id');
     });
 
     it('applies only target changes from an isolated workspace', async () => {
@@ -527,6 +833,7 @@ describe('flashcards CLI validation and Codex handoff', () => {
             label: 'test'
         });
         try {
+            expect(path.basename(prepared.workspacePath)).toBe('genetics');
             await writeFile(path.join(prepared.workspacePath, 'README.md'), '# Revised in isolation\n');
             await writeFile(prepared.stagedContext[0].path, '# Attempted context mutation\n');
             const result = finishIsolatedRun(prepared);

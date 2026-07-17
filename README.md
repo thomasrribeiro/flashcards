@@ -77,6 +77,18 @@ Subjects and decks use lowercase kebab-case. By default, decks are created at
 ```bash
 flashcards subject create biology
 
+# Explicit alternatives:
+flashcards subject create physics --destination whole-field
+flashcards subject create mathematics --destination undergraduate-core \
+  --deck-granularity course
+flashcards subject create physics --destination graduate-core \
+  --focus quantum-physics
+
+# Add a later research route without rebuilding the existing curriculum:
+flashcards subject extend ~/notes/physics \
+  --destination research-specialization \
+  --focus quantum-field-theory
+
 flashcards deck create biology genetics \
   --description "Mechanistic genetics from inheritance to gene regulation" \
   --assumed-tool basic-statistics
@@ -88,13 +100,32 @@ it with a repeatable flag such as
 
 Both commands launch a fresh isolated agent by default. `subject create`
 researches and completes `SUBJECT_BRIEF.md`, the explanatory `ROADMAP.md`, and
-the synchronized executable dependency graph in `subject.toml`; if the
+the synchronized executable curriculum in `subject.toml`. The default
+destination is `whole-field`, which creates a layered roadmap rather than
+treating undergraduate study as a permanent ceiling. Every deck separately
+records a learning level and a priority tier. Select `literacy`,
+`undergraduate-core`, `graduate-core`, or `research-specialization` for a more
+focused route; research specialization requires at least one repeatable
+`--focus`. `subject extend` preserves valid existing decks—especially approved
+or active ones—while adding a graduate or research route and only the
+prerequisite bridges it actually needs. The default deck granularity is
+`course`, meaning one coherent repository estimated at 6–14 ordered chapters;
+other granularities are `module` and `broad-area`. If the
 repository does not already provide a reusable `templates/guides/<subject>.md`,
 it also creates a subject-owned `DOMAIN_GUIDE.md`. `deck create` inherits its
 declared direct prerequisites from that graph, then researches the deck,
 completes its README and card blueprint, and authors only the first novice-first
 pilot chapter. Pass `--no-agent` to either command when only the deterministic
 scaffold is wanted.
+
+For isolated extensions, preservation is a checked postcondition before any
+generated files are copied back: existing ids, levels, statuses, and hard
+prerequisite edges cannot silently disappear or change.
+
+When a proposed deck is later created, `deck create` inherits both its hard
+prerequisites and its learning level from `subject.toml`. `--level` is an
+explicit override, not a default that silently turns graduate decks into
+introductory ones.
 
 `deck build` intentionally authors only the first ordered chapter. The agent
 may design the full roadmap, but it must complete a concept-dependency ledger
@@ -156,11 +187,15 @@ flashcards subject prerequisites ~/notes/biology --deck molecular-biology
 flashcards subject validate ~/notes/biology
 ```
 
-Deck orders in `subject.toml` must be topological. Every prerequisite names an
-earlier deck in the same subject, and cycles, missing references, duplicate
-orders, and duplicate ids are rejected. When a declared deck is created, its
-direct edges are copied into `deck.toml`; transitive prerequisites remain
-available through the normal deck resolver.
+Schema-v3 subject curricula distinguish destination and focus from each deck's
+learning level and priority tier. They separate hard `prerequisites` from
+`recommended_after` sequencing, estimate chapter scope, and map every material
+field domain to an included deck or deliberate deferral. Deck orders must be
+topological. Cycles, missing or redundant references, later-level hard edges,
+duplicate ids/orders, out-of-range deck estimates, and incomplete coverage are
+rejected. When a declared deck is created, only its hard direct edges are
+copied into `deck.toml`; recommended sequencing never grants assumed
+knowledge. Existing schema-v1 and schema-v2 subjects remain readable.
 
 ## Maintain a deck
 
@@ -379,8 +414,9 @@ The context hierarchy deliberately avoids repetition:
 | `templates/guides/<subject>.md` | Reusable domain-specific judgment |
 | subject `DOMAIN_GUIDE.md` | AI-researched domain guide only when no reusable repository guide exists |
 | subject `SUBJECT_BRIEF.md` | Learner, depth, conventions, and evidence authorities |
-| subject `ROADMAP.md` | Learner-facing explanation of deck sequence and durable outcomes |
-| subject `subject.toml` | AI-authored executable deck order and direct prerequisite graph |
+| subject curriculum workflow | Field mapping, deck granularity, tiers, hard versus recommended edges, and coverage decisions |
+| subject `ROADMAP.md` | Learner-facing explanation of field coverage, deck sequence, and durable outcomes |
+| subject `subject.toml` | AI-authored executable curriculum with tiers, scope estimates, hard/soft order, and coverage |
 | deck `deck.toml` | Machine-readable identity, external deck prerequisites, and assumed tools |
 | deck `README.md` | Scope, chapter map, and source register |
 | deck `CARD_README.md` | Deck-specific retrieval design and justified exceptions |
