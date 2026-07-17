@@ -1907,7 +1907,11 @@ async function showMainView(view) {
         controlsBar?.classList.remove('hidden');
         grid?.classList.remove('hidden');
         updateDeckBreadcrumb();
-        if (habitSettings) renderReviewButton({ refreshStatus: false });
+        // The existing columns are a snapshot of review state from their last
+        // render. Grades are saved immediately, so rebuild from the current
+        // in-memory card/review caches whenever Decks becomes visible. Without
+        // this, chapter completion percentages remain stale until a hard reload.
+        await loadRepositories();
     }
 }
 
