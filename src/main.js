@@ -16,6 +16,7 @@ import { renderDashboard } from './dashboard.js';
 import { getReminderPreferences, isIOSDevice, isStandalone, subscribeToPush, unsubscribeFromPush, updateAppBadge } from './push-client.js';
 import { renderBrowsableCards } from './card-browser.js';
 import { evictLegacyBlobLocalStorage } from './browser-storage.js';
+import { sortDeckIdsByCurriculum } from './deck-order.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -923,7 +924,7 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
     for (const subject of subjectNames) {
         const decks = subjects.get(subject);
         const subjectMatch = term && subject.toLowerCase().includes(term);
-        let deckIds = [...decks.keys()].sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()));
+        let deckIds = sortDeckIdsByCurriculum(decks.keys(), deckById);
         if (term && !subjectMatch) {
             deckIds = deckIds.filter(id => {
                 if (id.split('/').pop().toLowerCase().includes(term)) return true;
@@ -1108,6 +1109,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
     const filesOf = decksMap => id => ({ repo: id, files: [...decksMap.get(id).keys()] });
     const reviewMap = new Map(allReviews.map(review => [review.cardHash, review]));
     const now = new Date();
+    const deckById = new Map(displayDecks.map(deck => [deck.id, deck]));
 
     // Build Subject → Deck → File from lightweight Git-tree metadata. Loaded
     // cards are not required to render or search the columns.
@@ -1131,8 +1133,8 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
     }
     const subjectNames = [...subjects.keys()].sort((a, b) => a === 'misc' ? 1 : b === 'misc' ? -1 : a.localeCompare(b));
 
-    const sortedDeckIds = subject => [...subjects.get(subject).keys()]
-        .sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()));
+    const sortedDeckIds = subject =>
+        sortDeckIdsByCurriculum(subjects.get(subject).keys(), deckById);
     const matchingDecks = new Map(subjectNames.map(subject => [
         subject,
         sortedDeckIds(subject).filter(id => id.split('/').pop().toLowerCase().includes(term))

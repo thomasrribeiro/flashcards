@@ -80,6 +80,10 @@ function executeAgent(mode, deckPath, options) {
     }
     const chapterNumber = options.chapter || (options.freshPilot ? 1 : undefined);
     const buildScope = options.full ? 'full' : options.chapter ? 'chapter' : 'pilot';
+    const synced = syncDeckPrerequisitesFromSubject(deckPath, { allowMissing: true });
+    if (synced.changed) {
+        console.log(`Synced subject curriculum metadata (order ${synced.curriculumOrder}).`);
+    }
     const result = runDeckAgent({
         mode,
         deckPath,
@@ -356,6 +360,20 @@ addAgentOptions(deck
                 }
                 console.log(`Next: flashcards deck build ${result.deckPath}`);
             }
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+deck
+    .command('sync-curriculum <deck-path>')
+    .description('Copy current subject order and direct prerequisites into deck.toml')
+    .action(deckPath => {
+        try {
+            const result = syncDeckPrerequisitesFromSubject(deckPath, { requireEntry: true });
+            console.log(`Curriculum order: ${result.curriculumOrder}`);
+            console.log(`Direct prerequisites: ${result.inferred.length ? result.inferred.join(', ') : 'none'}`);
+            console.log(result.changed ? 'Updated deck.toml.' : 'deck.toml is already current.');
         } catch (error) {
             handleError(error);
         }

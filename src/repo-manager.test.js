@@ -14,6 +14,7 @@ vi.mock('./github-client.js', () => ({
     },
     getFileContent: mocks.getFileContent,
     getRepository: vi.fn(),
+    getRepositoryFileIndex: vi.fn(),
     getMarkdownFiles: vi.fn(),
     createRepoData: vi.fn()
 }));
@@ -27,7 +28,7 @@ vi.mock('./storage.js', () => ({
     markRepoLoaded: vi.fn()
 }));
 
-import { loadRepositoryFiles, resolveRepositorySubject } from './repo-manager.js';
+import { loadRepositoryFiles, parseDeckManifest, resolveRepositorySubject } from './repo-manager.js';
 
 const markdown = `+++
 subject = "computer-science"
@@ -79,5 +80,17 @@ describe('loadRepositoryFiles', () => {
 describe('resolveRepositorySubject', () => {
     it('recognizes misc as an explicit canonical repository topic', () => {
         expect(resolveRepositorySubject(['flashcards', 'misc'], 'physics')).toBe('misc');
+    });
+});
+
+describe('parseDeckManifest', () => {
+    it('reads a positive curriculum order', () => {
+        expect(parseDeckManifest('deck = "mechanics"\ncurriculum_order = 4\n'))
+            .toEqual({ curriculumOrder: 4 });
+    });
+
+    it('treats missing and zero orders as unlisted', () => {
+        expect(parseDeckManifest('deck = "legacy"\n')).toEqual({ curriculumOrder: null });
+        expect(parseDeckManifest('curriculum_order = 0\n')).toEqual({ curriculumOrder: null });
     });
 });

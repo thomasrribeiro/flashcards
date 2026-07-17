@@ -51,6 +51,7 @@ function commonValues({
     description = '',
     prerequisiteDecks = [],
     assumedTools = [],
+    curriculumOrder = 0,
     destination = 'whole-field',
     deckGranularity = 'course',
     focus = []
@@ -64,6 +65,7 @@ function commonValues({
         DESCRIPTION: description,
         PREREQUISITE_DECKS: prerequisiteDecks.map(tomlString).join(', '),
         ASSUMED_TOOLS: assumedTools.map(tomlString).join(', '),
+        CURRICULUM_ORDER: curriculumOrder,
         DESTINATION: destination,
         DECK_GRANULARITY: deckGranularity,
         FOCUS: focus.map(tomlString).join(', '),
@@ -145,7 +147,8 @@ export async function createDeck({
         level: resolvedLevel,
         description: summary,
         prerequisiteDecks: resolvedPrerequisiteDecks,
-        assumedTools
+        assumedTools,
+        curriculumOrder: curriculumDeck?.order || 0
     });
     await mkdir(path.join(deckPath, 'flashcards'), { recursive: true });
     await mkdir(path.join(deckPath, 'figures'), { recursive: true });

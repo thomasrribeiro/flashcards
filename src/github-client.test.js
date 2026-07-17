@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getFileContent } from './github-client.js';
+import { getFileContent, getRepositoryFileIndex } from './github-client.js';
 
 describe('getFileContent', () => {
     beforeEach(() => {
@@ -40,5 +40,44 @@ describe('getFileContent', () => {
         expect(fetchMock.mock.calls[1][0]).toBe(
             'https://api.github.com/repos/owner/deck/contents/flashcards/01.md'
         );
+    });
+});
+
+describe('getRepositoryFileIndex', () => {
+    beforeEach(() => {
+        vi.stubGlobal('localStorage', {
+            getItem: vi.fn().mockReturnValue(null),
+            setItem: vi.fn()
+        });
+    });
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('returns flashcard markdown and the root deck manifest from one tree request', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve({
+                tree: [
+                    { type: 'blob', path: 'flashcards/01_intro.md', sha: 'chapter', size: 20 },
+                    { type: 'blob', path: 'deck.toml', sha: 'manifest', size: 30 },
+                    { type: 'blob', path: 'README.md', sha: 'readme', size: 40 }
+                ]
+            })
+        }));
+
+        const result = await getRepositoryFileIndex('owner', 'deck', 'flashcards', 'master');
+
+        expect(result.markdownFiles).toEqual([{
+            path: 'flashcards/01_intro.md',
+            sha: 'chapter',
+            size: 20,
+            name: '01_intro.md'
+        }]);
+        expect(result.deckManifest).toEqual({
+            path: 'deck.toml',
+            sha: 'manifest',
+            size: 30,
+            name: 'deck.toml'
+        });
     });
 });

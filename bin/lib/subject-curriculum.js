@@ -484,6 +484,21 @@ function replaceDeckPrerequisites(content, prerequisites) {
     return `${content.slice(0, start)}${updatedBody}${content.slice(end)}`;
 }
 
+function replaceDeckCurriculumOrder(content, order) {
+    const rendered = `curriculum_order = ${order}`;
+    if (/^[ \t]*curriculum_order[ \t]*=/m.test(content)) {
+        return content.replace(/^[ \t]*curriculum_order[ \t]*=[ \t]*\d+[ \t]*$/m, rendered);
+    }
+    const level = /^[ \t]*level[ \t]*=.*$/m.exec(content);
+    if (level) {
+        const insertAt = level.index + level[0].length;
+        return `${content.slice(0, insertAt)}\n${rendered}${content.slice(insertAt)}`;
+    }
+    const status = /^[ \t]*status[ \t]*=.*$/m.exec(content);
+    if (status) return `${content.slice(0, status.index)}${rendered}\n${content.slice(status.index)}`;
+    throw new Error('deck.toml: missing level or status field for curriculum_order');
+}
+
 function manifestString(content, key) {
     return parseString(content, key, { required: true, sourceName: 'deck.toml' });
 }
@@ -497,7 +512,10 @@ function manifestPrerequisites(content) {
     return parseStringArray(tail.slice(0, next?.index ?? tail.length), 'decks', { required: true, sourceName: 'deck.toml [prerequisites]' });
 }
 
-export function syncDeckPrerequisitesFromSubject(inputPath, { requireEntry = false } = {}) {
+export function syncDeckPrerequisitesFromSubject(
+    inputPath,
+    { requireEntry = false, allowMissing = false } = {}
+) {
     const deckPath = resolvePath(inputPath);
     const manifestPath = path.join(deckPath, 'deck.toml');
     const content = readFileSync(manifestPath, 'utf8');
@@ -508,16 +526,31 @@ export function syncDeckPrerequisitesFromSubject(inputPath, { requireEntry = fal
     if (graph.errors.length) throw new Error(`Invalid subject curriculum:\n- ${graph.errors.join('\n- ')}`);
     const entry = graph.decks.find(candidate => candidate.id === deck);
     if (!entry) {
-        if (requireEntry || graph.decks.length > 0) {
+        if (requireEntry || (graph.decks.length > 0 && !allowMissing)) {
             throw new Error(`Deck ${subject}/${deck} is not declared in ${graph.manifestPath}; update the subject curriculum before creating it.`);
         }
-        return { deckPath, changed: false, prerequisites: manifestPrerequisites(content), inferred: [] };
+        return {
+            deckPath,
+            changed: false,
+            prerequisites: manifestPrerequisites(content),
+            inferred: [],
+            curriculumOrder: null
+        };
     }
     const inferred = entry.prerequisites.map(id => `${subject}/${id}`);
     const prerequisites = [...new Set([...inferred, ...manifestPrerequisites(content)])];
-    const updated = replaceDeckPrerequisites(content, prerequisites);
+    const updated = replaceDeckCurriculumOrder(
+        replaceDeckPrerequisites(content, prerequisites),
+        entry.order
+    );
     if (updated !== content) writeFileSync(manifestPath, updated);
-    return { deckPath, changed: updated !== content, prerequisites, inferred };
+    return {
+        deckPath,
+        changed: updated !== content,
+        prerequisites,
+        inferred,
+        curriculumOrder: entry.order
+    };
 }
 
 export function formatSubjectCurriculum(graph, { deck } = {}) {

@@ -78,36 +78,35 @@ function run(command, args, cwd, env = process.env) {
     }
 }
 
-function renderOne(deckPath, sourcePath) {
+function renderOne(deckPath, sourcePath, texEnvironment) {
     const source = readFileSync(sourcePath, 'utf8');
     const metadata = parseTikzMetadata(source);
     const temporary = mkdtempSync(path.join(os.tmpdir(), 'flashcards-tikz-'));
     const base = path.basename(sourcePath, '.tex');
     try {
-        const home = path.join(temporary, 'home');
-        const texmfVar = path.join(temporary, 'texmf-var');
-        const texmfCache = path.join(temporary, 'texmf-cache');
-        mkdirSync(home);
-        mkdirSync(texmfVar);
-        mkdirSync(texmfCache);
         const env = {
             ...process.env,
-            HOME: home,
-            TEXMFVAR: texmfVar,
-            TEXMFCACHE: texmfCache,
+            ...texEnvironment,
             // Sources deliberately load the shared style as
             // \input{figures/tikz-style.tex}. Running from the isolated
             // temporary directory keeps every TeX write there; this search
             // path still lets TeX resolve deck-owned inputs read-only.
             TEXINPUTS: `${deckPath}//:${process.env.TEXINPUTS || ''}`
         };
-        run('lualatex', [
-            '--output-format=dvi',
-            '--interaction=batchmode',
-            '--halt-on-error',
-            '--output-directory=' + temporary,
-            sourcePath
-        ], temporary, env);
+        try {
+            run('lualatex', [
+                '--output-format=dvi',
+                '--interaction=batchmode',
+                '--halt-on-error',
+                '--output-directory=' + temporary,
+                sourcePath
+            ], temporary, env);
+        } catch (error) {
+            const logPath = path.join(temporary, base + '.log');
+            if (!existsSync(logPath)) throw error;
+            const lines = readFileSync(logPath, 'utf8').trim().split('\n');
+            throw new Error(`${error.message}\nTeX log tail:\n${lines.slice(-30).join('\n')}`);
+        }
         const dviPath = path.join(temporary, base + '.dvi');
         const svgPath = path.join(temporary, base + '.svg');
         run('dvisvgm', [
@@ -132,13 +131,24 @@ export function renderTikzFigures(inputPath, { check = false, quiet = false } = 
     }
     const sources = findTikzSources(path.join(deckPath, 'figures'));
     const changed = [];
-    for (const sourcePath of sources) {
-        const targetPath = sourcePath.replace(/\.tex$/, '.svg');
-        const rendered = renderOne(deckPath, sourcePath);
-        const current = existsSync(targetPath) ? readFileSync(targetPath, 'utf8') : null;
-        if (current === rendered) continue;
-        changed.push(path.relative(deckPath, targetPath));
-        if (!check) writeFileSync(targetPath, rendered);
+    const cacheRoot = mkdtempSync(path.join(os.tmpdir(), 'flashcards-tex-cache-'));
+    const cachePath = path.join(cacheRoot, 'texmf-var');
+    const texEnvironment = {
+        TEXMFVAR: cachePath,
+        TEXMFCACHE: cachePath
+    };
+    mkdirSync(cachePath);
+    try {
+        for (const sourcePath of sources) {
+            const targetPath = sourcePath.replace(/\.tex$/, '.svg');
+            const rendered = renderOne(deckPath, sourcePath, texEnvironment);
+            const current = existsSync(targetPath) ? readFileSync(targetPath, 'utf8') : null;
+            if (current === rendered) continue;
+            changed.push(path.relative(deckPath, targetPath));
+            if (!check) writeFileSync(targetPath, rendered);
+        }
+    } finally {
+        rmSync(cacheRoot, { recursive: true, force: true });
     }
     if (!quiet) {
         if (check && changed.length) {

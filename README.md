@@ -122,10 +122,15 @@ For isolated extensions, preservation is a checked postcondition before any
 generated files are copied back: existing ids, levels, statuses, and hard
 prerequisite edges cannot silently disappear or change.
 
-When a proposed deck is later created, `deck create` inherits both its hard
-prerequisites and its learning level from `subject.toml`. `--level` is an
-explicit override, not a default that silently turns graduate decks into
-introductory ones.
+When a proposed deck is later created, `deck create` inherits its hard
+prerequisites, learning level, and curriculum order from `subject.toml`.
+`--level` is an explicit override, not a default that silently turns graduate
+decks into introductory ones. Builds and audits refresh this metadata. To
+propagate a roadmap reorder without regenerating cards, run:
+
+```bash
+flashcards deck sync-curriculum ~/notes/physics/classical-mechanics
+```
 
 `deck build` intentionally authors only the first ordered chapter. The agent
 may design the full roadmap, but it must complete a concept-dependency ledger
@@ -195,7 +200,9 @@ topological. Cycles, missing or redundant references, later-level hard edges,
 duplicate ids/orders, out-of-range deck estimates, and incomplete coverage are
 rejected. When a declared deck is created, only its hard direct edges are
 copied into `deck.toml`; recommended sequencing never grants assumed
-knowledge. Existing schema-v1 and schema-v2 subjects remain readable.
+knowledge. The home viewer lists positive curriculum orders first, then places
+unlisted legacy or community decks alphabetically below them. Existing
+schema-v1 and schema-v2 subjects remain readable.
 
 ## Maintain a deck
 
@@ -417,7 +424,7 @@ The context hierarchy deliberately avoids repetition:
 | subject curriculum workflow | Field mapping, deck granularity, tiers, hard versus recommended edges, and coverage decisions |
 | subject `ROADMAP.md` | Learner-facing explanation of field coverage, deck sequence, and durable outcomes |
 | subject `subject.toml` | AI-authored executable curriculum with tiers, scope estimates, hard/soft order, and coverage |
-| deck `deck.toml` | Machine-readable identity, external deck prerequisites, and assumed tools |
+| deck `deck.toml` | Machine-readable identity, subject curriculum order, external deck prerequisites, and assumed tools |
 | deck `README.md` | Scope, chapter map, and source register |
 | deck `CARD_README.md` | Deck-specific retrieval design and justified exceptions |
 | chapter frontmatter | Machine-readable chapter edges and provided concepts |

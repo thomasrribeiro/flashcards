@@ -96,7 +96,7 @@ export async function getRepository(owner, repo) {
  * @param {string} path - Directory prefix to filter (default: 'flashcards')
  * @param {string|null} treeRef - Branch name or commit SHA; if null, fetched from repo info.
  */
-export async function getMarkdownFiles(owner, repo, path = 'flashcards', treeRef = null) {
+export async function getRepositoryFileIndex(owner, repo, path = 'flashcards', treeRef = null) {
     // Resolve the tree ref from the default branch if not supplied.
     if (!treeRef) {
         const repoInfo = await getRepository(owner, repo);
@@ -107,7 +107,7 @@ export async function getMarkdownFiles(owner, repo, path = 'flashcards', treeRef
     const response = await fetch(url, { headers: getAuthHeaders() });
 
     if (!response.ok) {
-        if (response.status === 404) return [];
+        if (response.status === 404) return { markdownFiles: [], deckManifest: null };
         const err = new Error(`Failed to fetch repository tree: ${response.statusText}`);
         err.status = response.status;
         throw err;
@@ -121,7 +121,7 @@ export async function getMarkdownFiles(owner, repo, path = 'flashcards', treeRef
 
     // Filter to the requested path prefix (.md files only)
     const prefix = path ? `${path}/` : '';
-    return data.tree
+    const markdownFiles = data.tree
         .filter(item => item.type === 'blob' && item.path.startsWith(prefix) && item.path.endsWith('.md'))
         .map(item => ({
             path: item.path,
@@ -129,6 +129,19 @@ export async function getMarkdownFiles(owner, repo, path = 'flashcards', treeRef
             size: item.size,
             name: item.path.split('/').pop()
         }));
+    const manifest = data.tree.find(item => item.type === 'blob' && item.path === 'deck.toml');
+    const deckManifest = manifest ? {
+        path: manifest.path,
+        sha: manifest.sha,
+        size: manifest.size,
+        name: 'deck.toml'
+    } : null;
+    return { markdownFiles, deckManifest };
+}
+
+export async function getMarkdownFiles(owner, repo, path = 'flashcards', treeRef = null) {
+    const { markdownFiles } = await getRepositoryFileIndex(owner, repo, path, treeRef);
+    return markdownFiles;
 }
 
 /**

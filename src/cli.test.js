@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,6 +64,7 @@ describe('flashcards CLI scaffolding', () => {
         expect(await readFile(roadmap, 'utf8')).toBe('# My roadmap\n');
         expect(await readFile(path.join(result.deckPath, 'deck.toml'), 'utf8')).toContain('subject = "earth-science"');
         expect(await readFile(path.join(result.deckPath, 'deck.toml'), 'utf8')).toContain('schema_version = 2');
+        expect(await readFile(path.join(result.deckPath, 'deck.toml'), 'utf8')).toContain('curriculum_order = 0');
         expect(await readFile(path.join(result.deckPath, 'AGENTS.md'), 'utf8')).toContain('CARD_STANDARD.md');
         expect(await readFile(path.join(result.deckPath, 'CARD_README.md'), 'utf8')).toContain('Chapter design ledger');
         expect(await readFile(path.join(result.deckPath, 'CARD_README.md'), 'utf8')).toContain('Concept-dependency ledger');
@@ -479,6 +480,8 @@ status = "proposed"
             .toEqual([]);
         expect(await readFile(path.join(foundation.deckPath, 'deck.toml'), 'utf8'))
             .toContain('[prerequisites]\ndecks = []\nassumed_tools = []');
+        expect(await readFile(path.join(foundation.deckPath, 'deck.toml'), 'utf8'))
+            .toContain('curriculum_order = 1');
         const { deckPath, inferredPrerequisiteDecks } = await createDeck({
             subject: 'biology',
             deck: 'cell-biology',
@@ -489,8 +492,39 @@ status = "proposed"
         expect(inferredPrerequisiteDecks).toEqual(['biology/biology-foundations']);
         expect(await readFile(path.join(deckPath, 'deck.toml'), 'utf8'))
             .toContain('decks = ["biology/biology-foundations"]');
+        expect(await readFile(path.join(deckPath, 'deck.toml'), 'utf8'))
+            .toContain('curriculum_order = 2');
         expect(syncDeckPrerequisitesFromSubject(deckPath, { requireEntry: true }).inferred)
             .toEqual(['biology/biology-foundations']);
+    });
+
+    it('can leave a legacy unlisted deck unchanged during build-time sync', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({ subject: 'biology', notesRoot });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 1
+subject = "biology"
+
+[[decks]]
+id = "biology-foundations"
+order = 1
+prerequisites = []
+status = "active"
+`);
+        const deckPath = path.join(subjectPath, 'legacy-deck');
+        await mkdir(deckPath);
+        await writeFile(path.join(deckPath, 'deck.toml'), `schema_version = 2
+subject = "biology"
+deck = "legacy-deck"
+level = "foundational"
+status = "built"
+
+[prerequisites]
+decks = []
+assumed_tools = []
+`);
+
+        expect(syncDeckPrerequisitesFromSubject(deckPath, { allowMissing: true }))
+            .toMatchObject({ changed: false, curriculumOrder: null });
     });
 
     it('resolves sparse chapter and concept edges instead of assuming file order', async () => {
@@ -992,6 +1026,7 @@ describe('flashcards CLI validation and Codex handoff', () => {
 
         const full = runDeckAgent({ mode: 'build', deckPath, buildScope: 'full', dryRun: true });
         expect(full.invocation.prompt).toContain('full-cold-start.md');
+        expect(full.invocation.prompt).toContain('creating any planned chapter files');
     });
 
     it('reports the exact ordered context without deprecated compatibility guides', async () => {

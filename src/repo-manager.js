@@ -15,6 +15,41 @@ export function resolveRepositorySubject(topics = [], existingSubject = null) {
     return topics.find(topic => SUBJECT_TOPICS.has(topic)) || existingSubject || 'misc';
 }
 
+export function parseDeckManifest(content = '') {
+    const match = /^[ \t]*curriculum_order[ \t]*=[ \t]*(\d+)[ \t]*$/m.exec(content);
+    const curriculumOrder = match ? Number(match[1]) : null;
+    return {
+        curriculumOrder: Number.isInteger(curriculumOrder) && curriculumOrder > 0
+            ? curriculumOrder
+            : null
+    };
+}
+
+async function repositoryIndex(owner, repo, branch, existing = null) {
+    const { markdownFiles, deckManifest } = await githubClient.getRepositoryFileIndex(
+        owner,
+        repo,
+        'flashcards',
+        branch
+    );
+    let curriculumOrder = null;
+    if (deckManifest) {
+        try {
+            const manifest = await githubClient.getFileContent(
+                owner,
+                repo,
+                deckManifest.path,
+                deckManifest.sha
+            );
+            curriculumOrder = parseDeckManifest(manifest).curriculumOrder;
+        } catch (error) {
+            console.warn(`[RepoManager] Unable to load deck.toml for ${owner}/${repo}`, error);
+            curriculumOrder = existing?.curriculumOrder ?? null;
+        }
+    }
+    return { markdownFiles, deckManifest, curriculumOrder };
+}
+
 function metadataCacheKey(repoString) {
     return `flashcards_repo_metadata_${repoString.toLowerCase()}`;
 }
@@ -46,12 +81,17 @@ export async function loadRepositoryMetadata(repoString, { sync = false } = {}) 
         throw err;
     }
 
-    const markdownFiles = await githubClient.getMarkdownFiles(owner, repo, 'flashcards', repoInfo.default_branch);
+    const existing = await getRepoMetadata(`${owner}/${repo}`);
+    const { markdownFiles, deckManifest, curriculumOrder } = await repositoryIndex(
+        owner,
+        repo,
+        repoInfo.default_branch,
+        existing
+    );
     if (markdownFiles.length === 0) {
         throw new Error(`No markdown files found in ${owner}/${repo}/flashcards/. Repos must have a flashcards/ folder.`);
     }
 
-    const existing = await getRepoMetadata(`${owner}/${repo}`);
     const subject = resolveRepositorySubject(repoInfo.topics || [], existing?.subject);
     const repoData = githubClient.createRepoData(repoInfo, markdownFiles);
     const deck = {
@@ -61,6 +101,8 @@ export async function loadRepositoryMetadata(repoString, { sync = false } = {}) 
         description: repoInfo.description || '',
         subject,
         repo: `${owner}/${repo}`,
+        curriculumOrder,
+        deckManifest,
         cardCount: existing?.cardCount ?? null,
         fileCount: markdownFiles.length,
         metadataOnly: true,
@@ -153,7 +195,13 @@ export async function loadRepository(repoString) {
     // Fetch all markdown files from flashcards/ folder only.
     // Pass default_branch to avoid a redundant getRepository call inside getMarkdownFiles.
     console.log('[RepoManager] Fetching markdown files from flashcards/...');
-    const markdownFiles = await githubClient.getMarkdownFiles(owner, repo, 'flashcards', repoInfo.default_branch);
+    const existing = await getRepoMetadata(`${owner}/${repo}`);
+    const { markdownFiles, deckManifest, curriculumOrder } = await repositoryIndex(
+        owner,
+        repo,
+        repoInfo.default_branch,
+        existing
+    );
     console.log(`[RepoManager] Found ${markdownFiles.length} markdown files in flashcards/`);
 
     if (markdownFiles.length === 0) {
@@ -257,6 +305,8 @@ export async function loadRepository(repoString) {
         subject: deckMetadata.subject || null,
         topic: deckMetadata.topic || null,
         repo: `${owner}/${repo}`,
+        curriculumOrder,
+        deckManifest,
         cardCount: allCards.length,
         fileCount: totalFiles,
         createdAt: new Date().toISOString()

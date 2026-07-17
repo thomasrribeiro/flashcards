@@ -2,6 +2,7 @@ schema_version = 2
 subject = "{{SUBJECT}}"
 deck = "{{DECK}}"
 level = "{{LEVEL}}"
+curriculum_order = {{CURRICULUM_ORDER}}
 status = "scaffolded"
 pilot_chapter = 1
 created = "{{DATE}}"
