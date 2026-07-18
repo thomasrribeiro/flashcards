@@ -58,6 +58,39 @@ const cardsReviewed = document.getElementById('cards-reviewed');
 const studyArea = document.getElementById('study-area');
 const sessionComplete = document.getElementById('session-complete');
 
+function isOnline() {
+    return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
+function requireOnlineStudy() {
+    if (isOnline()) return true;
+    alert('Studying is paused while offline so every grade can be saved safely. Reconnect, then try again.');
+    return false;
+}
+
+function updateConnectionStatus() {
+    const status = document.getElementById('connection-status');
+    const online = isOnline();
+    status?.classList.toggle('online', online);
+    status?.classList.toggle('offline', !online);
+    if (status) {
+        status.querySelector('.connection-status-label').textContent = online ? 'Online' : 'Offline';
+        status.title = online
+            ? 'Connected — study progress can sync'
+            : 'Offline — studying is paused until the connection returns';
+    }
+    document.getElementById('reveal-btn')?.toggleAttribute('disabled', !online);
+    document.querySelectorAll('.grade-btn').forEach(button => {
+        button.toggleAttribute('disabled', !online);
+    });
+}
+
+function setupConnectionStatus() {
+    updateConnectionStatus();
+    window.addEventListener('online', updateConnectionStatus);
+    window.addEventListener('offline', updateConnectionStatus);
+}
+
 /**
  * Render a step label with info icon
  */
@@ -127,6 +160,7 @@ async function ensureCardsLoaded(deckId) {
  * Initialize the study session
  */
 async function init() {
+    setupConnectionStatus();
     // Restore user from localStorage if exists
     const storedUser = localStorage.getItem('github_user');
     if (storedUser) {
@@ -284,7 +318,7 @@ function setupEventListeners() {
     const revealBtn = document.getElementById('reveal-btn');
     if (revealBtn) {
         revealBtn.addEventListener('click', () => {
-            revealAnswer();
+            if (requireOnlineStudy()) revealAnswer();
         });
     }
 
@@ -293,11 +327,13 @@ function setupEventListeners() {
         // Spacebar to reveal answer
         if (e.key === ' ' && !isRevealed) {
             e.preventDefault();
+            if (!requireOnlineStudy()) return;
             revealAnswer();
         }
         // Number keys for grading
         else if (isRevealed && GradeKeys[e.key]) {
             e.preventDefault();
+            if (!requireOnlineStudy()) return;
             gradeCard(GradeKeys[e.key]);
         }
     });
@@ -305,6 +341,7 @@ function setupEventListeners() {
     // Grade button clicks
     document.querySelectorAll('.grade-btn').forEach(btn => {
         btn.addEventListener('click', () => {
+            if (!requireOnlineStudy()) return;
             const grade = parseInt(btn.dataset.grade);
             gradeCard(grade);
         });

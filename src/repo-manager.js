@@ -150,6 +150,7 @@ export async function loadRepositoryFiles(repoString, filePaths = null) {
                         source: { repo: repoString, file: file.path, sha: file.sha },
                         deckName: repoString,
                         deckMetadata: metadata,
+                        chapterMetadata: metadata,
                         id: `${repoString}#${identity.hash}`
                     };
                 });
@@ -275,6 +276,7 @@ export async function loadRepository(repoString) {
                         file: file.path,
                         sha: file.sha
                     },
+                    chapterMetadata: metadata,
                     deckName: deckId,
                     id: `${deckId}#${identity.hash}`
                 };

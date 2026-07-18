@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { buildTodayQueue, freshCardAvailability, newCardSessionLimit, newLearningPlan, todayQueueCounts, getLocalDate, SCOPE_SEP } from './today-queue.js';
+import {
+    buildTodayQueue,
+    cardChapterScope,
+    focusedNewCards,
+    freshCardAvailability,
+    getLocalDate,
+    interleaveDueCards,
+    newCardSessionLimit,
+    newLearningPlan,
+    SCOPE_SEP,
+    todayQueueCounts
+} from './today-queue.js';
 
 const now = new Date('2026-07-08T12:00:00Z');
 const past = new Date('2026-07-01T12:00:00Z');
@@ -128,6 +139,103 @@ describe('buildTodayQueue', () => {
         const reviews = [{ cardHash: 'a', fsrsCard: { due: past } }];
         const q = buildTodayQueue({ cards, reviews, activeDeckIds: ['deck1'], newPerDay: 0, now });
         expect(q).toHaveLength(1);
+    });
+
+    it('keeps each new-card session focused on one chapter', () => {
+        const cards = [
+            ...Array.from({ length: 10 }, (_, i) => card(`a${i}`, 'deck1', 1, 'flashcards/01.md')),
+            ...Array.from({ length: 10 }, (_, i) => card(`b${i}`, 'deck1', 1, 'flashcards/02.md'))
+        ];
+        const q = buildTodayQueue({
+            cards,
+            reviews: [],
+            activeDeckIds: ['deck1'],
+            newBatchSize: 10,
+            now
+        });
+        expect(new Set(q.map(entry => cardChapterScope(entry.card)))).toEqual(
+            new Set([`deck1${SCOPE_SEP}flashcards/01.md`])
+        );
+    });
+
+    it('rotates the focused chapter between new-card sessions', () => {
+        const cards = [
+            ...Array.from({ length: 10 }, (_, i) => card(`a${i}`, 'deck1', 1, 'flashcards/01.md')),
+            ...Array.from({ length: 10 }, (_, i) => card(`b${i}`, 'deck1', 1, 'flashcards/02.md'))
+        ];
+        const q = buildTodayQueue({
+            cards,
+            reviews: [],
+            activeDeckIds: ['deck1'],
+            newBatchSize: 10,
+            lastNewChapterScope: `deck1${SCOPE_SEP}flashcards/01.md`,
+            now
+        });
+        expect(q.map(entry => entry.cardHash)).toEqual(
+            Array.from({ length: 10 }, (_, i) => `b${i}`)
+        );
+    });
+
+    it('holds a dependent chapter until its starred prerequisite is introduced', () => {
+        const prerequisite = card('a', 'deck1', 1, 'flashcards/01_foundations.md');
+        const dependent = card('b', 'deck1', 1, 'flashcards/02_applications.md');
+        dependent.chapterMetadata = { prerequisites: ['chapter:01_foundations'] };
+        const lastChapter = `deck1${SCOPE_SEP}flashcards/01_foundations.md`;
+
+        const blocked = buildTodayQueue({
+            cards: [prerequisite, dependent],
+            reviews: [],
+            activeDeckIds: ['deck1'],
+            lastNewChapterScope: lastChapter,
+            now
+        });
+        expect(blocked.map(entry => entry.cardHash)).toEqual(['a']);
+
+        const available = buildTodayQueue({
+            cards: [prerequisite, dependent],
+            reviews: [{
+                cardHash: 'a',
+                fsrsCard: { due: future.toISOString() }
+            }],
+            activeDeckIds: ['deck1'],
+            lastNewChapterScope: lastChapter,
+            now
+        });
+        expect(available.map(entry => entry.cardHash)).toEqual(['b']);
+    });
+
+    it('ends a focused session instead of filling it from another chapter', () => {
+        const fresh = [
+            ...Array.from({ length: 3 }, (_, i) => ({
+                card: card(`a${i}`, 'deck1', 1, 'flashcards/01.md'),
+                cardHash: `a${i}`,
+                fsrsCard: null
+            })),
+            ...Array.from({ length: 10 }, (_, i) => ({
+                card: card(`b${i}`, 'deck1', 1, 'flashcards/02.md'),
+                cardHash: `b${i}`,
+                fsrsCard: null
+            }))
+        ];
+        expect(focusedNewCards(fresh, 10).map(entry => entry.cardHash)).toEqual(['a0', 'a1', 'a2']);
+    });
+
+    it('interleaves due chapters in two-card blocks while starting with the oldest', () => {
+        const due = [
+            ['a1', 'flashcards/01.md', '2026-07-01T00:00:00Z'],
+            ['a2', 'flashcards/01.md', '2026-07-02T00:00:00Z'],
+            ['a3', 'flashcards/01.md', '2026-07-03T00:00:00Z'],
+            ['b1', 'flashcards/02.md', '2026-07-01T12:00:00Z'],
+            ['b2', 'flashcards/02.md', '2026-07-02T12:00:00Z'],
+            ['b3', 'flashcards/02.md', '2026-07-03T12:00:00Z']
+        ].map(([hash, file, dueDate]) => ({
+            card: card(hash, 'deck1', 1, file),
+            cardHash: hash,
+            dueDate
+        }));
+
+        expect(interleaveDueCards(due).map(entry => entry.cardHash))
+            .toEqual(['a1', 'a2', 'b1', 'b2', 'a3', 'b3']);
     });
 });
 

@@ -49,6 +49,38 @@ textarea {
     gap: 8px;
 }
 
+.connection-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid #aaa;
+    padding: 4px 8px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    color: #666;
+    white-space: nowrap;
+}
+
+.connection-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #999;
+}
+
+.connection-status.online .connection-status-dot { background: #2f8f4e; }
+.connection-status.offline {
+    border-color: #b00020;
+    color: #b00020;
+}
+.connection-status.offline .connection-status-dot { background: #b00020; }
+
+.btn-reveal:disabled,
+.grade-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 .theme-toggle {
     border: 1px solid var(--black);
     background: var(--white);

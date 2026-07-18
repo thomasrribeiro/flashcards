@@ -9,7 +9,15 @@ import { identifyCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories, getOrgRepositories, mergeRepositoryLists } from './github-client.js';
 import { githubAuth } from './github-auth.js';
 import { startSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
-import { buildTodayQueue, freshCardAvailability, getLocalDate, newCardSessionLimit, newLearningPlan, SCOPE_SEP } from './today-queue.js';
+import {
+    buildTodayQueue,
+    cardChapterScope,
+    freshCardAvailability,
+    getLocalDate,
+    interleaveDueCards,
+    newLearningPlan,
+    SCOPE_SEP
+} from './today-queue.js';
 import { getSettings, saveSettings, getHabitStatus } from './habit-client.js';
 import { clearStudySession, getStudySession, saveStudySession, studySessionMatchesActiveScope } from './session-client.js';
 import { renderDashboard } from './dashboard.js';
@@ -57,6 +65,51 @@ function registerServiceWorker() {
     });
 }
 
+function isOnline() {
+    return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
+function requireOnlineStudy() {
+    if (isOnline()) return true;
+    alert('Studying is paused while offline so every grade can be saved safely. Reconnect, then try again.');
+    return false;
+}
+
+function updateConnectionStatus() {
+    const status = document.getElementById('connection-status');
+    const online = isOnline();
+    if (status) {
+        status.classList.toggle('online', online);
+        status.classList.toggle('offline', !online);
+        status.querySelector('.connection-status-label').textContent = online ? 'Online' : 'Offline';
+        status.title = online
+            ? 'Connected — study progress can sync'
+            : 'Offline — studying is paused until the connection returns';
+    }
+
+    document.getElementById('reveal-btn')?.toggleAttribute('disabled', !online);
+    document.querySelectorAll('.grade-btn').forEach(button => {
+        button.toggleAttribute('disabled', !online);
+    });
+    if (!online) {
+        document.getElementById('review-due-btn')?.setAttribute('disabled', '');
+        document.getElementById('learn-new-btn')?.setAttribute('disabled', '');
+    }
+}
+
+function setupConnectionStatus() {
+    updateConnectionStatus();
+    for (const eventName of ['online', 'offline']) {
+        window.addEventListener(eventName, () => {
+            updateConnectionStatus();
+            if (habitSettings) {
+                renderReviewButton({ refreshStatus: false }).catch(error =>
+                    console.warn('[Main] Failed to refresh study controls after connection change:', error));
+            }
+        });
+    }
+}
+
 async function init() {
     console.log('=== INIT START ===');
     // Older releases stored full Markdown blobs in localStorage. Reclaim that
@@ -67,6 +120,7 @@ async function init() {
     }
     setupThemeToggle();
     configureMobileAppShell();
+    setupConnectionStatus();
     registerServiceWorker();
     try {
         await initDB();
@@ -582,6 +636,7 @@ function renderStudyCardBreadcrumb(card) {
 let scopedReviewLoading = false;
 
 async function startScopedReview(filterFn, label, breadcrumb, repoIds = [], fileSpecs = null) {
+    if (!requireOnlineStudy()) return;
     if (scopedReviewLoading) return;
     scopedReviewLoading = true;
     showReviewLoading(label);
@@ -606,11 +661,10 @@ async function startScopedReview(filterFn, label, breadcrumb, repoIds = [], file
         if (!r) fresh.push({ card, fsrsCard: null, cardHash: card.hash });
         else {
             const d = new Date(r.fsrsCard.due);
-            if (d <= now) due.push({ card, fsrsCard: r.fsrsCard, cardHash: card.hash, _due: d });
+            if (d <= now) due.push({ card, fsrsCard: r.fsrsCard, cardHash: card.hash, dueDate: d });
         }
     }
-    due.sort((a, b) => a._due - b._due);
-    const queue = [...due, ...fresh];
+    const queue = [...interleaveDueCards(due), ...fresh];
     if (queue.length === 0) {
         alert('Nothing to review here right now — all caught up.');
         return;
@@ -740,6 +794,23 @@ async function mapWithConcurrency(items, limit, worker) {
 }
 
 let dailyPreparationPromise = Promise.resolve();
+const NEW_CHAPTER_ROTATION_PREFIX = 'flashcards_last_new_chapter:';
+
+function newChapterRotationKey() {
+    const user = githubAuth.getUser();
+    return NEW_CHAPTER_ROTATION_PREFIX + (user?.username || user?.id || 'local');
+}
+
+function lastNewChapterScope() {
+    try { return localStorage.getItem(newChapterRotationKey()); }
+    catch { return null; }
+}
+
+function rememberNewChapterScope(scope) {
+    if (!scope) return;
+    try { localStorage.setItem(newChapterRotationKey(), scope); }
+    catch { /* rotation is a convenience; studying must still proceed */ }
+}
 
 /** Queue preparation serially so star changes never duplicate active fetches. */
 function queueDailyPreparation() {
@@ -813,29 +884,39 @@ async function prepareDailyContent({ includeDue = true, includeNew = true, allow
         }
     }
 
-    const reviewHashes = new Set(reviews.map(review => review.cardHash));
-    const activeFileKeys = new Set(activeFiles.map(({ repo, file }) => `${repo}\0${file}`));
-    const loadedCards = await getAllCards();
-    const loadedFileKeys = new Set(loadedCards.map(card =>
-        `${card.source?.repo || card.deckName}\0${card.source?.file || ''}`));
-    let freshPrepared = loadedCards.filter(card =>
-        activeFileKeys.has(`${card.source?.repo || card.deckName}\0${card.source?.file || ''}`)
-        && !reviewHashes.has(card.hash)
-    ).length;
-    const newBudget = newCardSessionLimit({
-        newPerDay: habitSettings.newPerDay,
-        newBatchSize: habitSettings.newBatchSize,
-        newIntroducedToday: status.today.newCards,
-        allowBeyondTarget
-    });
+    const orderedActiveFiles = [...new Map(activeFiles.map(spec => [
+        `${spec.repo}\0${spec.file}`,
+        spec
+    ])).values()];
+    const previousScope = lastNewChapterScope();
+    const previousIndex = orderedActiveFiles.findIndex(({ repo, file }) =>
+        `${repo}\0${file}` === previousScope);
+    const rotatedActiveFiles = previousIndex >= 0
+        ? [
+            ...orderedActiveFiles.slice(previousIndex + 1),
+            ...orderedActiveFiles.slice(0, previousIndex + 1)
+        ]
+        : orderedActiveFiles;
 
-    const seen = new Set(loadedFileKeys);
-    for (const { repo, file } of activeFiles) {
+    const reviewHashes = new Set(reviews.map(review => review.cardHash));
+    const loadedCards = await getAllCards();
+    const cardsByFile = new Map();
+    for (const card of loadedCards) {
+        const key = `${card.source?.repo || card.deckName}\0${card.source?.file || ''}`;
+        if (!cardsByFile.has(key)) cardsByFile.set(key, []);
+        cardsByFile.get(key).push(card);
+    }
+
+    // Fetch only enough to find the next coherent chapter. Previously, unseen
+    // cards already cached from the first chapter could prevent a later starred
+    // chapter from ever loading, which made inter-session rotation impossible.
+    for (const { repo, file } of rotatedActiveFiles) {
         const key = `${repo}\0${file}`;
-        if (seen.has(key) || freshPrepared >= newBudget) continue;
-        seen.add(key);
-        const cards = await loadRepositoryFiles(repo, [file]);
-        freshPrepared += cards.filter(card => !reviewHashes.has(card.hash)).length;
+        let chapterCards = cardsByFile.get(key) || [];
+        if (chapterCards.length === 0 && !repo.startsWith('local/')) {
+            chapterCards = await loadRepositoryFiles(repo, [file]);
+        }
+        if (chapterCards.some(card => !reviewHashes.has(card.hash))) break;
     }
 }
 
@@ -1148,6 +1229,18 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
         for (const card of loadedCards) files.get(card.source.file).push(card);
     }
     const subjectNames = [...subjects.keys()].sort((a, b) => a === 'misc' ? 1 : b === 'misc' ? -1 : a.localeCompare(b));
+    const completedActiveScopes = new Set();
+    for (const decks of subjects.values()) {
+        for (const [deckId, files] of decks) {
+            for (const [file, cards] of files) {
+                if (cards.length > 0
+                    && chapterIsActive(scopes, deckId, file)
+                    && cards.every(card => reviewMap.has(card.hash))) {
+                    completedActiveScopes.add(chapterScope(deckId, file));
+                }
+            }
+        }
+    }
 
     const sortedDeckIds = subject =>
         sortDeckIdsByCurriculum(subjects.get(subject).keys(), deckById);
@@ -1170,7 +1263,8 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
             for (const deckId of sortedDeckIds(subject)) {
                 const files = [...decks.get(deckId).keys()].sort((a, b) => a.localeCompare(b));
                 for (const file of files) {
-                    if (!chapterIsActive(scopes, deckId, file)) continue;
+                    const scope = chapterScope(deckId, file);
+                    if (!chapterIsActive(scopes, deckId, file) || completedActiveScopes.has(scope)) continue;
                     columnsSel = { subject, deck: deckId, chapter: file };
                     break starredChapter;
                 }
@@ -1219,7 +1313,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
             const decks = subjects.get(subject);
             const deckIds = [...decks.keys()];
             const deckFiles = deckIds.map(filesOf(decks));
-            const starState = scopeStarState(scopes, deckFiles);
+            const starState = scopeStarState(scopes, deckFiles, completedActiveScopes);
             return colRow({
                 name: subject,
                 star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Unfocus subject' : 'Focus all decks in subject', onClick: () => toggleScopes(deckFiles) },
@@ -1240,7 +1334,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
         p2 = deckIds.map(deckId => {
             const deckName = deckId.split('/').pop();
             const deckFiles = [filesOf(decks)(deckId)];
-            const starState = scopeStarState(scopes, deckFiles);
+            const starState = scopeStarState(scopes, deckFiles, completedActiveScopes);
             return colRow({
                 name: deckName,
                 star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Remove deck from daily focus' : 'Add deck to daily focus', onClick: () => toggleScopes(deckFiles) },
@@ -1315,33 +1409,38 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
     for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
     renderEvictedNotice();
 
-    // Repository metadata renders before lazy card bodies. Hydrate every
-    // reviewed starred chapter in the visible deck, then redraw once so a hard
-    // refresh shows its persisted completion without requiring a star toggle.
-    if (columnsSel.deck && !columnsSel.deck.startsWith('local/')) {
-        const visibleFiles = subjects.get(columnsSel.subject)?.get(columnsSel.deck);
-        const loads = [];
-        for (const [file, cards] of visibleFiles || []) {
-            const key = `${columnsSel.deck}\0${file}`;
-            if (cards.length > 0
-                || !chapterIsActive(scopes, columnsSel.deck, file)
-                || !reviewedFileKeys.has(key)
-                || columnProgressLoads.has(key)) continue;
+    // Repository metadata renders before lazy card bodies. Hydrate reviewed
+    // starred chapters across the collection, then redraw once so completion
+    // checks and parent-star states are both correct after a hard refresh.
+    const progressLoads = [];
+    for (const decks of subjects.values()) {
+        for (const [deckId, files] of decks) {
+            if (deckId.startsWith('local/')) continue;
+            for (const [file, cards] of files) {
+                const key = `${deckId}\0${file}`;
+                if (cards.length > 0
+                    || !chapterIsActive(scopes, deckId, file)
+                    || !reviewedFileKeys.has(key)
+                    || columnProgressLoads.has(key)) continue;
 
-            columnProgressLoads.add(key);
-            loads.push(loadRepositoryFiles(columnsSel.deck, [file])
-                .then(loaded => loaded.length > 0)
-                .catch(error => {
-                    columnProgressLoads.delete(key);
-                    console.warn('[Main] Failed to load chapter progress:', error);
-                    return false;
-                }));
+                columnProgressLoads.add(key);
+                progressLoads.push({ deckId, file, key });
+            }
         }
-        if (loads.length > 0) {
-            Promise.all(loads).then(results => {
-                if (results.some(Boolean)) loadRepositories();
-            });
-        }
+    }
+    if (progressLoads.length > 0) {
+        mapWithConcurrency(progressLoads, 4, async ({ deckId, file, key }) => {
+            try {
+                const loaded = await loadRepositoryFiles(deckId, [file]);
+                return loaded.length > 0;
+            } catch (error) {
+                columnProgressLoads.delete(key);
+                console.warn('[Main] Failed to load chapter progress:', error);
+                return false;
+            }
+        }).then(results => {
+            if (results.some(Boolean)) loadRepositories();
+        });
     }
 }
 
@@ -2332,6 +2431,7 @@ async function loadLocalRepo(repoInfo) {
                     ...identity,
                     deckName: deckId,
                     deckMetadata: metadata || firstMetadata,
+                    chapterMetadata: metadata || firstMetadata,
                     source: {
                         repo: deckId,
                         file
@@ -2413,6 +2513,7 @@ async function restoreNavigationFromURL() {
 
             // If study session was active, restore it
             if (studyParam === 'true' && fileParam) {
+                if (!requireOnlineStudy()) return;
                 console.log('[Navigation] Restoring study session for file:', fileParam);
                 const displayName = fileParam.split('/').pop().replace('.md', '');
                 isInStudySession = true;
@@ -2486,6 +2587,7 @@ async function handlePopState(event) {
 
             // Check if we're navigating to a study session
             if (state.study && state.file) {
+                if (!requireOnlineStudy()) return;
                 // First navigate to the deck/path
                 await navigateToDeck(deck, path, false);
                 // Then start study session (without pushing history)
@@ -2885,20 +2987,25 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
         const visibleBatch = availability.fullyKnown
             ? Math.min(requestedBatch, availability.freshCount)
             : requestedBatch;
+        const online = isOnline();
 
-        dueBtn.disabled = due === 0;
+        dueBtn.disabled = !online || due === 0;
         dueBtn.textContent = 'Review';
-        dueBtn.title = due > 0
+        dueBtn.title = !online
+            ? 'Reconnect to review cards'
+            : due > 0
             ? `${due} learned card${due === 1 ? '' : 's'} due now`
             : 'No learned cards are due';
 
         const activeScopeComplete = availability.fullyKnown && availability.freshCount === 0;
-        newBtn.disabled = active.length === 0 || activeScopeComplete;
+        newBtn.disabled = !online || active.length === 0 || activeScopeComplete;
         newBtn.dataset.allowBeyondTarget = targetReached ? 'true' : 'false';
         newBtn.textContent = activeScopeComplete
             ? 'No new cards'
             : 'Learn';
-        newBtn.title = active.length === 0
+        newBtn.title = !online
+            ? 'Reconnect to learn cards'
+            : active.length === 0
             ? 'Star items (★) to choose new material'
             : activeScopeComplete
                 ? 'Every card in the starred scope has been introduced; star another chapter to continue learning'
@@ -2908,7 +3015,7 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
                     ? `Introduce up to ${visibleBatch} new cards in this session; no daily target`
                     : `Introduce up to ${visibleBatch} new card${visibleBatch === 1 ? '' : 's'} in this session`;
 
-        if (pausedPrimaryStudySession) {
+        if (online && pausedPrimaryStudySession) {
             const remaining = pausedPrimaryStudySession.queue?.length || 0;
             if (remaining > 0 && pausedPrimaryStudySession.mode === 'due') {
                 dueBtn.disabled = false;
@@ -3250,12 +3357,17 @@ function resolveActiveScopes(cards, decks = []) {
 }
 
 /** Tri-state over an array of { repo, files } deck descriptors. */
-function scopeStarState(scopes, deckFiles) {
+function scopeStarState(scopes, deckFiles, ignoredScopes = new Set()) {
     let total = 0, on = 0;
     for (const { repo, files } of deckFiles) {
-        for (const f of files) { total++; if (scopes.has(chapterScope(repo, f))) on++; }
+        for (const f of files) {
+            const scope = chapterScope(repo, f);
+            if (ignoredScopes.has(scope)) continue;
+            total++;
+            if (scopes.has(scope)) on++;
+        }
     }
-    if (on === 0) return 'none';
+    if (total === 0 || on === 0) return 'none';
     if (on === total) return 'all';
     return 'some';
 }
@@ -3328,6 +3440,7 @@ async function toggleActiveSubject(deckIds) {
 
 /** Start either scheduled reviews or one finite new-learning batch; never mix the two. */
 async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}) {
+    if (!requireOnlineStudy()) return;
     const isDueReview = mode === 'due';
     const dueBtn = document.getElementById('review-due-btn');
     const newBtn = document.getElementById('learn-new-btn');
@@ -3396,7 +3509,8 @@ async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}
         newPerDay: habitSettings.newPerDay,
         newBatchSize: habitSettings.newBatchSize,
         newIntroducedToday: status.today.newCards,
-        allowBeyondTarget
+        allowBeyondTarget,
+        lastNewChapterScope: lastNewChapterScope()
     });
     const queue = combinedQueue.filter(entry =>
         isDueReview ? entry.fsrsCard !== null : entry.fsrsCard === null);
@@ -3412,6 +3526,7 @@ async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}
     enterStudyArea(['home', isDueReview ? 'Due review' : 'New learning']);
     currentPrimaryStudyMode = mode;
     pausedPrimaryStudySession = null;
+    if (!isDueReview) rememberNewChapterScope(cardChapterScope(queue[0].card));
     startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb, {
         onProgress: persistCurrentPrimaryStudySession
     });
@@ -3423,6 +3538,7 @@ async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}
  * The Study tab is the exit back to the deck list.
  */
 async function reviewDeck(deck) {
+    if (!requireOnlineStudy()) return;
     discardPausedPrimaryStudySession();
     const allCards = await getAllCards();
     const hasCards = allCards.some(c => c.deckName === deck.id || c.source?.repo === deck.id);
@@ -3444,6 +3560,7 @@ async function reviewDeck(deck) {
 }
 
 async function startStudySession(deckId, fileFilter, displayFileName) {
+    if (!requireOnlineStudy()) return;
     discardPausedPrimaryStudySession();
     isInStudySession = true;
     setHomeReviewVisible(false);
@@ -3630,17 +3747,21 @@ function setupStudyEventListeners() {
     // Reveal button
     const revealBtn = document.getElementById('reveal-btn');
     if (revealBtn) {
-        revealBtn.onclick = revealAnswer;
+        revealBtn.onclick = () => {
+            if (requireOnlineStudy()) revealAnswer();
+        };
     }
 
     // Grade buttons
     document.querySelectorAll('.grade-btn').forEach(btn => {
         btn.onclick = () => {
+            if (!requireOnlineStudy()) return;
             const grade = parseInt(btn.dataset.grade);
             gradeCard(grade);
         };
     });
 
+    updateConnectionStatus();
     // Keyboard listener
     document.addEventListener('keydown', handleStudyKeydown);
 }
@@ -3673,10 +3794,12 @@ function handleStudyKeydown(event) {
     if (event.code === 'Space') {
         event.preventDefault();
         if (!state.isRevealed) {
+            if (!requireOnlineStudy()) return;
             revealAnswer();
         }
     } else if (state.isRevealed && GradeKeys[event.key]) {
         event.preventDefault();
+        if (!requireOnlineStudy()) return;
         gradeCard(GradeKeys[event.key]);
     }
 }

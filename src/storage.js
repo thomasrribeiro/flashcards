@@ -120,6 +120,53 @@ function getSyncOutbox() {
     }
 }
 
+function loadReviewsFromLocalStorage() {
+    try {
+        const stored = localStorage.getItem('flashcards_reviews');
+        if (!stored) return [];
+        return JSON.parse(stored).filter(review =>
+            review.deckId !== 'basics'
+            && !review.cardHash?.includes('basics')
+        );
+    } catch (error) {
+        console.error('[Storage] Failed to load local reviews:', error);
+        return [];
+    }
+}
+
+function persistReviewsLocally(reviews) {
+    try {
+        setCriticalLocalStorageItem('flashcards_reviews', JSON.stringify(reviews));
+    } catch (error) {
+        console.error('[Storage] Failed to persist local review snapshot:', error);
+    }
+}
+
+export function mergeReviewSnapshots(remoteReviews = [], localReviews = []) {
+    const merged = new Map();
+    const timestamp = review => {
+        const value = review.lastReviewed ? Date.parse(review.lastReviewed) : NaN;
+        return Number.isNaN(value) ? 0 : value;
+    };
+    for (const review of [...remoteReviews, ...localReviews]) {
+        const existing = merged.get(review.cardHash);
+        if (!existing) {
+            merged.set(review.cardHash, review);
+            continue;
+        }
+        const newer = timestamp(review) >= timestamp(existing) ? review : existing;
+        const older = newer === review ? existing : review;
+        merged.set(review.cardHash, {
+            ...newer,
+            repo: newer.repo || older.repo || null,
+            filepath: newer.filepath || older.filepath || null,
+            cardLabel: newer.cardLabel || older.cardLabel || null,
+            lastRating: newer.lastRating ?? older.lastRating ?? null
+        });
+    }
+    return [...merged.values()];
+}
+
 function enqueueSync(userId, reviewPayload) {
     try {
         const outbox = getSyncOutbox();
@@ -216,32 +263,16 @@ export function getCurrentUser() {
  * Initialize storage - load from D1 (if authenticated) or localStorage (if not)
  */
 export async function initDB() {
+    // Local review state is the durable first read for both signed-in and
+    // signed-out users. Remote initialization may fail while offline and must
+    // never make already graded cards appear unstudied after a refresh.
+    const localReviews = loadReviewsFromLocalStorage();
+    reviewsCache = localReviews;
+    console.log(`[Storage] Loaded ${reviewsCache.length} reviews from localStorage`);
+
     if (!currentUser) {
         console.log('[Storage] No user authenticated, loading from localStorage');
-
-        // Migration: Clean up old "basics" deck references
-        try {
-            const oldReviewsKey = 'flashcards_reviews';
-            const stored = localStorage.getItem(oldReviewsKey);
-            if (stored) {
-                const reviews = JSON.parse(stored);
-                // Filter out any reviews for the old "basics" deck
-                const cleanedReviews = reviews.filter(r =>
-                    r.deckId !== 'basics' &&
-                    !r.cardHash?.includes('basics')
-                );
-
-                if (cleanedReviews.length !== reviews.length) {
-                    console.log(`[Storage] Migration: Removed ${reviews.length - cleanedReviews.length} old "basics" deck reviews`);
-                    setCriticalLocalStorageItem(oldReviewsKey, JSON.stringify(cleanedReviews));
-                }
-
-                reviewsCache = cleanedReviews;
-                console.log(`[Storage] Loaded ${reviewsCache.length} reviews from localStorage`);
-            }
-        } catch (error) {
-            console.error('[Storage] Failed to load from localStorage:', error);
-        }
+        persistReviewsLocally(localReviews);
         return;
     }
 
@@ -336,43 +367,11 @@ async function loadReviewsFromD1(mergeWithLocalStorage = true) {
         }));
 
         if (mergeWithLocalStorage) {
-            // Load any existing localStorage reviews and merge (for initial login)
-            const localReviews = [];
-            try {
-                const stored = localStorage.getItem('flashcards_reviews');
-                if (stored) {
-                    localReviews.push(...JSON.parse(stored));
-                    console.log(`[Storage] Found ${localReviews.length} reviews in localStorage to merge`);
-                }
-            } catch (error) {
-                console.error('[Storage] Failed to load localStorage reviews:', error);
-            }
-
             // Merge by cardHash, keeping whichever copy was reviewed more
-            // recently. (Previously D1 always won, which could silently clobber
-            // a review graded offline with an older server state.)
-            const merged = new Map();
-            const ts = r => {
-                const t = r.lastReviewed ? Date.parse(r.lastReviewed) : NaN;
-                return Number.isNaN(t) ? 0 : t;
-            };
-            for (const r of [...d1Reviews, ...localReviews]) {
-                const existing = merged.get(r.cardHash);
-                if (!existing) {
-                    merged.set(r.cardHash, r);
-                    continue;
-                }
-                const newer = ts(r) >= ts(existing) ? r : existing;
-                const older = newer === r ? existing : r;
-                merged.set(r.cardHash, {
-                    ...newer,
-                    repo: newer.repo || older.repo || null,
-                    filepath: newer.filepath || older.filepath || null,
-                    cardLabel: newer.cardLabel || older.cardLabel || null,
-                    lastRating: newer.lastRating ?? older.lastRating ?? null
-                });
-            }
-            reviewsCache = [...merged.values()];
+            // recently. This protects locally graded cards from stale server
+            // state after a connection interruption.
+            const localReviews = loadReviewsFromLocalStorage();
+            reviewsCache = mergeReviewSnapshots(d1Reviews, localReviews);
 
             console.log(`[Storage] Merged ${d1Reviews.length} D1 + ${localReviews.length} local reviews (newer-wins), total: ${reviewsCache.length}`);
         } else {
@@ -380,9 +379,12 @@ async function loadReviewsFromD1(mergeWithLocalStorage = true) {
             reviewsCache = d1Reviews;
             console.log(`[Storage] Loaded ${d1Reviews.length} reviews from D1 (no merge)`);
         }
+        persistReviewsLocally(reviewsCache);
     } catch (error) {
         console.error('[Storage] Failed to load reviews from D1:', error);
-        reviewsCache = [];
+        // Keep the local snapshot seeded by initDB (or the current in-memory
+        // state). A failed fetch is not evidence that the learner has no data.
+        if (reviewsCache.length === 0) reviewsCache = loadReviewsFromLocalStorage();
     }
 }
 

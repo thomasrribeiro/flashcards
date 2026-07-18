@@ -41,7 +41,15 @@ function extractFrontmatter(text) {
     const first = lines[0]?.trim();
     const delimiter = first === '+++' ? '+++' : first === '---' ? '---' : null;
     if (delimiter === null) {
-        return [{ order: null, tags: [], name: null, subject: null, topic: null }, text];
+        return [{
+            order: null,
+            tags: [],
+            prerequisites: [],
+            provides: [],
+            name: null,
+            subject: null,
+            topic: null
+        }, text];
     }
 
     // Find closing delimiter (must match opening)
@@ -64,6 +72,8 @@ function extractFrontmatter(text) {
     const metadata = {
         order: null,
         tags: [],
+        prerequisites: [],
+        provides: [],
         name: null,
         subject: null,
         topic: null
@@ -88,10 +98,11 @@ function extractFrontmatter(text) {
         metadata.order = parseInt(orderMatch[1], 10);
     }
 
-    // Parse tags (array)
-    const tagsMatch = frontmatterStr.match(/tags\s*=\s*\[(.*?)\]/);
-    if (tagsMatch) {
-        metadata.tags = tagsMatch[1]
+    // Parse simple string arrays used by both presentation and curriculum data.
+    for (const field of ['tags', 'prerequisites', 'provides']) {
+        const match = frontmatterStr.match(new RegExp(`${field}\\s*=\\s*\\[(.*?)\\]`));
+        if (!match) continue;
+        metadata[field] = match[1]
             .split(',')
             .map(t => t.trim().replace(/"/g, ''))
             .filter(t => t.length > 0);
