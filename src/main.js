@@ -479,7 +479,16 @@ function scopeProgress(cards, reviewMap, now) {
         else retained++;
     }
     const total = cards.length;
-    return { total, due, fresh, retained, pct: total ? Math.round(retained / total * 100) : 0 };
+    const introduced = total - fresh;
+    return {
+        total,
+        due,
+        fresh,
+        retained,
+        introduced,
+        pct: total ? Math.round(retained / total * 100) : 0,
+        completionPct: total ? Math.round(introduced / total * 100) : 0
+    };
 }
 
 function treeActionBtn(cls, title, html, onclick) {
@@ -1038,6 +1047,7 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 
 // Selection path for the columns view (persists across re-renders)
 let columnsSel = { subject: null, deck: null, chapter: null };
+const columnProgressLoads = new Set();
 
 /**
  * One columns row: optional inline star (left), name and compact metadata,
@@ -1260,7 +1270,8 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
         p3 = fileList.map(file => {
             const chName = fileBase(file);
             const cards = files.get(file);
-            const completed = scopeProgress(cards, reviewMap, now).pct;
+            const progress = scopeProgress(cards, reviewMap, now);
+            const completed = progress.completionPct;
             const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, ['home', columnsSel.subject, deckName, chName], [deckId], [{ repo: deckId, path: file }]);
             const browse = () => openChapterBrowser({
                 deckId,
@@ -1270,7 +1281,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
                 chapterName: chName
             });
             const chActive = chapterIsActive(scopes, deckId, file);
-            const chComplete = chActive && completed === 100;
+            const chComplete = chActive && progress.total > 0 && progress.fresh === 0;
             return colRow({
                 name: chName,
                 meta: `(${completed}%)`,
@@ -1307,6 +1318,28 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
     });
     for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
     renderEvictedNotice();
+
+    // Repository metadata renders before lazy card bodies. Load the selected
+    // chapter once, then redraw so its persisted reviews produce the real
+    // percentage and completed-star state instead of a temporary 0%.
+    if (columnsSel.deck && columnsSel.chapter && !columnsSel.deck.startsWith('local/')) {
+        const selectedCards = subjects
+            .get(columnsSel.subject)
+            ?.get(columnsSel.deck)
+            ?.get(columnsSel.chapter);
+        const key = `${columnsSel.deck}\0${columnsSel.chapter}`;
+        if (selectedCards?.length === 0 && !columnProgressLoads.has(key)) {
+            columnProgressLoads.add(key);
+            loadRepositoryFiles(columnsSel.deck, [columnsSel.chapter])
+                .then(cards => {
+                    if (cards.length > 0) loadRepositories();
+                })
+                .catch(error => {
+                    columnProgressLoads.delete(key);
+                    console.warn('[Main] Failed to load selected chapter progress:', error);
+                });
+        }
+    }
 }
 
 /**
