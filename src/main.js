@@ -1121,6 +1121,9 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
     const fileBase = f => f.split('/').pop().replace(/\.md$/, '');
     const filesOf = decksMap => id => ({ repo: id, files: [...decksMap.get(id).keys()] });
     const reviewMap = new Map(allReviews.map(review => [review.cardHash, review]));
+    const reviewedFileKeys = new Set(allReviews
+        .filter(review => review.repo && review.filepath)
+        .map(review => `${review.repo}\0${review.filepath}`));
     const now = new Date();
     const deckById = new Map(displayDecks.map(deck => [deck.id, deck]));
 
@@ -1312,25 +1315,32 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
     for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
     renderEvictedNotice();
 
-    // Repository metadata renders before lazy card bodies. Load the selected
-    // chapter once, then redraw so its persisted reviews produce the real
-    // percentage and completed-star state instead of a temporary 0%.
-    if (columnsSel.deck && columnsSel.chapter && !columnsSel.deck.startsWith('local/')) {
-        const selectedCards = subjects
-            .get(columnsSel.subject)
-            ?.get(columnsSel.deck)
-            ?.get(columnsSel.chapter);
-        const key = `${columnsSel.deck}\0${columnsSel.chapter}`;
-        if (selectedCards?.length === 0 && !columnProgressLoads.has(key)) {
+    // Repository metadata renders before lazy card bodies. Hydrate every
+    // reviewed starred chapter in the visible deck, then redraw once so a hard
+    // refresh shows its persisted completion without requiring a star toggle.
+    if (columnsSel.deck && !columnsSel.deck.startsWith('local/')) {
+        const visibleFiles = subjects.get(columnsSel.subject)?.get(columnsSel.deck);
+        const loads = [];
+        for (const [file, cards] of visibleFiles || []) {
+            const key = `${columnsSel.deck}\0${file}`;
+            if (cards.length > 0
+                || !chapterIsActive(scopes, columnsSel.deck, file)
+                || !reviewedFileKeys.has(key)
+                || columnProgressLoads.has(key)) continue;
+
             columnProgressLoads.add(key);
-            loadRepositoryFiles(columnsSel.deck, [columnsSel.chapter])
-                .then(cards => {
-                    if (cards.length > 0) loadRepositories();
-                })
+            loads.push(loadRepositoryFiles(columnsSel.deck, [file])
+                .then(loaded => loaded.length > 0)
                 .catch(error => {
                     columnProgressLoads.delete(key);
-                    console.warn('[Main] Failed to load selected chapter progress:', error);
-                });
+                    console.warn('[Main] Failed to load chapter progress:', error);
+                    return false;
+                }));
+        }
+        if (loads.length > 0) {
+            Promise.all(loads).then(results => {
+                if (results.some(Boolean)) loadRepositories();
+            });
         }
     }
 }
