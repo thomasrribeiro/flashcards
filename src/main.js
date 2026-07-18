@@ -795,10 +795,41 @@ async function mapWithConcurrency(items, limit, worker) {
 
 let dailyPreparationPromise = Promise.resolve();
 const NEW_CHAPTER_ROTATION_PREFIX = 'flashcards_last_new_chapter:';
+const CHAPTER_PROGRESS_PREFIX = 'flashcards_chapter_progress:';
 
 function newChapterRotationKey() {
     const user = githubAuth.getUser();
     return NEW_CHAPTER_ROTATION_PREFIX + (user?.username || user?.id || 'local');
+}
+
+function chapterProgressStorageKey() {
+    const user = githubAuth.getUser();
+    return CHAPTER_PROGRESS_PREFIX + (user?.username || user?.id || 'local');
+}
+
+function loadChapterProgressSnapshot() {
+    try { return JSON.parse(localStorage.getItem(chapterProgressStorageKey()) || '{}'); }
+    catch { return {}; }
+}
+
+function saveChapterProgressSnapshot(snapshot) {
+    try { localStorage.setItem(chapterProgressStorageKey(), JSON.stringify(snapshot)); }
+    catch { /* card reviews remain the durable source of truth */ }
+}
+
+function clearChapterProgressSnapshot(specs) {
+    const snapshot = loadChapterProgressSnapshot();
+    let changed = false;
+    for (const { deckId, file = null } of specs) {
+        const exact = file ? chapterScope(deckId, file) : null;
+        for (const key of Object.keys(snapshot)) {
+            if (key === exact || (!file && key.startsWith(`${deckId}${SCOPE_SEP}`))) {
+                delete snapshot[key];
+                changed = true;
+            }
+        }
+    }
+    if (changed) saveChapterProgressSnapshot(snapshot);
 }
 
 function lastNewChapterScope() {
@@ -925,6 +956,7 @@ async function resetScope(specs, message) {
     if (!ok) return;
     const { refreshDeck } = await import('./storage.js');
     for (const s of specs) await refreshDeck(s.deckId, s.file || null);
+    clearChapterProgressSnapshot(specs);
     await loadRepositories();
 }
 
@@ -934,6 +966,7 @@ async function deleteScope(deckIds, message) {
     for (const id of deckIds) {
         try { await removeRepository(id); } catch (e) { console.error('[Main] delete failed', id, e); }
     }
+    clearChapterProgressSnapshot(deckIds.map(deckId => ({ deckId })));
     await loadRepositories();
 }
 
@@ -1205,6 +1238,9 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
     const reviewedFileKeys = new Set(allReviews
         .filter(review => review.repo && review.filepath)
         .map(review => `${review.repo}\0${review.filepath}`));
+    const hasUnmappedReviews = allReviews.some(review => !review.repo || !review.filepath);
+    const progressSnapshot = loadChapterProgressSnapshot();
+    let progressSnapshotChanged = false;
     const now = new Date();
     const deckById = new Map(displayDecks.map(deck => [deck.id, deck]));
 
@@ -1233,14 +1269,30 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
     for (const decks of subjects.values()) {
         for (const [deckId, files] of decks) {
             for (const [file, cards] of files) {
-                if (cards.length > 0
-                    && chapterIsActive(scopes, deckId, file)
-                    && cards.every(card => reviewMap.has(card.hash))) {
-                    completedActiveScopes.add(chapterScope(deckId, file));
+                const scope = chapterScope(deckId, file);
+                let savedProgress = progressSnapshot[scope] || null;
+                if (cards.length > 0) {
+                    const progress = scopeProgress(cards, reviewMap, now);
+                    const nextProgress = {
+                        completionPct: progress.completionPct,
+                        total: progress.total,
+                        fresh: progress.fresh
+                    };
+                    if (JSON.stringify(savedProgress) !== JSON.stringify(nextProgress)) {
+                        progressSnapshot[scope] = nextProgress;
+                        progressSnapshotChanged = true;
+                    }
+                    savedProgress = nextProgress;
+                }
+                if (chapterIsActive(scopes, deckId, file)
+                    && savedProgress?.total > 0
+                    && savedProgress.fresh === 0) {
+                    completedActiveScopes.add(scope);
                 }
             }
         }
     }
+    if (progressSnapshotChanged) saveChapterProgressSnapshot(progressSnapshot);
 
     const sortedDeckIds = subject =>
         sortDeckIdsByCurriculum(subjects.get(subject).keys(), deckById);
@@ -1361,7 +1413,9 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
             const chName = fileBase(file);
             const cards = files.get(file);
             const progress = scopeProgress(cards, reviewMap, now);
-            const completed = progress.completionPct;
+            const scope = chapterScope(deckId, file);
+            const savedProgress = cards.length > 0 ? progress : progressSnapshot[scope];
+            const completed = savedProgress?.completionPct || 0;
             const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, ['home', columnsSel.subject, deckName, chName], [deckId], [{ repo: deckId, path: file }]);
             const browse = () => openChapterBrowser({
                 deckId,
@@ -1371,16 +1425,21 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
                 chapterName: chName
             });
             const chActive = chapterIsActive(scopes, deckId, file);
-            const chComplete = chActive && progress.total > 0 && progress.fresh === 0;
+            const chComplete = savedProgress?.total > 0 && savedProgress.fresh === 0;
+            const progressPending = cards.length === 0
+                && !savedProgress
+                && (chActive || reviewedFileKeys.has(scope) || hasUnmappedReviews);
             return colRow({
                 name: chName,
-                meta: `(${completed}%)`,
+                meta: progressPending ? '(…)' : `(${completed}%)`,
                 star: {
                     glyph: chComplete ? '✓' : chActive ? '★' : '☆',
                     active: chActive,
                     complete: chComplete,
                     title: chComplete
-                        ? 'Completed — remove chapter from daily focus'
+                        ? chActive
+                            ? 'Completed — remove chapter from daily focus'
+                            : 'Completed — add chapter to daily focus'
                         : chActive
                             ? 'Remove chapter from daily focus'
                             : 'Add chapter to daily focus',
@@ -1409,9 +1468,9 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
     for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
     renderEvictedNotice();
 
-    // Repository metadata renders before lazy card bodies. Hydrate reviewed
-    // starred chapters across the collection, then redraw once so completion
-    // checks and parent-star states are both correct after a hard refresh.
+    // Repository metadata renders before lazy card bodies. Hydrate starred and
+    // previously reviewed chapters, then redraw once. Legacy hash-only rows
+    // trigger a one-time collection pass that repairs their chapter metadata.
     const progressLoads = [];
     for (const decks of subjects.values()) {
         for (const [deckId, files] of decks) {
@@ -1419,8 +1478,9 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
             for (const [file, cards] of files) {
                 const key = `${deckId}\0${file}`;
                 if (cards.length > 0
-                    || !chapterIsActive(scopes, deckId, file)
-                    || !reviewedFileKeys.has(key)
+                    || (!chapterIsActive(scopes, deckId, file)
+                        && !reviewedFileKeys.has(key)
+                        && !hasUnmappedReviews)
                     || columnProgressLoads.has(key)) continue;
 
                 columnProgressLoads.add(key);

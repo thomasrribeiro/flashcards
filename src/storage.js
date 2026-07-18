@@ -167,6 +167,23 @@ export function mergeReviewSnapshots(remoteReviews = [], localReviews = []) {
     return [...merged.values()];
 }
 
+export function enrichReviewSources(reviews = [], cards = []) {
+    const cardByHash = new Map(cards.map(card => [card.hash, card]));
+    let changed = false;
+    const enriched = reviews.map(review => {
+        const card = cardByHash.get(review.cardHash);
+        if (!card || (review.repo && review.filepath)) return review;
+        changed = true;
+        return {
+            ...review,
+            repo: review.repo || card.source?.repo || card.deckName || null,
+            filepath: review.filepath || card.source?.file || null,
+            cardLabel: review.cardLabel || cardLabelSnapshot(card)
+        };
+    });
+    return { reviews: enriched, changed };
+}
+
 function enqueueSync(userId, reviewPayload) {
     try {
         const outbox = getSyncOutbox();
@@ -464,6 +481,13 @@ export async function saveCards(cards) {
         }
         console.log(`[Storage] Preserved review state across ${migration.migrations.length} stable card identity migration(s)`);
     }
+
+    // Older review rows may predate persisted source metadata. Once their card
+    // bodies are available, repair the local snapshot so future refreshes can
+    // map progress to a chapter without downloading the whole collection.
+    const enrichment = enrichReviewSources(reviewsCache, cardsCache);
+    reviewsCache = enrichment.reviews;
+    if (enrichment.changed) persistReviewsLocally(reviewsCache);
 
     console.log(`[Storage] Cards cache after: ${cardsCache.length} cards`);
     console.log(`[Storage] Deck IDs in cache:`, [...new Set(cardsCache.map(c => c.deckName))]);
