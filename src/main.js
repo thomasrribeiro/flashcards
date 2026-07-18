@@ -2897,9 +2897,7 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
         newBtn.dataset.allowBeyondTarget = targetReached ? 'true' : 'false';
         newBtn.textContent = activeScopeComplete
             ? 'No new cards'
-            : targetReached
-                ? 'Learn'
-                : `Learn ${visibleBatch} new`;
+            : 'Learn';
         newBtn.title = active.length === 0
             ? 'Star items (★) to choose new material'
             : activeScopeComplete
@@ -3379,7 +3377,7 @@ async function startPrimaryStudySession(mode, { allowBeyondTarget = false } = {}
         await renderReviewButton({ refreshStatus: false });
         return;
     } finally {
-        if (activeBtn) activeBtn.textContent = isDueReview ? 'Review' : 'Learn new';
+        if (activeBtn) activeBtn.textContent = isDueReview ? 'Review' : 'Learn';
     }
 
     const allReviews = await getAllReviews();
@@ -3619,7 +3617,8 @@ async function updateSessionCompletionActions(status) {
         ? Math.min(requestedBatch, availability.freshCount)
         : requestedBatch;
 
-    learnMore.textContent = targetReached ? 'Learn' : `Learn ${visibleBatch} new`;
+    learnMore.textContent = 'Learn';
+    learnMore.title = `Introduce up to ${visibleBatch} new card${visibleBatch === 1 ? '' : 's'}`;
     learnMore.dataset.allowBeyondTarget = targetReached ? 'true' : 'false';
     learnMore.classList.remove('hidden');
 }
