@@ -2916,6 +2916,7 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .col-name {
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2924,9 +2925,11 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .col-meta {
+    width: 46px;
     flex-shrink: 0;
     font-size: 0.68rem;
     opacity: 0.55;
+    text-align: right;
     white-space: nowrap;
 }
 
