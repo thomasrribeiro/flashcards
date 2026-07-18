@@ -311,6 +311,24 @@ export async function getOrgRepositories(org) {
 }
 
 /**
+ * Merge repository suggestion sources without showing the same full name more
+ * than once. Earlier lists win so authenticated repositories can take
+ * precedence over public-catalog copies.
+ */
+export function mergeRepositoryLists(...lists) {
+    const repositories = new Map();
+    for (const list of lists) {
+        for (const repo of list || []) {
+            const fullName = String(repo?.full_name || '').trim();
+            if (!fullName) continue;
+            const key = fullName.toLowerCase();
+            if (!repositories.has(key)) repositories.set(key, repo);
+        }
+    }
+    return [...repositories.values()];
+}
+
+/**
  * Parse owner/repo string
  */
 export function parseRepoString(repoString) {

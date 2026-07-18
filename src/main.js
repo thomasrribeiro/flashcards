@@ -6,7 +6,7 @@ import { initDB, getAllCards, getAllReviews, getStats, getAllRepos, getAllDecks,
 import { loadRepository, loadRepositoryFiles, loadRepositoryMetadata, removeRepository } from './repo-manager.js';
 import { parseDeck } from './parser.js';
 import { identifyCard } from './hasher.js';
-import { getAuthenticatedUser, getUserRepositories, getOrgRepositories } from './github-client.js';
+import { getAuthenticatedUser, getUserRepositories, getOrgRepositories, mergeRepositoryLists } from './github-client.js';
 import { githubAuth } from './github-auth.js';
 import { startSession, startTodaySession, revealAnswer, gradeCard, getState, cleanup as cleanupStudySession, GradeKeys } from './study-session.js';
 import { buildTodayQueue, freshCardAvailability, getLocalDate, newCardSessionLimit, newLearningPlan, SCOPE_SEP } from './today-queue.js';
@@ -1976,33 +1976,47 @@ async function setupRepoInput() {
     const suggestions = document.getElementById('repo-suggestions');
     if (!repoInput || !suggestions) return;
 
-    let userRepos = [];
+    let availableRepos = [];
     let selectedIndex = -1;
 
     repoInput.value = '';
     repoInput.placeholder = 'Add decks...';
 
-    // Dropdown always suggests from the public org; users can still type any
-    // owner/repo by hand to add their own private repos when authenticated.
-    try {
-        console.log(`[Main] Loading public decks from ${PUBLIC_DECKS_ORG}`);
-        userRepos = await getOrgRepositories(PUBLIC_DECKS_ORG);
-        console.log(`[Main] Loaded ${userRepos.length} public decks`);
-    } catch (error) {
-        console.error(`[Main] Failed to load ${PUBLIC_DECKS_ORG} repos:`, error);
+    // Signed-in users see repositories available to their GitHub account
+    // (including private repositories) alongside the public deck catalog.
+    // Keep either source useful when the other one is temporarily unavailable.
+    const sources = [
+        { name: `public decks from ${PUBLIC_DECKS_ORG}`, promise: getOrgRepositories(PUBLIC_DECKS_ORG) }
+    ];
+    if (githubAuth.isAuthenticated()) {
+        sources.unshift({ name: 'authenticated GitHub repositories', promise: getUserRepositories() });
+    }
+    const results = await Promise.allSettled(sources.map(source => source.promise));
+    const repositoryLists = [];
+    results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+            repositoryLists.push(result.value);
+            console.log(`[Main] Loaded ${result.value.length} ${sources[index].name}`);
+        } else {
+            console.error(`[Main] Failed to load ${sources[index].name}:`, result.reason);
+        }
+    });
+    availableRepos = mergeRepositoryLists(...repositoryLists);
+    if (githubAuth.isAuthenticated()) {
+        console.log(`[Main] ${availableRepos.length} unique repositories available in add-deck search`);
     }
 
     // Input event for filtering
     repoInput.addEventListener('input', () => {
         const value = repoInput.value;
-        updateDropdownDisplay(userRepos, value, suggestions);
+        updateDropdownDisplay(availableRepos, value, suggestions);
         selectedIndex = -1;
     });
 
     // Focus event to show dropdown
     repoInput.addEventListener('focus', () => {
-        if (userRepos.length > 0) {
-            updateDropdownDisplay(userRepos, repoInput.value, suggestions);
+        if (availableRepos.length > 0) {
+            updateDropdownDisplay(availableRepos, repoInput.value, suggestions);
         }
     });
 

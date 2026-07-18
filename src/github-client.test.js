@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getFileContent, getRepositoryFileIndex } from './github-client.js';
+import { getFileContent, getRepositoryFileIndex, mergeRepositoryLists } from './github-client.js';
 
 describe('getFileContent', () => {
     beforeEach(() => {
@@ -79,5 +79,32 @@ describe('getRepositoryFileIndex', () => {
             size: 30,
             name: 'deck.toml'
         });
+    });
+});
+
+describe('mergeRepositoryLists', () => {
+    it('keeps authenticated repositories first and deduplicates public copies', () => {
+        const privateRepo = {
+            full_name: 'owner/quantitative-reasoning-and-arithmetic',
+            private: true
+        };
+        const authenticatedPublicCopy = {
+            full_name: 'catalog/mechanics',
+            source: 'authenticated'
+        };
+        const publicCatalogCopy = {
+            full_name: 'CATALOG/MECHANICS',
+            source: 'catalog'
+        };
+        const publicRepo = { full_name: 'catalog/biology' };
+
+        expect(mergeRepositoryLists(
+            [privateRepo, authenticatedPublicCopy],
+            [publicCatalogCopy, publicRepo]
+        )).toEqual([
+            privateRepo,
+            authenticatedPublicCopy,
+            publicRepo
+        ]);
     });
 });
