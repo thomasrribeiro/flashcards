@@ -1110,4 +1110,25 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(result.stdout).not.toContain('generate');
         expect(result.stdout).not.toContain('auth');
     });
+
+    it('starts a deck-create agent run at the pilot instead of a full build', async () => {
+        const notesRoot = await temporaryRoot();
+        const result = spawnSync(process.execPath, [
+            'bin/flashcards.js',
+            'deck',
+            'create',
+            'mathematics',
+            'arithmetic',
+            '--notes-root',
+            notesRoot,
+            '--dry-run'
+        ], {
+            cwd: path.resolve(testDirectory, '..'),
+            encoding: 'utf8'
+        });
+
+        expect(result.status).toBe(0);
+        expect(result.stdout).toContain('AUTHOR ONLY THE FIRST ORDERED CHAPTER');
+        expect(result.stdout).not.toContain('Full build requires an approved pilot');
+    });
 });

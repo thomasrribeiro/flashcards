@@ -73,13 +73,21 @@ function addAgentOptions(command, { audit = false, build = false } = {}) {
 }
 
 function executeAgent(mode, deckPath, options) {
-    if (options.full && options.chapter) throw new Error('--full cannot be combined with --chapter.');
-    if (options.freshChapter && !options.chapter) throw new Error('--fresh-chapter requires --chapter.');
-    if (options.freshPilot && options.chapter && options.chapter !== 1) {
+    // Commander passes the command instance to action handlers. Absent option
+    // names can therefore resolve to Command methods (for example `full()`),
+    // and deck creation also has a repeatable `chapter` array. Only accept the
+    // exact value types produced by the build command.
+    const full = options.full === true;
+    const chapter = Number.isInteger(options.chapter) ? options.chapter : undefined;
+    const freshChapter = options.freshChapter === true;
+    const freshPilot = options.freshPilot === true;
+    if (full && chapter) throw new Error('--full cannot be combined with --chapter.');
+    if (freshChapter && !chapter) throw new Error('--fresh-chapter requires --chapter.');
+    if (freshPilot && chapter && chapter !== 1) {
         throw new Error('--fresh-pilot cannot target a chapter other than 1.');
     }
-    const chapterNumber = options.chapter || (options.freshPilot ? 1 : undefined);
-    const buildScope = options.full ? 'full' : options.chapter ? 'chapter' : 'pilot';
+    const chapterNumber = chapter || (freshPilot ? 1 : undefined);
+    const buildScope = full ? 'full' : chapter ? 'chapter' : 'pilot';
     const synced = syncDeckPrerequisitesFromSubject(deckPath, { allowMissing: true });
     if (synced.changed) {
         console.log(`Synced subject curriculum metadata (order ${synced.curriculumOrder}).`);
@@ -95,8 +103,8 @@ function executeAgent(mode, deckPath, options) {
         allowDirty: options.allowDirty,
         buildScope,
         chapterNumber,
-        freshChapter: options.freshChapter,
-        freshPilot: options.freshPilot,
+        freshChapter,
+        freshPilot,
         isolated: options.isolated,
         reasoningEffort: options.reasoningEffort
     });
