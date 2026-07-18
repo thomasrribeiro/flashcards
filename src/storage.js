@@ -16,6 +16,7 @@ const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 let cardsCache = [];
 let reposCache = [];
 let reviewsCache = []; // Local cache of reviews fetched from D1
+let chapterProgressCache = []; // D1-backed per-chapter completion snapshots
 let reposListCache = null; // Cached list from D1 (avoids duplicate fetches in same session)
 
 // Track which repo IDs fully loaded in this session (for safe orphan cleanup)
@@ -47,6 +48,25 @@ function cardLabelSnapshot(card) {
         .replace(/\s+/g, ' ')
         .trim();
     return label ? label.slice(0, 300) : null;
+}
+
+export function chapterProgressForCard(cards, reviews, card) {
+    const repo = card?.source?.repo || card?.deckName || '';
+    const filepath = card?.source?.file || '';
+    if (!repo || !filepath) return null;
+    const chapterCards = cards.filter(candidate =>
+        (candidate.source?.repo || candidate.deckName) === repo
+        && (candidate.source?.file || '') === filepath);
+    if (chapterCards.length === 0) return null;
+    const reviewedHashes = new Set(reviews.map(review => review.cardHash));
+    return {
+        repo,
+        filepath,
+        sourceSha: card.source?.sha || null,
+        totalCards: chapterCards.length,
+        reviewedCards: chapterCards.filter(candidate =>
+            reviewedHashes.has(candidate.hash)).length
+    };
 }
 
 function getIdentityMigrations() {
@@ -289,6 +309,7 @@ export async function initDB() {
 
     if (!currentUser) {
         console.log('[Storage] No user authenticated, loading from localStorage');
+        chapterProgressCache = [];
         persistReviewsLocally(localReviews);
         return;
     }
@@ -315,12 +336,75 @@ export async function initDB() {
         await flushSyncOutbox();
         flushIdentityMigrations();
 
-        // Load reviews and repo list in parallel — neither depends on the other
-        await Promise.all([loadReviewsFromD1(), loadReposFromD1()]);
+        // Load durable account state in parallel before the first app render.
+        await Promise.all([
+            loadReviewsFromD1(),
+            loadReposFromD1(),
+            loadChapterProgressFromD1()
+        ]);
 
         console.log('[Storage] D1 initialized successfully');
     } catch (error) {
         console.error('[Storage] Failed to initialize D1:', error);
+    }
+}
+
+function chapterProgressKey(progress) {
+    return `${progress.repo}\0${progress.filepath}`;
+}
+
+function upsertChapterProgressCache(chapters) {
+    const merged = new Map(chapterProgressCache.map(progress => [
+        chapterProgressKey(progress),
+        progress
+    ]));
+    for (const progress of chapters) merged.set(chapterProgressKey(progress), progress);
+    chapterProgressCache = [...merged.values()];
+}
+
+function removeChapterProgressCache(repo, folder = null) {
+    chapterProgressCache = chapterProgressCache.filter(progress => {
+        if (progress.repo !== repo) return true;
+        if (!folder) return false;
+        return !(progress.filepath === folder || progress.filepath.startsWith(`${folder}/`));
+    });
+}
+
+export async function loadChapterProgressFromD1() {
+    if (!currentUser) {
+        chapterProgressCache = [];
+        return [];
+    }
+    try {
+        const userId = currentUser.github_id || currentUser.id;
+        const response = await fetch(`${WORKER_URL}/api/chapter-progress/${encodeURIComponent(userId)}`);
+        if (!response.ok) throw new Error(`Failed to load chapter progress: ${response.statusText}`);
+        const { chapters } = await response.json();
+        chapterProgressCache = Array.isArray(chapters) ? chapters : [];
+        return [...chapterProgressCache];
+    } catch (error) {
+        console.error('[Storage] Failed to load chapter progress from D1:', error);
+        chapterProgressCache = [];
+        return [];
+    }
+}
+
+export async function getAllChapterProgress() {
+    return [...chapterProgressCache];
+}
+
+export async function syncChapterProgress(chapters = []) {
+    if (!currentUser || chapters.length === 0) return;
+    const userId = currentUser.github_id || currentUser.id;
+    for (let index = 0; index < chapters.length; index += 100) {
+        const batch = chapters.slice(index, index + 100);
+        const response = await fetch(`${WORKER_URL}/api/chapter-progress`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, chapters: batch })
+        });
+        if (!response.ok) throw new Error(`Failed to sync chapter progress: ${response.statusText}`);
+        upsertChapterProgressCache(batch);
     }
 }
 
@@ -419,6 +503,7 @@ export async function clearLocalStorage() {
     cardsCache = [];
     reposCache = [];
     reviewsCache = [];
+    chapterProgressCache = [];
     reposListCache = null;
     fullyLoadedRepos = new Set();
     currentUser = null;
@@ -556,6 +641,7 @@ export async function saveReview(cardHash, fsrsCard, log = null) {
             }
 
             const userId = currentUser.github_id || currentUser.id;
+            const chapterProgress = chapterProgressForCard(cardsCache, reviewsCache, card);
             const reviewPayload = {
                 cardHash,
                 repo: card.source?.repo || card.deckName,
@@ -564,6 +650,7 @@ export async function saveReview(cardHash, fsrsCard, log = null) {
                 lastReviewed: review.lastReviewed,
                 dueDate: fsrsCard.due,
                 cardLabel,
+                chapterProgress,
                 log: log ? {
                     rating: log.rating,
                     prevState: log.state,
@@ -589,6 +676,7 @@ export async function saveReview(cardHash, fsrsCard, log = null) {
                     enqueueSync(userId, reviewPayload);
                 } else {
                     console.log('[Storage] Review synced to D1 successfully');
+                    if (chapterProgress) upsertChapterProgressCache([chapterProgress]);
                 }
             }
         } catch (error) {
@@ -604,6 +692,7 @@ export async function saveReview(cardHash, fsrsCard, log = null) {
                 lastReviewed: review.lastReviewed,
                 dueDate: fsrsCard.due,
                 cardLabel,
+                chapterProgress: chapterProgressForCard(cardsCache, reviewsCache, card),
                 log: log ? {
                     rating: log.rating, prevState: log.state, stability: log.stability,
                     difficulty: log.difficulty, elapsedDays: log.elapsed_days, scheduledDays: log.scheduled_days
@@ -655,6 +744,7 @@ export async function clearReviewsByDeck(deckId) {
     const cardsInDeck = cardsCache.filter(c => c.deckName === deckId || c.id === deckId);
     const cardHashes = cardsInDeck.map(c => c.hash);
     reviewsCache = reviewsCache.filter(r => !cardHashes.includes(r.cardHash));
+    removeChapterProgressCache(deckId);
 
     return Promise.resolve();
 }
@@ -693,6 +783,7 @@ export async function refreshDeck(deckId, folder = null) {
         const cardHashes = cardsInDeck.map(c => c.hash);
         const beforeCount = reviewsCache.length;
         reviewsCache = reviewsCache.filter(r => !cardHashes.includes(r.cardHash));
+        removeChapterProgressCache(deckId, folder);
         const deleted = beforeCount - reviewsCache.length;
         console.log(`[Storage] Refreshed deck - deleted ${deleted} review(s) from localStorage (matched ${cardsInDeck.length} cards)`);
 
@@ -744,6 +835,7 @@ export async function refreshDeck(deckId, folder = null) {
     // Always apply local filter after the API attempt so the UI reflects the
     // reset even if D1 returned stale data or the request failed transiently.
     reviewsCache = reviewsCache.filter(r => !cardHashSet.has(r.cardHash));
+    removeChapterProgressCache(deckId, folder);
 
     try {
         setCriticalLocalStorageItem('flashcards_reviews', JSON.stringify(reviewsCache));
@@ -895,6 +987,7 @@ export async function removeRepo(repoId) {
 
     // Remove from local caches
     reposCache = reposCache.filter(r => r.id !== repoId);
+    removeChapterProgressCache(repoId);
 
     const cardsToRemove = cardsCache.filter(c =>
         c.deckName === repoId || c.source?.repo === repoId

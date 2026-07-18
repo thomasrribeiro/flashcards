@@ -2,7 +2,20 @@
  * Main entry point for topic listing page
  */
 
-import { initDB, getAllCards, getAllReviews, getStats, getAllRepos, getAllDecks, getAllTopics, clearReviewsByDeck, saveCards, saveRepoMetadata } from './storage.js';
+import {
+    clearReviewsByDeck,
+    getAllCards,
+    getAllChapterProgress,
+    getAllDecks,
+    getAllRepos,
+    getAllReviews,
+    getAllTopics,
+    getStats,
+    initDB,
+    saveCards,
+    saveRepoMetadata,
+    syncChapterProgress
+} from './storage.js';
 import { loadRepository, loadRepositoryFiles, loadRepositoryMetadata, removeRepository } from './repo-manager.js';
 import { parseDeck } from './parser.js';
 import { identifyCard } from './hasher.js';
@@ -409,6 +422,8 @@ async function loadRepositories() {
         console.log('All reviews:', allReviews.length);
         const allDecks = await getAllDecks();
         console.log('All decks:', allDecks.length);
+        const allChapterProgress = await getAllChapterProgress();
+        console.log('Chapter progress snapshots:', allChapterProgress.length);
 
         // Clear loading message
         grid.innerHTML = '';
@@ -449,7 +464,7 @@ async function loadRepositories() {
             if (deckViewMode === 'tree') {
                 renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid);
             } else if (deckViewMode === 'columns') {
-                renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid, {
+                renderColumnsView(displayDecks, allCards, allReviews, allChapterProgress, searchTerm, grid, {
                     panes: previousColumnScroll,
                     left: previousColumnsLeft
                 });
@@ -795,41 +810,10 @@ async function mapWithConcurrency(items, limit, worker) {
 
 let dailyPreparationPromise = Promise.resolve();
 const NEW_CHAPTER_ROTATION_PREFIX = 'flashcards_last_new_chapter:';
-const CHAPTER_PROGRESS_PREFIX = 'flashcards_chapter_progress:';
 
 function newChapterRotationKey() {
     const user = githubAuth.getUser();
     return NEW_CHAPTER_ROTATION_PREFIX + (user?.username || user?.id || 'local');
-}
-
-function chapterProgressStorageKey() {
-    const user = githubAuth.getUser();
-    return CHAPTER_PROGRESS_PREFIX + (user?.username || user?.id || 'local');
-}
-
-function loadChapterProgressSnapshot() {
-    try { return JSON.parse(localStorage.getItem(chapterProgressStorageKey()) || '{}'); }
-    catch { return {}; }
-}
-
-function saveChapterProgressSnapshot(snapshot) {
-    try { localStorage.setItem(chapterProgressStorageKey(), JSON.stringify(snapshot)); }
-    catch { /* card reviews remain the durable source of truth */ }
-}
-
-function clearChapterProgressSnapshot(specs) {
-    const snapshot = loadChapterProgressSnapshot();
-    let changed = false;
-    for (const { deckId, file = null } of specs) {
-        const exact = file ? chapterScope(deckId, file) : null;
-        for (const key of Object.keys(snapshot)) {
-            if (key === exact || (!file && key.startsWith(`${deckId}${SCOPE_SEP}`))) {
-                delete snapshot[key];
-                changed = true;
-            }
-        }
-    }
-    if (changed) saveChapterProgressSnapshot(snapshot);
 }
 
 function lastNewChapterScope() {
@@ -956,7 +940,6 @@ async function resetScope(specs, message) {
     if (!ok) return;
     const { refreshDeck } = await import('./storage.js');
     for (const s of specs) await refreshDeck(s.deckId, s.file || null);
-    clearChapterProgressSnapshot(specs);
     await loadRepositories();
 }
 
@@ -966,7 +949,6 @@ async function deleteScope(deckIds, message) {
     for (const id of deckIds) {
         try { await removeRepository(id); } catch (e) { console.error('[Main] delete failed', id, e); }
     }
-    clearChapterProgressSnapshot(deckIds.map(deckId => ({ deckId })));
     await loadRepositories();
 }
 
@@ -1229,7 +1211,7 @@ function colRow({ name, meta, star, actions, hasChildren, selected, onClick }) {
  * strip scrolls horizontally if it's too wide. Height fits the tallest column
  * up to a max, then that column scrolls.
  */
-function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid, scroll = {}) {
+function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgress, searchTerm, grid, scroll = {}) {
     const scopes = resolveActiveScopes(allCards, displayDecks);
     const term = (searchTerm || '').toLowerCase();
     const fileBase = f => f.split('/').pop().replace(/\.md$/, '');
@@ -1239,10 +1221,32 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
         .filter(review => review.repo && review.filepath)
         .map(review => `${review.repo}\0${review.filepath}`));
     const hasUnmappedReviews = allReviews.some(review => !review.repo || !review.filepath);
-    const progressSnapshot = loadChapterProgressSnapshot();
-    let progressSnapshotChanged = false;
     const now = new Date();
     const deckById = new Map(displayDecks.map(deck => [deck.id, deck]));
+    const chapterProgressByScope = new Map((allChapterProgress || []).map(progress => [
+        chapterScope(progress.repo, progress.filepath),
+        progress
+    ]));
+    const chapterSourceSha = (deckId, file) => {
+        const descriptor = (deckById.get(deckId)?.files || []).find(candidate =>
+            (typeof candidate === 'string' ? candidate : candidate.path) === file);
+        return typeof descriptor === 'string' ? null : descriptor?.sha || null;
+    };
+    const storedChapterProgress = (deckId, file) => {
+        const stored = chapterProgressByScope.get(chapterScope(deckId, file));
+        if (!stored) return null;
+        const currentSha = chapterSourceSha(deckId, file);
+        if (currentSha && stored.sourceSha && currentSha !== stored.sourceSha) return null;
+        const total = Math.max(0, Number(stored.totalCards) || 0);
+        const reviewed = Math.min(total, Math.max(0, Number(stored.reviewedCards) || 0));
+        return {
+            completionPct: total ? Math.round(reviewed / total * 100) : 0,
+            total,
+            fresh: total - reviewed,
+            sourceSha: stored.sourceSha || null
+        };
+    };
+    const progressUpdates = [];
 
     // Build Subject → Deck → File from lightweight Git-tree metadata. Loaded
     // cards are not required to render or search the columns.
@@ -1270,19 +1274,25 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
         for (const [deckId, files] of decks) {
             for (const [file, cards] of files) {
                 const scope = chapterScope(deckId, file);
-                let savedProgress = progressSnapshot[scope] || null;
+                let savedProgress = storedChapterProgress(deckId, file);
                 if (cards.length > 0) {
                     const progress = scopeProgress(cards, reviewMap, now);
-                    const nextProgress = {
-                        completionPct: progress.completionPct,
-                        total: progress.total,
-                        fresh: progress.fresh
+                    const sourceSha = cards[0]?.source?.sha || chapterSourceSha(deckId, file);
+                    const nextSnapshot = {
+                        repo: deckId,
+                        filepath: file,
+                        sourceSha,
+                        totalCards: progress.total,
+                        reviewedCards: progress.introduced
                     };
-                    if (JSON.stringify(savedProgress) !== JSON.stringify(nextProgress)) {
-                        progressSnapshot[scope] = nextProgress;
-                        progressSnapshotChanged = true;
+                    const stored = chapterProgressByScope.get(scope);
+                    if (!stored
+                        || stored.sourceSha !== nextSnapshot.sourceSha
+                        || Number(stored.totalCards) !== nextSnapshot.totalCards
+                        || Number(stored.reviewedCards) !== nextSnapshot.reviewedCards) {
+                        progressUpdates.push(nextSnapshot);
                     }
-                    savedProgress = nextProgress;
+                    savedProgress = progress;
                 }
                 if (chapterIsActive(scopes, deckId, file)
                     && savedProgress?.total > 0
@@ -1292,7 +1302,10 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
             }
         }
     }
-    if (progressSnapshotChanged) saveChapterProgressSnapshot(progressSnapshot);
+    if (progressUpdates.length > 0) {
+        syncChapterProgress(progressUpdates)
+            .catch(error => console.warn('[Main] Failed to persist chapter progress:', error));
+    }
 
     const sortedDeckIds = subject =>
         sortDeckIdsByCurriculum(subjects.get(subject).keys(), deckById);
@@ -1414,7 +1427,9 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
             const cards = files.get(file);
             const progress = scopeProgress(cards, reviewMap, now);
             const scope = chapterScope(deckId, file);
-            const savedProgress = cards.length > 0 ? progress : progressSnapshot[scope];
+            const savedProgress = cards.length > 0
+                ? progress
+                : storedChapterProgress(deckId, file);
             const completed = savedProgress?.completionPct || 0;
             const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, ['home', columnsSel.subject, deckName, chName], [deckId], [{ repo: deckId, path: file }]);
             const browse = () => openChapterBrowser({
@@ -1477,10 +1492,12 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
             if (deckId.startsWith('local/')) continue;
             for (const [file, cards] of files) {
                 const key = `${deckId}\0${file}`;
+                const hasStoredProgress = Boolean(storedChapterProgress(deckId, file));
                 if (cards.length > 0
                     || (!chapterIsActive(scopes, deckId, file)
                         && !reviewedFileKeys.has(key)
                         && !hasUnmappedReviews)
+                    || (hasStoredProgress && !chapterIsActive(scopes, deckId, file))
                     || columnProgressLoads.has(key)) continue;
 
                 columnProgressLoads.add(key);

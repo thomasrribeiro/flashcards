@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { enrichReviewSources, mergeReviewSnapshots } from './storage.js';
+import {
+    chapterProgressForCard,
+    enrichReviewSources,
+    mergeReviewSnapshots
+} from './storage.js';
 
 describe('mergeReviewSnapshots', () => {
     it('keeps a newer locally graded review over stale server state', () => {
@@ -51,6 +55,37 @@ describe('enrichReviewSources', () => {
                 filepath: 'flashcards/01.md',
                 cardLabel: 'What is one?'
             }]
+        });
+    });
+});
+
+describe('chapterProgressForCard', () => {
+    it('counts reviewed cards in the current source revision', () => {
+        const cards = [
+            {
+                hash: 'card-a',
+                source: { repo: 'owner/deck', file: 'flashcards/01.md', sha: 'abc123' }
+            },
+            {
+                hash: 'card-b',
+                source: { repo: 'owner/deck', file: 'flashcards/01.md', sha: 'abc123' }
+            },
+            {
+                hash: 'card-c',
+                source: { repo: 'owner/deck', file: 'flashcards/02.md', sha: 'def456' }
+            }
+        ];
+
+        expect(chapterProgressForCard(
+            cards,
+            [{ cardHash: 'card-a' }, { cardHash: 'card-c' }],
+            cards[0]
+        )).toEqual({
+            repo: 'owner/deck',
+            filepath: 'flashcards/01.md',
+            sourceSha: 'abc123',
+            totalCards: 2,
+            reviewedCards: 1
         });
     });
 });
