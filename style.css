@@ -8,6 +8,7 @@
     --white: #ffffff;
     --black: #1a1a1a;
     --gold: #F5C842;
+    --complete: #27864f;
     --light-gray: #f8f8f8;
     --muted: #666666;
     --subtle-border: #eeeeee;
@@ -19,6 +20,7 @@
     --white: #111416;
     --black: #f1efe8;
     --gold: #F5C842;
+    --complete: #55c982;
     --light-gray: #202527;
     --muted: #a7adaf;
     --subtle-border: #343a3d;
@@ -2874,6 +2876,35 @@ body.standalone-phone .mobile-sidebar-close {
     padding: 0;
 }
 .col-star.active { color: var(--gold); opacity: 1; }
+.col-star.complete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: 30px;
+    height: 22px;
+    border-radius: 999px;
+    background: rgba(245, 200, 66, 0.18);
+    box-shadow:
+        0 0 0 1px rgba(245, 200, 66, 0.75),
+        0 0 10px rgba(245, 200, 66, 0.9);
+    text-shadow: 0 0 5px rgba(245, 200, 66, 0.95);
+}
+.col-star-complete-check {
+    display: grid;
+    place-items: center;
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
+    border-radius: 50%;
+    background: var(--complete);
+    color: #fff;
+    box-shadow: 0 0 5px var(--complete);
+    font-family: sans-serif;
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 1;
+}
 
 .col-label {
     flex: 1;

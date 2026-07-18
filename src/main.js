@@ -1051,9 +1051,19 @@ function colRow({ name, meta, star, actions, hasChildren, selected, onClick }) {
 
     if (star) {
         const s = document.createElement('button');
-        s.className = 'col-star' + (star.active ? ' active' : '');
+        s.className = 'col-star'
+            + (star.active ? ' active' : '')
+            + (star.complete ? ' complete' : '');
         s.title = star.title;
+        s.setAttribute('aria-label', star.title);
         s.textContent = star.glyph;
+        if (star.complete) {
+            const check = document.createElement('span');
+            check.className = 'col-star-complete-check';
+            check.setAttribute('aria-hidden', 'true');
+            check.textContent = '✓';
+            s.appendChild(check);
+        }
         s.onclick = (e) => { e.stopPropagation(); star.onClick(); };
         row.appendChild(s);
     } else {
@@ -1142,6 +1152,25 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
     const visibleSubjectNames = term
         ? subjectNames.filter(subject => matchingDecks.get(subject).length > 0)
         : subjectNames;
+
+    // Open the first starred chapter whenever the view has no selection. This
+    // deliberately keeps trying across startup renders: repository metadata
+    // can arrive before the restored starred scope. Once a path is selected,
+    // later renders preserve the user's navigation.
+    if (!columnsSel.subject && !term) {
+        starredChapter:
+        for (const subject of subjectNames) {
+            const decks = subjects.get(subject);
+            for (const deckId of sortedDeckIds(subject)) {
+                const files = [...decks.get(deckId).keys()].sort((a, b) => a.localeCompare(b));
+                for (const file of files) {
+                    if (!chapterIsActive(scopes, deckId, file)) continue;
+                    columnsSel = { subject, deck: deckId, chapter: file };
+                    break starredChapter;
+                }
+            }
+        }
+    }
 
     // Prune a stale selection (e.g. after a delete).
     if (columnsSel.subject && !subjects.has(columnsSel.subject)) columnsSel = { subject: null, deck: null, chapter: null };
@@ -1241,10 +1270,21 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
                 chapterName: chName
             });
             const chActive = chapterIsActive(scopes, deckId, file);
+            const chComplete = chActive && completed === 100;
             return colRow({
                 name: chName,
                 meta: `(${completed}%)`,
-                star: { glyph: chActive ? '★' : '☆', active: chActive, title: chActive ? 'Remove chapter from daily focus' : 'Add chapter to daily focus', onClick: () => toggleChapterScope(deckId, file) },
+                star: {
+                    glyph: chActive ? '★' : '☆',
+                    active: chActive,
+                    complete: chComplete,
+                    title: chComplete
+                        ? 'Completed — remove chapter from daily focus'
+                        : chActive
+                            ? 'Remove chapter from daily focus'
+                            : 'Add chapter to daily focus',
+                    onClick: () => toggleChapterScope(deckId, file)
+                },
                 actions: [
                     { html: BROWSE_IMG, title: 'Browse all cards in this chapter (read-only)', onClick: browse },
                     { html: GAVEL_IMG, title: 'Review this chapter (due + new)', onClick: review },
@@ -2808,7 +2848,7 @@ async function renderReviewButton({ refreshStatus = true } = {}) {
         newBtn.textContent = activeScopeComplete
             ? 'No new cards'
             : targetReached
-                ? `Learn ${visibleBatch} more`
+                ? 'Learn'
                 : `Learn ${visibleBatch} new`;
         newBtn.title = active.length === 0
             ? 'Star items (★) to choose new material'
@@ -3529,7 +3569,7 @@ async function updateSessionCompletionActions(status) {
         ? Math.min(requestedBatch, availability.freshCount)
         : requestedBatch;
 
-    learnMore.textContent = targetReached ? `Learn ${visibleBatch} more` : `Learn ${visibleBatch} new`;
+    learnMore.textContent = targetReached ? 'Learn' : `Learn ${visibleBatch} new`;
     learnMore.dataset.allowBeyondTarget = targetReached ? 'true' : 'false';
     learnMore.classList.remove('hidden');
 }
@@ -3568,6 +3608,16 @@ function removeStudyEventListeners() {
  */
 function handleStudyKeydown(event) {
     if (!isInStudySession) return;
+
+    const sessionComplete = document.getElementById('session-complete');
+    if (event.code === 'Space' && !sessionComplete?.classList.contains('hidden')) {
+        // Preserve native Space activation when the user has deliberately
+        // focused one of the completion-screen actions.
+        if (event.target?.closest?.('#session-complete button, #session-complete a')) return;
+        event.preventDefault();
+        if (!event.repeat) document.getElementById('session-back-home')?.click();
+        return;
+    }
 
     const state = getState();
 
