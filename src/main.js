@@ -1067,13 +1067,6 @@ function colRow({ name, meta, star, actions, hasChildren, selected, onClick }) {
         s.title = star.title;
         s.setAttribute('aria-label', star.title);
         s.textContent = star.glyph;
-        if (star.complete) {
-            const check = document.createElement('span');
-            check.className = 'col-star-complete-check';
-            check.setAttribute('aria-hidden', 'true');
-            check.textContent = '✓';
-            s.appendChild(check);
-        }
         s.onclick = (e) => { e.stopPropagation(); star.onClick(); };
         row.appendChild(s);
     } else {
@@ -1286,7 +1279,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, searchTerm, grid,
                 name: chName,
                 meta: `(${completed}%)`,
                 star: {
-                    glyph: chActive ? '★' : '☆',
+                    glyph: chComplete ? '✓' : chActive ? '★' : '☆',
                     active: chActive,
                     complete: chComplete,
                     title: chComplete
