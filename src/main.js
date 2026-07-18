@@ -38,6 +38,10 @@ import { getReminderPreferences, isIOSDevice, isStandalone, subscribeToPush, uns
 import { renderBrowsableCards } from './card-browser.js';
 import { evictLegacyBlobLocalStorage } from './browser-storage.js';
 import { sortDeckIdsByCurriculum } from './deck-order.js';
+import {
+    buildChapterProgressSnapshot,
+    chapterProgressTargets
+} from './chapter-progress.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -416,14 +420,48 @@ async function loadRepositories() {
     try {
         // Get all data
         console.log('Loading repositories...');
-        const allCards = await getAllCards();
+        let allCards = await getAllCards();
         console.log('All cards:', allCards.length);
         const allReviews = await getAllReviews();
         console.log('All reviews:', allReviews.length);
         const allDecks = await getAllDecks();
         console.log('All decks:', allDecks.length);
-        const allChapterProgress = await getAllChapterProgress();
+        let allChapterProgress = await getAllChapterProgress();
         console.log('Chapter progress snapshots:', allChapterProgress.length);
+
+        // D1 is the durable source for chapter completion. Before rendering,
+        // explicitly backfill any reviewed/starred chapter whose snapshot is
+        // missing or tied to an older GitHub blob.
+        if (githubAuth.isAuthenticated()) {
+            const targets = chapterProgressTargets(
+                allDecks,
+                allReviews,
+                allChapterProgress,
+                resolveActiveScopes(allCards, allDecks)
+            );
+            if (targets.length > 0) {
+                await mapWithConcurrency(targets, 4, async target => {
+                    try {
+                        await loadRepositoryFiles(target.repo, [target.filepath]);
+                    } catch (error) {
+                        console.warn('[Main] Failed to backfill chapter progress:', target, error);
+                    }
+                });
+                allCards = await getAllCards();
+                const snapshots = targets
+                    .map(target => buildChapterProgressSnapshot(
+                        allCards,
+                        allReviews,
+                        target
+                    ))
+                    .filter(Boolean);
+                if (snapshots.length > 0) {
+                    await syncChapterProgress(snapshots);
+                    allChapterProgress = await getAllChapterProgress();
+                    console.log(`[Main] Backfilled ${snapshots.length} chapter progress snapshot(s)`);
+                }
+            }
+        }
 
         // Clear loading message
         grid.innerHTML = '';
@@ -1143,7 +1181,6 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 
 // Selection path for the columns view (persists across re-renders)
 let columnsSel = { subject: null, deck: null, chapter: null };
-const columnProgressLoads = new Set();
 
 /**
  * One columns row: optional inline star (left), name and compact metadata,
@@ -1483,42 +1520,6 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
     for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
     renderEvictedNotice();
 
-    // Repository metadata renders before lazy card bodies. Hydrate starred and
-    // previously reviewed chapters, then redraw once. Legacy hash-only rows
-    // trigger a one-time collection pass that repairs their chapter metadata.
-    const progressLoads = [];
-    for (const decks of subjects.values()) {
-        for (const [deckId, files] of decks) {
-            if (deckId.startsWith('local/')) continue;
-            for (const [file, cards] of files) {
-                const key = `${deckId}\0${file}`;
-                const hasStoredProgress = Boolean(storedChapterProgress(deckId, file));
-                if (cards.length > 0
-                    || (!chapterIsActive(scopes, deckId, file)
-                        && !reviewedFileKeys.has(key)
-                        && !hasUnmappedReviews)
-                    || (hasStoredProgress && !chapterIsActive(scopes, deckId, file))
-                    || columnProgressLoads.has(key)) continue;
-
-                columnProgressLoads.add(key);
-                progressLoads.push({ deckId, file, key });
-            }
-        }
-    }
-    if (progressLoads.length > 0) {
-        mapWithConcurrency(progressLoads, 4, async ({ deckId, file, key }) => {
-            try {
-                const loaded = await loadRepositoryFiles(deckId, [file]);
-                return loaded.length > 0;
-            } catch (error) {
-                columnProgressLoads.delete(key);
-                console.warn('[Main] Failed to load chapter progress:', error);
-                return false;
-            }
-        }).then(results => {
-            if (results.some(Boolean)) loadRepositories();
-        });
-    }
 }
 
 /**
