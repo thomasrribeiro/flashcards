@@ -9,6 +9,7 @@ created = "{{DATE}}"
 
 [prerequisites]
 decks = [{{PREREQUISITE_DECKS}}]
+recommended_decks = [{{RECOMMENDED_DECKS}}]
 assumed_tools = [{{ASSUMED_TOOLS}}]
 
 [standards]

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { resolvePath } from './paths.js';
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const DECK_REF = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/;
 export const SUBJECT_DESTINATIONS = Object.freeze([
     'literacy',
     'undergraduate-core',
@@ -119,7 +120,17 @@ function unique(values, label, errors) {
     }
 }
 
-function findCycles(decks, errors) {
+export function canonicalDeckReference(subject, reference) {
+    return reference.includes('/') ? reference : `${subject}/${reference}`;
+}
+
+function localDeckReference(subject, reference) {
+    if (!reference.includes('/')) return reference;
+    const [referenceSubject, deck] = reference.split('/');
+    return referenceSubject === subject ? deck : null;
+}
+
+function findCycles(subject, decks, errors) {
     const byId = new Map(decks.map(deck => [deck.id, deck]));
     const visiting = new Set();
     const visited = new Set();
@@ -134,7 +145,8 @@ function findCycles(decks, errors) {
         visiting.add(deck.id);
         stack.push(deck.id);
         for (const prerequisite of deck.prerequisites) {
-            const dependency = byId.get(prerequisite);
+            const localId = localDeckReference(subject, prerequisite);
+            const dependency = localId ? byId.get(localId) : null;
             if (dependency) visit(dependency);
         }
         stack.pop();
@@ -262,7 +274,9 @@ export function resolveSubjectCurriculum(inputPath, { requireDecks = false } = {
                 errors.push(`${sourceName}: estimated_chapters ${estimatedChapters} is outside the ${deckGranularity} range ${range[0]}-${range[1]}`);
             }
             for (const dependency of [...prerequisites, ...recommendedAfter]) {
-                if (!SLUG.test(dependency)) errors.push(`${sourceName}: invalid prerequisite ${JSON.stringify(dependency)}`);
+                if (!DECK_REF.test(dependency)) {
+                    errors.push(`${sourceName}: invalid prerequisite ${JSON.stringify(dependency)}; expected deck or subject/deck`);
+                }
             }
             unique(prerequisites, `${sourceName} prerequisites`, errors);
             unique(recommendedAfter, `${sourceName} recommended_after`, errors);
@@ -316,7 +330,9 @@ export function resolveSubjectCurriculum(inputPath, { requireDecks = false } = {
     const byId = new Map(decks.map(deck => [deck.id, deck]));
     for (const deck of decks) {
         for (const prerequisite of deck.prerequisites) {
-            const dependency = byId.get(prerequisite);
+            const localId = localDeckReference(subject, prerequisite);
+            if (!localId) continue;
+            const dependency = byId.get(localId);
             if (!dependency) {
                 errors.push(`${manifestPath}: ${deck.id} references missing prerequisite deck ${prerequisite}`);
             } else if (dependency.order >= deck.order) {
@@ -329,7 +345,9 @@ export function resolveSubjectCurriculum(inputPath, { requireDecks = false } = {
             }
         }
         for (const recommendation of deck.recommendedAfter) {
-            const dependency = byId.get(recommendation);
+            const localId = localDeckReference(subject, recommendation);
+            if (!localId) continue;
+            const dependency = byId.get(localId);
             if (!dependency) {
                 errors.push(`${manifestPath}: ${deck.id} references missing recommended deck ${recommendation}`);
             } else if (dependency.order >= deck.order) {
@@ -342,26 +360,32 @@ export function resolveSubjectCurriculum(inputPath, { requireDecks = false } = {
             }
         }
     }
-    findCycles(decks, errors);
+    findCycles(subject, decks, errors);
     decks.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 
     const ancestors = new Map();
     for (const deck of decks) {
         const deckAncestors = new Set();
         for (const prerequisite of deck.prerequisites) {
-            deckAncestors.add(prerequisite);
-            for (const ancestor of ancestors.get(prerequisite) || []) deckAncestors.add(ancestor);
+            const localId = localDeckReference(subject, prerequisite);
+            if (!localId) continue;
+            deckAncestors.add(localId);
+            for (const ancestor of ancestors.get(localId) || []) deckAncestors.add(ancestor);
         }
         for (const prerequisite of deck.prerequisites) {
+            const localPrerequisite = localDeckReference(subject, prerequisite);
+            if (!localPrerequisite) continue;
             const redundantVia = deck.prerequisites.filter(other =>
-                other !== prerequisite && ancestors.get(other)?.has(prerequisite)
+                other !== prerequisite
+                && ancestors.get(localDeckReference(subject, other))?.has(localPrerequisite)
             );
             if (redundantVia.length) {
                 errors.push(`${manifestPath}: ${deck.id} prerequisite ${prerequisite} is transitively redundant via ${redundantVia.join(', ')}`);
             }
         }
         for (const recommendation of deck.recommendedAfter) {
-            if (deckAncestors.has(recommendation)) {
+            const localRecommendation = localDeckReference(subject, recommendation);
+            if (localRecommendation && deckAncestors.has(localRecommendation)) {
                 errors.push(`${manifestPath}: ${deck.id} recommended_after ${recommendation} is already guaranteed by hard prerequisites`);
             }
         }
@@ -416,8 +440,10 @@ export function resolveSubjectDeckClosure(graph, deckId) {
     const visit = id => {
         const deck = byId.get(id);
         for (const dependency of deck.prerequisites) {
-            visit(dependency);
-            closure.add(dependency);
+            const localId = localDeckReference(graph.subject, dependency);
+            if (!localId || !byId.has(localId)) continue;
+            visit(localId);
+            closure.add(localId);
         }
     };
     visit(deckId);
@@ -467,10 +493,10 @@ export function subjectPrerequisiteDecks(subjectPath, deckId) {
     if (graph.errors.length) throw new Error(`Invalid subject curriculum:\n- ${graph.errors.join('\n- ')}`);
     if (graph.decks.length === 0) return [];
     const resolution = resolveSubjectDeckClosure(graph, deckId);
-    return resolution.direct.map(id => `${graph.subject}/${id}`);
+    return resolution.direct.map(id => canonicalDeckReference(graph.subject, id));
 }
 
-function replaceDeckPrerequisites(content, prerequisites) {
+function replaceDeckArray(content, key, values, { insertAfter } = {}) {
     const section = /^\[prerequisites\][ \t]*$/m.exec(content);
     if (!section) throw new Error('deck.toml: missing [prerequisites] section');
     const start = section.index + section[0].length;
@@ -478,9 +504,18 @@ function replaceDeckPrerequisites(content, prerequisites) {
     const next = /^\[[^\]]+\]\s*$/m.exec(tail);
     const end = next ? start + next.index : content.length;
     const body = content.slice(start, end);
-    if (!/^\s*decks\s*=/m.test(body)) throw new Error('deck.toml: missing [prerequisites].decks');
-    const rendered = `decks = [${prerequisites.map(value => JSON.stringify(value)).join(', ')}]`;
-    const updatedBody = body.replace(/^[ \t]*decks[ \t]*=[ \t]*\[[\s\S]*?\][ \t]*$/m, rendered);
+    const rendered = `${key} = [${values.map(value => JSON.stringify(value)).join(', ')}]`;
+    const field = new RegExp(`^[ \\t]*${key}[ \\t]*=[ \\t]*\\[[\\s\\S]*?\\][ \\t]*$`, 'm');
+    let updatedBody;
+    if (field.test(body)) {
+        updatedBody = body.replace(field, rendered);
+    } else if (insertAfter) {
+        const anchor = new RegExp(`^([ \\t]*${insertAfter}[ \\t]*=[ \\t]*\\[[\\s\\S]*?\\][ \\t]*)$`, 'm');
+        if (!anchor.test(body)) throw new Error(`deck.toml: missing [prerequisites].${insertAfter}`);
+        updatedBody = body.replace(anchor, `$1\n${rendered}`);
+    } else {
+        throw new Error(`deck.toml: missing [prerequisites].${key}`);
+    }
     return `${content.slice(0, start)}${updatedBody}${content.slice(end)}`;
 }
 
@@ -512,6 +547,19 @@ function manifestPrerequisites(content) {
     return parseStringArray(tail.slice(0, next?.index ?? tail.length), 'decks', { required: true, sourceName: 'deck.toml [prerequisites]' });
 }
 
+function manifestRecommendedDecks(content) {
+    const section = /^\[prerequisites\][ \t]*$/m.exec(content);
+    if (!section) return [];
+    const start = section.index + section[0].length;
+    const tail = content.slice(start);
+    const next = /^\[[^\]]+\]\s*$/m.exec(tail);
+    return parseStringArray(
+        tail.slice(0, next?.index ?? tail.length),
+        'recommended_decks',
+        { required: false, sourceName: 'deck.toml [prerequisites]' }
+    );
+}
+
 export function syncDeckPrerequisitesFromSubject(
     inputPath,
     { requireEntry = false, allowMissing = false } = {}
@@ -533,14 +581,23 @@ export function syncDeckPrerequisitesFromSubject(
             deckPath,
             changed: false,
             prerequisites: manifestPrerequisites(content),
+            recommendedDecks: manifestRecommendedDecks(content),
             inferred: [],
+            inferredRecommended: [],
             curriculumOrder: null
         };
     }
-    const inferred = entry.prerequisites.map(id => `${subject}/${id}`);
+    const inferred = entry.prerequisites.map(id => canonicalDeckReference(subject, id));
+    const inferredRecommended = entry.recommendedAfter.map(id => canonicalDeckReference(subject, id));
     const prerequisites = [...new Set([...inferred, ...manifestPrerequisites(content)])];
+    const recommendedDecks = [...new Set([...inferredRecommended, ...manifestRecommendedDecks(content)])];
     const updated = replaceDeckCurriculumOrder(
-        replaceDeckPrerequisites(content, prerequisites),
+        replaceDeckArray(
+            replaceDeckArray(content, 'decks', prerequisites),
+            'recommended_decks',
+            recommendedDecks,
+            { insertAfter: 'decks' }
+        ),
         entry.order
     );
     if (updated !== content) writeFileSync(manifestPath, updated);
@@ -548,7 +605,9 @@ export function syncDeckPrerequisitesFromSubject(
         deckPath,
         changed: updated !== content,
         prerequisites,
+        recommendedDecks,
         inferred,
+        inferredRecommended,
         curriculumOrder: entry.order
     };
 }

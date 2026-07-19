@@ -14,6 +14,10 @@ import {
     runDeckAgent
 } from '../bin/lib/codex.js';
 import { buildContextManifest, buildSubjectContextManifest, formatContextManifest } from '../bin/lib/context.js';
+import {
+    globalCurriculumIndex,
+    resolveGlobalCurriculum
+} from '../bin/lib/global-curriculum.js';
 import { discardIsolatedRun, finishIsolatedRun, prepareIsolatedRun } from '../bin/lib/isolation.js';
 import { approvePilot, markPilotBuilt, readDeckStatus, requireFullBuildApproval } from '../bin/lib/pilot.js';
 import { requireKebabSlug } from '../bin/lib/paths.js';
@@ -479,7 +483,7 @@ status = "proposed"
         expect(syncDeckPrerequisitesFromSubject(foundation.deckPath, { requireEntry: true }).inferred)
             .toEqual([]);
         expect(await readFile(path.join(foundation.deckPath, 'deck.toml'), 'utf8'))
-            .toContain('[prerequisites]\ndecks = []\nassumed_tools = []');
+            .toContain('[prerequisites]\ndecks = []\nrecommended_decks = []\nassumed_tools = []');
         expect(await readFile(path.join(foundation.deckPath, 'deck.toml'), 'utf8'))
             .toContain('curriculum_order = 1');
         const { deckPath, inferredPrerequisiteDecks } = await createDeck({
@@ -496,6 +500,127 @@ status = "proposed"
             .toContain('curriculum_order = 2');
         expect(syncDeckPrerequisitesFromSubject(deckPath, { requireEntry: true }).inferred)
             .toEqual(['biology/biology-foundations']);
+    });
+
+    it('validates qualified cross-subject prerequisites and syncs them into deck manifests', async () => {
+        const notesRoot = await temporaryRoot();
+        const mathematics = await ensureSubject({ subject: 'mathematics', notesRoot });
+        await writeFile(path.join(mathematics.subjectPath, 'subject.toml'), `schema_version = 1
+subject = "mathematics"
+
+[[decks]]
+id = "algebra"
+order = 1
+prerequisites = []
+status = "active"
+`);
+        const physics = await ensureSubject({ subject: 'physics', notesRoot });
+        await writeFile(path.join(physics.subjectPath, 'subject.toml'), `schema_version = 1
+subject = "physics"
+
+[[decks]]
+id = "mechanics"
+order = 1
+prerequisites = ["mathematics/algebra"]
+status = "proposed"
+`);
+
+        expect(resolveSubjectCurriculum(physics.subjectPath, { requireDecks: true }).errors).toEqual([]);
+        const global = resolveGlobalCurriculum(notesRoot, { requireSubjects: true });
+        expect(global.errors).toEqual([]);
+        expect(global.crossSubjectHardEdges).toEqual([{
+            from: 'physics/mechanics',
+            to: 'mathematics/algebra',
+            kind: 'required'
+        }]);
+        expect(globalCurriculumIndex(global).decks.find(deck => deck.id === 'physics/mechanics'))
+            .toMatchObject({ prerequisites: ['mathematics/algebra'] });
+
+        const created = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false
+        });
+        expect(created.inferredPrerequisiteDecks).toEqual(['mathematics/algebra']);
+        expect(await readFile(path.join(created.deckPath, 'deck.toml'), 'utf8'))
+            .toContain('decks = ["mathematics/algebra"]');
+    });
+
+    it('detects missing references and cycles across subject boundaries', async () => {
+        const notesRoot = await temporaryRoot();
+        const mathematics = await ensureSubject({ subject: 'mathematics', notesRoot });
+        const physics = await ensureSubject({ subject: 'physics', notesRoot });
+        await writeFile(path.join(mathematics.subjectPath, 'subject.toml'), `schema_version = 1
+subject = "mathematics"
+
+[[decks]]
+id = "algebra"
+order = 1
+prerequisites = ["physics/mechanics"]
+status = "active"
+`);
+        await writeFile(path.join(physics.subjectPath, 'subject.toml'), `schema_version = 1
+subject = "physics"
+
+[[decks]]
+id = "mechanics"
+order = 1
+prerequisites = ["mathematics/algebra", "computer-science/programming"]
+status = "proposed"
+`);
+
+        const errors = resolveGlobalCurriculum(notesRoot, { requireSubjects: true }).errors.join('\n');
+        expect(errors).toContain('physics/mechanics references missing prerequisite deck computer-science/programming');
+        expect(errors).toContain('global curriculum cycle:');
+        expect(errors).toContain('mathematics/algebra');
+        expect(errors).toContain('physics/mechanics');
+    });
+
+    it('warns when an advanced curriculum skips the immediately preceding maturity layer', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({ subject: 'physics', notesRoot });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 3
+subject = "physics"
+destination = "whole-field"
+deck_granularity = "course"
+focus = []
+
+[[decks]]
+id = "introductory-physics"
+order = 1
+tier = "core"
+level = "undergraduate-core"
+prerequisites = []
+recommended_after = []
+estimated_chapters = 10
+status = "active"
+description = "Develop introductory physical reasoning."
+
+[[decks]]
+id = "graduate-field-theory"
+order = 2
+tier = "specialization"
+level = "graduate"
+prerequisites = ["introductory-physics"]
+recommended_after = []
+estimated_chapters = 10
+status = "proposed"
+description = "Develop a graduate field-theory route."
+
+[[coverage]]
+domain = "physics"
+disposition = "included"
+decks = ["introductory-physics", "graduate-field-theory"]
+rationale = "Test the maturity-transition audit."
+`);
+
+        const graph = resolveGlobalCurriculum(notesRoot, { requireSubjects: true });
+        expect(graph.errors).toEqual([]);
+        expect(graph.warnings.join('\n')).toContain(
+            'physics/graduate-field-theory is graduate but has no direct undergraduate-advanced prerequisite'
+        );
+        expect(globalCurriculumIndex(graph)).not.toHaveProperty('generated_at');
     });
 
     it('can leave a legacy unlisted deck unchanged during build-time sync', async () => {

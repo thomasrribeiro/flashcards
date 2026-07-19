@@ -1,6 +1,10 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { FLASHCARDS_ROOT, resolvePath } from './paths.js';
+import {
+    formatGlobalCurriculumCatalog,
+    resolveGlobalCurriculum
+} from './global-curriculum.js';
 import { formatPrerequisiteGraph, resolvePrerequisiteGraph } from './prerequisites.js';
 import { formatSubjectCurriculum, resolveSubjectCurriculum } from './subject-curriculum.js';
 
@@ -88,6 +92,13 @@ export function buildSubjectContextManifest({ subjectPath: inputPath } = {}) {
     const collectionRoot = path.dirname(subjectPath);
     const subject = path.basename(subjectPath);
     const guide = subjectGuidePath(subjectPath, subject);
+    const globalCurriculum = resolveGlobalCurriculum(collectionRoot);
+    const globalCatalogPath = path.join(subjectPath, '.flashcards', 'context', 'global-curriculum.md');
+    mkdirSync(path.dirname(globalCatalogPath), { recursive: true });
+    writeFileSync(
+        globalCatalogPath,
+        formatGlobalCurriculumCatalog(globalCurriculum, { excludeSubject: subject })
+    );
     const files = [];
     const add = (filePath, role, options) => files.push(inspectFile(filePath, role, options));
 
@@ -105,6 +116,7 @@ export function buildSubjectContextManifest({ subjectPath: inputPath } = {}) {
     add(path.join(subjectPath, 'ROADMAP.md'), 'learner-specific subject roadmap', { required: true });
     add(path.join(subjectPath, 'SUBJECT_BRIEF.md'), 'learner-specific subject brief', { required: true });
     add(path.join(subjectPath, 'subject.toml'), 'machine-readable subject curriculum', { required: true });
+    add(globalCatalogPath, 'generated cross-subject curriculum catalog', { required: true });
 
     const present = files.filter(file => file.exists);
     const subjectCurriculum = resolveSubjectCurriculum(subjectPath);
@@ -114,6 +126,7 @@ export function buildSubjectContextManifest({ subjectPath: inputPath } = {}) {
         collectionRoot,
         subject,
         guide,
+        globalCurriculum,
         subjectCurriculum,
         files,
         summary: {

@@ -5,8 +5,9 @@ deck_granularity = "{{DECK_GRANULARITY}}"
 focus = [{{FOCUS}}]
 
 # The subject agent replaces this empty scaffold with a topologically ordered
-# curriculum. Hard prerequisites and recommended sequencing name earlier deck
-# ids in this same subject. The default course granularity expects a coherent
+# curriculum. Local prerequisite references name earlier deck ids in this
+# subject; cross-subject references use "subject/deck" and must exist in the
+# collection-wide catalog. The default course granularity expects a coherent
 # deck estimated at 6-14 ordered chapters.
 #
 # [[decks]]

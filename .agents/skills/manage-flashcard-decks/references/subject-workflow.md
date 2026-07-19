@@ -93,6 +93,28 @@ small explicit bridge, or use recommended sequencing.
 Keep both edge types direct and minimal. Do not list an ancestor already
 guaranteed through another direct edge.
 
+## Reuse capabilities across subjects
+
+Read the generated cross-subject curriculum catalog before proposing a new
+subject. A local reference uses `deck-id`; an established external capability
+uses the canonical `subject/deck-id` form.
+
+Do not recreate algebra, statistics, programming, chemistry, or another broad
+capability inside every subject merely to make its roadmap look self-contained.
+Reference the established external deck when the complete capability is truly
+required. Use `recommended_after` when it is useful preparation but a
+cold-start learner could still succeed without it.
+
+A subject-specific bridge is appropriate only when the transfer itself needs
+instruction—for example, translating mathematical notation into a new domain's
+representations—or when the target needs a small subset that would make the
+entire external deck a false prerequisite. Explain that choice in `ROADMAP.md`.
+Never invent a qualified reference absent from the supplied catalog.
+
+The hierarchy remains subject → deck → chapter → card for ownership and
+navigation. Prerequisite edges form one collection-wide directed acyclic graph
+that may cross those ownership boundaries.
+
 ## Assign curriculum tiers
 
 Every deck has one tier:
@@ -122,6 +144,14 @@ the requested destination. They are independent. A graduate deck may be
 `core` for a graduate destination, while an undergraduate deck may be
 `recommended` because it is only one possible bridge. A hard prerequisite
 cannot have a later level than its dependent deck.
+
+For every graduate or research-specialization proposal, audit the maturity
+transition rather than relying on the label. Enumerate what the first chapter
+may assume—formalism, mathematical tools, experimental practice, representation
+grammar, and research conventions—and verify that the direct prerequisite
+closure establishes it. A route may skip the immediately preceding level only
+when that closure is genuinely sufficient and `ROADMAP.md` explains why. Do
+not hide a missing advanced foundation inside a literature-facing deck.
 
 ## Keep the three artifacts synchronized
 
@@ -164,7 +194,9 @@ rationale = "Why this placement fits the requested destination."
 ```
 
 All identifiers use lowercase kebab-case. Orders are unique positive
-topological values. References name earlier decks. Every included coverage row
+topological values within a subject. Local references name earlier decks;
+cross-subject references use `subject/deck` and are checked in the global DAG.
+Every included coverage row
 names at least one deck; deferred and out-of-scope rows name none. Every deck
 must appear in at least one included coverage row.
 

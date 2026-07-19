@@ -116,7 +116,10 @@ it also creates a subject-owned `DOMAIN_GUIDE.md`. `deck create` inherits its
 declared direct prerequisites from that graph, then researches the deck,
 completes its README and card blueprint, and authors only the first novice-first
 pilot chapter. Pass `--no-agent` to either command when only the deterministic
-scaffold is wanted.
+scaffold is wanted. Subject generation also receives a generated, inspectable
+catalog of the other subject curricula under the same notes root. It may reuse
+those capabilities with qualified references such as
+`mathematics/linear-algebra` instead of duplicating them inside the new subject.
 
 For isolated extensions, preservation is a checked postcondition before any
 generated files are copied back: existing ids, levels, statuses, and hard
@@ -190,16 +193,27 @@ Inspect or validate the AI-authored curriculum graph:
 flashcards subject prerequisites ~/notes/biology
 flashcards subject prerequisites ~/notes/biology --deck molecular-biology
 flashcards subject validate ~/notes/biology
+
+# Validate and inspect every subject as one cross-subject DAG
+flashcards curriculum validate ~/notes
+flashcards curriculum audit ~/notes
+
+# Emit a machine-readable index for applications and analysis
+flashcards curriculum build ~/notes \
+  --output ~/notes/.flashcards/curriculum.json
 ```
 
 Schema-v3 subject curricula distinguish destination and focus from each deck's
 learning level and priority tier. They separate hard `prerequisites` from
 `recommended_after` sequencing, estimate chapter scope, and map every material
-field domain to an included deck or deliberate deferral. Deck orders must be
-topological. Cycles, missing or redundant references, later-level hard edges,
+field domain to an included deck or deliberate deferral. Local references use
+`deck-id`; cross-subject references use `subject/deck-id`. Deck orders must be
+topological within a subject, and `curriculum validate` checks the entire
+collection as one DAG. Cycles, missing or redundant references, later-level hard edges,
 duplicate ids/orders, out-of-range deck estimates, and incomplete coverage are
-rejected. When a declared deck is created, only its hard direct edges are
-copied into `deck.toml`; recommended sequencing never grants assumed
+rejected. When a declared deck is created, its hard and recommended direct
+edges are copied into `deck.toml`; recommended sequencing is retained for UI
+guidance but never grants assumed
 knowledge. The home viewer lists positive curriculum orders first, then places
 unlisted legacy or community decks alphabetically below them. Existing
 schema-v1 and schema-v2 subjects remain readable.

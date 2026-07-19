@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command, Option } from 'commander';
+import path from 'node:path';
 import { addChapter, createDeck, ensureSubject } from './lib/scaffold.js';
 import { codexDoctor, formatInvocation, runDeckAgent, runSubjectAgent } from './lib/codex.js';
 import { buildContextManifest, buildSubjectContextManifest, formatContextManifest } from './lib/context.js';
@@ -11,6 +12,11 @@ import {
     resolvePrerequisiteGraph
 } from './lib/prerequisites.js';
 import { renderTikzFigures } from './lib/figures.js';
+import {
+    formatGlobalCurriculum,
+    resolveGlobalCurriculum,
+    writeGlobalCurriculumIndex
+} from './lib/global-curriculum.js';
 import { resolveNotesRoot, resolvePath } from './lib/paths.js';
 import { stabilizeDeck, validateDeck } from './lib/validation.js';
 import {
@@ -120,7 +126,7 @@ function executeAgent(mode, deckPath, options) {
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('3.6.0')
+    .version('3.7.0')
     .showSuggestionAfterError();
 
 program
@@ -135,6 +141,54 @@ program
         console.log(`Isolated-run model: ${status.configuredModel}`);
         console.log(`Authoring runtime: ${status.missingFiles.length ? `missing ${status.missingFiles.join(', ')}` : 'ready'}`);
         if (!status.installed || !status.authenticated || status.missingFiles.length) process.exitCode = 1;
+    });
+
+const curriculum = program.command('curriculum').description('Manage the collection-wide cross-subject prerequisite graph');
+
+curriculum
+    .command('validate [notes-root]')
+    .description('Validate every subject manifest as one global prerequisite DAG')
+    .action(notesRoot => {
+        try {
+            const graph = resolveGlobalCurriculum(resolveNotesRoot(notesRoot), { requireSubjects: true });
+            console.log(formatGlobalCurriculum(graph));
+            if (graph.errors.length) process.exitCode = 1;
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+curriculum
+    .command('audit [notes-root]')
+    .description('Summarize cross-subject routes and validation findings')
+    .action(notesRoot => {
+        try {
+            const graph = resolveGlobalCurriculum(resolveNotesRoot(notesRoot), { requireSubjects: true });
+            console.log(formatGlobalCurriculum(graph, { audit: true }));
+            if (graph.errors.length) process.exitCode = 1;
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+curriculum
+    .command('build [notes-root]')
+    .description('Build a machine-readable global curriculum index')
+    .option('-o, --output <path>', 'Output JSON path; defaults to <notes-root>/.flashcards/curriculum.json')
+    .action((notesRoot, options) => {
+        try {
+            const root = resolveNotesRoot(notesRoot);
+            const graph = resolveGlobalCurriculum(root, { requireSubjects: true });
+            console.log(formatGlobalCurriculum(graph));
+            if (graph.errors.length) {
+                process.exitCode = 1;
+                return;
+            }
+            const output = options.output || path.join(root, '.flashcards', 'curriculum.json');
+            console.log(`Wrote: ${writeGlobalCurriculumIndex(graph, output)}`);
+        } catch (error) {
+            handleError(error);
+        }
     });
 
 const subject = program.command('subject').description('Manage subject-level curriculum context');
@@ -381,6 +435,7 @@ deck
             const result = syncDeckPrerequisitesFromSubject(deckPath, { requireEntry: true });
             console.log(`Curriculum order: ${result.curriculumOrder}`);
             console.log(`Direct prerequisites: ${result.inferred.length ? result.inferred.join(', ') : 'none'}`);
+            console.log(`Recommended after: ${result.inferredRecommended.length ? result.inferredRecommended.join(', ') : 'none'}`);
             console.log(result.changed ? 'Updated deck.toml.' : 'deck.toml is already current.');
         } catch (error) {
             handleError(error);

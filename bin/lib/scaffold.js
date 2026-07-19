@@ -11,7 +11,10 @@ import {
     titleFromSlug,
     tomlString
 } from './paths.js';
-import { resolveSubjectCurriculum } from './subject-curriculum.js';
+import {
+    canonicalDeckReference,
+    resolveSubjectCurriculum
+} from './subject-curriculum.js';
 
 const TEMPLATE_ROOT = path.join(FLASHCARDS_ROOT, 'templates', 'scaffold');
 
@@ -50,6 +53,7 @@ function commonValues({
     level = '',
     description = '',
     prerequisiteDecks = [],
+    recommendedDecks = [],
     assumedTools = [],
     curriculumOrder = 0,
     destination = 'whole-field',
@@ -64,6 +68,7 @@ function commonValues({
         LEVEL: level,
         DESCRIPTION: description,
         PREREQUISITE_DECKS: prerequisiteDecks.map(tomlString).join(', '),
+        RECOMMENDED_DECKS: recommendedDecks.map(tomlString).join(', '),
         ASSUMED_TOOLS: assumedTools.map(tomlString).join(', '),
         CURRICULUM_ORDER: curriculumOrder,
         DESTINATION: destination,
@@ -135,7 +140,10 @@ export async function createDeck({
         throw new Error(`Deck ${subject}/${deck} is not declared in ${curriculum.manifestPath}; update the subject curriculum before creating it.`);
     }
     const inferredPrerequisiteDecks = curriculumDeck
-        ? curriculumDeck.prerequisites.map(id => `${subject}/${id}`)
+        ? curriculumDeck.prerequisites.map(id => canonicalDeckReference(subject, id))
+        : [];
+    const inferredRecommendedDecks = curriculumDeck
+        ? curriculumDeck.recommendedAfter.map(id => canonicalDeckReference(subject, id))
         : [];
     const resolvedPrerequisiteDecks = [...new Set([...inferredPrerequisiteDecks, ...prerequisiteDecks])];
     const resolvedLevel = level || curriculumDeck?.level || 'introductory-college';
@@ -147,6 +155,7 @@ export async function createDeck({
         level: resolvedLevel,
         description: summary,
         prerequisiteDecks: resolvedPrerequisiteDecks,
+        recommendedDecks: inferredRecommendedDecks,
         assumedTools,
         curriculumOrder: curriculumDeck?.order || 0
     });
@@ -191,6 +200,7 @@ export async function createDeck({
         gitInitialized,
         prerequisiteDecks: resolvedPrerequisiteDecks,
         inferredPrerequisiteDecks,
+        inferredRecommendedDecks,
         level: resolvedLevel
     };
 }
