@@ -24,7 +24,8 @@ import {
     formatSubjectCurriculum,
     resolveSubjectCurriculum,
     SUBJECT_DESTINATIONS,
-    syncDeckPrerequisitesFromSubject
+    syncDeckPrerequisitesFromSubject,
+    validateSubjectRoadmap
 } from './lib/subject-curriculum.js';
 
 const program = new Command();
@@ -126,7 +127,7 @@ function executeAgent(mode, deckPath, options) {
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('3.7.0')
+    .version('3.8.0')
     .showSuggestionAfterError();
 
 program
@@ -343,12 +344,17 @@ subject
 
 subject
     .command('validate <subject-path>')
-    .description('Validate subject.toml deck identities, order, references, and cycles')
+    .description('Validate subject.toml and its synchronized ROADMAP.md deck table')
     .action(subjectPath => {
         try {
             const graph = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
             console.log(formatSubjectCurriculum(graph));
-            if (graph.errors.length) process.exitCode = 1;
+            const roadmapErrors = validateSubjectRoadmap(subjectPath, graph);
+            if (roadmapErrors.length) {
+                console.log('\nROADMAP.md errors:');
+                roadmapErrors.forEach(error => console.log(`- ${error}`));
+            }
+            if (graph.errors.length || roadmapErrors.length) process.exitCode = 1;
         } catch (error) {
             handleError(error);
         }

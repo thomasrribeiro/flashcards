@@ -120,6 +120,10 @@ scaffold is wanted. Subject generation also receives a generated, inspectable
 catalog of the other subject curricula under the same notes root. It may reuse
 those capabilities with qualified references such as
 `mathematics/linear-algebra` instead of duplicating them inside the new subject.
+Before launching the agent, the CLI validates the established external-subject
+graph and fails fast if it is already invalid; errors in the target subject
+remain repairable. Before applying an isolated result, it also verifies that
+the nine-column `ROADMAP.md` deck table is synchronized with `subject.toml`.
 
 For isolated extensions, preservation is a checked postcondition before any
 generated files are copied back: existing ids, levels, statuses, and hard
@@ -211,7 +215,9 @@ field domain to an included deck or deliberate deferral. Local references use
 topological within a subject, and `curriculum validate` checks the entire
 collection as one DAG. Cycles, missing or redundant references, later-level hard edges,
 duplicate ids/orders, out-of-range deck estimates, and incomplete coverage are
-rejected. When a declared deck is created, its hard and recommended direct
+rejected. `subject validate` additionally rejects missing or drifted roadmap
+deck rows, including omitted chapter estimates or mismatched prerequisites.
+When a declared deck is created, its hard and recommended direct
 edges are copied into `deck.toml`; recommended sequencing is retained for UI
 guidance but never grants assumed
 knowledge. The home viewer lists positive curriculum orders first, then places

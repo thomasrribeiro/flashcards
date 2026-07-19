@@ -204,6 +204,14 @@ Before handoff, validate schema, synchronization, minimal edges, deck
 coherence, chapter estimates, and coverage. A valid DAG can still be a poor
 curriculum; perform the semantic stress tests above after deterministic checks.
 
+The `ROADMAP.md` deck table is an executable-facing projection of
+`subject.toml`, not an independent summary. Keep exactly these nine cells on
+every deck row: order, deck, level, tier, hard prerequisites, recommended
+sequencing, estimated chapters, durable capability, and status. Spell out
+canonical deck ids in prerequisite cells instead of using numeric order aliases;
+orders can change, while ids are stable. `flashcards subject validate` checks
+the table against the manifest and rejects missing cells or metadata drift.
+
 When extending an existing subject, preserve every valid existing deck id,
 level, status, and edge; approved or active entries are especially immutable.
 Tiers may change because they express priority for the new destination. Add

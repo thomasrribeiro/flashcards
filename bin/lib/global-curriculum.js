@@ -55,13 +55,17 @@ function prerequisiteClosure(decks, start, seen = new Set()) {
     return seen;
 }
 
-export function resolveGlobalCurriculum(inputPath, { requireSubjects = false } = {}) {
+export function resolveGlobalCurriculum(
+    inputPath,
+    { requireSubjects = false, excludeSubjects = [] } = {}
+) {
     const notesRoot = resolvePath(inputPath);
     const errors = [];
     const warnings = [];
-    const subjects = subjectDirectories(notesRoot).map(subjectPath =>
-        resolveSubjectCurriculum(subjectPath, { requireDecks: false })
-    );
+    const excluded = new Set(excludeSubjects);
+    const subjects = subjectDirectories(notesRoot)
+        .filter(subjectPath => !excluded.has(path.basename(subjectPath)))
+        .map(subjectPath => resolveSubjectCurriculum(subjectPath, { requireDecks: false }));
     if (requireSubjects && subjects.length === 0) {
         errors.push(`No subject.toml manifests found under ${notesRoot}`);
     }
@@ -99,6 +103,7 @@ export function resolveGlobalCurriculum(inputPath, { requireSubjects = false } =
         for (const dependency of deck.prerequisites) {
             const prerequisite = decks.get(dependency);
             if (!prerequisite) {
+                if (excluded.has(dependency.split('/')[0])) continue;
                 errors.push(`${deck.id} references missing prerequisite deck ${dependency}`);
                 continue;
             }
@@ -113,6 +118,7 @@ export function resolveGlobalCurriculum(inputPath, { requireSubjects = false } =
         for (const recommendation of deck.recommendedAfter) {
             const prerequisite = decks.get(recommendation);
             if (!prerequisite) {
+                if (excluded.has(recommendation.split('/')[0])) continue;
                 errors.push(`${deck.id} references missing recommended deck ${recommendation}`);
                 continue;
             }

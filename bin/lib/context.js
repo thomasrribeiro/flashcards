@@ -92,7 +92,9 @@ export function buildSubjectContextManifest({ subjectPath: inputPath } = {}) {
     const collectionRoot = path.dirname(subjectPath);
     const subject = path.basename(subjectPath);
     const guide = subjectGuidePath(subjectPath, subject);
-    const globalCurriculum = resolveGlobalCurriculum(collectionRoot);
+    const globalCurriculum = resolveGlobalCurriculum(collectionRoot, {
+        excludeSubjects: [subject]
+    });
     const globalCatalogPath = path.join(subjectPath, '.flashcards', 'context', 'global-curriculum.md');
     mkdirSync(path.dirname(globalCatalogPath), { recursive: true });
     writeFileSync(

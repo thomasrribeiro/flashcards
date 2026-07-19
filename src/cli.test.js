@@ -33,7 +33,8 @@ import {
     resolveSubjectCurriculum,
     resolveSubjectDeckClosure,
     syncDeckPrerequisitesFromSubject,
-    validateSubjectExtension
+    validateSubjectExtension,
+    validateSubjectRoadmap
 } from '../bin/lib/subject-curriculum.js';
 
 const temporaryRoots = [];
@@ -430,6 +431,64 @@ rationale = "Test fixture."
         expect(graph.errors.join('\n')).toContain('cannot require later-level deck advanced-genomics');
     });
 
+    it('validates the ROADMAP deck table against schema-v3 subject metadata', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({ subject: 'physics', notesRoot });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 3
+subject = "physics"
+destination = "whole-field"
+deck_granularity = "course"
+focus = []
+
+[[decks]]
+id = "physics-foundations"
+order = 1
+tier = "core"
+level = "foundational"
+prerequisites = []
+recommended_after = []
+estimated_chapters = 8
+status = "active"
+description = "Establish physical reasoning."
+
+[[decks]]
+id = "advanced-physics"
+order = 2
+tier = "specialization"
+level = "undergraduate-advanced"
+prerequisites = ["physics-foundations"]
+recommended_after = ["mathematics/linear-algebra"]
+estimated_chapters = 10
+status = "proposed"
+description = "Apply advanced physical models."
+
+[[coverage]]
+domain = "physics"
+disposition = "included"
+decks = ["physics-foundations", "advanced-physics"]
+rationale = "Test fixture."
+`);
+        const roadmapPath = path.join(subjectPath, 'ROADMAP.md');
+        await writeFile(roadmapPath, `# Physics learning roadmap
+
+## Deck sequence
+
+| Order | Deck | Level | Tier | Hard prerequisites | Recommended after | Est. chapters | Durable capabilities | Status |
+|---:|---|---|---|---|---|---:|---|---|
+| 1 | physics-foundations | foundational | core | None | None | 8 | Establish physical reasoning. | active |
+| 2 | advanced-physics | undergraduate-advanced | specialization | 1 | mathematics/linear-algebra | 10 | Apply advanced physical models. | proposed |
+`);
+        const graph = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+        expect(validateSubjectRoadmap(subjectPath, graph)).toEqual([]);
+
+        await writeFile(roadmapPath, (await readFile(roadmapPath, 'utf8')).replace(
+            '| mathematics/linear-algebra | 10 | Apply advanced physical models. |',
+            '| mathematics/linear-algebra | Apply advanced physical models. |'
+        ));
+        expect(validateSubjectRoadmap(subjectPath, graph).join('\n'))
+            .toContain('deck row must have 9 cells');
+    });
+
     it('rejects missing, later, duplicate, and cyclic subject deck edges', async () => {
         const notesRoot = await temporaryRoot();
         const { subjectPath } = await ensureSubject({ subject: 'biology', notesRoot });
@@ -575,6 +634,63 @@ status = "proposed"
         expect(errors).toContain('global curriculum cycle:');
         expect(errors).toContain('mathematics/algebra');
         expect(errors).toContain('physics/mechanics');
+    });
+
+    it('fails before launching a subject agent when an external curriculum is invalid', async () => {
+        const notesRoot = await temporaryRoot();
+        const mathematics = await ensureSubject({ subject: 'mathematics', notesRoot });
+        await writeFile(path.join(mathematics.subjectPath, 'subject.toml'), `schema_version = 1
+subject = "mathematics"
+
+[[decks]]
+id = "calculus"
+order = 1
+prerequisites = ["missing-foundations"]
+status = "active"
+`);
+        const physics = await ensureSubject({ subject: 'physics', notesRoot });
+
+        expect(() => buildSubjectAgentInvocation({
+            subjectPath: physics.subjectPath,
+            operation: 'create',
+            destination: 'whole-field',
+            deckGranularity: 'course',
+            focus: [],
+            isolated: true
+        })).toThrow(/established external curriculum is invalid/);
+    });
+
+    it('allows a subject agent to repair its target while validating external subjects', async () => {
+        const notesRoot = await temporaryRoot();
+        const mathematics = await ensureSubject({ subject: 'mathematics', notesRoot });
+        await writeFile(path.join(mathematics.subjectPath, 'subject.toml'), `schema_version = 1
+subject = "mathematics"
+
+[[decks]]
+id = "calculus"
+order = 1
+prerequisites = []
+status = "active"
+`);
+        const physics = await ensureSubject({ subject: 'physics', notesRoot });
+        await writeFile(path.join(physics.subjectPath, 'subject.toml'), `schema_version = 1
+subject = "physics"
+
+[[decks]]
+id = "mechanics"
+order = 1
+prerequisites = ["missing-local-deck"]
+status = "proposed"
+`);
+
+        expect(() => buildSubjectAgentInvocation({
+            subjectPath: physics.subjectPath,
+            operation: 'create',
+            destination: 'whole-field',
+            deckGranularity: 'course',
+            focus: [],
+            isolated: true
+        })).not.toThrow();
     });
 
     it('warns when an advanced curriculum skips the immediately preceding maturity layer', async () => {

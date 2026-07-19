@@ -124,6 +124,118 @@ export function canonicalDeckReference(subject, reference) {
     return reference.includes('/') ? reference : `${subject}/${reference}`;
 }
 
+function markdownSection(content, heading) {
+    const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const startMatch = new RegExp(`^## ${escaped}\\s*$`, 'm').exec(content);
+    if (!startMatch) return null;
+    const start = startMatch.index + startMatch[0].length;
+    const tail = content.slice(start);
+    const next = /^## .+$/m.exec(tail);
+    return {
+        content: tail.slice(0, next?.index ?? tail.length),
+        lineOffset: content.slice(0, start).split('\n').length
+    };
+}
+
+function markdownCells(line) {
+    if (!line.trim().startsWith('|') || !line.trim().endsWith('|')) return [];
+    return line.trim().slice(1, -1).split('|').map(cell => cell.trim());
+}
+
+function unquoteMarkdown(value) {
+    return value.trim().replace(/^`|`$/g, '').trim();
+}
+
+function roadmapReferences(value, byOrder, errors, sourceName) {
+    if (/^(?:none|—|-)\.?$/i.test(value.trim())) return [];
+    return value
+        .split(/[;,]/)
+        .map(item => unquoteMarkdown(item))
+        .filter(Boolean)
+        .flatMap(item => {
+            if (/^\d+$/.test(item)) {
+                const deck = byOrder.get(Number(item));
+                if (!deck) {
+                    errors.push(`${sourceName}: unknown deck order ${item}`);
+                    return [];
+                }
+                return [deck.id];
+            }
+            if (!DECK_REF.test(item)) {
+                errors.push(`${sourceName}: invalid deck reference ${JSON.stringify(item)}`);
+                return [];
+            }
+            return [item];
+        });
+}
+
+function sameReferences(subject, left, right) {
+    const canonical = values => values
+        .map(reference => canonicalDeckReference(subject, reference))
+        .sort();
+    return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+}
+
+export function validateSubjectRoadmap(inputPath, graph = resolveSubjectCurriculum(inputPath, {
+    requireDecks: true
+})) {
+    const subjectPath = resolvePath(inputPath);
+    const roadmapPath = path.join(subjectPath, 'ROADMAP.md');
+    const errors = [];
+    if (graph.schemaVersion < 3 || graph.decks.length === 0 || graph.errors.length) return errors;
+    if (!existsSync(roadmapPath)) return [`Missing ROADMAP.md: ${subjectPath}`];
+
+    const content = readFileSync(roadmapPath, 'utf8');
+    const section = markdownSection(content, 'Deck sequence');
+    if (!section) return [`${roadmapPath}: missing ## Deck sequence section`];
+    const byOrder = new Map(graph.decks.map(deck => [deck.order, deck]));
+    const byId = new Map(graph.decks.map(deck => [deck.id, deck]));
+    const seen = new Set();
+    const lines = section.content.split('\n');
+
+    lines.forEach((line, index) => {
+        if (!/^\|\s*\d+\s*\|/.test(line)) return;
+        const sourceName = `${roadmapPath}:${section.lineOffset + index + 1}`;
+        const cells = markdownCells(line);
+        if (cells.length !== 9) {
+            errors.push(
+                `${sourceName}: deck row must have 9 cells (order, deck, level, tier, hard prerequisites, recommended after, estimated chapters, durable capabilities, status); found ${cells.length}`
+            );
+            return;
+        }
+        const [orderText, deckText, level, tier, hardText, recommendedText, chaptersText, , status] = cells;
+        const order = Number(orderText);
+        const id = unquoteMarkdown(deckText);
+        const deck = byId.get(id);
+        if (!deck) {
+            errors.push(`${sourceName}: roadmap references undeclared deck ${JSON.stringify(id)}`);
+            return;
+        }
+        if (seen.has(id)) errors.push(`${sourceName}: duplicate roadmap deck ${id}`);
+        seen.add(id);
+        if (order !== deck.order) errors.push(`${sourceName}: ${id} order ${orderText} does not match subject.toml order ${deck.order}`);
+        if (level !== deck.level) errors.push(`${sourceName}: ${id} level ${JSON.stringify(level)} does not match subject.toml ${JSON.stringify(deck.level)}`);
+        if (tier !== deck.tier) errors.push(`${sourceName}: ${id} tier ${JSON.stringify(tier)} does not match subject.toml ${JSON.stringify(deck.tier)}`);
+        if (Number(chaptersText) !== deck.estimatedChapters) {
+            errors.push(`${sourceName}: ${id} estimated chapters ${JSON.stringify(chaptersText)} does not match subject.toml ${deck.estimatedChapters}`);
+        }
+        if (status !== deck.status) errors.push(`${sourceName}: ${id} status ${JSON.stringify(status)} does not match subject.toml ${JSON.stringify(deck.status)}`);
+        const hard = roadmapReferences(hardText, byOrder, errors, sourceName);
+        const recommended = roadmapReferences(recommendedText, byOrder, errors, sourceName);
+        if (!sameReferences(graph.subject, hard, deck.prerequisites)) {
+            errors.push(`${sourceName}: ${id} hard prerequisites do not match subject.toml`);
+        }
+        if (!sameReferences(graph.subject, recommended, deck.recommendedAfter)) {
+            errors.push(`${sourceName}: ${id} recommended sequencing does not match subject.toml`);
+        }
+    });
+
+    for (const deck of graph.decks) {
+        if (!seen.has(deck.id)) errors.push(`${roadmapPath}: missing deck row for ${deck.id}`);
+    }
+    return [...new Set(errors)];
+}
+
 function localDeckReference(subject, reference) {
     if (!reference.includes('/')) return reference;
     const [referenceSubject, deck] = reference.split('/');

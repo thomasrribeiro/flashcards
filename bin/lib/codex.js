@@ -22,7 +22,8 @@ import {
 import {
     DECK_GRANULARITY_RANGES,
     resolveSubjectCurriculum,
-    validateSubjectExtension
+    validateSubjectExtension,
+    validateSubjectRoadmap
 } from './subject-curriculum.js';
 import { stabilizeDeck, validateDeck } from './validation.js';
 
@@ -343,6 +344,13 @@ export function buildSubjectAgentInvocation({
     }
     const subjectPath = resolvePath(inputPath);
     const contextManifest = buildSubjectContextManifest({ subjectPath });
+    if (contextManifest.globalCurriculum.errors.length) {
+        throw new Error(
+            `Cannot start subject agent while the established external curriculum is invalid:\n- ${
+                contextManifest.globalCurriculum.errors.join('\n- ')
+            }`
+        );
+    }
     const missingRequired = contextManifest.files.filter(file => file.required && !file.exists);
     if (missingRequired.length) {
         throw new Error(`Missing required subject context: ${missingRequired.map(file => file.path).join(', ')}`);
@@ -439,6 +447,10 @@ export function runSubjectAgent({
             if (curriculum.errors.length) {
                 throw new Error(`Codex finished, but subject curriculum validation failed:\n- ${curriculum.errors.join('\n- ')}`);
             }
+            const roadmapErrors = validateSubjectRoadmap(subjectPath, curriculum);
+            if (roadmapErrors.length) {
+                throw new Error(`Codex finished, but ROADMAP.md is not synchronized:\n- ${roadmapErrors.join('\n- ')}`);
+            }
             const globalCurriculum = resolveGlobalCurriculum(path.dirname(subjectPath), { requireSubjects: true });
             if (globalCurriculum.errors.length) {
                 throw new Error(`Codex finished, but global curriculum validation failed:\n- ${globalCurriculum.errors.join('\n- ')}`);
@@ -486,20 +498,32 @@ export function runSubjectAgent({
                 deckGranularity,
                 focus
             },
-            validateWorkspace: operation === 'extend'
-                ? workspacePath => {
-                    const extended = resolveSubjectCurriculum(workspacePath, { requireDecks: true });
+            validateWorkspace: workspacePath => {
+                const generated = resolveSubjectCurriculum(workspacePath, { requireDecks: true });
+                if (generated.errors.length) {
+                    throw new Error(`Subject curriculum validation failed:\n- ${generated.errors.join('\n- ')}`);
+                }
+                const roadmapErrors = validateSubjectRoadmap(workspacePath, generated);
+                if (roadmapErrors.length) {
+                    throw new Error(`ROADMAP.md is not synchronized:\n- ${roadmapErrors.join('\n- ')}`);
+                }
+                if (operation === 'extend') {
+                    const extended = generated;
                     const errors = validateSubjectExtension(baseline, extended);
                     if (errors.length) {
                         throw new Error(`Subject extension violated preservation rules:\n- ${errors.join('\n- ')}`);
                     }
                 }
-                : undefined
+            }
         });
         if (result.status === 0) {
             const curriculum = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
             if (curriculum.errors.length) {
                 throw new Error(`Codex finished, but subject curriculum validation failed:\n- ${curriculum.errors.join('\n- ')}`);
+            }
+            const roadmapErrors = validateSubjectRoadmap(subjectPath, curriculum);
+            if (roadmapErrors.length) {
+                throw new Error(`Codex finished, but ROADMAP.md is not synchronized:\n- ${roadmapErrors.join('\n- ')}`);
             }
             const globalCurriculum = resolveGlobalCurriculum(path.dirname(subjectPath), { requireSubjects: true });
             if (globalCurriculum.errors.length) {
