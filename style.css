@@ -3337,6 +3337,29 @@ body.standalone-phone .mobile-sidebar-close {
     max-height: min(780px, calc(100dvh - 28px));
 }
 
+.dependency-modal-content .modal-header {
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.dependency-heading {
+    flex: 1;
+    min-width: 0;
+}
+
+.dependency-heading .card-browser-path {
+    display: block;
+    max-width: 100%;
+}
+
+.dependency-heading h3 {
+    overflow-wrap: anywhere;
+}
+
+.dependency-modal-content .modal-close {
+    flex: 0 0 auto;
+}
+
 .dependency-body {
     overflow-y: auto;
 }
