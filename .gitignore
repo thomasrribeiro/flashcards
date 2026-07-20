@@ -1,6 +1,7 @@
 node_modules/
 dist/
-public/data/
+public/data/*
+!public/data/curriculum.json
 .DS_Store
 *.log
 .env

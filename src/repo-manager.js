@@ -18,10 +18,22 @@ export function resolveRepositorySubject(topics = [], existingSubject = null) {
 export function parseDeckManifest(content = '') {
     const match = /^[ \t]*curriculum_order[ \t]*=[ \t]*(\d+)[ \t]*$/m.exec(content);
     const curriculumOrder = match ? Number(match[1]) : null;
+    const string = key => new RegExp(`^[ \\t]*${key}[ \\t]*=[ \\t]*"([^"]+)"[ \\t]*$`, 'm')
+        .exec(content)?.[1] || null;
+    const array = key => {
+        const source = new RegExp(`^[ \\t]*${key}[ \\t]*=[ \\t]*\\[([\\s\\S]*?)\\][ \\t]*$`, 'm')
+            .exec(content)?.[1];
+        return source == null ? [] : [...source.matchAll(/"([^"]+)"/g)].map(item => item[1]);
+    };
+    const subject = string('subject');
+    const deck = string('deck');
     return {
         curriculumOrder: Number.isInteger(curriculumOrder) && curriculumOrder > 0
             ? curriculumOrder
-            : null
+            : null,
+        curriculumId: subject && deck ? `${subject}/${deck}` : null,
+        prerequisiteDecks: array('decks'),
+        recommendedDecks: array('recommended_decks')
     };
 }
 
@@ -33,6 +45,7 @@ async function repositoryIndex(owner, repo, branch, existing = null) {
         branch
     );
     let curriculumOrder = null;
+    let curriculumMetadata = null;
     if (deckManifest) {
         try {
             const manifest = await githubClient.getFileContent(
@@ -41,13 +54,14 @@ async function repositoryIndex(owner, repo, branch, existing = null) {
                 deckManifest.path,
                 deckManifest.sha
             );
-            curriculumOrder = parseDeckManifest(manifest).curriculumOrder;
+            curriculumMetadata = parseDeckManifest(manifest);
+            curriculumOrder = curriculumMetadata.curriculumOrder;
         } catch (error) {
             console.warn(`[RepoManager] Unable to load deck.toml for ${owner}/${repo}`, error);
             curriculumOrder = existing?.curriculumOrder ?? null;
         }
     }
-    return { markdownFiles, deckManifest, curriculumOrder };
+    return { markdownFiles, deckManifest, curriculumOrder, curriculumMetadata };
 }
 
 function metadataCacheKey(repoString) {
@@ -82,7 +96,7 @@ export async function loadRepositoryMetadata(repoString, { sync = false } = {}) 
     }
 
     const existing = await getRepoMetadata(`${owner}/${repo}`);
-    const { markdownFiles, deckManifest, curriculumOrder } = await repositoryIndex(
+    const { markdownFiles, deckManifest, curriculumOrder, curriculumMetadata } = await repositoryIndex(
         owner,
         repo,
         repoInfo.default_branch,
@@ -102,6 +116,9 @@ export async function loadRepositoryMetadata(repoString, { sync = false } = {}) 
         subject,
         repo: `${owner}/${repo}`,
         curriculumOrder,
+        curriculumId: curriculumMetadata?.curriculumId || existing?.curriculumId || null,
+        prerequisiteDecks: curriculumMetadata?.prerequisiteDecks || existing?.prerequisiteDecks || [],
+        recommendedDecks: curriculumMetadata?.recommendedDecks || existing?.recommendedDecks || [],
         deckManifest,
         cardCount: existing?.cardCount ?? null,
         fileCount: markdownFiles.length,
@@ -197,7 +214,7 @@ export async function loadRepository(repoString) {
     // Pass default_branch to avoid a redundant getRepository call inside getMarkdownFiles.
     console.log('[RepoManager] Fetching markdown files from flashcards/...');
     const existing = await getRepoMetadata(`${owner}/${repo}`);
-    const { markdownFiles, deckManifest, curriculumOrder } = await repositoryIndex(
+    const { markdownFiles, deckManifest, curriculumOrder, curriculumMetadata } = await repositoryIndex(
         owner,
         repo,
         repoInfo.default_branch,
@@ -308,6 +325,9 @@ export async function loadRepository(repoString) {
         topic: deckMetadata.topic || null,
         repo: `${owner}/${repo}`,
         curriculumOrder,
+        curriculumId: curriculumMetadata?.curriculumId || existing?.curriculumId || null,
+        prerequisiteDecks: curriculumMetadata?.prerequisiteDecks || existing?.prerequisiteDecks || [],
+        recommendedDecks: curriculumMetadata?.recommendedDecks || existing?.recommendedDecks || [],
         deckManifest,
         cardCount: allCards.length,
         fileCount: totalFiles,

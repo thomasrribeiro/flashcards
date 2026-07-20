@@ -42,6 +42,13 @@ import {
     buildChapterProgressSnapshot,
     chapterProgressTargets
 } from './chapter-progress.js';
+import {
+    chapterForFile,
+    curriculumDeckRows,
+    curriculumMaps,
+    dependencyPlan,
+    loadCurriculumIndex
+} from './curriculum.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -147,6 +154,11 @@ async function init() {
         if (grid) grid.innerHTML = '<div class="loading">Loading collection...</div>';
 
         const isAuthenticated = githubAuth.isAuthenticated();
+        const curriculumIndexPromise = loadCurriculumIndex()
+            .catch(error => {
+                console.warn('[Curriculum] Public index unavailable:', error);
+                return null;
+            });
         // Fetch the saved scope alongside repository metadata, but do not render
         // columns until both are ready. Otherwise the first paint shows no stars.
         const habitSettingsPromise = getSettings();
@@ -169,6 +181,7 @@ async function init() {
 
         habitSettings = await habitSettingsPromise;
         pausedPrimaryStudySession = await pausedSessionPromise;
+        curriculumIndex = await curriculumIndexPromise;
         if (pausedPrimaryStudySession
             && !studySessionMatchesActiveScope(pausedPrimaryStudySession, habitSettings?.activeDecks)) {
             // A session built for an older scope must never override the stars
@@ -479,7 +492,7 @@ async function loadRepositories() {
         // Show message if no decks
         if (displayDecks.length === 0) {
             controlsBar.classList.add('hidden');
-            document.getElementById('view-tabs')?.classList.add('hidden');
+            document.getElementById('view-tabs')?.classList.toggle('hidden', !curriculumIndex);
             if (isLoggedIn) {
                 grid.innerHTML = '<div class="loading">Search for a GitHub repository and click + to add it.</div>';
             } else {
@@ -489,7 +502,7 @@ async function loadRepositories() {
         }
 
         // Show controls when there are decks
-        controlsBar.classList.remove('hidden');
+        controlsBar.classList.toggle('hidden', currentMainView !== 'decks');
         document.getElementById('view-tabs')?.classList.remove('hidden');
 
         const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
@@ -1181,6 +1194,21 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 
 // Selection path for the columns view (persists across re-renders)
 let columnsSel = { subject: null, deck: null, chapter: null };
+let curriculumIndex = null;
+let activeDependencyTarget = null;
+
+function curriculumDeckForRepository(deckId, subject = null) {
+    if (!curriculumIndex) return null;
+    const repoName = String(deckId || '').split('/').pop();
+    return curriculumIndex.decks.find(deck =>
+        deck.deck === repoName && (!subject || deck.subject === subject)) || null;
+}
+
+function hasCurriculumDependencies(deck, chapter = null) {
+    if (!deck) return false;
+    if (chapter && (chapter.prerequisites?.length || chapter.resolved_dependencies?.length)) return true;
+    return Boolean(deck.prerequisites?.length || deck.recommended_after?.length);
+}
 
 /**
  * One columns row: optional inline star (left), name and compact metadata,
@@ -1437,10 +1465,19 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
             const deckName = deckId.split('/').pop();
             const deckFiles = [filesOf(decks)(deckId)];
             const starState = scopeStarState(scopes, deckFiles, completedActiveScopes);
+            const curriculumDeck = curriculumDeckForRepository(deckId, columnsSel.subject);
+            const dependencyAction = hasCurriculumDependencies(curriculumDeck)
+                ? [{
+                    html: '↳',
+                    title: 'View prerequisite path',
+                    onClick: () => openDependencyModal(curriculumDeck.id)
+                }]
+                : [];
             return colRow({
                 name: deckName,
                 star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Remove deck from daily focus' : 'Add deck to daily focus', onClick: () => toggleScopes(deckFiles) },
                 actions: [
+                    ...dependencyAction,
                     { html: GAVEL_IMG, title: 'Review this deck (due + new)', onClick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName, ['home', columnsSel.subject, deckName], [deckId]) },
                     { html: RESET_IMG, title: 'Reset progress in this deck', onClick: () => resetScope([{ deckId }], `Reset all progress in "${deckName}"?`) },
                     { html: '×', danger: true, title: 'Remove this deck', onClick: () => deleteScope([deckId], `Remove "${deckName}" from your collection?`) }
@@ -1459,6 +1496,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
         const files = subjects.get(columnsSel.subject).get(deckId);
         const fileList = [...files.keys()].sort((a, b) => a.localeCompare(b));
         const deckName = deckId.split('/').pop();
+        const curriculumDeck = curriculumDeckForRepository(deckId, columnsSel.subject);
         p3 = fileList.map(file => {
             const chName = fileBase(file);
             const cards = files.get(file);
@@ -1481,6 +1519,16 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
             const progressPending = cards.length === 0
                 && !savedProgress
                 && (chActive || reviewedFileKeys.has(scope) || hasUnmappedReviews);
+            const curriculumChapter = curriculumDeck
+                ? chapterForFile(curriculumIndex, curriculumDeck.id, file)
+                : null;
+            const dependencyAction = hasCurriculumDependencies(curriculumDeck, curriculumChapter)
+                ? [{
+                    html: '↳',
+                    title: 'View chapter prerequisites',
+                    onClick: () => openDependencyModal(curriculumDeck.id, curriculumChapter?.id || null)
+                }]
+                : [];
             return colRow({
                 name: chName,
                 meta: progressPending ? '(…)' : `(${completed}%)`,
@@ -1498,6 +1546,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
                     onClick: () => toggleChapterScope(deckId, file)
                 },
                 actions: [
+                    ...dependencyAction,
                     { html: BROWSE_IMG, title: 'Browse all cards in this chapter (read-only)', onClick: browse },
                     { html: GAVEL_IMG, title: 'Review this chapter (due + new)', onClick: review },
                     { html: RESET_IMG, title: 'Reset progress in this chapter', onClick: () => resetScope([{ deckId, file }], `Reset progress in "${chName}"?`) }
@@ -2068,11 +2117,17 @@ function setupEventListeners() {
     document.querySelector('#pwa-install-modal .modal-overlay')?.addEventListener('click', closePwaInstallGuide);
     document.getElementById('card-browser-close')?.addEventListener('click', closeChapterBrowser);
     document.querySelector('#card-browser-modal .modal-overlay')?.addEventListener('click', closeChapterBrowser);
+    document.getElementById('dependency-close')?.addEventListener('click', closeDependencyModal);
+    document.querySelector('#dependency-modal .modal-overlay')?.addEventListener('click', closeDependencyModal);
+    document.getElementById('dependency-add-path')?.addEventListener('click', addActiveDependencyPath);
+    document.getElementById('dependency-copy-command')?.addEventListener('click', copyMissingGenerationCommands);
+    document.getElementById('dependency-request-generation')?.addEventListener('click', requestMissingGeneration);
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
             if (!document.getElementById('study-settings-modal')?.classList.contains('hidden')) closeStudySettings();
             if (!document.getElementById('pwa-install-modal')?.classList.contains('hidden')) closePwaInstallGuide();
             if (!document.getElementById('card-browser-modal')?.classList.contains('hidden')) closeChapterBrowser();
+            if (!document.getElementById('dependency-modal')?.classList.contains('hidden')) closeDependencyModal();
         }
     });
     document.getElementById('session-back-home')?.addEventListener('click', () => showMainView('decks'));
@@ -2088,10 +2143,12 @@ function setupEventListeners() {
     document.getElementById('view-columns')?.addEventListener('click', () => setDeckView('columns'));
     reflectViewToggle();
 
-    // View tabs: Study / Progress
+    // Main views
     const tabDecks = document.getElementById('tab-decks');
+    const tabCurriculum = document.getElementById('tab-curriculum');
     const tabProgress = document.getElementById('tab-progress');
     if (tabDecks) tabDecks.addEventListener('click', () => showMainView('decks'));
+    if (tabCurriculum) tabCurriculum.addEventListener('click', () => showMainView('curriculum'));
     if (tabProgress) tabProgress.addEventListener('click', () => showMainView('progress'));
 
     // Back-to-decks button shown during a study session
@@ -2131,12 +2188,14 @@ function setDeckView(mode) {
 let currentMainView = 'decks';
 async function showMainView(view) {
     const dashboard = document.getElementById('dashboard');
+    const curriculumView = document.getElementById('curriculum-view');
     const grid = document.getElementById('topics-grid');
     const hero = document.getElementById('today-hero');
     const breadcrumb = document.getElementById('deck-breadcrumb');
     const studyArea = document.getElementById('study-area');
     const sessionComplete = document.getElementById('session-complete');
     const tabDecks = document.getElementById('tab-decks');
+    const tabCurriculum = document.getElementById('tab-curriculum');
     const tabProgress = document.getElementById('tab-progress');
 
     // Leaving the drill surface pauses an unfinished primary session. Decks
@@ -2148,6 +2207,7 @@ async function showMainView(view) {
 
     currentMainView = view;
     tabDecks?.classList.toggle('active', view === 'decks');
+    tabCurriculum?.classList.toggle('active', view === 'curriculum');
     tabProgress?.classList.toggle('active', view === 'progress');
 
     const controlsBar = document.getElementById('controls-bar');
@@ -2155,6 +2215,7 @@ async function showMainView(view) {
 
     if (view === 'progress') {
         grid?.classList.add('hidden');
+        curriculumView?.classList.add('hidden');
         hero?.classList.add('hidden');
         breadcrumb?.classList.add('hidden');
         studyArea?.classList.add('hidden');
@@ -2162,8 +2223,19 @@ async function showMainView(view) {
         controlsBar?.classList.add('hidden');   // Review + toggle + search belong to Decks
         dashboard?.classList.remove('hidden');
         await renderDashboard();
+    } else if (view === 'curriculum') {
+        grid?.classList.add('hidden');
+        dashboard?.classList.add('hidden');
+        hero?.classList.add('hidden');
+        breadcrumb?.classList.add('hidden');
+        studyArea?.classList.add('hidden');
+        sessionComplete?.classList.add('hidden');
+        controlsBar?.classList.add('hidden');
+        curriculumView?.classList.remove('hidden');
+        await renderCurriculumView();
     } else {
         dashboard?.classList.add('hidden');
+        curriculumView?.classList.add('hidden');
         studyArea?.classList.add('hidden');
         sessionComplete?.classList.add('hidden');
         controlsBar?.classList.remove('hidden');
@@ -2175,6 +2247,279 @@ async function showMainView(view) {
         // this, chapter completion percentages remain stale until a hard reload.
         await loadRepositories();
     }
+}
+
+function repositoryStringForCurriculumDeck(deck) {
+    try {
+        const url = new URL(deck?.repository?.url || '');
+        const [owner, repo] = url.pathname.replace(/^\/|\/$/g, '').split('/');
+        return owner && repo ? `${owner}/${repo}` : null;
+    } catch {
+        return null;
+    }
+}
+
+function installedCurriculumIds(decks) {
+    const ids = new Set();
+    for (const deck of decks || []) {
+        if (deck.curriculumId) ids.add(deck.curriculumId);
+        const subject = subjectSlug(deck.subject);
+        const name = String(deck.id || '').split('/').pop();
+        if (subject && name) ids.add(`${subject}/${name}`);
+    }
+    return ids;
+}
+
+function curriculumStatus(deck, installed) {
+    if (installed.has(deck.id)) return '✓ in collection';
+    if (deck.repository?.configured) return 'available';
+    if (deck.materialized) return 'local pilot';
+    return 'planned';
+}
+
+async function renderCurriculumView({ query = '', subject = '' } = {}) {
+    const root = document.getElementById('curriculum-view');
+    if (!root) return;
+    if (!curriculumIndex) {
+        root.innerHTML = '<div class="loading">Curriculum data is unavailable.</div>';
+        return;
+    }
+    const installed = installedCurriculumIds(await getAllDecks());
+    const subjects = [...new Set(curriculumIndex.decks.map(deck => deck.subject))].sort();
+    const rows = curriculumDeckRows(curriculumIndex, { subject: subject || null, query });
+    const grouped = new Map();
+    for (const deck of rows) {
+        if (!grouped.has(deck.subject)) grouped.set(deck.subject, []);
+        grouped.get(deck.subject).push(deck);
+    }
+
+    root.innerHTML = '';
+    const toolbar = document.createElement('div');
+    toolbar.className = 'curriculum-toolbar';
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.placeholder = 'Search the curriculum...';
+    search.value = query;
+    search.setAttribute('aria-label', 'Search curriculum');
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', 'Filter curriculum by subject');
+    select.innerHTML = `<option value="">All subjects</option>${subjects
+        .map(item => `<option value="${escapeHtml(item)}"${item === subject ? ' selected' : ''}>${escapeHtml(item)}</option>`)
+        .join('')}`;
+    toolbar.append(search, select);
+    root.appendChild(toolbar);
+
+    const summary = document.createElement('div');
+    summary.className = 'curriculum-summary';
+    summary.textContent = `${rows.length} of ${curriculumIndex.decks.length} decks · solid requirements are listed before each dependent deck · recommended preparation is marked separately`;
+    root.appendChild(summary);
+
+    const map = document.createElement('div');
+    map.className = 'curriculum-map';
+    for (const [subjectId, decks] of grouped) {
+        const section = document.createElement('section');
+        section.className = 'curriculum-subject';
+        const heading = document.createElement('h3');
+        heading.className = 'curriculum-subject-title';
+        heading.textContent = subjectId;
+        section.appendChild(heading);
+        for (const deck of decks) {
+            const node = document.createElement('button');
+            node.type = 'button';
+            node.className = 'curriculum-node';
+            const required = deck.prerequisites?.length
+                ? deck.prerequisites.join(' · ')
+                : 'entry point';
+            const recommended = deck.recommended_after?.length
+                ? `recommended: ${deck.recommended_after.join(' · ')}`
+                : '';
+            node.innerHTML = `
+                <span>
+                    <span class="curriculum-node-status">${escapeHtml(curriculumStatus(deck, installed))}</span>
+                    <span class="curriculum-node-name">${escapeHtml(`${deck.order}. ${deck.deck}`)}</span>
+                    <span class="curriculum-node-meta">${escapeHtml(`${deck.level || 'unspecified'} · ${deck.tier || 'unclassified'}`)}</span>
+                </span>
+                <span class="curriculum-node-description">${escapeHtml(deck.description || '')}</span>
+                <span class="curriculum-node-edges">requires: ${escapeHtml(required)}${recommended ? `<br>${escapeHtml(recommended)}` : ''}</span>
+            `;
+            node.onclick = () => openDependencyModal(deck.id);
+            section.appendChild(node);
+        }
+        map.appendChild(section);
+    }
+    if (rows.length === 0) map.innerHTML = '<div class="loading">No curriculum matches.</div>';
+    root.appendChild(map);
+
+    let timer = null;
+    search.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => renderCurriculumView({
+            query: search.value,
+            subject: select.value
+        }), 120);
+    });
+    select.addEventListener('change', () => renderCurriculumView({
+        query: search.value,
+        subject: select.value
+    }));
+}
+
+function dependencyItemMarkup(name, meta, command = null) {
+    return `<div class="dependency-item">
+        <div class="dependency-item-name">${escapeHtml(name)}</div>
+        <div class="dependency-item-meta">${escapeHtml(meta)}</div>
+        ${command ? `<code class="dependency-command">${escapeHtml(command)}</code>` : ''}
+    </div>`;
+}
+
+async function renderDependencyModal() {
+    if (!activeDependencyTarget || !curriculumIndex) return;
+    const { deckId, chapterId } = activeDependencyTarget;
+    const plan = dependencyPlan(curriculumIndex, deckId, chapterId);
+    const installed = installedCurriculumIds(await getAllDecks());
+    const targetChapter = chapterId
+        ? curriculumMaps(curriculumIndex).chapters.get(`${deckId}#${chapterId}`)
+        : null;
+    const title = document.getElementById('dependency-title');
+    const path = document.getElementById('dependency-path');
+    const body = document.getElementById('dependency-body');
+    const add = document.getElementById('dependency-add-path');
+    const copy = document.getElementById('dependency-copy-command');
+    const request = document.getElementById('dependency-request-generation');
+    if (!title || !path || !body || !add || !copy || !request || !plan.target) return;
+
+    title.textContent = targetChapter?.title || plan.target.deck;
+    path.textContent = `~ / curriculum / ${deckId}${targetChapter ? ` / ${targetChapter.id}` : ''}`;
+    const exact = plan.exactChapters.map(chapter => dependencyItemMarkup(
+        `${chapter.deckId} / ${chapter.id}`,
+        `${installed.has(chapter.deckId) ? '✓ in collection' : 'required provider chapter'} · ${chapter.card_count ?? '?'} cards`
+    )).join('');
+    const whole = plan.wholeDecks.map(deck => dependencyItemMarkup(
+        deck.id,
+        curriculumStatus(deck, installed),
+        !deck.repository?.configured ? deck.generation_command : null
+    )).join('');
+    const recommended = plan.recommendedDecks.map(deck => dependencyItemMarkup(
+        deck.id,
+        `${curriculumStatus(deck, installed)} · optional preparation`
+    )).join('');
+
+    body.innerHTML = `
+        <section class="dependency-section">
+            <h4>Required path</h4>
+            <div class="dependency-chain">${exact || whole
+                ? `${exact}${whole}`
+                : '<div class="dependency-item dependency-empty">No declared prerequisite.</div>'}</div>
+        </section>
+        ${recommended ? `<section class="dependency-section"><h4>Recommended preparation</h4><div class="dependency-chain">${recommended}</div></section>` : ''}
+    `;
+    add.disabled = plan.requiredDecks.length === 0;
+    add.textContent = plan.missingDecks.length
+        ? 'Add available path'
+        : 'Add prerequisite path';
+    copy.classList.toggle('hidden', plan.missingDecks.length === 0);
+    request.classList.toggle('hidden', plan.missingDecks.length === 0 || !githubAuth.isAuthenticated());
+}
+
+async function openDependencyModal(deckId, chapterId = null) {
+    activeDependencyTarget = { deckId, chapterId };
+    await renderDependencyModal();
+    document.getElementById('dependency-modal')?.classList.remove('hidden');
+    document.getElementById('dependency-close')?.focus();
+}
+
+function closeDependencyModal() {
+    document.getElementById('dependency-modal')?.classList.add('hidden');
+    activeDependencyTarget = null;
+}
+
+async function copyMissingGenerationCommands() {
+    if (!activeDependencyTarget || !curriculumIndex) return;
+    const plan = dependencyPlan(
+        curriculumIndex,
+        activeDependencyTarget.deckId,
+        activeDependencyTarget.chapterId
+    );
+    const commands = plan.missingDecks.map(deck => deck.generation_command).join('\n');
+    if (!commands) return;
+    await navigator.clipboard.writeText(commands);
+    const button = document.getElementById('dependency-copy-command');
+    if (button) {
+        button.textContent = 'Copied';
+        setTimeout(() => { button.textContent = 'Copy generation command'; }, 1200);
+    }
+}
+
+async function requestMissingGeneration() {
+    if (!activeDependencyTarget || !curriculumIndex || !githubAuth.isAuthenticated()) return;
+    const plan = dependencyPlan(
+        curriculumIndex,
+        activeDependencyTarget.deckId,
+        activeDependencyTarget.chapterId
+    );
+    const button = document.getElementById('dependency-request-generation');
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Requesting...';
+    }
+    try {
+        for (const deck of plan.missingDecks) {
+            await githubAuth.apiRequest('/api/generation-requests', {
+                method: 'POST',
+                body: JSON.stringify({ deckId: deck.id })
+            });
+        }
+        if (button) button.textContent = 'Requested';
+    } catch (error) {
+        console.error('[Curriculum] Generation request failed:', error);
+        alert(`Could not queue generation: ${error.message}`);
+        if (button) button.textContent = 'Request generation';
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
+async function addActiveDependencyPath() {
+    if (!activeDependencyTarget || !curriculumIndex) return;
+    const plan = dependencyPlan(
+        curriculumIndex,
+        activeDependencyTarget.deckId,
+        activeDependencyTarget.chapterId
+    );
+    const failures = [];
+    for (const deck of plan.requiredDecks) {
+        if (!deck.repository?.configured) continue;
+        const repo = repositoryStringForCurriculumDeck(deck);
+        if (!repo) continue;
+        try {
+            await loadRepositoryMetadata(repo, { sync: true });
+        } catch (error) {
+            failures.push(`${deck.id}: ${error.message}`);
+        }
+    }
+
+    const [cards, decks] = await Promise.all([getAllCards(), getAllDecks()]);
+    const byCurriculum = new Map();
+    for (const deck of decks) {
+        const curriculumId = deck.curriculumId
+            || `${subjectSlug(deck.subject)}/${String(deck.id || '').split('/').pop()}`;
+        byCurriculum.set(curriculumId, deck);
+    }
+    const scopes = resolveActiveScopes(cards, decks);
+    for (const chapter of plan.exactChapters) {
+        const installedDeck = byCurriculum.get(chapter.deckId);
+        if (installedDeck) scopes.add(chapterScope(installedDeck.id, chapter.file));
+    }
+    for (const required of plan.wholeDecks) {
+        const installedDeck = byCurriculum.get(required.id);
+        if (!installedDeck) continue;
+        for (const file of installedDeck.files || []) {
+            scopes.add(chapterScope(installedDeck.id, typeof file === 'string' ? file : file.path));
+        }
+    }
+    await applyActiveScopes(scopes);
+    await renderDependencyModal();
+    if (failures.length) alert(`Some prerequisite decks could not be added:\n${failures.join('\n')}`);
 }
 
 /**

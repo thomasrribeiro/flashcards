@@ -205,6 +205,10 @@ flashcards curriculum audit ~/notes
 # Emit a machine-readable index for applications and analysis
 flashcards curriculum build ~/notes \
   --output ~/notes/.flashcards/curriculum.json
+
+# Materialize a planned deck by canonical id, synchronize its roadmap
+# metadata, and run the usual isolated pilot build.
+flashcards curriculum materialize physics/physical-reasoning-and-measurement
 ```
 
 Schema-v3 subject curricula distinguish destination and focus from each deck's
@@ -223,6 +227,27 @@ guidance but never grants assumed
 knowledge. The home viewer lists positive curriculum orders first, then places
 unlisted legacy or community decks alphabetically below them. Existing
 schema-v1 and schema-v2 subjects remain readable.
+
+Chapter prerequisites can target an exact provider in another deck with
+`concept:subject/deck#concept-id`. The generated schema-v2 curriculum index
+preserves those exact chapter edges, repository availability, card counts, and
+the materialization command used by the PWA's Curriculum view. From that view,
+users can inspect the full cross-subject map, add the smallest available
+prerequisite path to their study scope, copy commands for missing decks, or
+submit a generation request while signed in.
+
+Generation requests are deliberately executed outside the browser. A local,
+fresh Codex run can consume the oldest request with:
+
+```bash
+export FLASHCARDS_WORKER_URL=https://flashcards-worker-prod.example.workers.dev
+flashcards requests list
+flashcards requests run
+```
+
+The CLI uses `FLASHCARDS_GITHUB_TOKEN` or the token returned by `gh auth token`
+to authenticate the queue. A successful build is marked `needs-review`; it is
+never published automatically.
 
 ## Maintain a deck
 

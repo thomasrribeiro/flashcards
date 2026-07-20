@@ -1,0 +1,3681 @@
+{
+  "schema_version": 2,
+  "subjects": [
+    {
+      "id": "biology",
+      "destination": "whole-field",
+      "focus": [],
+      "deck_granularity": "course"
+    },
+    {
+      "id": "mathematics",
+      "destination": "whole-field",
+      "focus": [],
+      "deck_granularity": "course"
+    },
+    {
+      "id": "physics",
+      "destination": "whole-field",
+      "focus": [],
+      "deck_granularity": "course"
+    }
+  ],
+  "decks": [
+    {
+      "id": "biology/biology-and-scientific-inquiry",
+      "subject": "biology",
+      "deck": "biology-and-scientific-inquiry",
+      "order": 1,
+      "tier": "core",
+      "level": "foundational",
+      "status": "built",
+      "description": "Use biology's unifying ideas and elementary evidence reasoning to explain living systems across scales.",
+      "prerequisites": [],
+      "recommended_after": [],
+      "materialized": true,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/biology-and-scientific-inquiry",
+        "configured": true
+      },
+      "chapters": [
+        {
+          "id": "01_living_systems_and_scale",
+          "order": 1,
+          "title": "Living systems, boundaries, and scale",
+          "file": "flashcards/01_living_systems_and_scale.md",
+          "card_count": 19,
+          "prerequisites": [],
+          "provides": [
+            "biology",
+            "organism",
+            "living-system",
+            "system-boundary",
+            "biological-scale",
+            "cell",
+            "population",
+            "variation",
+            "mechanistic-explanation",
+            "evidence",
+            "model"
+          ],
+          "resolved_dependencies": []
+        },
+        {
+          "id": "02_patterns_of_life",
+          "order": 2,
+          "title": "Patterns of life and the limits of definitions",
+          "file": "flashcards/02_patterns_of_life.md",
+          "card_count": 14,
+          "prerequisites": [
+            "chapter:01_living_systems_and_scale"
+          ],
+          "provides": [
+            "life-process-criteria",
+            "biological-organization",
+            "regulation",
+            "lineage",
+            "boundary-case"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:01_living_systems_and_scale",
+              "kind": "chapter",
+              "resolved": "01_living_systems_and_scale"
+            }
+          ]
+        },
+        {
+          "id": "03_structure_function_and_constraint",
+          "order": 3,
+          "title": "Structure, function, and constraint",
+          "file": "flashcards/03_structure_function_and_constraint.md",
+          "card_count": 14,
+          "prerequisites": [
+            "chapter:02_patterns_of_life"
+          ],
+          "provides": [
+            "structure-function",
+            "biological-constraint",
+            "tradeoff",
+            "current-function"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:02_patterns_of_life",
+              "kind": "chapter",
+              "resolved": "02_patterns_of_life"
+            }
+          ]
+        },
+        {
+          "id": "04_information_and_response",
+          "order": 4,
+          "title": "Information in living systems",
+          "file": "flashcards/04_information_and_response.md",
+          "card_count": 14,
+          "prerequisites": [
+            "chapter:03_structure_function_and_constraint"
+          ],
+          "provides": [
+            "biological-information",
+            "cue",
+            "detector",
+            "response-pathway",
+            "stored-information"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:03_structure_function_and_constraint",
+              "kind": "chapter",
+              "resolved": "03_structure_function_and_constraint"
+            }
+          ]
+        },
+        {
+          "id": "05_matter_energy_and_change",
+          "order": 5,
+          "title": "Matter, energy, and living change",
+          "file": "flashcards/05_matter_energy_and_change.md",
+          "card_count": 14,
+          "prerequisites": [
+            "chapter:04_information_and_response"
+          ],
+          "provides": [
+            "matter-energy-tracking",
+            "open-system",
+            "transfer",
+            "transformation",
+            "system-budget"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:04_information_and_response",
+              "kind": "chapter",
+              "resolved": "04_information_and_response"
+            }
+          ]
+        },
+        {
+          "id": "06_variation_inheritance_and_evolution",
+          "order": 6,
+          "title": "Variation, inheritance, and evolution",
+          "file": "flashcards/06_variation_inheritance_and_evolution.md",
+          "card_count": 14,
+          "prerequisites": [
+            "chapter:05_matter_energy_and_change"
+          ],
+          "provides": [
+            "inheritance",
+            "generation",
+            "evolution",
+            "natural-selection",
+            "nonteleological-evolution"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:05_matter_energy_and_change",
+              "kind": "chapter",
+              "resolved": "05_matter_energy_and_change"
+            }
+          ]
+        },
+        {
+          "id": "07_interactions_feedback_and_emergence",
+          "order": 7,
+          "title": "Interactions, feedback, and emergence",
+          "file": "flashcards/07_interactions_feedback_and_emergence.md",
+          "card_count": 14,
+          "prerequisites": [
+            "chapter:06_variation_inheritance_and_evolution"
+          ],
+          "provides": [
+            "direct-indirect-interaction",
+            "reinforcing-feedback",
+            "counteracting-feedback",
+            "subsystem",
+            "emergence"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:06_variation_inheritance_and_evolution",
+              "kind": "chapter",
+              "resolved": "06_variation_inheritance_and_evolution"
+            }
+          ]
+        },
+        {
+          "id": "08_questions_claims_and_predictions",
+          "order": 8,
+          "title": "Questions, claims, and testable predictions",
+          "file": "flashcards/08_questions_claims_and_predictions.md",
+          "card_count": 14,
+          "prerequisites": [
+            "chapter:07_interactions_feedback_and_emergence"
+          ],
+          "provides": [
+            "bounded-question",
+            "descriptive-explanatory-question",
+            "hypothesis",
+            "prediction",
+            "disconfirming-result"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:07_interactions_feedback_and_emergence",
+              "kind": "chapter",
+              "resolved": "07_interactions_feedback_and_emergence"
+            }
+          ]
+        },
+        {
+          "id": "09_comparisons_controls_and_causes",
+          "order": 9,
+          "title": "Comparisons, controls, and causal inference",
+          "file": "flashcards/09_comparisons_controls_and_causes.md",
+          "card_count": 14,
+          "prerequisites": [
+            "chapter:08_questions_claims_and_predictions"
+          ],
+          "provides": [
+            "comparison-group",
+            "control",
+            "confounding-difference",
+            "association",
+            "intervention-evidence"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:08_questions_claims_and_predictions",
+              "kind": "chapter",
+              "resolved": "08_questions_claims_and_predictions"
+            }
+          ]
+        },
+        {
+          "id": "10_evidence_models_and_synthesis",
+          "order": 10,
+          "title": "Evidence, models, uncertainty, and synthesis",
+          "file": "flashcards/10_evidence_models_and_synthesis.md",
+          "card_count": 15,
+          "prerequisites": [
+            "chapter:09_comparisons_controls_and_causes"
+          ],
+          "provides": [
+            "converging-evidence",
+            "conflicting-evidence",
+            "uncertainty",
+            "claim-revision",
+            "cross-scale-synthesis"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:09_comparisons_controls_and_causes",
+              "kind": "chapter",
+              "resolved": "09_comparisons_controls_and_causes"
+            }
+          ]
+        }
+      ],
+      "generation_command": "flashcards curriculum materialize biology/biology-and-scientific-inquiry"
+    },
+    {
+      "id": "biology/quantitative-foundations-for-biology",
+      "subject": "biology",
+      "deck": "quantitative-foundations-for-biology",
+      "order": 2,
+      "tier": "core",
+      "level": "foundational",
+      "status": "proposed",
+      "description": "Use units, ratios, algebra, logarithms, functions, graphs, probability, and estimation in biological contexts.",
+      "prerequisites": [],
+      "recommended_after": [
+        "biology/biology-and-scientific-inquiry"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/quantitative-foundations-for-biology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/quantitative-foundations-for-biology"
+    },
+    {
+      "id": "biology/chemistry-for-living-systems",
+      "subject": "biology",
+      "deck": "chemistry-for-living-systems",
+      "order": 3,
+      "tier": "core",
+      "level": "foundational",
+      "status": "proposed",
+      "description": "Reason from atomic interactions, water, pH, concentration, energetics, and macromolecular chemistry to biological behavior.",
+      "prerequisites": [
+        "biology/quantitative-foundations-for-biology"
+      ],
+      "recommended_after": [
+        "biology/biology-and-scientific-inquiry"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/chemistry-for-living-systems",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/chemistry-for-living-systems"
+    },
+    {
+      "id": "biology/biological-data-and-statistical-reasoning",
+      "subject": "biology",
+      "deck": "biological-data-and-statistical-reasoning",
+      "order": 4,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Describe variation, quantify uncertainty, choose basic analyses, and make bounded inferences from biological data.",
+      "prerequisites": [
+        "biology/quantitative-foundations-for-biology"
+      ],
+      "recommended_after": [
+        "biology/biology-and-scientific-inquiry"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/biological-data-and-statistical-reasoning",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/biological-data-and-statistical-reasoning"
+    },
+    {
+      "id": "biology/cell-biology",
+      "subject": "biology",
+      "deck": "cell-biology",
+      "order": 5,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Explain how membranes, compartments, structures, transport, signaling, division, and energy transformations make cells work.",
+      "prerequisites": [
+        "biology/biology-and-scientific-inquiry",
+        "biology/chemistry-for-living-systems"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/cell-biology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/cell-biology"
+    },
+    {
+      "id": "biology/biochemistry-and-metabolism",
+      "subject": "biology",
+      "deck": "biochemistry-and-metabolism",
+      "order": 6,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Connect biomolecular structure, enzymes, thermodynamics, pathways, regulation, and compartmentation to metabolic function.",
+      "prerequisites": [
+        "biology/cell-biology"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/biochemistry-and-metabolism",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/biochemistry-and-metabolism"
+    },
+    {
+      "id": "biology/genetics-and-inheritance",
+      "subject": "biology",
+      "deck": "genetics-and-inheritance",
+      "order": 7,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Predict and interpret inheritance using chromosomes, recombination, probability, pedigrees, variation, and gene interactions.",
+      "prerequisites": [
+        "biology/cell-biology"
+      ],
+      "recommended_after": [
+        "biology/biological-data-and-statistical-reasoning"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/genetics-and-inheritance",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/genetics-and-inheritance"
+    },
+    {
+      "id": "biology/molecular-biology-and-gene-regulation",
+      "subject": "biology",
+      "deck": "molecular-biology-and-gene-regulation",
+      "order": 8,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Explain genome replication, expression, regulation, mutation, repair, and molecular experiments without treating information flow as a rigid slogan.",
+      "prerequisites": [
+        "biology/biochemistry-and-metabolism",
+        "biology/genetics-and-inheritance"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/molecular-biology-and-gene-regulation",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/molecular-biology-and-gene-regulation"
+    },
+    {
+      "id": "biology/evolution",
+      "subject": "biology",
+      "deck": "evolution",
+      "order": 9,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Use population processes, selection, drift, gene flow, speciation, phylogeny, and evidence to explain biological change and diversity.",
+      "prerequisites": [
+        "biology/genetics-and-inheritance"
+      ],
+      "recommended_after": [
+        "biology/biochemistry-and-metabolism"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/evolution",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/evolution"
+    },
+    {
+      "id": "biology/ecology",
+      "subject": "biology",
+      "deck": "ecology",
+      "order": 10,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Analyze organisms, populations, communities, ecosystems, landscapes, and the biosphere across space and time.",
+      "prerequisites": [
+        "biology/biology-and-scientific-inquiry",
+        "biology/quantitative-foundations-for-biology"
+      ],
+      "recommended_after": [
+        "biology/evolution",
+        "biology/biological-data-and-statistical-reasoning"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/ecology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/ecology"
+    },
+    {
+      "id": "biology/biodiversity-and-phylogenetics",
+      "subject": "biology",
+      "deck": "biodiversity-and-phylogenetics",
+      "order": 11,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Interpret the tree of life, organismal diversity, classification, form, life cycles, and natural-history evidence.",
+      "prerequisites": [
+        "biology/evolution"
+      ],
+      "recommended_after": [
+        "biology/ecology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/biodiversity-and-phylogenetics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/biodiversity-and-phylogenetics"
+    },
+    {
+      "id": "biology/biological-research-practice",
+      "subject": "biology",
+      "deck": "biological-research-practice",
+      "order": 12,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Plan ethical, safe, reproducible laboratory and field investigations; document methods; evaluate literature; and communicate results.",
+      "prerequisites": [
+        "biology/biology-and-scientific-inquiry",
+        "biology/biological-data-and-statistical-reasoning"
+      ],
+      "recommended_after": [
+        "biology/cell-biology",
+        "biology/ecology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/biological-research-practice",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/biological-research-practice"
+    },
+    {
+      "id": "biology/computational-biology-foundations",
+      "subject": "biology",
+      "deck": "computational-biology-foundations",
+      "order": 13,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Use a first programming environment, structured biological data, databases, reproducible workflows, and simple simulations.",
+      "prerequisites": [
+        "biology/quantitative-foundations-for-biology"
+      ],
+      "recommended_after": [
+        "biology/biological-data-and-statistical-reasoning"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/computational-biology-foundations",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/computational-biology-foundations"
+    },
+    {
+      "id": "biology/microbiology-and-virology",
+      "subject": "biology",
+      "deck": "microbiology-and-virology",
+      "order": 14,
+      "tier": "recommended",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Explain microbial and viral diversity, growth, metabolism, genetics, ecology, host interactions, and methods.",
+      "prerequisites": [
+        "biology/molecular-biology-and-gene-regulation"
+      ],
+      "recommended_after": [
+        "biology/ecology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/microbiology-and-virology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/microbiology-and-virology"
+    },
+    {
+      "id": "biology/plant-form-and-function",
+      "subject": "biology",
+      "deck": "plant-form-and-function",
+      "order": 15,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Connect plant anatomy, transport, photosynthesis, nutrition, signaling, development, reproduction, defense, and environmental response.",
+      "prerequisites": [
+        "biology/biochemistry-and-metabolism"
+      ],
+      "recommended_after": [
+        "biology/biodiversity-and-phylogenetics",
+        "biology/ecology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/plant-form-and-function",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/plant-form-and-function"
+    },
+    {
+      "id": "biology/comparative-animal-physiology",
+      "subject": "biology",
+      "deck": "comparative-animal-physiology",
+      "order": 16,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Use gradients, mass balance, feedback, structure-function, and comparative evidence to explain integrated animal function.",
+      "prerequisites": [
+        "biology/biochemistry-and-metabolism"
+      ],
+      "recommended_after": [
+        "biology/biodiversity-and-phylogenetics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/comparative-animal-physiology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/comparative-animal-physiology"
+    },
+    {
+      "id": "biology/developmental-biology",
+      "subject": "biology",
+      "deck": "developmental-biology",
+      "order": 17,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Explain how cells generate form through specification, patterning, morphogenesis, growth, regeneration, and environmental interaction.",
+      "prerequisites": [
+        "biology/molecular-biology-and-gene-regulation"
+      ],
+      "recommended_after": [
+        "biology/plant-form-and-function",
+        "biology/comparative-animal-physiology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/developmental-biology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/developmental-biology"
+    },
+    {
+      "id": "biology/neuroscience",
+      "subject": "biology",
+      "deck": "neuroscience",
+      "order": 18,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Relate neural signaling, circuits, sensory and motor systems, plasticity, and cognition across levels of organization.",
+      "prerequisites": [
+        "biology/comparative-animal-physiology"
+      ],
+      "recommended_after": [
+        "biology/molecular-biology-and-gene-regulation"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/neuroscience",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/neuroscience"
+    },
+    {
+      "id": "biology/animal-behavior",
+      "subject": "biology",
+      "deck": "animal-behavior",
+      "order": 19,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Analyze behavior through mechanism, development, function, evolutionary history, communication, learning, and social systems.",
+      "prerequisites": [
+        "biology/evolution"
+      ],
+      "recommended_after": [
+        "biology/ecology",
+        "biology/neuroscience"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/animal-behavior",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/animal-behavior"
+    },
+    {
+      "id": "biology/immunology",
+      "subject": "biology",
+      "deck": "immunology",
+      "order": 20,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Explain barrier, innate, and adaptive defense; recognition; signaling; tolerance; memory; and immune-system failure.",
+      "prerequisites": [
+        "biology/molecular-biology-and-gene-regulation"
+      ],
+      "recommended_after": [
+        "biology/microbiology-and-virology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/immunology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/immunology"
+    },
+    {
+      "id": "biology/conservation-biology-and-global-change",
+      "subject": "biology",
+      "deck": "conservation-biology-and-global-change",
+      "order": 21,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Evaluate biodiversity loss, population viability, climate and land-use change, conservation evidence, restoration, and human dimensions.",
+      "prerequisites": [
+        "biology/ecology",
+        "biology/biodiversity-and-phylogenetics"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/conservation-biology-and-global-change",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/conservation-biology-and-global-change"
+    },
+    {
+      "id": "biology/genomics-and-bioinformatics",
+      "subject": "biology",
+      "deck": "genomics-and-bioinformatics",
+      "order": 22,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Interpret sequence, variation, expression, annotation, comparative genomics, pipelines, databases, and reproducible genomic evidence.",
+      "prerequisites": [
+        "biology/molecular-biology-and-gene-regulation",
+        "biology/biological-data-and-statistical-reasoning",
+        "biology/computational-biology-foundations"
+      ],
+      "recommended_after": [
+        "biology/biological-research-practice"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/genomics-and-bioinformatics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/genomics-and-bioinformatics"
+    },
+    {
+      "id": "biology/systems-biology-and-quantitative-modeling",
+      "subject": "biology",
+      "deck": "systems-biology-and-quantitative-modeling",
+      "order": 23,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Build, analyze, fit, and critique network, dynamical, stochastic, and multiscale models of biological systems.",
+      "prerequisites": [
+        "biology/molecular-biology-and-gene-regulation",
+        "biology/biological-data-and-statistical-reasoning",
+        "biology/computational-biology-foundations"
+      ],
+      "recommended_after": [
+        "biology/genomics-and-bioinformatics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/systems-biology-and-quantitative-modeling",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/systems-biology-and-quantitative-modeling"
+    },
+    {
+      "id": "biology/structural-biology-and-biophysics",
+      "subject": "biology",
+      "deck": "structural-biology-and-biophysics",
+      "order": 24,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Infer molecular mechanism from forces, energy landscapes, macromolecular structure, dynamics, and complementary measurement methods.",
+      "prerequisites": [
+        "biology/biochemistry-and-metabolism"
+      ],
+      "recommended_after": [
+        "biology/computational-biology-foundations"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/structural-biology-and-biophysics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/structural-biology-and-biophysics"
+    },
+    {
+      "id": "biology/synthetic-biology-and-biotechnology",
+      "subject": "biology",
+      "deck": "synthetic-biology-and-biotechnology",
+      "order": 25,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Design and evaluate engineered biological parts, circuits, cells, products, measurement standards, risks, and societal tradeoffs.",
+      "prerequisites": [
+        "biology/molecular-biology-and-gene-regulation"
+      ],
+      "recommended_after": [
+        "biology/microbiology-and-virology",
+        "biology/systems-biology-and-quantitative-modeling",
+        "biology/biological-research-practice"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/synthetic-biology-and-biotechnology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/synthetic-biology-and-biotechnology"
+    },
+    {
+      "id": "biology/human-biology-and-disease-mechanisms",
+      "subject": "biology",
+      "deck": "human-biology-and-disease-mechanisms",
+      "order": 26,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Integrate physiology, immunity, genetics, environment, development, and evolution to explain bounded human disease mechanisms.",
+      "prerequisites": [
+        "biology/comparative-animal-physiology",
+        "biology/immunology"
+      ],
+      "recommended_after": [
+        "biology/microbiology-and-virology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/human-biology-and-disease-mechanisms",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/human-biology-and-disease-mechanisms"
+    },
+    {
+      "id": "biology/evolutionary-genomics",
+      "subject": "biology",
+      "deck": "evolutionary-genomics",
+      "order": 27,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Use genome-scale variation and comparative data to test demographic, selective, phylogenomic, and molecular-evolution hypotheses.",
+      "prerequisites": [
+        "biology/evolution",
+        "biology/genomics-and-bioinformatics"
+      ],
+      "recommended_after": [
+        "biology/systems-biology-and-quantitative-modeling"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/evolutionary-genomics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/evolutionary-genomics"
+    },
+    {
+      "id": "biology/microbial-ecology-and-evolution",
+      "subject": "biology",
+      "deck": "microbial-ecology-and-evolution",
+      "order": 28,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze microbial communities, interactions, biogeochemistry, host associations, horizontal transfer, and community evolution.",
+      "prerequisites": [
+        "biology/evolution",
+        "biology/ecology",
+        "biology/microbiology-and-virology"
+      ],
+      "recommended_after": [
+        "biology/conservation-biology-and-global-change"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/microbial-ecology-and-evolution",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/microbial-ecology-and-evolution"
+    },
+    {
+      "id": "biology/evolution-of-development",
+      "subject": "biology",
+      "deck": "evolution-of-development",
+      "order": 29,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Explain morphological innovation and constraint by comparing developmental mechanisms, gene networks, life histories, and phylogenies.",
+      "prerequisites": [
+        "biology/evolution",
+        "biology/developmental-biology"
+      ],
+      "recommended_after": [
+        "biology/genomics-and-bioinformatics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/evolution-of-development",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/evolution-of-development"
+    },
+    {
+      "id": "biology/ecological-forecasting-and-conservation-data",
+      "subject": "biology",
+      "deck": "ecological-forecasting-and-conservation-data",
+      "order": 30,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Combine monitoring data, hierarchical models, uncertainty, scenarios, and decision analysis for ecological forecasts and conservation.",
+      "prerequisites": [
+        "biology/conservation-biology-and-global-change",
+        "biology/biological-data-and-statistical-reasoning",
+        "biology/computational-biology-foundations"
+      ],
+      "recommended_after": [
+        "biology/microbial-ecology-and-evolution"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/ecological-forecasting-and-conservation-data",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/ecological-forecasting-and-conservation-data"
+    },
+    {
+      "id": "biology/integrative-systems-and-synthetic-biology",
+      "subject": "biology",
+      "deck": "integrative-systems-and-synthetic-biology",
+      "order": 31,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Integrate measurement, inference, control, design-build-test cycles, multiscale models, and responsible engineering of living systems.",
+      "prerequisites": [
+        "biology/systems-biology-and-quantitative-modeling",
+        "biology/synthetic-biology-and-biotechnology"
+      ],
+      "recommended_after": [
+        "biology/structural-biology-and-biophysics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/integrative-systems-and-synthetic-biology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/integrative-systems-and-synthetic-biology"
+    },
+    {
+      "id": "biology/single-cell-and-spatial-biology",
+      "subject": "biology",
+      "deck": "single-cell-and-spatial-biology",
+      "order": 32,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Critique and integrate single-cell and spatial measurements, preprocessing, uncertainty, multimodal inference, and biological validation.",
+      "prerequisites": [
+        "biology/biological-research-practice",
+        "biology/genomics-and-bioinformatics",
+        "biology/systems-biology-and-quantitative-modeling"
+      ],
+      "recommended_after": [
+        "biology/integrative-systems-and-synthetic-biology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/single-cell-and-spatial-biology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/single-cell-and-spatial-biology"
+    },
+    {
+      "id": "biology/engineering-living-systems",
+      "subject": "biology",
+      "deck": "engineering-living-systems",
+      "order": 33,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Read frontier literature and design research programs for programmable cells, multicellular systems, biomaterials, and biomanufacturing.",
+      "prerequisites": [
+        "biology/biological-research-practice",
+        "biology/integrative-systems-and-synthetic-biology"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/engineering-living-systems",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/engineering-living-systems"
+    },
+    {
+      "id": "biology/global-change-biosphere-science",
+      "subject": "biology",
+      "deck": "global-change-biosphere-science",
+      "order": 34,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Synthesize organismal, microbial, ecological, remote-sensing, and Earth-system evidence about biosphere responses and feedbacks.",
+      "prerequisites": [
+        "biology/microbial-ecology-and-evolution",
+        "biology/ecological-forecasting-and-conservation-data"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/global-change-biosphere-science",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/global-change-biosphere-science"
+    },
+    {
+      "id": "biology/origins-and-evolution-of-life",
+      "subject": "biology",
+      "deck": "origins-and-evolution-of-life",
+      "order": 35,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Evaluate competing hypotheses and evidence for prebiotic chemistry, early cells, metabolic and genetic systems, and major evolutionary transitions.",
+      "prerequisites": [
+        "biology/evolution",
+        "biology/microbiology-and-virology",
+        "biology/structural-biology-and-biophysics"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/origins-and-evolution-of-life",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize biology/origins-and-evolution-of-life"
+    },
+    {
+      "id": "mathematics/quantitative-reasoning-and-arithmetic",
+      "subject": "mathematics",
+      "deck": "quantitative-reasoning-and-arithmetic",
+      "order": 1,
+      "tier": "core",
+      "level": "foundational",
+      "status": "built",
+      "description": "Reason fluently with whole, signed, rational, decimal, percent, proportional, and estimated quantities in authentic contexts.",
+      "prerequisites": [],
+      "recommended_after": [],
+      "materialized": true,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/quantitative-reasoning-and-arithmetic",
+        "configured": true
+      },
+      "chapters": [
+        {
+          "id": "01_quantities_and_whole_numbers",
+          "order": 1,
+          "title": "Quantities and whole-number sense",
+          "file": "flashcards/01_quantities_and_whole_numbers.md",
+          "card_count": 18,
+          "prerequisites": [],
+          "provides": [
+            "quantity",
+            "whole-number",
+            "place-value",
+            "whole-number-line",
+            "whole-number-comparison",
+            "rounding-whole-numbers"
+          ],
+          "resolved_dependencies": []
+        },
+        {
+          "id": "02_addition_and_subtraction",
+          "order": 2,
+          "title": "Addition and subtraction",
+          "file": "flashcards/02_addition_and_subtraction.md",
+          "card_count": 19,
+          "prerequisites": [
+            "chapter:01_quantities_and_whole_numbers"
+          ],
+          "provides": [
+            "whole-number-addition",
+            "whole-number-subtraction",
+            "inverse-operation-check",
+            "whole-number-regrouping"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:01_quantities_and_whole_numbers",
+              "kind": "chapter",
+              "resolved": "01_quantities_and_whole_numbers"
+            }
+          ]
+        },
+        {
+          "id": "03_multiplication_and_division",
+          "order": 3,
+          "title": "Multiplication and division",
+          "file": "flashcards/03_multiplication_and_division.md",
+          "card_count": 21,
+          "prerequisites": [
+            "chapter:02_addition_and_subtraction"
+          ],
+          "provides": [
+            "whole-number-multiplication",
+            "whole-number-division",
+            "division-remainder",
+            "array-representation"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:02_addition_and_subtraction",
+              "kind": "chapter",
+              "resolved": "02_addition_and_subtraction"
+            }
+          ]
+        },
+        {
+          "id": "04_operation_structure_and_factors",
+          "order": 4,
+          "title": "Operation structure and factors",
+          "file": "flashcards/04_operation_structure_and_factors.md",
+          "card_count": 20,
+          "prerequisites": [
+            "chapter:03_multiplication_and_division"
+          ],
+          "provides": [
+            "arithmetic-expression",
+            "operation-order",
+            "factor-and-multiple",
+            "prime-and-composite",
+            "whole-number-power"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:03_multiplication_and_division",
+              "kind": "chapter",
+              "resolved": "03_multiplication_and_division"
+            }
+          ]
+        },
+        {
+          "id": "05_signed_quantities",
+          "order": 5,
+          "title": "Signed quantities",
+          "file": "flashcards/05_signed_quantities.md",
+          "card_count": 19,
+          "prerequisites": [
+            "chapter:04_operation_structure_and_factors"
+          ],
+          "provides": [
+            "signed-number",
+            "signed-number-line",
+            "opposite-number",
+            "absolute-distance",
+            "signed-addition",
+            "signed-subtraction"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:04_operation_structure_and_factors",
+              "kind": "chapter",
+              "resolved": "04_operation_structure_and_factors"
+            }
+          ]
+        },
+        {
+          "id": "06_fractions",
+          "order": 6,
+          "title": "Fractions",
+          "file": "flashcards/06_fractions.md",
+          "card_count": 30,
+          "prerequisites": [
+            "chapter:05_signed_quantities"
+          ],
+          "provides": [
+            "fraction",
+            "fraction-number-line",
+            "equivalent-fraction",
+            "mixed-number",
+            "fraction-operations",
+            "fraction-of-quantity"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:05_signed_quantities",
+              "kind": "chapter",
+              "resolved": "05_signed_quantities"
+            }
+          ]
+        },
+        {
+          "id": "07_decimals",
+          "order": 7,
+          "title": "Decimals",
+          "file": "flashcards/07_decimals.md",
+          "card_count": 23,
+          "prerequisites": [
+            "chapter:06_fractions"
+          ],
+          "provides": [
+            "decimal-number",
+            "decimal-place-value",
+            "fraction-decimal-equivalence",
+            "decimal-operations",
+            "decimal-rounding"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:06_fractions",
+              "kind": "chapter",
+              "resolved": "06_fractions"
+            }
+          ]
+        },
+        {
+          "id": "08_ratios_rates_and_proportions",
+          "order": 8,
+          "title": "Ratios, rates, and proportions",
+          "file": "flashcards/08_ratios_rates_and_proportions.md",
+          "card_count": 20,
+          "prerequisites": [
+            "chapter:07_decimals"
+          ],
+          "provides": [
+            "ratio",
+            "equivalent-ratio",
+            "rate",
+            "unit-rate",
+            "proportional-relationship"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:07_decimals",
+              "kind": "chapter",
+              "resolved": "07_decimals"
+            }
+          ]
+        },
+        {
+          "id": "09_percents",
+          "order": 9,
+          "title": "Percents",
+          "file": "flashcards/09_percents.md",
+          "card_count": 21,
+          "prerequisites": [
+            "chapter:08_ratios_rates_and_proportions"
+          ],
+          "provides": [
+            "percent",
+            "percent-conversion",
+            "percent-of-quantity",
+            "percent-change",
+            "percentage-point"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:08_ratios_rates_and_proportions",
+              "kind": "chapter",
+              "resolved": "08_ratios_rates_and_proportions"
+            }
+          ]
+        },
+        {
+          "id": "10_measurement_estimation_and_decisions",
+          "order": 10,
+          "title": "Measurement, estimation, and decisions",
+          "file": "flashcards/10_measurement_estimation_and_decisions.md",
+          "card_count": 21,
+          "prerequisites": [
+            "chapter:09_percents"
+          ],
+          "provides": [
+            "measurement",
+            "measurement-unit",
+            "unit-conversion",
+            "measurement-precision",
+            "rounded-value-interval",
+            "quantitative-reasonableness"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:09_percents",
+              "kind": "chapter",
+              "resolved": "09_percents"
+            }
+          ]
+        }
+      ],
+      "generation_command": "flashcards curriculum materialize mathematics/quantitative-reasoning-and-arithmetic"
+    },
+    {
+      "id": "mathematics/elementary-algebra-and-functions",
+      "subject": "mathematics",
+      "deck": "elementary-algebra-and-functions",
+      "order": 2,
+      "tier": "core",
+      "level": "foundational",
+      "status": "scaffolded",
+      "description": "Translate among situations, expressions, equations, inequalities, tables, and graphs and solve elementary algebraic models.",
+      "prerequisites": [
+        "mathematics/quantitative-reasoning-and-arithmetic"
+      ],
+      "recommended_after": [],
+      "materialized": true,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/elementary-algebra-and-functions",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/elementary-algebra-and-functions"
+    },
+    {
+      "id": "mathematics/geometry-and-measurement",
+      "subject": "mathematics",
+      "deck": "geometry-and-measurement",
+      "order": 3,
+      "tier": "core",
+      "level": "foundational",
+      "status": "proposed",
+      "description": "Reason with Euclidean shape, congruence, similarity, coordinates, units, area, volume, scale, and spatial representations.",
+      "prerequisites": [
+        "mathematics/quantitative-reasoning-and-arithmetic"
+      ],
+      "recommended_after": [
+        "mathematics/elementary-algebra-and-functions"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/geometry-and-measurement",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/geometry-and-measurement"
+    },
+    {
+      "id": "mathematics/precalculus-functions-and-trigonometry",
+      "subject": "mathematics",
+      "deck": "precalculus-functions-and-trigonometry",
+      "order": 4,
+      "tier": "core",
+      "level": "foundational",
+      "status": "proposed",
+      "description": "Analyze polynomial, rational, exponential, logarithmic, and trigonometric functions as preparation for continuous mathematics.",
+      "prerequisites": [
+        "mathematics/elementary-algebra-and-functions"
+      ],
+      "recommended_after": [
+        "mathematics/geometry-and-measurement"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/precalculus-functions-and-trigonometry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/precalculus-functions-and-trigonometry"
+    },
+    {
+      "id": "mathematics/mathematical-computing-and-experimentation",
+      "subject": "mathematics",
+      "deck": "mathematical-computing-and-experimentation",
+      "order": 5,
+      "tier": "core",
+      "level": "foundational",
+      "status": "proposed",
+      "description": "Use code, symbolic and numerical tools, visualization, testing, and reproducible experiments to investigate mathematics responsibly.",
+      "prerequisites": [
+        "mathematics/elementary-algebra-and-functions"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/mathematical-computing-and-experimentation",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/mathematical-computing-and-experimentation"
+    },
+    {
+      "id": "mathematics/logic-sets-and-proof",
+      "subject": "mathematics",
+      "deck": "logic-sets-and-proof",
+      "order": 6,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Read and construct proofs using logic, sets, functions, relations, induction, contradiction, counterexamples, and precise quantifiers.",
+      "prerequisites": [
+        "mathematics/quantitative-reasoning-and-arithmetic"
+      ],
+      "recommended_after": [
+        "mathematics/elementary-algebra-and-functions"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/logic-sets-and-proof",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/logic-sets-and-proof"
+    },
+    {
+      "id": "mathematics/single-variable-differential-calculus",
+      "subject": "mathematics",
+      "deck": "single-variable-differential-calculus",
+      "order": 7,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Interpret limits, continuity, derivatives, approximation, and optimization across symbolic, graphical, numerical, and applied forms.",
+      "prerequisites": [
+        "mathematics/precalculus-functions-and-trigonometry"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/single-variable-differential-calculus",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/single-variable-differential-calculus"
+    },
+    {
+      "id": "mathematics/discrete-mathematics",
+      "subject": "mathematics",
+      "deck": "discrete-mathematics",
+      "order": 8,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Reason with finite structures, counting, recurrence, graphs, algorithms, invariants, and discrete proof methods.",
+      "prerequisites": [
+        "mathematics/logic-sets-and-proof",
+        "mathematics/elementary-algebra-and-functions"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/discrete-mathematics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/discrete-mathematics"
+    },
+    {
+      "id": "mathematics/linear-algebra",
+      "subject": "mathematics",
+      "deck": "linear-algebra",
+      "order": 9,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Use vectors, matrices, linear maps, subspaces, eigenstructure, inner products, and decompositions to solve and explain linear problems.",
+      "prerequisites": [
+        "mathematics/elementary-algebra-and-functions"
+      ],
+      "recommended_after": [
+        "mathematics/logic-sets-and-proof"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/linear-algebra",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/linear-algebra"
+    },
+    {
+      "id": "mathematics/single-variable-integral-calculus",
+      "subject": "mathematics",
+      "deck": "single-variable-integral-calculus",
+      "order": 10,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Connect accumulation and change through integration, differential equations, parametric curves, sequences, series, and approximation.",
+      "prerequisites": [
+        "mathematics/single-variable-differential-calculus"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/single-variable-integral-calculus",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/single-variable-integral-calculus"
+    },
+    {
+      "id": "mathematics/multivariable-and-vector-calculus",
+      "subject": "mathematics",
+      "deck": "multivariable-and-vector-calculus",
+      "order": 11,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Differentiate and integrate scalar and vector fields in several variables and interpret the major integral theorems.",
+      "prerequisites": [
+        "mathematics/single-variable-integral-calculus"
+      ],
+      "recommended_after": [
+        "mathematics/linear-algebra"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/multivariable-and-vector-calculus",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/multivariable-and-vector-calculus"
+    },
+    {
+      "id": "mathematics/probability",
+      "subject": "mathematics",
+      "deck": "probability",
+      "order": 12,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Model uncertainty with random variables, conditioning, independence, distributions, expectation, transforms, and limit reasoning.",
+      "prerequisites": [
+        "mathematics/single-variable-integral-calculus"
+      ],
+      "recommended_after": [
+        "mathematics/discrete-mathematics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/probability",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/probability"
+    },
+    {
+      "id": "mathematics/differential-equations",
+      "subject": "mathematics",
+      "deck": "differential-equations",
+      "order": 13,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Classify, solve, approximate, and interpret ordinary differential equations and linear systems while checking model assumptions.",
+      "prerequisites": [
+        "mathematics/single-variable-integral-calculus",
+        "mathematics/linear-algebra"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/differential-equations",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/differential-equations"
+    },
+    {
+      "id": "mathematics/statistical-inference-and-data-analysis",
+      "subject": "mathematics",
+      "deck": "statistical-inference-and-data-analysis",
+      "order": 14,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Carry out an ethical statistical investigation from question and study design through estimation, testing, uncertainty, and communication.",
+      "prerequisites": [
+        "mathematics/probability",
+        "mathematics/mathematical-computing-and-experimentation"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/statistical-inference-and-data-analysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/statistical-inference-and-data-analysis"
+    },
+    {
+      "id": "mathematics/mathematical-modeling",
+      "subject": "mathematics",
+      "deck": "mathematical-modeling",
+      "order": 15,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Formulate, analyze, validate, compare, and communicate models while making assumptions, scales, sensitivity, and limitations explicit.",
+      "prerequisites": [
+        "mathematics/mathematical-computing-and-experimentation"
+      ],
+      "recommended_after": [
+        "mathematics/differential-equations",
+        "mathematics/statistical-inference-and-data-analysis"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/mathematical-modeling",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/mathematical-modeling"
+    },
+    {
+      "id": "mathematics/real-analysis",
+      "subject": "mathematics",
+      "deck": "real-analysis",
+      "order": 16,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Prove and apply the foundations of limits, continuity, differentiation, integration, sequences, series, and metric-space reasoning.",
+      "prerequisites": [
+        "mathematics/logic-sets-and-proof",
+        "mathematics/single-variable-integral-calculus"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/real-analysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/real-analysis"
+    },
+    {
+      "id": "mathematics/abstract-algebra",
+      "subject": "mathematics",
+      "deck": "abstract-algebra",
+      "order": 17,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Reason structurally with groups, rings, fields, homomorphisms, quotients, actions, and polynomial constructions.",
+      "prerequisites": [
+        "mathematics/logic-sets-and-proof",
+        "mathematics/elementary-algebra-and-functions"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/abstract-algebra",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/abstract-algebra"
+    },
+    {
+      "id": "mathematics/combinatorics-and-graph-theory",
+      "subject": "mathematics",
+      "deck": "combinatorics-and-graph-theory",
+      "order": 18,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Use structural, enumerative, extremal, algebraic, and algorithmic methods on graphs and finite configurations.",
+      "prerequisites": [
+        "mathematics/discrete-mathematics"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/combinatorics-and-graph-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/combinatorics-and-graph-theory"
+    },
+    {
+      "id": "mathematics/number-theory",
+      "subject": "mathematics",
+      "deck": "number-theory",
+      "order": 19,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Prove and compute with divisibility, congruences, Diophantine equations, arithmetic functions, quadratic residues, and prime structure.",
+      "prerequisites": [
+        "mathematics/logic-sets-and-proof",
+        "mathematics/elementary-algebra-and-functions"
+      ],
+      "recommended_after": [
+        "mathematics/abstract-algebra"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/number-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/number-theory"
+    },
+    {
+      "id": "mathematics/complex-analysis",
+      "subject": "mathematics",
+      "deck": "complex-analysis",
+      "order": 20,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Analyze holomorphic functions through complex differentiation, contour integration, series, residues, conformal maps, and harmonic links.",
+      "prerequisites": [
+        "mathematics/real-analysis"
+      ],
+      "recommended_after": [
+        "mathematics/multivariable-and-vector-calculus"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/complex-analysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/complex-analysis"
+    },
+    {
+      "id": "mathematics/topology",
+      "subject": "mathematics",
+      "deck": "topology",
+      "order": 21,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Work with topological spaces, continuity, products, quotients, compactness, connectedness, separation, and elementary homotopy.",
+      "prerequisites": [
+        "mathematics/real-analysis"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/topology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/topology"
+    },
+    {
+      "id": "mathematics/modern-geometry",
+      "subject": "mathematics",
+      "deck": "modern-geometry",
+      "order": 22,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Compare Euclidean, affine, projective, spherical, hyperbolic, and transformation geometries through invariants and constructions.",
+      "prerequisites": [
+        "mathematics/logic-sets-and-proof",
+        "mathematics/linear-algebra"
+      ],
+      "recommended_after": [
+        "mathematics/topology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/modern-geometry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/modern-geometry"
+    },
+    {
+      "id": "mathematics/history-and-philosophy-of-mathematics",
+      "subject": "mathematics",
+      "deck": "history-and-philosophy-of-mathematics",
+      "order": 23,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Relate major mathematical ideas to their historical development, foundational debates, proof cultures, and changing standards of rigor.",
+      "prerequisites": [
+        "mathematics/logic-sets-and-proof"
+      ],
+      "recommended_after": [
+        "mathematics/real-analysis",
+        "mathematics/abstract-algebra"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/history-and-philosophy-of-mathematics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/history-and-philosophy-of-mathematics"
+    },
+    {
+      "id": "mathematics/nonlinear-dynamics-and-chaos",
+      "subject": "mathematics",
+      "deck": "nonlinear-dynamics-and-chaos",
+      "order": 24,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Analyze phase portraits, stability, bifurcations, oscillations, maps, chaos, and qualitative behavior of nonlinear systems.",
+      "prerequisites": [
+        "mathematics/differential-equations"
+      ],
+      "recommended_after": [
+        "mathematics/multivariable-and-vector-calculus"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/nonlinear-dynamics-and-chaos",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/nonlinear-dynamics-and-chaos"
+    },
+    {
+      "id": "mathematics/partial-differential-equations-and-fourier-methods",
+      "subject": "mathematics",
+      "deck": "partial-differential-equations-and-fourier-methods",
+      "order": 25,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Classify and solve canonical partial differential equations using characteristics, separation, Fourier methods, energy, and boundary data.",
+      "prerequisites": [
+        "mathematics/differential-equations",
+        "mathematics/multivariable-and-vector-calculus"
+      ],
+      "recommended_after": [
+        "mathematics/real-analysis"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/partial-differential-equations-and-fourier-methods",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/partial-differential-equations-and-fourier-methods"
+    },
+    {
+      "id": "mathematics/numerical-analysis",
+      "subject": "mathematics",
+      "deck": "numerical-analysis",
+      "order": 26,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Design and assess numerical algorithms using approximation, conditioning, stability, convergence, error bounds, and reproducible experiments.",
+      "prerequisites": [
+        "mathematics/mathematical-computing-and-experimentation",
+        "mathematics/single-variable-integral-calculus",
+        "mathematics/linear-algebra"
+      ],
+      "recommended_after": [
+        "mathematics/differential-equations"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/numerical-analysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/numerical-analysis"
+    },
+    {
+      "id": "mathematics/convex-and-continuous-optimization",
+      "subject": "mathematics",
+      "deck": "convex-and-continuous-optimization",
+      "order": 27,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Formulate and solve linear, convex, constrained, and smooth optimization problems using duality, optimality conditions, and algorithms.",
+      "prerequisites": [
+        "mathematics/mathematical-computing-and-experimentation",
+        "mathematics/multivariable-and-vector-calculus",
+        "mathematics/linear-algebra"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/convex-and-continuous-optimization",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/convex-and-continuous-optimization"
+    },
+    {
+      "id": "mathematics/combinatorial-optimization-and-networks",
+      "subject": "mathematics",
+      "deck": "combinatorial-optimization-and-networks",
+      "order": 28,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Model and solve network, matching, flow, scheduling, integer, and combinatorial optimization problems with exact and approximate methods.",
+      "prerequisites": [
+        "mathematics/mathematical-computing-and-experimentation",
+        "mathematics/discrete-mathematics",
+        "mathematics/linear-algebra"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/combinatorial-optimization-and-networks",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/combinatorial-optimization-and-networks"
+    },
+    {
+      "id": "mathematics/stochastic-processes",
+      "subject": "mathematics",
+      "deck": "stochastic-processes",
+      "order": 29,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Analyze discrete- and continuous-time random processes, Markov chains, Poisson processes, martingales, queues, and long-run behavior.",
+      "prerequisites": [
+        "mathematics/probability",
+        "mathematics/linear-algebra"
+      ],
+      "recommended_after": [
+        "mathematics/differential-equations"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/stochastic-processes",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/stochastic-processes"
+    },
+    {
+      "id": "mathematics/regression-and-multivariate-statistics",
+      "subject": "mathematics",
+      "deck": "regression-and-multivariate-statistics",
+      "order": 30,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Build, diagnose, interpret, and communicate regression and multivariate models with principled uncertainty and validation.",
+      "prerequisites": [
+        "mathematics/statistical-inference-and-data-analysis",
+        "mathematics/linear-algebra"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/regression-and-multivariate-statistics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/regression-and-multivariate-statistics"
+    },
+    {
+      "id": "mathematics/mathematical-logic-and-computability",
+      "subject": "mathematics",
+      "deck": "mathematical-logic-and-computability",
+      "order": 31,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Analyze formal languages, deduction, semantics, computability, undecidability, incompleteness, and the limits of formal methods.",
+      "prerequisites": [
+        "mathematics/discrete-mathematics"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/mathematical-logic-and-computability",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/mathematical-logic-and-computability"
+    },
+    {
+      "id": "mathematics/differential-geometry-and-manifolds",
+      "subject": "mathematics",
+      "deck": "differential-geometry-and-manifolds",
+      "order": 32,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Study curves, surfaces, manifolds, tangent structures, metrics, curvature, differential forms, and geometric integration.",
+      "prerequisites": [
+        "mathematics/multivariable-and-vector-calculus",
+        "mathematics/linear-algebra",
+        "mathematics/logic-sets-and-proof"
+      ],
+      "recommended_after": [
+        "mathematics/topology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/differential-geometry-and-manifolds",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/differential-geometry-and-manifolds"
+    },
+    {
+      "id": "mathematics/information-theory",
+      "subject": "mathematics",
+      "deck": "information-theory",
+      "order": 33,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Quantify information, compression, channel capacity, divergence, coding limits, and statistical decision tradeoffs.",
+      "prerequisites": [
+        "mathematics/probability"
+      ],
+      "recommended_after": [
+        "mathematics/linear-algebra"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/information-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/information-theory"
+    },
+    {
+      "id": "mathematics/coding-theory-and-cryptography",
+      "subject": "mathematics",
+      "deck": "coding-theory-and-cryptography",
+      "order": 34,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Construct and analyze error-correcting codes and classical cryptosystems using finite algebra, number theory, probability, and adversarial models.",
+      "prerequisites": [
+        "mathematics/number-theory",
+        "mathematics/abstract-algebra",
+        "mathematics/probability"
+      ],
+      "recommended_after": [
+        "mathematics/combinatorics-and-graph-theory"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/coding-theory-and-cryptography",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/coding-theory-and-cryptography"
+    },
+    {
+      "id": "mathematics/game-theory-and-social-choice",
+      "subject": "mathematics",
+      "deck": "game-theory-and-social-choice",
+      "order": 35,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Analyze strategic interaction, equilibrium, bargaining, voting, allocation, incentives, and the assumptions behind social-choice results.",
+      "prerequisites": [
+        "mathematics/elementary-algebra-and-functions"
+      ],
+      "recommended_after": [
+        "mathematics/probability",
+        "mathematics/discrete-mathematics",
+        "mathematics/linear-algebra"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/game-theory-and-social-choice",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/game-theory-and-social-choice"
+    },
+    {
+      "id": "mathematics/mathematical-biology-and-network-models",
+      "subject": "mathematics",
+      "deck": "mathematical-biology-and-network-models",
+      "order": 36,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Build and critique dynamical, stochastic, spatial, and network models of biological systems across scales.",
+      "prerequisites": [
+        "mathematics/mathematical-modeling",
+        "mathematics/differential-equations",
+        "mathematics/probability"
+      ],
+      "recommended_after": [
+        "mathematics/stochastic-processes"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/mathematical-biology-and-network-models",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/mathematical-biology-and-network-models"
+    },
+    {
+      "id": "mathematics/financial-mathematics-and-risk",
+      "subject": "mathematics",
+      "deck": "financial-mathematics-and-risk",
+      "order": 37,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Model interest, contingent claims, portfolios, insurance losses, dependence, and risk while stating market and actuarial assumptions.",
+      "prerequisites": [
+        "mathematics/probability"
+      ],
+      "recommended_after": [
+        "mathematics/statistical-inference-and-data-analysis",
+        "mathematics/stochastic-processes"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/financial-mathematics-and-risk",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/financial-mathematics-and-risk"
+    },
+    {
+      "id": "mathematics/measure-theory-and-integration",
+      "subject": "mathematics",
+      "deck": "measure-theory-and-integration",
+      "order": 38,
+      "tier": "recommended",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Reason with sigma-algebras, measures, measurable functions, Lebesgue integration, convergence theorems, product measures, and signed measures.",
+      "prerequisites": [
+        "mathematics/real-analysis"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/measure-theory-and-integration",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/measure-theory-and-integration"
+    },
+    {
+      "id": "mathematics/functional-analysis-and-operator-theory",
+      "subject": "mathematics",
+      "deck": "functional-analysis-and-operator-theory",
+      "order": 39,
+      "tier": "recommended",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze normed, Banach, and Hilbert spaces and bounded, compact, and spectral operators with applications to analysis.",
+      "prerequisites": [
+        "mathematics/measure-theory-and-integration",
+        "mathematics/linear-algebra"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/functional-analysis-and-operator-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/functional-analysis-and-operator-theory"
+    },
+    {
+      "id": "mathematics/measure-theoretic-probability",
+      "subject": "mathematics",
+      "deck": "measure-theoretic-probability",
+      "order": 40,
+      "tier": "recommended",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Develop probability on measure spaces through conditional expectation, modes of convergence, laws of large numbers, and central limit theory.",
+      "prerequisites": [
+        "mathematics/measure-theory-and-integration",
+        "mathematics/probability"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/measure-theoretic-probability",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/measure-theoretic-probability"
+    },
+    {
+      "id": "mathematics/graduate-algebra",
+      "subject": "mathematics",
+      "deck": "graduate-algebra",
+      "order": 41,
+      "tier": "recommended",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Develop groups, rings, modules, fields, tensor constructions, canonical forms, and Galois theory at graduate depth.",
+      "prerequisites": [
+        "mathematics/abstract-algebra",
+        "mathematics/linear-algebra"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/graduate-algebra",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/graduate-algebra"
+    },
+    {
+      "id": "mathematics/commutative-algebra",
+      "subject": "mathematics",
+      "deck": "commutative-algebra",
+      "order": 42,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Use ideals, localization, modules, chain conditions, dimension, primary decomposition, and homological tools in commutative rings.",
+      "prerequisites": [
+        "mathematics/graduate-algebra"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/commutative-algebra",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/commutative-algebra"
+    },
+    {
+      "id": "mathematics/algebraic-topology",
+      "subject": "mathematics",
+      "deck": "algebraic-topology",
+      "order": 43,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Compute and interpret fundamental groups, covering spaces, homology, cohomology, products, and exact sequences as topological invariants.",
+      "prerequisites": [
+        "mathematics/topology",
+        "mathematics/abstract-algebra"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/algebraic-topology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/algebraic-topology"
+    },
+    {
+      "id": "mathematics/differential-topology-and-global-analysis",
+      "subject": "mathematics",
+      "deck": "differential-topology-and-global-analysis",
+      "order": 44,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Use transversality, degree, intersection, Morse ideas, vector bundles, and elliptic viewpoints to derive global conclusions.",
+      "prerequisites": [
+        "mathematics/differential-geometry-and-manifolds",
+        "mathematics/topology"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/differential-topology-and-global-analysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/differential-topology-and-global-analysis"
+    },
+    {
+      "id": "mathematics/category-theory-and-homological-algebra",
+      "subject": "mathematics",
+      "deck": "category-theory-and-homological-algebra",
+      "order": 45,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Reason with categories, universal properties, adjunctions, limits, abelian categories, complexes, derived functors, and spectral sequences.",
+      "prerequisites": [
+        "mathematics/graduate-algebra"
+      ],
+      "recommended_after": [
+        "mathematics/algebraic-topology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/category-theory-and-homological-algebra",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/category-theory-and-homological-algebra"
+    },
+    {
+      "id": "mathematics/algebraic-geometry",
+      "subject": "mathematics",
+      "deck": "algebraic-geometry",
+      "order": 46,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Study affine and projective varieties and schemes through coordinate rings, morphisms, sheaves, dimension, smoothness, and cohomological ideas.",
+      "prerequisites": [
+        "mathematics/commutative-algebra"
+      ],
+      "recommended_after": [
+        "mathematics/topology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/algebraic-geometry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/algebraic-geometry"
+    },
+    {
+      "id": "mathematics/representation-theory",
+      "subject": "mathematics",
+      "deck": "representation-theory",
+      "order": 47,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze symmetries through group and algebra representations, characters, modules, decomposition, induction, and structural examples.",
+      "prerequisites": [
+        "mathematics/graduate-algebra"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/representation-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/representation-theory"
+    },
+    {
+      "id": "mathematics/lie-groups-and-lie-algebras",
+      "subject": "mathematics",
+      "deck": "lie-groups-and-lie-algebras",
+      "order": 48,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Connect continuous symmetry, manifolds, Lie algebras, exponential maps, roots, weights, and representations.",
+      "prerequisites": [
+        "mathematics/differential-geometry-and-manifolds",
+        "mathematics/graduate-algebra"
+      ],
+      "recommended_after": [
+        "mathematics/representation-theory"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/lie-groups-and-lie-algebras",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/lie-groups-and-lie-algebras"
+    },
+    {
+      "id": "mathematics/analytic-number-theory",
+      "subject": "mathematics",
+      "deck": "analytic-number-theory",
+      "order": 49,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Study primes and arithmetic functions using Dirichlet series, complex methods, sieves, exponential sums, and asymptotic reasoning.",
+      "prerequisites": [
+        "mathematics/number-theory",
+        "mathematics/complex-analysis"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/analytic-number-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/analytic-number-theory"
+    },
+    {
+      "id": "mathematics/algebraic-number-theory",
+      "subject": "mathematics",
+      "deck": "algebraic-number-theory",
+      "order": 50,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze number fields, rings of integers, ideals, ramification, valuations, local fields, and class and unit structures.",
+      "prerequisites": [
+        "mathematics/number-theory",
+        "mathematics/graduate-algebra"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/algebraic-number-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/algebraic-number-theory"
+    },
+    {
+      "id": "mathematics/probabilistic-and-extremal-combinatorics",
+      "subject": "mathematics",
+      "deck": "probabilistic-and-extremal-combinatorics",
+      "order": 51,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Use probabilistic, extremal, algebraic, and asymptotic methods to prove existence and structure in large discrete systems.",
+      "prerequisites": [
+        "mathematics/combinatorics-and-graph-theory",
+        "mathematics/probability"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/probabilistic-and-extremal-combinatorics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/probabilistic-and-extremal-combinatorics"
+    },
+    {
+      "id": "mathematics/set-theory-and-model-theory",
+      "subject": "mathematics",
+      "deck": "set-theory-and-model-theory",
+      "order": 52,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Study axiomatic set theory, ordinals, cardinals, choice, models, compactness, types, and independence phenomena.",
+      "prerequisites": [
+        "mathematics/mathematical-logic-and-computability"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/set-theory-and-model-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/set-theory-and-model-theory"
+    },
+    {
+      "id": "mathematics/harmonic-analysis",
+      "subject": "mathematics",
+      "deck": "harmonic-analysis",
+      "order": 53,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze functions and operators through Fourier series and transforms, convolution, maximal estimates, distributions, and function spaces.",
+      "prerequisites": [
+        "mathematics/functional-analysis-and-operator-theory"
+      ],
+      "recommended_after": [
+        "mathematics/complex-analysis"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/harmonic-analysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/harmonic-analysis"
+    },
+    {
+      "id": "mathematics/graduate-pde-and-distributions",
+      "subject": "mathematics",
+      "deck": "graduate-pde-and-distributions",
+      "order": 54,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Treat weak solutions, distributions, Sobolev spaces, elliptic, parabolic, and hyperbolic equations, regularity, and variational methods.",
+      "prerequisites": [
+        "mathematics/functional-analysis-and-operator-theory",
+        "mathematics/partial-differential-equations-and-fourier-methods"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/graduate-pde-and-distributions",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/graduate-pde-and-distributions"
+    },
+    {
+      "id": "mathematics/stochastic-analysis",
+      "subject": "mathematics",
+      "deck": "stochastic-analysis",
+      "order": 55,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Work with martingales, Brownian motion, stochastic integration, stochastic differential equations, change of measure, and diffusion generators.",
+      "prerequisites": [
+        "mathematics/measure-theoretic-probability",
+        "mathematics/stochastic-processes"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/stochastic-analysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/stochastic-analysis"
+    },
+    {
+      "id": "mathematics/statistical-learning-and-high-dimensional-inference",
+      "subject": "mathematics",
+      "deck": "statistical-learning-and-high-dimensional-inference",
+      "order": 56,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze prediction, regularization, generalization, resampling, sparsity, kernels, ensembles, and high-dimensional uncertainty.",
+      "prerequisites": [
+        "mathematics/regression-and-multivariate-statistics",
+        "mathematics/convex-and-continuous-optimization"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/statistical-learning-and-high-dimensional-inference",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/statistical-learning-and-high-dimensional-inference"
+    },
+    {
+      "id": "mathematics/systems-and-control-theory",
+      "subject": "mathematics",
+      "deck": "systems-and-control-theory",
+      "order": 57,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze state-space systems, stability, controllability, observability, feedback, estimation, optimal control, and robustness.",
+      "prerequisites": [
+        "mathematics/differential-equations"
+      ],
+      "recommended_after": [
+        "mathematics/convex-and-continuous-optimization",
+        "mathematics/combinatorial-optimization-and-networks"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/systems-and-control-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/systems-and-control-theory"
+    },
+    {
+      "id": "mathematics/numerical-pde-and-scientific-computing",
+      "subject": "mathematics",
+      "deck": "numerical-pde-and-scientific-computing",
+      "order": 58,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Discretize and solve differential equations with finite difference, finite element, spectral, iterative, adaptive, and scalable methods.",
+      "prerequisites": [
+        "mathematics/numerical-analysis",
+        "mathematics/partial-differential-equations-and-fourier-methods"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/numerical-pde-and-scientific-computing",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/numerical-pde-and-scientific-computing"
+    },
+    {
+      "id": "mathematics/variational-methods-and-mathematical-physics",
+      "subject": "mathematics",
+      "deck": "variational-methods-and-mathematical-physics",
+      "order": 59,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Use variational principles, symmetries, conservation laws, spectral methods, and field equations across continuum and quantum models.",
+      "prerequisites": [
+        "mathematics/functional-analysis-and-operator-theory",
+        "mathematics/partial-differential-equations-and-fourier-methods"
+      ],
+      "recommended_after": [
+        "mathematics/differential-geometry-and-manifolds"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/variational-methods-and-mathematical-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/variational-methods-and-mathematical-physics"
+    },
+    {
+      "id": "mathematics/arithmetic-geometry",
+      "subject": "mathematics",
+      "deck": "arithmetic-geometry",
+      "order": 60,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Enter literature on rational and integral points, elliptic curves, heights, reduction, moduli, and arithmetic invariants.",
+      "prerequisites": [
+        "mathematics/algebraic-geometry",
+        "mathematics/algebraic-number-theory"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/arithmetic-geometry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/arithmetic-geometry"
+    },
+    {
+      "id": "mathematics/geometric-analysis",
+      "subject": "mathematics",
+      "deck": "geometric-analysis",
+      "order": 61,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Enter literature connecting curvature, geometric variational problems, elliptic and parabolic PDE, flows, compactness, and singularities.",
+      "prerequisites": [
+        "mathematics/differential-topology-and-global-analysis",
+        "mathematics/graduate-pde-and-distributions"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/geometric-analysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/geometric-analysis"
+    },
+    {
+      "id": "mathematics/topological-and-geometric-data-analysis",
+      "subject": "mathematics",
+      "deck": "topological-and-geometric-data-analysis",
+      "order": 62,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Enter literature on persistent homology, shape summaries, manifold methods, stability, algorithms, and statistical validation for data.",
+      "prerequisites": [
+        "mathematics/algebraic-topology",
+        "mathematics/regression-and-multivariate-statistics"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/topological-and-geometric-data-analysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/topological-and-geometric-data-analysis"
+    },
+    {
+      "id": "mathematics/inverse-problems-and-uncertainty-quantification",
+      "subject": "mathematics",
+      "deck": "inverse-problems-and-uncertainty-quantification",
+      "order": 63,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Enter literature on identifiability, regularization, Bayesian inversion, sensitivity, uncertainty propagation, and computational inference.",
+      "prerequisites": [
+        "mathematics/graduate-pde-and-distributions",
+        "mathematics/stochastic-analysis",
+        "mathematics/numerical-pde-and-scientific-computing"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/inverse-problems-and-uncertainty-quantification",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/inverse-problems-and-uncertainty-quantification"
+    },
+    {
+      "id": "mathematics/networks-and-complex-systems",
+      "subject": "mathematics",
+      "deck": "networks-and-complex-systems",
+      "order": 64,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Enter literature on random, temporal, and multilayer networks, spreading, synchronization, emergence, inference, and intervention.",
+      "prerequisites": [
+        "mathematics/probabilistic-and-extremal-combinatorics",
+        "mathematics/nonlinear-dynamics-and-chaos",
+        "mathematics/stochastic-processes"
+      ],
+      "recommended_after": [
+        "mathematics/combinatorial-optimization-and-networks"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/networks-and-complex-systems",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/networks-and-complex-systems"
+    },
+    {
+      "id": "mathematics/quantum-information-mathematics",
+      "subject": "mathematics",
+      "deck": "quantum-information-mathematics",
+      "order": 65,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Enter literature on quantum states, channels, entanglement, entropy, coding, algorithms, and operator-theoretic limits.",
+      "prerequisites": [
+        "mathematics/information-theory",
+        "mathematics/functional-analysis-and-operator-theory"
+      ],
+      "recommended_after": [
+        "mathematics/representation-theory"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/quantum-information-mathematics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/quantum-information-mathematics"
+    },
+    {
+      "id": "physics/physical-reasoning-and-measurement",
+      "subject": "physics",
+      "deck": "physical-reasoning-and-measurement",
+      "order": 1,
+      "tier": "core",
+      "level": "foundational",
+      "status": "pilot-built",
+      "description": "Define systems and quantities; measure, estimate, graph, scale, model, and check physical claims.",
+      "prerequisites": [
+        "mathematics/elementary-algebra-and-functions"
+      ],
+      "recommended_after": [
+        "mathematics/geometry-and-measurement"
+      ],
+      "materialized": true,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/physical-reasoning-and-measurement",
+        "configured": true
+      },
+      "chapters": [
+        {
+          "id": "01_systems_quantities_and_models",
+          "order": 1,
+          "title": "Systems, quantities, and models",
+          "file": "flashcards/01_systems_quantities_and_models.md",
+          "card_count": 18,
+          "prerequisites": [
+            "concept:mathematics/quantitative-reasoning-and-arithmetic#measurement-unit",
+            "concept:mathematics/quantitative-reasoning-and-arithmetic#unit-conversion"
+          ],
+          "provides": [
+            "system",
+            "system-boundary",
+            "surroundings",
+            "physical-quantity",
+            "quantity-value",
+            "measurement",
+            "measurand",
+            "physical-model",
+            "model-assumption",
+            "model-prediction",
+            "model-test"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "concept:mathematics/quantitative-reasoning-and-arithmetic#measurement-unit",
+              "kind": "external-concept",
+              "resolved": "mathematics/quantitative-reasoning-and-arithmetic#10_measurement_estimation_and_decisions"
+            },
+            {
+              "reference": "concept:mathematics/quantitative-reasoning-and-arithmetic#unit-conversion",
+              "kind": "external-concept",
+              "resolved": "mathematics/quantitative-reasoning-and-arithmetic#10_measurement_estimation_and_decisions"
+            }
+          ]
+        }
+      ],
+      "generation_command": "flashcards curriculum materialize physics/physical-reasoning-and-measurement"
+    },
+    {
+      "id": "physics/experimental-physics-and-data",
+      "subject": "physics",
+      "deck": "experimental-physics-and-data",
+      "order": 2,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Plan introductory investigations, calibrate instruments, propagate uncertainty, analyze data, and defend conclusions.",
+      "prerequisites": [
+        "physics/physical-reasoning-and-measurement"
+      ],
+      "recommended_after": [
+        "mathematics/mathematical-computing-and-experimentation",
+        "mathematics/statistical-inference-and-data-analysis"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/experimental-physics-and-data",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/experimental-physics-and-data"
+    },
+    {
+      "id": "physics/computational-physics-and-modeling",
+      "subject": "physics",
+      "deck": "computational-physics-and-modeling",
+      "order": 3,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Translate physical models into tested code, visualize results, assess numerical error, and extract physical insight.",
+      "prerequisites": [
+        "physics/physical-reasoning-and-measurement",
+        "mathematics/mathematical-computing-and-experimentation"
+      ],
+      "recommended_after": [
+        "mathematics/differential-equations"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/computational-physics-and-modeling",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/computational-physics-and-modeling"
+    },
+    {
+      "id": "physics/classical-mechanics-and-oscillations",
+      "subject": "physics",
+      "deck": "classical-mechanics-and-oscillations",
+      "order": 4,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Model motion, forces, momentum, energy, rotation, gravitation, and oscillation with conservation and checks.",
+      "prerequisites": [
+        "physics/physical-reasoning-and-measurement",
+        "mathematics/single-variable-integral-calculus"
+      ],
+      "recommended_after": [
+        "mathematics/differential-equations"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/classical-mechanics-and-oscillations",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/classical-mechanics-and-oscillations"
+    },
+    {
+      "id": "physics/waves-acoustics-and-optics",
+      "subject": "physics",
+      "deck": "waves-acoustics-and-optics",
+      "order": 5,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Predict propagation, interference, diffraction, sound, imaging, polarization, and spectra across representations.",
+      "prerequisites": [
+        "physics/classical-mechanics-and-oscillations"
+      ],
+      "recommended_after": [
+        "mathematics/differential-equations"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/waves-acoustics-and-optics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/waves-acoustics-and-optics"
+    },
+    {
+      "id": "physics/thermodynamics-and-kinetic-theory",
+      "subject": "physics",
+      "deck": "thermodynamics-and-kinetic-theory",
+      "order": 6,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Relate state variables, energy transfer, entropy, cycles, kinetic models, and limits of equilibrium reasoning.",
+      "prerequisites": [
+        "physics/physical-reasoning-and-measurement",
+        "mathematics/single-variable-integral-calculus"
+      ],
+      "recommended_after": [
+        "physics/classical-mechanics-and-oscillations"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/thermodynamics-and-kinetic-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/thermodynamics-and-kinetic-theory"
+    },
+    {
+      "id": "physics/electric-circuits-and-fields",
+      "subject": "physics",
+      "deck": "electric-circuits-and-fields",
+      "order": 7,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Analyze charge, DC and AC circuit elements, electric fields, potential, capacitance, and energy.",
+      "prerequisites": [
+        "physics/physical-reasoning-and-measurement",
+        "mathematics/single-variable-integral-calculus"
+      ],
+      "recommended_after": [
+        "physics/classical-mechanics-and-oscillations"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/electric-circuits-and-fields",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/electric-circuits-and-fields"
+    },
+    {
+      "id": "physics/magnetism-induction-and-radiation",
+      "subject": "physics",
+      "deck": "magnetism-induction-and-radiation",
+      "order": 8,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Connect magnetic interactions, induction, Maxwell structure, electromagnetic waves, radiation, and circuits.",
+      "prerequisites": [
+        "physics/electric-circuits-and-fields"
+      ],
+      "recommended_after": [
+        "physics/waves-acoustics-and-optics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/magnetism-induction-and-radiation",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/magnetism-induction-and-radiation"
+    },
+    {
+      "id": "physics/special-relativity-and-spacetime",
+      "subject": "physics",
+      "deck": "special-relativity-and-spacetime",
+      "order": 9,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Use events, frames, invariants, spacetime diagrams, causal structure, and relativistic energy-momentum.",
+      "prerequisites": [
+        "physics/classical-mechanics-and-oscillations"
+      ],
+      "recommended_after": [
+        "physics/magnetism-induction-and-radiation"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/special-relativity-and-spacetime",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/special-relativity-and-spacetime"
+    },
+    {
+      "id": "physics/quantum-phenomena-and-matter",
+      "subject": "physics",
+      "deck": "quantum-phenomena-and-matter",
+      "order": 10,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Interpret quantization, wave-particle evidence, simple wavefunctions, spectra, and quantum structure of matter.",
+      "prerequisites": [
+        "physics/waves-acoustics-and-optics"
+      ],
+      "recommended_after": [
+        "physics/special-relativity-and-spacetime",
+        "physics/thermodynamics-and-kinetic-theory"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/quantum-phenomena-and-matter",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/quantum-phenomena-and-matter"
+    },
+    {
+      "id": "physics/analytical-mechanics-and-nonlinear-dynamics",
+      "subject": "physics",
+      "deck": "analytical-mechanics-and-nonlinear-dynamics",
+      "order": 11,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Use generalized coordinates, variational principles, Hamiltonian structure, phase portraits, stability, and chaos.",
+      "prerequisites": [
+        "physics/classical-mechanics-and-oscillations",
+        "mathematics/differential-equations"
+      ],
+      "recommended_after": [
+        "physics/computational-physics-and-modeling"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/analytical-mechanics-and-nonlinear-dynamics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/analytical-mechanics-and-nonlinear-dynamics"
+    },
+    {
+      "id": "physics/continuum-mechanics-and-fluids",
+      "subject": "physics",
+      "deck": "continuum-mechanics-and-fluids",
+      "order": 12,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Model stress, strain, conservation, flow, viscosity, vorticity, waves, instabilities, and scaling in continua.",
+      "prerequisites": [
+        "physics/classical-mechanics-and-oscillations",
+        "mathematics/multivariable-and-vector-calculus"
+      ],
+      "recommended_after": [
+        "physics/thermodynamics-and-kinetic-theory",
+        "physics/analytical-mechanics-and-nonlinear-dynamics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/continuum-mechanics-and-fluids",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/continuum-mechanics-and-fluids"
+    },
+    {
+      "id": "physics/statistical-mechanics",
+      "subject": "physics",
+      "deck": "statistical-mechanics",
+      "order": 13,
+      "tier": "core",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Move between microstates and macrostates using ensembles, partition functions, fluctuations, phases, and transport foundations.",
+      "prerequisites": [
+        "physics/thermodynamics-and-kinetic-theory",
+        "mathematics/probability"
+      ],
+      "recommended_after": [
+        "physics/computational-physics-and-modeling"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/statistical-mechanics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/statistical-mechanics"
+    },
+    {
+      "id": "physics/electromagnetic-theory",
+      "subject": "physics",
+      "deck": "electromagnetic-theory",
+      "order": 14,
+      "tier": "core",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Solve boundary-value, field, wave, radiation, and relativistic electrodynamics problems with Maxwell theory.",
+      "prerequisites": [
+        "physics/magnetism-induction-and-radiation",
+        "mathematics/multivariable-and-vector-calculus"
+      ],
+      "recommended_after": [
+        "physics/special-relativity-and-spacetime"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/electromagnetic-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/electromagnetic-theory"
+    },
+    {
+      "id": "physics/quantum-mechanics",
+      "subject": "physics",
+      "deck": "quantum-mechanics",
+      "order": 15,
+      "tier": "core",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Use states, operators, symmetries, angular momentum, identical particles, approximation, and scattering methods.",
+      "prerequisites": [
+        "physics/quantum-phenomena-and-matter",
+        "mathematics/differential-equations"
+      ],
+      "recommended_after": [
+        "physics/special-relativity-and-spacetime"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/quantum-mechanics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/quantum-mechanics"
+    },
+    {
+      "id": "physics/advanced-experimental-physics-and-instrumentation",
+      "subject": "physics",
+      "deck": "advanced-experimental-physics-and-instrumentation",
+      "order": 16,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Design open-ended experiments; build and troubleshoot instruments; handle signals, noise, controls, and reproducible reports.",
+      "prerequisites": [
+        "physics/experimental-physics-and-data",
+        "physics/electric-circuits-and-fields"
+      ],
+      "recommended_after": [
+        "physics/computational-physics-and-modeling",
+        "physics/waves-acoustics-and-optics",
+        "physics/magnetism-induction-and-radiation"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/advanced-experimental-physics-and-instrumentation",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/advanced-experimental-physics-and-instrumentation"
+    },
+    {
+      "id": "physics/solid-state-and-condensed-matter-physics",
+      "subject": "physics",
+      "deck": "solid-state-and-condensed-matter-physics",
+      "order": 17,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Reason with lattices, reciprocal space, bands, quasiparticles, magnetism, superconductivity, and collective phases.",
+      "prerequisites": [
+        "physics/statistical-mechanics",
+        "physics/quantum-mechanics"
+      ],
+      "recommended_after": [
+        "physics/electromagnetic-theory"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/solid-state-and-condensed-matter-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/solid-state-and-condensed-matter-physics"
+    },
+    {
+      "id": "physics/atomic-molecular-and-optical-physics",
+      "subject": "physics",
+      "deck": "atomic-molecular-and-optical-physics",
+      "order": 18,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Model atomic and molecular structure, spectra, collisions, selection rules, and light-matter interactions.",
+      "prerequisites": [
+        "physics/quantum-mechanics"
+      ],
+      "recommended_after": [
+        "physics/electromagnetic-theory",
+        "physics/advanced-experimental-physics-and-instrumentation"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/atomic-molecular-and-optical-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/atomic-molecular-and-optical-physics"
+    },
+    {
+      "id": "physics/nuclear-physics",
+      "subject": "physics",
+      "deck": "nuclear-physics",
+      "order": 19,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Interpret nuclear structure, decay, reactions, symmetries, energetics, detectors, and model limits.",
+      "prerequisites": [
+        "physics/quantum-mechanics",
+        "physics/special-relativity-and-spacetime"
+      ],
+      "recommended_after": [
+        "physics/advanced-experimental-physics-and-instrumentation"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/nuclear-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/nuclear-physics"
+    },
+    {
+      "id": "physics/astrophysics-of-stars-and-galaxies",
+      "subject": "physics",
+      "deck": "astrophysics-of-stars-and-galaxies",
+      "order": 20,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Infer stellar, galactic, compact-object, and high-energy processes from dynamics, radiation, spectra, and observations.",
+      "prerequisites": [
+        "physics/thermodynamics-and-kinetic-theory",
+        "physics/waves-acoustics-and-optics"
+      ],
+      "recommended_after": [
+        "physics/quantum-phenomena-and-matter",
+        "physics/nuclear-physics",
+        "physics/computational-physics-and-modeling"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/astrophysics-of-stars-and-galaxies",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/astrophysics-of-stars-and-galaxies"
+    },
+    {
+      "id": "physics/plasma-physics",
+      "subject": "physics",
+      "deck": "plasma-physics",
+      "order": 21,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Translate among single-particle, kinetic, fluid, wave, instability, confinement, and space-plasma models.",
+      "prerequisites": [
+        "physics/continuum-mechanics-and-fluids",
+        "physics/statistical-mechanics",
+        "physics/electromagnetic-theory"
+      ],
+      "recommended_after": [
+        "physics/computational-physics-and-modeling"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/plasma-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/plasma-physics"
+    },
+    {
+      "id": "physics/soft-matter-and-polymer-physics",
+      "subject": "physics",
+      "deck": "soft-matter-and-polymer-physics",
+      "order": 22,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Explain mesoscale structure, Brownian motion, rheology, polymers, colloids, liquid crystals, and self-assembly.",
+      "prerequisites": [
+        "physics/continuum-mechanics-and-fluids",
+        "physics/statistical-mechanics"
+      ],
+      "recommended_after": [
+        "physics/computational-physics-and-modeling"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/soft-matter-and-polymer-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/soft-matter-and-polymer-physics"
+    },
+    {
+      "id": "physics/chemical-physics",
+      "subject": "physics",
+      "deck": "chemical-physics",
+      "order": 23,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Connect electronic structure, bonding, spectroscopy, molecular motion, reaction dynamics, and statistical rate models.",
+      "prerequisites": [
+        "physics/statistical-mechanics",
+        "physics/quantum-mechanics"
+      ],
+      "recommended_after": [
+        "physics/atomic-molecular-and-optical-physics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/chemical-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/chemical-physics"
+    },
+    {
+      "id": "physics/biological-physics",
+      "subject": "physics",
+      "deck": "biological-physics",
+      "order": 24,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Use scaling, mechanics, transport, stochasticity, energetics, and information to model living systems.",
+      "prerequisites": [
+        "physics/classical-mechanics-and-oscillations",
+        "physics/thermodynamics-and-kinetic-theory"
+      ],
+      "recommended_after": [
+        "physics/continuum-mechanics-and-fluids",
+        "physics/statistical-mechanics",
+        "physics/computational-physics-and-modeling"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/biological-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/biological-physics"
+    },
+    {
+      "id": "physics/medical-physics",
+      "subject": "physics",
+      "deck": "medical-physics",
+      "order": 25,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Explain imaging, radiation interactions, dosimetry, therapy, reconstruction, uncertainty, safety, and clinical model limits.",
+      "prerequisites": [
+        "physics/experimental-physics-and-data",
+        "physics/quantum-phenomena-and-matter"
+      ],
+      "recommended_after": [
+        "physics/advanced-experimental-physics-and-instrumentation",
+        "physics/atomic-molecular-and-optical-physics",
+        "physics/nuclear-physics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/medical-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/medical-physics"
+    },
+    {
+      "id": "physics/climate-and-earth-system-physics",
+      "subject": "physics",
+      "deck": "climate-and-earth-system-physics",
+      "order": 26,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Analyze radiation balance, rotating fluids, transport, feedback, variability, observations, and model uncertainty.",
+      "prerequisites": [
+        "physics/thermodynamics-and-kinetic-theory",
+        "physics/continuum-mechanics-and-fluids"
+      ],
+      "recommended_after": [
+        "physics/computational-physics-and-modeling",
+        "physics/statistical-mechanics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/climate-and-earth-system-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/climate-and-earth-system-physics"
+    },
+    {
+      "id": "physics/particle-physics",
+      "subject": "physics",
+      "deck": "particle-physics",
+      "order": 27,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Interpret particles, symmetries, interactions, conservation rules, accelerators, detectors, and Standard Model evidence.",
+      "prerequisites": [
+        "physics/quantum-mechanics",
+        "physics/special-relativity-and-spacetime"
+      ],
+      "recommended_after": [
+        "physics/nuclear-physics",
+        "physics/electromagnetic-theory"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/particle-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/particle-physics"
+    },
+    {
+      "id": "physics/general-relativity-and-gravitation",
+      "subject": "physics",
+      "deck": "general-relativity-and-gravitation",
+      "order": 28,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Relate geometry, stress-energy, field equations, weak fields, black holes, orbital tests, and gravitational radiation.",
+      "prerequisites": [
+        "physics/special-relativity-and-spacetime",
+        "mathematics/differential-geometry-and-manifolds"
+      ],
+      "recommended_after": [
+        "physics/analytical-mechanics-and-nonlinear-dynamics",
+        "physics/astrophysics-of-stars-and-galaxies"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/general-relativity-and-gravitation",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/general-relativity-and-gravitation"
+    },
+    {
+      "id": "physics/cosmology-and-early-universe",
+      "subject": "physics",
+      "deck": "cosmology-and-early-universe",
+      "order": 29,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Connect expansion, thermal history, perturbations, nucleosynthesis, structure, observations, and parameter inference.",
+      "prerequisites": [
+        "physics/statistical-mechanics",
+        "physics/general-relativity-and-gravitation"
+      ],
+      "recommended_after": [
+        "physics/astrophysics-of-stars-and-galaxies",
+        "physics/particle-physics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/cosmology-and-early-universe",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/cosmology-and-early-universe"
+    },
+    {
+      "id": "physics/laser-and-quantum-optics",
+      "subject": "physics",
+      "deck": "laser-and-quantum-optics",
+      "order": 30,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze resonators, gain, coherence, photon statistics, open systems, nonlinear optics, and coherent control.",
+      "prerequisites": [
+        "physics/electromagnetic-theory",
+        "physics/atomic-molecular-and-optical-physics"
+      ],
+      "recommended_after": [
+        "physics/advanced-experimental-physics-and-instrumentation"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/laser-and-quantum-optics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/laser-and-quantum-optics"
+    },
+    {
+      "id": "physics/quantum-information-science",
+      "subject": "physics",
+      "deck": "quantum-information-science",
+      "order": 31,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze states, channels, entanglement, measurement, error correction, algorithms, and physical platforms.",
+      "prerequisites": [
+        "physics/quantum-mechanics",
+        "mathematics/information-theory"
+      ],
+      "recommended_after": [
+        "physics/computational-physics-and-modeling",
+        "physics/laser-and-quantum-optics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/quantum-information-science",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/quantum-information-science"
+    },
+    {
+      "id": "physics/accelerator-beam-and-detector-physics",
+      "subject": "physics",
+      "deck": "accelerator-beam-and-detector-physics",
+      "order": 32,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze beam optics, collective effects, acceleration, sources, detectors, calibration, and event inference.",
+      "prerequisites": [
+        "physics/special-relativity-and-spacetime",
+        "physics/analytical-mechanics-and-nonlinear-dynamics",
+        "physics/electromagnetic-theory",
+        "physics/advanced-experimental-physics-and-instrumentation"
+      ],
+      "recommended_after": [
+        "physics/nuclear-physics",
+        "physics/particle-physics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/accelerator-beam-and-detector-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/accelerator-beam-and-detector-physics"
+    },
+    {
+      "id": "physics/quantum-field-theory-and-standard-model",
+      "subject": "physics",
+      "deck": "quantum-field-theory-and-standard-model",
+      "order": 33,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Develop fields, symmetries, quantization, amplitudes, renormalization, gauge theory, and Standard Model structure.",
+      "prerequisites": [
+        "physics/electromagnetic-theory",
+        "physics/particle-physics"
+      ],
+      "recommended_after": [
+        "physics/analytical-mechanics-and-nonlinear-dynamics",
+        "mathematics/complex-analysis"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/quantum-field-theory-and-standard-model",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/quantum-field-theory-and-standard-model"
+    },
+    {
+      "id": "physics/nonequilibrium-and-complex-systems",
+      "subject": "physics",
+      "deck": "nonequilibrium-and-complex-systems",
+      "order": 34,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze stochastic dynamics, response, transport, pattern formation, networks, emergence, and driven matter.",
+      "prerequisites": [
+        "physics/computational-physics-and-modeling",
+        "physics/analytical-mechanics-and-nonlinear-dynamics",
+        "physics/statistical-mechanics"
+      ],
+      "recommended_after": [
+        "mathematics/stochastic-processes",
+        "physics/soft-matter-and-polymer-physics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/nonequilibrium-and-complex-systems",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/nonequilibrium-and-complex-systems"
+    },
+    {
+      "id": "physics/gravitational-wave-and-multimessenger-physics",
+      "subject": "physics",
+      "deck": "gravitational-wave-and-multimessenger-physics",
+      "order": 35,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Enter literature on sources, detectors, signals, inference, populations, and joint electromagnetic, particle, and gravitational observations.",
+      "prerequisites": [
+        "physics/advanced-experimental-physics-and-instrumentation",
+        "physics/astrophysics-of-stars-and-galaxies",
+        "physics/general-relativity-and-gravitation",
+        "mathematics/statistical-inference-and-data-analysis"
+      ],
+      "recommended_after": [
+        "physics/computational-physics-and-modeling",
+        "physics/particle-physics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/gravitational-wave-and-multimessenger-physics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize physics/gravitational-wave-and-multimessenger-physics"
+    }
+  ]
+}

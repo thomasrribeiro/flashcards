@@ -1,12 +1,14 @@
 import {
     existsSync,
     mkdirSync,
+    readFileSync,
     readdirSync,
     statSync,
     writeFileSync
 } from 'node:fs';
 import path from 'node:path';
 import { resolvePath } from './paths.js';
+import { resolvePrerequisiteGraph } from './prerequisites.js';
 import {
     canonicalDeckReference,
     resolveSubjectCurriculum,
@@ -192,27 +194,102 @@ export function resolveGlobalCurriculum(
     };
 }
 
+function gitRemoteUrl(deckPath) {
+    const configPath = path.join(deckPath, '.git', 'config');
+    if (!existsSync(configPath)) return null;
+    const config = readFileSync(configPath, 'utf8');
+    const origin = /\[remote "origin"\]([\s\S]*?)(?=\n\[|$)/.exec(config)?.[1] || '';
+    const raw = /^\s*url\s*=\s*(.+)\s*$/m.exec(origin)?.[1]?.trim();
+    if (!raw) return null;
+    const ssh = /^git@github\.com:(.+?)(?:\.git)?$/.exec(raw);
+    if (ssh) return `https://github.com/${ssh[1]}`;
+    return raw.replace(/\.git$/, '');
+}
+
+function manifestStatus(deckPath, fallback) {
+    const manifestPath = path.join(deckPath, 'deck.toml');
+    if (!existsSync(manifestPath)) return fallback;
+    return /^\s*status\s*=\s*"([^"]+)"\s*$/m.exec(readFileSync(manifestPath, 'utf8'))?.[1] || fallback;
+}
+
+function chapterTitle(content, id) {
+    return /^#\s+(.+?)\s*$/m.exec(content)?.[1]?.trim()
+        || id.replace(/^\d+_/, '').replaceAll('_', ' ');
+}
+
+function materializedDeck(graph, deck) {
+    const deckPath = path.join(graph.notesRoot, deck.subject, deck.deck);
+    const materialized = existsSync(path.join(deckPath, 'deck.toml'));
+    const conventionalUrl = `https://github.com/thomasrribeiro-flashcards/${deck.deck}`;
+    if (!materialized) {
+        return {
+            materialized: false,
+            repository: {
+                url: conventionalUrl,
+                configured: false
+            },
+            chapters: []
+        };
+    }
+
+    const resolved = resolvePrerequisiteGraph(deckPath);
+    const chapters = resolved.chapters.map(chapter => {
+        const content = readFileSync(chapter.path, 'utf8');
+        return {
+            id: chapter.id,
+            order: chapter.order,
+            title: chapterTitle(content, chapter.id),
+            file: `flashcards/${chapter.filename}`,
+            card_count: (content.match(/^(?:Q|C|P):/gm) || []).length,
+            prerequisites: chapter.prerequisites,
+            provides: chapter.provides,
+            resolved_dependencies: chapter.dependencyDetails.map(detail => ({
+                reference: detail.reference,
+                kind: detail.kind,
+                resolved: detail.resolved
+            }))
+        };
+    });
+    const remoteUrl = gitRemoteUrl(deckPath);
+    return {
+        materialized: true,
+        status: manifestStatus(deckPath, deck.status),
+        repository: {
+            url: remoteUrl || conventionalUrl,
+            configured: Boolean(remoteUrl)
+        },
+        chapters
+    };
+}
+
 export function globalCurriculumIndex(graph) {
     return {
-        schema_version: graph.schemaVersion,
+        schema_version: 2,
         subjects: graph.subjects.map(subject => ({
             id: subject.subject,
             destination: subject.destination,
             focus: subject.focus,
             deck_granularity: subject.deckGranularity
         })),
-        decks: graph.decks.map(deck => ({
-            id: deck.id,
-            subject: deck.subject,
-            deck: deck.deck,
-            order: deck.order,
-            tier: deck.tier,
-            level: deck.level,
-            status: deck.status,
-            description: deck.description,
-            prerequisites: deck.prerequisites,
-            recommended_after: deck.recommendedAfter
-        }))
+        decks: graph.decks.map(deck => {
+            const local = materializedDeck(graph, deck);
+            return {
+                id: deck.id,
+                subject: deck.subject,
+                deck: deck.deck,
+                order: deck.order,
+                tier: deck.tier,
+                level: deck.level,
+                status: local.status || deck.status,
+                description: deck.description,
+                prerequisites: deck.prerequisites,
+                recommended_after: deck.recommendedAfter,
+                materialized: local.materialized,
+                repository: local.repository,
+                chapters: local.chapters,
+                generation_command: `flashcards curriculum materialize ${deck.id}`
+            };
+        })
     };
 }
 

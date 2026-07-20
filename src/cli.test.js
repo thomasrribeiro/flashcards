@@ -19,6 +19,7 @@ import {
     resolveGlobalCurriculum
 } from '../bin/lib/global-curriculum.js';
 import { discardIsolatedRun, finishIsolatedRun, prepareIsolatedRun } from '../bin/lib/isolation.js';
+import { materializeCurriculumDeck, parseCurriculumDeckReference } from '../bin/lib/materialize.js';
 import { approvePilot, markPilotBuilt, readDeckStatus, requireFullBuildApproval } from '../bin/lib/pilot.js';
 import { requireKebabSlug } from '../bin/lib/paths.js';
 import {
@@ -51,6 +52,38 @@ afterEach(async () => {
 });
 
 describe('flashcards CLI scaffolding', () => {
+    it('materializes a canonical planned deck without requiring a filesystem path', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({ subject: 'physics', notesRoot });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 1
+subject = "physics"
+
+[[decks]]
+id = "physical-reasoning"
+order = 1
+prerequisites = []
+status = "proposed"
+description = "Reason from systems, quantities, and evidence."
+`);
+
+        const result = await materializeCurriculumDeck('physics/physical-reasoning', {
+            notesRoot,
+            initializeGit: false
+        });
+
+        expect(parseCurriculumDeckReference(result.reference)).toEqual({
+            subject: 'physics',
+            deck: 'physical-reasoning'
+        });
+        expect(result).toMatchObject({
+            created: true,
+            curriculumOrder: 1,
+            prerequisites: []
+        });
+        expect(await readFile(path.join(result.deckPath, 'README.md'), 'utf8'))
+            .toContain('Reason from systems, quantities, and evidence.');
+    });
+
     it('creates subject context and a complete deck without overwriting subject files', async () => {
         const notesRoot = await temporaryRoot();
         const subject = await ensureSubject({ subject: 'earth-science', notesRoot });
@@ -799,6 +832,63 @@ assumed_tools = []
             kind: 'concept',
             resolved: '02_vectors'
         });
+    });
+
+    it('resolves a qualified concept to its exact chapter in a transitive external deck', async () => {
+        const notesRoot = await temporaryRoot();
+        const arithmetic = await createDeck({
+            subject: 'mathematics',
+            deck: 'arithmetic',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['numbers', 'measurement']
+        });
+        const measurement = path.join(arithmetic.deckPath, 'flashcards', '02_measurement.md');
+        await writeFile(
+            measurement,
+            (await readFile(measurement, 'utf8'))
+                .replace('provides = []', 'provides = ["measurement-unit", "unit-conversion"]')
+        );
+        await createDeck({
+            subject: 'mathematics',
+            deck: 'algebra',
+            notesRoot,
+            initializeGit: false,
+            prerequisiteDecks: ['mathematics/arithmetic'],
+            chapters: ['expressions']
+        });
+        const physics = await createDeck({
+            subject: 'physics',
+            deck: 'physical-reasoning',
+            notesRoot,
+            initializeGit: false,
+            prerequisiteDecks: ['mathematics/algebra'],
+            chapters: ['systems']
+        });
+        const systems = path.join(physics.deckPath, 'flashcards', '01_systems.md');
+        await writeFile(
+            systems,
+            (await readFile(systems, 'utf8')).replace(
+                'prerequisites = []',
+                'prerequisites = ["concept:mathematics/arithmetic#measurement-unit"]'
+            )
+        );
+
+        const graph = resolvePrerequisiteGraph(physics.deckPath);
+        expect(graph.errors).toEqual([]);
+        expect(graph.chapters[0].dependencyDetails[0]).toMatchObject({
+            kind: 'external-concept',
+            deck: 'mathematics/arithmetic',
+            chapter: '02_measurement',
+            concept: 'measurement-unit',
+            resolved: 'mathematics/arithmetic#02_measurement'
+        });
+        expect(resolveChapterClosure(graph, 1).externalConcepts).toEqual([
+            expect.objectContaining({
+                deck: 'mathematics/arithmetic',
+                chapter: '02_measurement'
+            })
+        ]);
     });
 
     it('rejects missing, later, ambiguous, undeclared, and cyclic prerequisite edges', async () => {

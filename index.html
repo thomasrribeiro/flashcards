@@ -125,9 +125,10 @@
                     </div>
                 </div>
 
-                <!-- View tabs: Study vs Progress -->
+                <!-- Main views -->
                 <div class="view-tabs hidden" id="view-tabs">
                     <button id="tab-decks" class="view-tab active">Study</button>
+                    <button id="tab-curriculum" class="view-tab">Curriculum</button>
                     <button id="tab-progress" class="view-tab">Progress</button>
                 </div>
 
@@ -240,6 +241,25 @@
                     </div>
                 </div>
 
+                <div id="dependency-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="dependency-title">
+                    <div class="modal-overlay"></div>
+                    <div class="modal-content dependency-modal-content">
+                        <div class="modal-header">
+                            <div>
+                                <div id="dependency-path" class="card-browser-path"></div>
+                                <h3 id="dependency-title">Prerequisites</h3>
+                            </div>
+                            <button id="dependency-close" class="modal-close" type="button" aria-label="Close prerequisites">&times;</button>
+                        </div>
+                        <div id="dependency-body" class="modal-body dependency-body"></div>
+                        <div class="modal-footer dependency-footer">
+                            <button id="dependency-copy-command" class="btn-cancel hidden" type="button">Copy generation command</button>
+                            <button id="dependency-request-generation" class="btn-cancel hidden" type="button">Request generation</button>
+                            <button id="dependency-add-path" class="btn-primary" type="button">Add prerequisite path</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Deck Navigation Breadcrumb -->
                 <div class="deck-breadcrumb hidden" id="deck-breadcrumb"></div>
 
@@ -255,6 +275,7 @@
 
                 <!-- Analytics dashboard (swapped with the grid) -->
                 <div id="dashboard" class="dashboard hidden"></div>
+                <div id="curriculum-view" class="curriculum-view hidden"></div>
 
                 <div id="topics-grid" class="projects-grid">
                     <div class="loading">Loading collection...</div>

@@ -17,6 +17,11 @@ import {
     resolveGlobalCurriculum,
     writeGlobalCurriculumIndex
 } from './lib/global-curriculum.js';
+import { materializeCurriculumDeck } from './lib/materialize.js';
+import {
+    listGenerationRequests,
+    updateGenerationRequest
+} from './lib/generation-requests.js';
 import { resolveNotesRoot, resolvePath } from './lib/paths.js';
 import { stabilizeDeck, validateDeck } from './lib/validation.js';
 import {
@@ -122,12 +127,13 @@ function executeAgent(mode, deckPath, options) {
         console.log(result.invocation.prompt);
     }
     if (result.status !== 0) process.exitCode = result.status;
+    return result;
 }
 
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('3.8.0')
+    .version('3.9.0')
     .showSuggestionAfterError();
 
 program
@@ -187,6 +193,30 @@ curriculum
             }
             const output = options.output || path.join(root, '.flashcards', 'curriculum.json');
             console.log(`Wrote: ${writeGlobalCurriculumIndex(graph, output)}`);
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+addAgentOptions(curriculum
+    .command('materialize <subject/deck>')
+    .description('Create or resume a planned curriculum deck and build its isolated pilot')
+    .option('--notes-root <path>', 'Notes collection root')
+    .option('--no-agent', 'Create or synchronize the local deck without launching Codex'), { build: true })
+    .action(async (reference, options) => {
+        try {
+            const result = await materializeCurriculumDeck(reference, {
+                notesRoot: options.notesRoot
+            });
+            console.log(`${result.created ? 'Created' : 'Using'} deck: ${result.deckPath}`);
+            console.log(`Curriculum order: ${result.curriculumOrder}`);
+            console.log(`Direct prerequisites: ${result.prerequisites.length ? result.prerequisites.join(', ') : 'none'}`);
+            console.log(`Recommended after: ${result.recommendedDecks.length ? result.recommendedDecks.join(', ') : 'none'}`);
+            if (options.agent) {
+                executeAgent('build', result.deckPath, options);
+            } else {
+                console.log(`Next: flashcards deck build ${result.deckPath}`);
+            }
         } catch (error) {
             handleError(error);
         }
@@ -607,6 +637,65 @@ addAgentOptions(deck
         try {
             executeAgent('audit', resolvePath(deckPath), options);
         } catch (error) {
+            handleError(error);
+        }
+    });
+
+const requests = program.command('requests').description('Process curriculum generation requests');
+
+requests
+    .command('list')
+    .description('List generation requests queued from the PWA')
+    .option('--worker-url <url>', 'Flashcards Worker URL')
+    .action(async options => {
+        try {
+            const result = await listGenerationRequests({ workerUrl: options.workerUrl });
+            if (!result.requests?.length) {
+                console.log('No generation requests.');
+                return;
+            }
+            for (const item of result.requests) {
+                console.log(`${item.id}. ${item.deck_id}${item.chapter_id ? `#${item.chapter_id}` : ''} [${item.status}]`);
+            }
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+addAgentOptions(requests
+    .command('run')
+    .description('Run the oldest queued request locally in an isolated Codex pilot')
+    .option('--worker-url <url>', 'Flashcards Worker URL')
+    .option('--notes-root <path>', 'Notes collection root'), { build: true })
+    .action(async options => {
+        let queued = null;
+        try {
+            const result = await listGenerationRequests({ workerUrl: options.workerUrl });
+            queued = result.requests?.find(item => item.status === 'queued') || null;
+            if (!queued) {
+                console.log('No queued generation requests.');
+                return;
+            }
+            await updateGenerationRequest(queued.id, { status: 'running' }, {
+                workerUrl: options.workerUrl
+            });
+            const materialized = await materializeCurriculumDeck(queued.deck_id, {
+                notesRoot: options.notesRoot
+            });
+            console.log(`${materialized.created ? 'Created' : 'Using'} deck: ${materialized.deckPath}`);
+            const agent = executeAgent('build', materialized.deckPath, options);
+            if (agent.status !== 0) throw new Error(`Deck agent exited with status ${agent.status}`);
+            await updateGenerationRequest(queued.id, { status: 'needs-review' }, {
+                workerUrl: options.workerUrl
+            });
+            console.log(`Request ${queued.id} is ready for pilot review.`);
+        } catch (error) {
+            if (queued) {
+                await updateGenerationRequest(queued.id, {
+                    status: 'failed',
+                    error: error.message
+                }, { workerUrl: options.workerUrl }).catch(() => {});
+            }
             handleError(error);
         }
     });

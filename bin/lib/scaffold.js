@@ -263,7 +263,7 @@ export async function addChapter({ deckPath: inputPath, name, order, prerequisit
         ? previous ? [`chapter:${previous}`] : []
         : prerequisites;
     for (const reference of resolvedPrerequisites) {
-        if (!/^(?:chapter:\d{2}_[a-z0-9]+(?:_[a-z0-9]+)*|concept:[a-z0-9]+(?:-[a-z0-9]+)*|deck:[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*|tool:[a-z0-9]+(?:-[a-z0-9]+)*)$/.test(reference)) {
+        if (!/^(?:chapter:\d{2}_[a-z0-9]+(?:_[a-z0-9]+)*|concept:(?:[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*#)?[a-z0-9]+(?:-[a-z0-9]+)*|deck:[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*|tool:[a-z0-9]+(?:-[a-z0-9]+)*)$/.test(reference)) {
             throw new Error(`Invalid chapter prerequisite reference: ${reference}`);
         }
     }

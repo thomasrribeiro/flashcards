@@ -85,12 +85,25 @@ describe('resolveRepositorySubject', () => {
 
 describe('parseDeckManifest', () => {
     it('reads a positive curriculum order', () => {
-        expect(parseDeckManifest('deck = "mechanics"\ncurriculum_order = 4\n'))
-            .toEqual({ curriculumOrder: 4 });
+        expect(parseDeckManifest(`subject = "physics"
+deck = "mechanics"
+curriculum_order = 4
+
+[prerequisites]
+decks = ["mathematics/algebra"]
+recommended_decks = [
+  "mathematics/geometry",
+]
+`)).toEqual({
+            curriculumOrder: 4,
+            curriculumId: 'physics/mechanics',
+            prerequisiteDecks: ['mathematics/algebra'],
+            recommendedDecks: ['mathematics/geometry']
+        });
     });
 
     it('treats missing and zero orders as unlisted', () => {
-        expect(parseDeckManifest('deck = "legacy"\n')).toEqual({ curriculumOrder: null });
-        expect(parseDeckManifest('curriculum_order = 0\n')).toEqual({ curriculumOrder: null });
+        expect(parseDeckManifest('deck = "legacy"\n')).toMatchObject({ curriculumOrder: null });
+        expect(parseDeckManifest('curriculum_order = 0\n')).toMatchObject({ curriculumOrder: null });
     });
 });

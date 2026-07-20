@@ -246,8 +246,7 @@ function readChapters(deck, errors, warnings) {
     return chapters;
 }
 
-function resolveChapterEdges(deck, chapters, externalDeckIds, errors) {
-    const byId = new Map(chapters.map(chapter => [chapter.id, chapter]));
+function conceptProviders(chapters, deckId, errors) {
     const providers = new Map();
     for (const chapter of chapters) {
         for (const concept of chapter.provides) {
@@ -257,9 +256,24 @@ function resolveChapterEdges(deck, chapters, externalDeckIds, errors) {
     }
     for (const [concept, matches] of providers) {
         if (matches.length > 1) {
-            errors.push(`${deck.path}: concept:${concept} is provided by multiple chapters: ${matches.map(chapter => chapter.id).join(', ')}`);
+            errors.push(`${deckId}: concept:${concept} is provided by multiple chapters: ${matches.map(chapter => chapter.id).join(', ')}`);
         }
     }
+    return providers;
+}
+
+function qualifiedConcept(reference) {
+    const match = /^concept:([a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*)#([a-z0-9]+(?:-[a-z0-9]+)*)$/.exec(reference);
+    return match ? { deckId: match[1], concept: match[2] } : null;
+}
+
+function resolveChapterEdges(deck, chapters, externalDeckIds, externalChapters, errors) {
+    const byId = new Map(chapters.map(chapter => [chapter.id, chapter]));
+    const providers = conceptProviders(chapters, deck.path, errors);
+    const externalProviders = new Map([...externalChapters].map(([deckId, deckChapters]) => [
+        deckId,
+        conceptProviders(deckChapters, deckId, errors)
+    ]));
     const toolSet = new Set(deck.assumedTools);
     for (const chapter of chapters) {
         for (const reference of chapter.prerequisites) {
@@ -275,6 +289,26 @@ function resolveChapterEdges(deck, chapters, externalDeckIds, errors) {
                 if (dependency.order >= chapter.order) {
                     errors.push(`${chapter.path}: ${reference} must point to an earlier chapter`);
                 }
+            } else if (qualifiedConcept(reference)) {
+                const { deckId, concept } = qualifiedConcept(reference);
+                if (!externalDeckIds.has(deckId)) {
+                    errors.push(`${chapter.path}: ${reference} is not in the transitive deck.toml prerequisite closure`);
+                    continue;
+                }
+                const matches = externalProviders.get(deckId)?.get(concept) || [];
+                if (matches.length !== 1) {
+                    errors.push(`${chapter.path}: ${reference} must resolve to exactly one external provider`);
+                    continue;
+                }
+                const dependency = matches[0];
+                chapter.dependencyDetails.push({
+                    reference,
+                    kind: 'external-concept',
+                    resolved: `${deckId}#${dependency.id}`,
+                    deck: deckId,
+                    chapter: dependency.id,
+                    concept
+                });
             } else if (reference.startsWith('concept:')) {
                 const concept = reference.slice('concept:'.length);
                 const matches = providers.get(concept) || [];
@@ -303,7 +337,7 @@ function resolveChapterEdges(deck, chapters, externalDeckIds, errors) {
                 }
                 chapter.dependencyDetails.push({ reference, kind: 'tool', resolved: tool });
             } else {
-                errors.push(`${chapter.path}: invalid prerequisite ${JSON.stringify(reference)}; use chapter:, concept:, deck:, or tool:`);
+                errors.push(`${chapter.path}: invalid prerequisite ${JSON.stringify(reference)}; use chapter:, concept:, concept:subject/deck#concept, deck:, or tool:`);
             }
         }
         chapter.dependencies = [...new Set(chapter.dependencies)];
@@ -363,16 +397,28 @@ export function resolvePrerequisiteGraph(inputPath) {
     };
     visitDeck(root);
 
-    const chapters = readChapters(root, errors, warnings);
     const externalDeckIds = new Set([...decksById.keys()].filter(id => id !== root.id));
-    resolveChapterEdges(root, chapters, externalDeckIds, errors);
     const decks = [...decksById.values()];
+    const chapters = readChapters(root, errors, warnings);
+    const externalChapters = new Map(decks
+        .filter(deck => deck.id !== root.id)
+        .map(deck => [deck.id, readChapters(deck, errors, warnings)]));
+    resolveChapterEdges(root, chapters, externalDeckIds, externalChapters, errors);
     return {
         deckPath,
         collectionRoot,
         root,
         decks,
         externalDecks: decks.filter(deck => deck.id !== root.id),
+        externalChapters: Object.fromEntries([...externalChapters].map(([id, deckChapters]) => [
+            id,
+            deckChapters.map(chapter => ({
+                id: chapter.id,
+                filename: chapter.filename,
+                order: chapter.order,
+                provides: chapter.provides
+            }))
+        ])),
         chapters,
         errors: [...new Set(errors)],
         warnings: [...new Set(warnings)]
@@ -398,12 +444,25 @@ export function resolveChapterClosure(graph, chapterSelector) {
     const localChapters = graph.chapters
         .filter(candidate => closure.has(candidate.id))
         .sort((a, b) => a.order - b.order);
+    const externalConcepts = [...localChapters, chapter]
+        .flatMap(candidate => candidate.dependencyDetails)
+        .filter(detail => detail.kind === 'external-concept')
+        .map(detail => ({
+            reference: detail.reference,
+            deck: detail.deck,
+            chapter: detail.chapter,
+            concept: detail.concept,
+            resolved: detail.resolved
+        }))
+        .filter((item, index, items) =>
+            items.findIndex(candidate => candidate.reference === item.reference) === index);
     return {
         chapter,
         localChapters,
         localChapterIds: localChapters.map(candidate => candidate.id),
         externalDecks: graph.externalDecks,
         externalDeckIds: graph.externalDecks.map(deck => deck.id),
+        externalConcepts,
         assumedTools: graph.root.assumedTools,
         mode: chapter.prerequisiteMode
     };
@@ -423,6 +482,9 @@ export function formatPrerequisiteGraph(graph, { chapter } = {}) {
         lines.push(`Target chapter: ${resolution.chapter.id}`);
         lines.push(`Local prerequisite closure: ${resolution.localChapterIds.length ? resolution.localChapterIds.join(', ') : 'none'}`);
         lines.push(`External deck closure: ${resolution.externalDeckIds.length ? resolution.externalDeckIds.join(', ') : 'none'}`);
+        lines.push(`Exact external providers: ${resolution.externalConcepts.length
+            ? resolution.externalConcepts.map(item => `${item.deck}#${item.chapter} (${item.concept})`).join(', ')
+            : 'none'}`);
         lines.push(`Edge mode: ${resolution.mode}`);
     }
     lines.push('', 'Chapters:');
