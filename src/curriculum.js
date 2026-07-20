@@ -1,19 +1,12 @@
+import { loadCurriculumRegistries } from './curriculum-registry.js';
+
 const CURRICULUM_PATH = 'data/curriculum.json';
 let curriculumPromise = null;
 
 export async function loadCurriculumIndex(baseUrl = import.meta.env.BASE_URL) {
     if (!curriculumPromise) {
-        curriculumPromise = fetch(`${baseUrl}${CURRICULUM_PATH}`)
-            .then(response => {
-                if (!response.ok) throw new Error(`Curriculum index unavailable (${response.status})`);
-                return response.json();
-            })
-            .then(index => {
-                if (Number(index?.schema_version) < 2 || !Array.isArray(index?.decks)) {
-                    throw new Error('Curriculum index uses an unsupported schema');
-                }
-                return index;
-            });
+        curriculumPromise = loadCurriculumRegistries({ fallbackUrl: `${baseUrl}${CURRICULUM_PATH}` })
+            .then(result => result.index);
     }
     return curriculumPromise;
 }
@@ -180,6 +173,150 @@ export function curriculumGraph(index, {
         }
     }
     return { nodes, edges, seedIds: seeds.map(deck => deck.id) };
+}
+
+export function subjectOverviewGraph(index, { includeRecommended = false, query = '' } = {}) {
+    const term = query.trim().toLowerCase();
+    const subjects = new Map((index?.subjects || []).map(subject => [subject.id, subject]));
+    for (const deck of index?.decks || []) {
+        if (!subjects.has(deck.subject)) subjects.set(deck.subject, { id: deck.subject });
+    }
+    const edgeKinds = new Map();
+    for (const target of index?.decks || []) {
+        const add = (sourceId, type) => {
+            const sourceSubject = sourceId.split('/')[0];
+            if (sourceSubject === target.subject || !subjects.has(sourceSubject)) return;
+            const key = `${sourceSubject}>${target.subject}`;
+            const current = edgeKinds.get(key);
+            if (!current || type === 'required') edgeKinds.set(key, type);
+        };
+        (target.prerequisites || []).forEach(id => add(id, 'required'));
+        if (includeRecommended) (target.recommended_after || []).forEach(id => add(id, 'recommended'));
+    }
+    const visible = new Set();
+    for (const subject of subjects.values()) {
+        const count = (index?.decks || []).filter(deck => deck.subject === subject.id).length;
+        const text = `${subject.id} ${subject.destination || ''} ${subject.focus || ''}`.toLowerCase();
+        if (!term || text.includes(term)) visible.add(subject.id);
+        subject.deck_count = count;
+    }
+    if (term) {
+        for (const [key] of edgeKinds) {
+            const [source, target] = key.split('>');
+            if (visible.has(source) || visible.has(target)) visible.add(source), visible.add(target);
+        }
+    }
+    return {
+        nodes: [...subjects.values()].filter(subject => visible.has(subject.id)).map(subject => ({
+            ...subject,
+            subject: subject.id,
+            deck: subject.id,
+            nodeType: 'subject',
+            order: 0
+        })),
+        edges: [...edgeKinds].map(([key, type]) => {
+            const [source, target] = key.split('>');
+            return { source, target, type };
+        }).filter(edge => visible.has(edge.source) && visible.has(edge.target)),
+        seedIds: [...visible]
+    };
+}
+
+export function focusedCurriculumGraph(index, targetId, {
+    includeRecommended = false,
+    descendantDepth = 1
+} = {}) {
+    const { decks } = curriculumMaps(index);
+    if (!decks.has(targetId)) return { nodes: [], edges: [], seedIds: [] };
+    const visible = new Set([targetId]);
+    const ancestors = id => {
+        for (const parent of decks.get(id)?.prerequisites || []) {
+            if (visible.has(parent)) continue;
+            visible.add(parent);
+            ancestors(parent);
+        }
+    };
+    ancestors(targetId);
+    let frontier = new Set([targetId]);
+    for (let depth = 0; depth < descendantDepth; depth += 1) {
+        const next = new Set();
+        for (const deck of decks.values()) {
+            if ((deck.prerequisites || []).some(id => frontier.has(id))) {
+                visible.add(deck.id);
+                next.add(deck.id);
+            }
+        }
+        frontier = next;
+    }
+    const nodes = [...visible].map(id => decks.get(id)).filter(Boolean);
+    const edges = [];
+    for (const target of nodes) {
+        for (const source of target.prerequisites || []) if (visible.has(source)) edges.push({ source, target: target.id, type: 'required' });
+        if (includeRecommended) {
+            for (const source of target.recommended_after || []) if (visible.has(source)) edges.push({ source, target: target.id, type: 'recommended' });
+        }
+    }
+    return { nodes, edges, seedIds: [targetId] };
+}
+
+export function chapterGraph(index, deckId) {
+    const { decks } = curriculumMaps(index);
+    const deck = decks.get(deckId);
+    if (!deck) return { nodes: [], edges: [], seedIds: [] };
+    const nodes = (deck.chapters || []).map(chapter => ({
+        ...chapter,
+        id: `${deckId}#${chapter.id}`,
+        deck: chapter.title || chapter.id,
+        subject: deck.subject,
+        nodeType: 'chapter'
+    }));
+    const ids = new Set(nodes.map(node => node.id));
+    const edges = [];
+    for (const chapter of deck.chapters || []) {
+        for (const dependency of localChapterDependencies(chapter, deckId)) {
+            if (ids.has(dependency)) edges.push({ source: dependency, target: `${deckId}#${chapter.id}`, type: 'required' });
+        }
+    }
+    return { nodes, edges, seedIds: [] };
+}
+
+export async function layoutCurriculumGraphElk(graph, {
+    nodeWidth = 250,
+    nodeHeight = 78,
+    direction = 'RIGHT'
+} = {}) {
+    const { default: ELK } = await import('elkjs/lib/elk.bundled.js');
+    const elk = new ELK();
+    const result = await elk.layout({
+        id: 'root',
+        layoutOptions: {
+            'elk.algorithm': 'layered',
+            'elk.direction': direction,
+            'elk.spacing.nodeNode': '34',
+            'elk.layered.spacing.nodeNodeBetweenLayers': '90',
+            'elk.edgeRouting': 'ORTHOGONAL',
+            'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES'
+        },
+        children: graph.nodes.map(node => ({ id: node.id, width: nodeWidth, height: nodeHeight })),
+        edges: graph.edges.map((edge, index) => ({
+            id: `edge-${index}`,
+            sources: [edge.source],
+            targets: [edge.target]
+        }))
+    });
+    const original = new Map(graph.nodes.map(node => [node.id, node]));
+    const nodes = (result.children || []).map(node => ({
+        ...original.get(node.id),
+        x: node.x || 0,
+        y: node.y || 0,
+        width: node.width || nodeWidth,
+        height: node.height || nodeHeight
+    }));
+    const edges = graph.edges.map((edge, index) => ({
+        ...edge,
+        sections: result.edges?.find(item => item.id === `edge-${index}`)?.sections || []
+    }));
+    return { nodes, edges, width: result.width || nodeWidth, height: result.height || nodeHeight };
 }
 
 /**

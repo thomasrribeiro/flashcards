@@ -32,7 +32,17 @@ export function listGenerationRequests(options = {}) {
     return request('/api/generation-requests', {
         token: options.token,
         url: options.workerUrl
-    });
+    }).then(result => ({
+        ...result,
+        requests: (result.requests || []).map(item => ({
+            ...item,
+            job_type: item.job_type || 'deck-build',
+            payload: item.payload_json ? JSON.parse(item.payload_json) : {
+                deckId: item.deck_id,
+                chapterId: item.chapter_id
+            }
+        }))
+    }));
 }
 
 export function updateGenerationRequest(id, partial, options = {}) {

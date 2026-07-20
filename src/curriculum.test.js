@@ -4,6 +4,10 @@ import {
     curriculumGraph,
     curriculumDeckRows,
     dependencyPlan,
+    focusedCurriculumGraph,
+    layoutCurriculumGraphElk,
+    subjectOverviewGraph,
+    chapterGraph,
     layoutCurriculumGraph
 } from './curriculum.js';
 
@@ -129,5 +133,40 @@ describe('curriculum dependency planning', () => {
         expect(nodes.get('physics/physical-reasoning').rank).toBe(2);
         expect(layout.width).toBeGreaterThan(0);
         expect(layout.height).toBeGreaterThan(0);
+    });
+
+    it('summarizes cross-subject dependencies without rendering every deck', () => {
+        const graph = subjectOverviewGraph(index);
+        expect(graph.nodes.map(node => node.id)).toEqual(['mathematics', 'physics']);
+        expect(graph.edges).toEqual([{
+            source: 'mathematics',
+            target: 'physics',
+            type: 'required'
+        }]);
+    });
+
+    it('builds a focused ancestor path with only immediate descendants', () => {
+        const graph = focusedCurriculumGraph(index, 'mathematics/algebra');
+        expect(graph.nodes.map(node => node.id).sort()).toEqual([
+            'mathematics/algebra',
+            'mathematics/arithmetic',
+            'physics/physical-reasoning'
+        ]);
+    });
+
+    it('builds chapter-level edges from resolved local dependencies', () => {
+        const graph = chapterGraph(index, 'mathematics/arithmetic');
+        expect(graph.edges).toEqual([{
+            source: 'mathematics/arithmetic#01_numbers',
+            target: 'mathematics/arithmetic#02_measurement',
+            type: 'required'
+        }]);
+    });
+
+    it('uses ELK to route a readable layered graph', async () => {
+        const layout = await layoutCurriculumGraphElk(curriculumGraph(index));
+        expect(layout.nodes).toHaveLength(3);
+        expect(layout.edges.every(edge => edge.sections.length > 0)).toBe(true);
+        expect(layout.width).toBeGreaterThan(250);
     });
 });

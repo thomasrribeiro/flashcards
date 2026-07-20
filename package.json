@@ -1,6 +1,6 @@
 {
   "name": "flashcards",
-  "version": "3.9.0",
+  "version": "4.0.0",
   "description": "Spaced-repetition app and CLI for durable, agent-assisted flashcard decks",
   "license": "Apache-2.0",
   "engines": {
@@ -31,17 +31,20 @@
     "process-submodules": "node scripts/build.js",
     "add-card-ids": "node scripts/add-card-ids.js",
     "watch": "node scripts/watch-simple.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@noble/hashes": "^1.3.3",
     "commander": "^14.0.2",
     "dompurify": "^3.3.3",
+    "elkjs": "^0.11.0",
     "katex": "^0.16.9",
     "marked": "^11.1.1",
     "ts-fsrs": "^4.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "chokidar": "^4.0.3",
     "concurrently": "^9.2.1",
     "vite": "^5.0.11",

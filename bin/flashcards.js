@@ -18,6 +18,13 @@ import {
     writeGlobalCurriculumIndex
 } from './lib/global-curriculum.js';
 import { materializeCurriculumDeck } from './lib/materialize.js';
+import { buildRegistry, formatRegistry, resolveRegistry } from './lib/registry.js';
+import { providerRunner, runExternalProviderJob } from './lib/agent-provider.js';
+import {
+    abandonRegistryDraft,
+    beginRegistryDraft,
+    publishRegistryDraft
+} from './lib/github-publisher.js';
 import {
     listGenerationRequests,
     updateGenerationRequest
@@ -133,8 +140,36 @@ function executeAgent(mode, deckPath, options) {
 program
     .name('flashcards')
     .description('Create, validate, build, and audit durable spaced-repetition decks')
-    .version('3.9.0')
+    .version('4.0.0')
     .showSuggestionAfterError();
+
+const registry = program.command('registry').description('Validate and publish a portable curriculum registry');
+
+registry
+    .command('validate [path]')
+    .description('Validate registry.toml and its complete cross-subject prerequisite DAG')
+    .action(inputPath => {
+        try {
+            const result = resolveRegistry(inputPath || '.');
+            console.log(formatRegistry(result));
+            if (result.errors.length) process.exitCode = 1;
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+registry
+    .command('build [path]')
+    .description('Compile a registry into its deterministic public JSON index')
+    .action(inputPath => {
+        try {
+            const result = buildRegistry(inputPath || '.');
+            console.log(formatRegistry(result.registry));
+            console.log(`Wrote: ${result.outputPath}`);
+        } catch (error) {
+            handleError(error);
+        }
+    });
 
 program
     .command('doctor')
@@ -655,7 +690,7 @@ requests
                 return;
             }
             for (const item of result.requests) {
-                console.log(`${item.id}. ${item.deck_id}${item.chapter_id ? `#${item.chapter_id}` : ''} [${item.status}]`);
+                console.log(`${item.id}. ${item.job_type} ${item.request_key || item.deck_id || ''} [${item.status}]`);
             }
         } catch (error) {
             handleError(error);
@@ -666,9 +701,13 @@ addAgentOptions(requests
     .command('run')
     .description('Run the oldest queued request locally in an isolated Codex pilot')
     .option('--worker-url <url>', 'Flashcards Worker URL')
-    .option('--notes-root <path>', 'Notes collection root'), { build: true })
+    .option('--notes-root <path>', 'Notes collection root for deck jobs')
+    .option('--registry-root <path>', 'Curriculum registry checkout for subject-design jobs')
+    .option('--agent-runner <command>', 'Executable implementing the generic local provider protocol'), { build: true })
     .action(async options => {
         let queued = null;
+        let registryDraft = null;
+        let registryRoot = null;
         try {
             const result = await listGenerationRequests({ workerUrl: options.workerUrl });
             queued = result.requests?.find(item => item.status === 'queued') || null;
@@ -679,17 +718,81 @@ addAgentOptions(requests
             await updateGenerationRequest(queued.id, { status: 'running' }, {
                 workerUrl: options.workerUrl
             });
-            const materialized = await materializeCurriculumDeck(queued.deck_id, {
-                notesRoot: options.notesRoot
-            });
-            console.log(`${materialized.created ? 'Created' : 'Using'} deck: ${materialized.deckPath}`);
-            const agent = executeAgent('build', materialized.deckPath, options);
+            const jobType = queued.job_type || 'deck-build';
+            const payload = queued.payload || {};
+            const runner = providerRunner(queued.provider_id, options.agentRunner);
+            let agent;
+            let resultUrl = null;
+            if (jobType === 'subject-design') {
+                registryRoot = resolvePath(options.registryRoot || '.');
+                const registry = resolveRegistry(registryRoot);
+                if (registry.errors.length) throw new Error(`Invalid registry:\n- ${registry.errors.join('\n- ')}`);
+                registryDraft = beginRegistryDraft(registryRoot, queued.id);
+                const destination = payload.destination || 'whole-field';
+                const deckGranularity = payload.deckGranularity || 'course';
+                const focus = Array.isArray(payload.focus) ? payload.focus : [];
+                validateSubjectOptions(destination, focus);
+                const subjectResult = await ensureSubject({
+                    subject: payload.subject,
+                    notesRoot: registry.subjectsRoot,
+                    title: payload.title,
+                    destination,
+                    deckGranularity,
+                    focus
+                });
+                agent = runner
+                    ? runExternalProviderJob({ ...queued, payload }, {
+                        workspacePath: subjectResult.subjectPath,
+                        command: runner
+                    })
+                    : runSubjectAgent({
+                        subjectPath: subjectResult.subjectPath,
+                        model: queued.model_id || options.model,
+                        reasoningEffort: options.reasoningEffort,
+                        destination,
+                        deckGranularity,
+                        focus,
+                        extraInstructions: [
+                            payload.instructions,
+                            payload.proposedDecks?.length
+                                ? `The user supplied this ordered visual draft. Treat it as an explicit design constraint, preserve valid existing identities, and change an edge only when validation or a documented false prerequisite requires it:\n${JSON.stringify(payload.proposedDecks, null, 2)}`
+                                : null
+                        ].filter(Boolean).join('\n\n'),
+                        isolated: options.isolated
+                    });
+                if (agent.status !== 0) throw new Error(`Subject agent exited with status ${agent.status}`);
+                buildRegistry(registryRoot);
+                resultUrl = publishRegistryDraft(registryRoot, registryDraft, {
+                    title: `Design ${payload.subject} curriculum`,
+                    body: `Queued generation request ${queued.id}.\n\nThis is a draft for human review. No deck or cards are published by this pull request.`
+                });
+                registryDraft = null;
+            } else {
+                const deckId = payload.deckId || queued.deck_id;
+                const materialized = await materializeCurriculumDeck(deckId, {
+                    notesRoot: options.notesRoot
+                });
+                console.log(`${materialized.created ? 'Created' : 'Using'} deck: ${materialized.deckPath}`);
+                const mode = jobType === 'deck-audit' ? 'audit' : 'build';
+                if (jobType === 'chapter-expand') {
+                    const chapter = Number.parseInt(String(payload.chapterId || queued.chapter_id).slice(0, 2), 10);
+                    if (!Number.isInteger(chapter)) throw new Error('Chapter job has no ordered chapter identifier.');
+                    options.chapter = chapter;
+                }
+                agent = runner
+                    ? runExternalProviderJob({ ...queued, payload }, {
+                        workspacePath: materialized.deckPath,
+                        command: runner
+                    })
+                    : executeAgent(mode, materialized.deckPath, options);
+            }
             if (agent.status !== 0) throw new Error(`Deck agent exited with status ${agent.status}`);
-            await updateGenerationRequest(queued.id, { status: 'needs-review' }, {
+            await updateGenerationRequest(queued.id, { status: 'needs-review', resultUrl }, {
                 workerUrl: options.workerUrl
             });
-            console.log(`Request ${queued.id} is ready for pilot review.`);
+            console.log(`Request ${queued.id} is ready for human review${resultUrl ? `: ${resultUrl}` : '.'}`);
         } catch (error) {
+            if (registryDraft && registryRoot) abandonRegistryDraft(registryRoot, registryDraft);
             if (queued) {
                 await updateGenerationRequest(queued.id, {
                     status: 'failed',

@@ -16,5 +16,8 @@ export default defineConfig(({ mode }) => ({
     publicDir: 'public',
     server: {
         port: 3000
+    },
+    test: {
+        exclude: ['tests/e2e/**', 'node_modules/**', 'dist/**']
     }
 }));

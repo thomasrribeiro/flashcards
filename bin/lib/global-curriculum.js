@@ -217,11 +217,21 @@ function chapterTitle(content, id) {
         || id.replace(/^\d+_/, '').replaceAll('_', ' ');
 }
 
-function materializedDeck(graph, deck) {
+function materializedDeck(graph, deck, options = {}) {
+    const { deckOwner = 'thomasrribeiro-flashcards', deckMetadata } = options;
     const deckPath = path.join(graph.notesRoot, deck.subject, deck.deck);
     const materialized = existsSync(path.join(deckPath, 'deck.toml'));
-    const conventionalUrl = `https://github.com/thomasrribeiro-flashcards/${deck.deck}`;
+    const conventionalUrl = `https://github.com/${deckOwner}/${deck.deck}`;
     if (!materialized) {
+        const snapshot = deckMetadata?.get(deck.id);
+        if (snapshot) {
+            return {
+                materialized: Boolean(snapshot.materialized),
+                status: snapshot.status || deck.status,
+                repository: snapshot.repository || { url: conventionalUrl, configured: false },
+                chapters: Array.isArray(snapshot.chapters) ? snapshot.chapters : []
+            };
+        }
         return {
             materialized: false,
             repository: {
@@ -262,9 +272,10 @@ function materializedDeck(graph, deck) {
     };
 }
 
-export function globalCurriculumIndex(graph) {
+export function globalCurriculumIndex(graph, options = {}) {
     return {
-        schema_version: 2,
+        schema_version: options.registry ? 3 : 2,
+        ...(options.registry ? { registry: options.registry } : {}),
         subjects: graph.subjects.map(subject => ({
             id: subject.subject,
             destination: subject.destination,
@@ -272,7 +283,7 @@ export function globalCurriculumIndex(graph) {
             deck_granularity: subject.deckGranularity
         })),
         decks: graph.decks.map(deck => {
-            const local = materializedDeck(graph, deck);
+            const local = materializedDeck(graph, deck, options);
             return {
                 id: deck.id,
                 subject: deck.subject,
@@ -293,13 +304,13 @@ export function globalCurriculumIndex(graph) {
     };
 }
 
-export function writeGlobalCurriculumIndex(graph, outputPath) {
+export function writeGlobalCurriculumIndex(graph, outputPath, options = {}) {
     if (graph.errors.length) {
         throw new Error(`Invalid global curriculum:\n- ${graph.errors.join('\n- ')}`);
     }
     const resolvedOutput = resolvePath(outputPath);
     mkdirSync(path.dirname(resolvedOutput), { recursive: true });
-    writeFileSync(resolvedOutput, `${JSON.stringify(globalCurriculumIndex(graph), null, 2)}\n`);
+    writeFileSync(resolvedOutput, `${JSON.stringify(globalCurriculumIndex(graph, options), null, 2)}\n`);
     return resolvedOutput;
 }
 

@@ -20,6 +20,7 @@ import {
 } from '../bin/lib/global-curriculum.js';
 import { discardIsolatedRun, finishIsolatedRun, prepareIsolatedRun } from '../bin/lib/isolation.js';
 import { materializeCurriculumDeck, parseCurriculumDeckReference } from '../bin/lib/materialize.js';
+import { buildRegistry, resolveRegistry } from '../bin/lib/registry.js';
 import { approvePilot, markPilotBuilt, readDeckStatus, requireFullBuildApproval } from '../bin/lib/pilot.js';
 import { requireKebabSlug } from '../bin/lib/paths.js';
 import {
@@ -52,6 +53,73 @@ afterEach(async () => {
 });
 
 describe('flashcards CLI scaffolding', () => {
+    it('validates and deterministically compiles a portable curriculum registry', async () => {
+        const root = await temporaryRoot();
+        await writeFile(path.join(root, 'registry.toml'), `schema_version = 1
+id = "learning-lab"
+name = "Learning Lab"
+repository = "example/curricula"
+default_ref = "master"
+subjects_dir = "subjects"
+output = "dist/curriculum.json"
+deck_metadata = "deck-metadata.json"
+deck_owner = "example-decks"
+`);
+        const subjectsRoot = path.join(root, 'subjects');
+        const { subjectPath } = await ensureSubject({ subject: 'physics', notesRoot: subjectsRoot });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 1
+subject = "physics"
+
+[[decks]]
+id = "mechanics"
+order = 1
+prerequisites = []
+status = "proposed"
+description = "Learn mechanics."
+`);
+        await writeFile(path.join(root, 'deck-metadata.json'), JSON.stringify({ decks: [{
+            id: 'physics/mechanics',
+            status: 'active',
+            materialized: true,
+            repository: { url: 'https://github.com/example-decks/mechanics', configured: true },
+            chapters: [{ id: '01_foundations', order: 1, card_count: 20 }]
+        }] }));
+
+        expect(resolveRegistry(root).errors).toEqual([]);
+        const { outputPath } = buildRegistry(root);
+        const index = JSON.parse(await readFile(outputPath, 'utf8'));
+        expect(index).toMatchObject({
+            schema_version: 3,
+            registry: {
+                id: 'learning-lab',
+                repository: 'example/curricula',
+                ref: 'master'
+            }
+        });
+        expect(index.decks[0]).toMatchObject({
+            status: 'active',
+            materialized: true,
+            repository: { url: 'https://github.com/example-decks/mechanics', configured: true },
+            chapters: [{ id: '01_foundations', card_count: 20 }]
+        });
+        const first = await readFile(outputPath, 'utf8');
+        buildRegistry(root);
+        expect(await readFile(outputPath, 'utf8')).toBe(first);
+    });
+
+    it('rejects registry paths that escape the repository', async () => {
+        const root = await temporaryRoot();
+        await writeFile(path.join(root, 'registry.toml'), `schema_version = 1
+id = "learning-lab"
+name = "Learning Lab"
+repository = "example/curricula"
+subjects_dir = "../notes"
+output = "../curriculum.json"
+`);
+        expect(resolveRegistry(root).errors.join('\n')).toContain('must remain inside');
+        expect(resolveRegistry(root).errors.join('\n')).toContain('must be a JSON path inside');
+    });
+
     it('materializes a canonical planned deck without requiring a filesystem path', async () => {
         const notesRoot = await temporaryRoot();
         const { subjectPath } = await ensureSubject({ subject: 'physics', notesRoot });

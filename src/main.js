@@ -44,12 +44,20 @@ import {
 } from './chapter-progress.js';
 import {
     chapterForFile,
+    chapterGraph,
     curriculumGraph,
     curriculumMaps,
     dependencyPlan,
-    layoutCurriculumGraph,
-    loadCurriculumIndex
+    focusedCurriculumGraph,
+    layoutCurriculumGraphElk,
+    loadCurriculumIndex,
+    subjectOverviewGraph
 } from './curriculum.js';
+import {
+    getCurriculumRegistrySources,
+    saveCurriculumRegistrySources
+} from './curriculum-registry.js';
+import { generationJobForDraft, validateCurriculumDraft } from './curriculum-builder.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -1182,7 +1190,9 @@ let activeDependencyTarget = null;
 const curriculumViewState = {
     query: '',
     subject: '',
-    includeRecommended: true
+    includeRecommended: false,
+    mode: 'overview',
+    targetId: ''
 };
 
 function curriculumDeckForRepository(deckId, subject = null) {
@@ -2274,8 +2284,17 @@ function curriculumEdgePath(source, target) {
     return `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`;
 }
 
-function renderCurriculumGraphCanvas(root, graph, installed) {
-    const layout = layoutCurriculumGraph(graph);
+function curriculumElkEdgePath(edge, source, target) {
+    const section = edge.sections?.[0];
+    if (!section) return curriculumEdgePath(source, target);
+    const points = [section.startPoint, ...(section.bendPoints || []), section.endPoint];
+    return points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
+}
+
+async function renderCurriculumGraphCanvas(root, graph, installed) {
+    const layout = await layoutCurriculumGraphElk(graph, {
+        direction: graph.nodes.every(node => node.nodeType === 'subject') ? 'DOWN' : 'RIGHT'
+    });
     const stage = document.createElement('div');
     stage.className = 'curriculum-graph-stage';
     stage.setAttribute('aria-label', 'Interactive curriculum prerequisite graph');
@@ -2310,7 +2329,7 @@ function renderCurriculumGraphCanvas(root, graph, installed) {
         path.classList.add('curriculum-graph-edge', `is-${edge.type}`);
         path.dataset.source = edge.source;
         path.dataset.target = edge.target;
-        path.setAttribute('d', curriculumEdgePath(source, target));
+        path.setAttribute('d', curriculumElkEdgePath(edge, source, target));
         path.setAttribute('marker-end', `url(#curriculum-arrow-${edge.type})`);
         svg.appendChild(path);
     }
@@ -2323,6 +2342,7 @@ function renderCurriculumGraphCanvas(root, graph, installed) {
         node.type = 'button';
         node.className = 'curriculum-graph-node';
         if (installed.has(deck.id)) node.classList.add('is-installed');
+        if (curriculumViewState.targetId === deck.id) node.classList.add('is-target');
         if (highlightsMatches && graph.seedIds.includes(deck.id)) node.classList.add('is-match');
         node.dataset.deckId = deck.id;
         node.style.left = `${deck.x}px`;
@@ -2330,12 +2350,33 @@ function renderCurriculumGraphCanvas(root, graph, installed) {
         node.style.width = `${deck.width}px`;
         node.style.height = `${deck.height}px`;
         node.title = `${deck.id}\n${deck.description || ''}`;
+        const nodeName = deck.nodeType === 'subject'
+            ? deck.id
+            : deck.nodeType === 'chapter'
+                ? `${deck.order}. ${deck.deck}`
+                : `${deck.order}. ${deck.deck}`;
+        const nodeMeta = deck.nodeType === 'subject'
+            ? `${deck.deck_count} decks`
+            : deck.nodeType === 'chapter'
+                ? `${deck.card_count || 0} cards`
+                : curriculumStatus(deck, installed);
         node.innerHTML = `
-            <span class="curriculum-graph-node-subject">${escapeHtml(deck.subject)}</span>
-            <span class="curriculum-graph-node-name">${escapeHtml(`${deck.order}. ${deck.deck}`)}</span>
-            <span class="curriculum-graph-node-status">${escapeHtml(curriculumStatus(deck, installed))}</span>
+            <span class="curriculum-graph-node-subject">${escapeHtml(deck.nodeType === 'subject' ? 'subject' : deck.subject)}</span>
+            <span class="curriculum-graph-node-name">${escapeHtml(nodeName)}</span>
+            <span class="curriculum-graph-node-status">${escapeHtml(nodeMeta)}</span>
         `;
-        node.onclick = () => openDependencyModal(deck.id);
+        node.onclick = () => {
+            if (deck.nodeType === 'subject') {
+                renderCurriculumView({ mode: 'subject', subject: deck.id, targetId: '', query: '' });
+            } else if (curriculumViewState.mode === 'path' && curriculumViewState.targetId === deck.id) {
+                openDependencyModal(deck.id);
+            } else if (deck.nodeType === 'chapter') {
+                const [deckId, chapterId] = deck.id.split('#');
+                openDependencyModal(deckId, chapterId);
+            } else {
+                renderCurriculumView({ mode: 'path', subject: deck.subject, targetId: deck.id, query: '' });
+            }
+        };
         nodeElements.push(node);
         viewport.appendChild(node);
     }
@@ -2443,23 +2484,46 @@ async function renderCurriculumView(options = {}) {
         return;
     }
     Object.assign(curriculumViewState, options);
-    const { query, subject, includeRecommended } = curriculumViewState;
+    const { query, subject, includeRecommended, mode, targetId } = curriculumViewState;
     const installed = installedCurriculumIds(await getAllDecks());
     const subjects = [...new Set(curriculumIndex.decks.map(deck => deck.subject))].sort();
-    const graph = curriculumGraph(curriculumIndex, {
-        subject: subject || null,
-        query,
-        includeRecommended
-    });
+    const graph = mode === 'overview'
+        ? subjectOverviewGraph(curriculumIndex, { query, includeRecommended })
+        : mode === 'path'
+            ? focusedCurriculumGraph(curriculumIndex, targetId, { includeRecommended })
+            : mode === 'chapters'
+                ? chapterGraph(curriculumIndex, targetId)
+                : curriculumGraph(curriculumIndex, {
+                    subject: subject || null,
+                    query,
+                    includeRecommended
+                });
 
     root.innerHTML = '';
     const toolbar = document.createElement('div');
     toolbar.className = 'curriculum-toolbar';
+    const modes = document.createElement('div');
+    modes.className = 'curriculum-mode-tabs';
+    const modeOptions = [
+        ['overview', 'Subjects'],
+        ...(subject ? [['subject', subject]] : []),
+        ...(targetId ? [['path', 'Path']] : []),
+        ...(targetId && curriculumMaps(curriculumIndex).decks.get(targetId)?.chapters?.length ? [['chapters', 'Chapters']] : [])
+    ];
+    for (const [value, label] of modeOptions) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.classList.toggle('active', mode === value);
+        button.onclick = () => renderCurriculumView({ mode: value, query: '' });
+        modes.appendChild(button);
+    }
     const search = document.createElement('input');
     search.type = 'search';
     search.placeholder = 'Search the curriculum...';
     search.value = query;
     search.setAttribute('aria-label', 'Search curriculum');
+    if (mode === 'path' || mode === 'chapters') search.classList.add('hidden');
     const select = document.createElement('select');
     select.setAttribute('aria-label', 'Filter curriculum by subject');
     select.innerHTML = `<option value="">All subjects</option>${subjects
@@ -2471,12 +2535,29 @@ async function renderCurriculumView(options = {}) {
     recommended.type = 'checkbox';
     recommended.checked = includeRecommended;
     recommendedLabel.append(recommended, document.createTextNode('Recommended paths'));
-    toolbar.append(search, select, recommendedLabel);
+    const sourcesButton = document.createElement('button');
+    sourcesButton.type = 'button';
+    sourcesButton.className = 'curriculum-toolbar-action';
+    sourcesButton.textContent = 'Sources';
+    sourcesButton.onclick = openCurriculumSources;
+    const createButton = document.createElement('button');
+    createButton.type = 'button';
+    createButton.className = 'curriculum-toolbar-action is-primary';
+    createButton.textContent = subject ? 'Edit subject' : 'Create curriculum';
+    createButton.onclick = () => openCurriculumBuilder(subject || '');
+    if (mode === 'overview') select.classList.add('hidden');
+    toolbar.append(modes, search, select, recommendedLabel, sourcesButton, createButton);
     root.appendChild(toolbar);
 
     const summary = document.createElement('div');
     summary.className = 'curriculum-summary';
-    summary.textContent = `${graph.nodes.length} of ${curriculumIndex.decks.length} decks · arrows point from prerequisite to dependent deck`;
+    summary.textContent = mode === 'overview'
+        ? `${graph.nodes.length} subjects · select one to explore its decks`
+        : mode === 'path'
+            ? `${graph.nodes.length} decks in the prerequisite path · select the highlighted target for details`
+            : mode === 'chapters'
+                ? `${graph.nodes.length} chapters · arrows point from prerequisite to dependent chapter`
+                : `${graph.nodes.length} decks · external prerequisites are retained as entry portals`;
     root.appendChild(summary);
 
     const controls = document.createElement('div');
@@ -2494,7 +2575,7 @@ async function renderCurriculumView(options = {}) {
     `;
     root.appendChild(controls);
     const controller = graph.nodes.length
-        ? renderCurriculumGraphCanvas(root, graph, installed)
+        ? await renderCurriculumGraphCanvas(root, graph, installed)
         : null;
     if (!controller) {
         const empty = document.createElement('div');
@@ -2513,19 +2594,177 @@ async function renderCurriculumView(options = {}) {
         timer = setTimeout(() => renderCurriculumView({
             query: search.value,
             subject: select.value,
-            includeRecommended: recommended.checked
+            includeRecommended: recommended.checked,
+            mode
         }), 120);
     });
     select.addEventListener('change', () => renderCurriculumView({
         query: search.value,
         subject: select.value,
-        includeRecommended: recommended.checked
+        includeRecommended: recommended.checked,
+        mode: select.value ? 'subject' : 'overview'
     }));
     recommended.addEventListener('change', () => renderCurriculumView({
         query: search.value,
         subject: select.value,
-        includeRecommended: recommended.checked
+        includeRecommended: recommended.checked,
+        mode
     }));
+}
+
+function curriculumOverlay(title) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay curriculum-builder-overlay';
+    overlay.innerHTML = `<div class="curriculum-builder-modal" role="dialog" aria-modal="true">
+        <header><h2>${escapeHtml(title)}</h2><button type="button" data-close aria-label="Close">×</button></header>
+        <div class="curriculum-builder-content"></div>
+    </div>`;
+    const close = () => overlay.remove();
+    overlay.querySelector('[data-close]').onclick = close;
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    document.body.appendChild(overlay);
+    return { overlay, content: overlay.querySelector('.curriculum-builder-content'), close };
+}
+
+function openCurriculumSources() {
+    const { content, close } = curriculumOverlay('Curriculum sources');
+    const sources = getCurriculumRegistrySources();
+    content.innerHTML = `<p class="curriculum-builder-help">Registries are public GitHub repositories. The first enabled source wins if two registries publish the same subject/deck ID.</p>
+        <div data-sources></div>
+        <button type="button" class="curriculum-add-row" data-add>Add source</button>
+        <div class="curriculum-builder-actions"><button type="button" data-save>Save and reload</button></div>`;
+    const list = content.querySelector('[data-sources]');
+    const render = () => {
+        list.innerHTML = '';
+        sources.forEach((source, index) => {
+            const row = document.createElement('div');
+            row.className = 'curriculum-source-row';
+            row.innerHTML = `<input type="checkbox" ${source.enabled !== false ? 'checked' : ''} aria-label="Enable source">
+                <input value="${escapeHtml(source.repository)}" placeholder="owner/curricula" aria-label="GitHub repository">
+                <input value="${escapeHtml(source.ref || 'master')}" placeholder="branch" aria-label="Branch">
+                <button type="button" aria-label="Remove source">×</button>`;
+            const inputs = row.querySelectorAll('input');
+            inputs[0].onchange = () => { source.enabled = inputs[0].checked; };
+            inputs[1].oninput = () => { source.repository = inputs[1].value.trim(); source.id = source.repository.replace('/', '-'); source.name = source.repository; };
+            inputs[2].oninput = () => { source.ref = inputs[2].value.trim(); };
+            row.querySelector('button').onclick = () => { sources.splice(index, 1); render(); };
+            list.appendChild(row);
+        });
+    };
+    render();
+    content.querySelector('[data-add]').onclick = () => {
+        sources.push({ id: 'new-source', name: 'New source', repository: '', ref: 'master', path: 'dist/curriculum.json', enabled: true });
+        render();
+    };
+    content.querySelector('[data-save]').onclick = () => {
+        try {
+            saveCurriculumRegistrySources(sources);
+            close();
+            location.reload();
+        } catch (error) {
+            alert(error.message);
+        }
+    };
+}
+
+function openCurriculumBuilder(subjectId = '') {
+    const existing = subjectId ? curriculumMaps(curriculumIndex).decks : new Map();
+    const subjectMeta = curriculumIndex.subjects?.find(item => item.id === subjectId) || {};
+    const draft = {
+        subject: subjectId,
+        title: subjectId ? subjectId.replaceAll('-', ' ').replace(/\b\w/g, value => value.toUpperCase()) : '',
+        destination: subjectMeta.destination || 'whole-field',
+        deckGranularity: subjectMeta.deck_granularity || 'course',
+        focus: Array.isArray(subjectMeta.focus) ? subjectMeta.focus.join(', ') : (subjectMeta.focus || ''),
+        instructions: '',
+        proposedDecks: [...existing.values()]
+            .filter(deck => deck.subject === subjectId)
+            .sort((a, b) => a.order - b.order)
+            .map(deck => ({
+                id: deck.deck,
+                description: deck.description || '',
+                prerequisites: (deck.prerequisites || []).map(id => id.startsWith(`${subjectId}/`) ? id.split('/')[1] : id)
+            }))
+    };
+    const { content } = curriculumOverlay(subjectId ? `Edit ${subjectId}` : 'Create curriculum');
+    content.innerHTML = `<p class="curriculum-builder-help">Define as much or as little as you want. The local isolated agent researches and completes the draft, validation checks the entire DAG, and the runner opens a draft pull request. Provider keys remain on your computer.</p>
+        <form class="curriculum-builder-form">
+            <div class="curriculum-builder-grid">
+                <label>Subject slug<input name="subject" value="${escapeHtml(draft.subject)}" placeholder="earth-science" ${subjectId ? 'readonly' : ''}></label>
+                <label>Title<input name="title" value="${escapeHtml(draft.title)}" placeholder="Earth Science"></label>
+                <label>Destination<select name="destination"><option>literacy</option><option>undergraduate-core</option><option>graduate-core</option><option>whole-field</option><option>research-specialization</option></select></label>
+                <label>Deck size<select name="deckGranularity"><option value="module">module</option><option value="course">course</option><option value="broad-area">broad-area</option></select></label>
+                <label>Focus areas<input name="focus" value="${escapeHtml(draft.focus)}" placeholder="neuroscience, genomics"></label>
+                <label>Local provider<select name="provider"><option value="codex">Codex</option><option value="custom">Custom runner</option></select></label>
+            </div>
+            <label>Instructions<textarea name="instructions" rows="3" placeholder="Learner goals, constraints, or branches to emphasize"></textarea></label>
+            <div class="curriculum-builder-decks-head"><h3>Draft decks and prerequisite edges</h3><button type="button" data-add-deck>Add deck</button></div>
+            <div data-decks class="curriculum-builder-decks"></div>
+            <div data-errors class="curriculum-builder-errors" aria-live="polite"></div>
+            <div class="curriculum-builder-actions"><button type="submit">Queue AI draft</button></div>
+        </form>`;
+    const form = content.querySelector('form');
+    const field = name => form.elements.namedItem(name);
+    field('destination').value = draft.destination;
+    field('deckGranularity').value = draft.deckGranularity;
+    const deckList = content.querySelector('[data-decks]');
+    const readDraft = () => ({
+        subject: field('subject').value,
+        title: field('title').value,
+        destination: field('destination').value,
+        deckGranularity: field('deckGranularity').value,
+        focus: field('focus').value,
+        instructions: field('instructions').value,
+        proposedDecks: draft.proposedDecks
+    });
+    const validate = () => {
+        const result = validateCurriculumDraft(readDraft());
+        content.querySelector('[data-errors]').textContent = result.errors.join(' ');
+        return result;
+    };
+    const renderDecks = () => {
+        deckList.innerHTML = '';
+        draft.proposedDecks.forEach((deck, index) => {
+            const row = document.createElement('div');
+            row.className = 'curriculum-builder-deck';
+            row.innerHTML = `<span class="curriculum-builder-order">${index + 1}</span>
+                <input value="${escapeHtml(deck.id)}" placeholder="deck-id" aria-label="Deck ID">
+                <input value="${escapeHtml(deck.description)}" placeholder="Purpose" aria-label="Deck purpose">
+                <input value="${escapeHtml((deck.prerequisites || []).join(', '))}" placeholder="requires: earlier-deck" aria-label="Prerequisites">
+                <span class="curriculum-builder-row-actions"><button type="button" data-up aria-label="Move up">↑</button><button type="button" data-down aria-label="Move down">↓</button><button type="button" data-remove aria-label="Remove">×</button></span>`;
+            const inputs = row.querySelectorAll('input');
+            inputs[0].oninput = () => { deck.id = inputs[0].value; validate(); };
+            inputs[1].oninput = () => { deck.description = inputs[1].value; };
+            inputs[2].oninput = () => { deck.prerequisites = inputs[2].value.split(',').map(value => value.trim()).filter(Boolean); validate(); };
+            row.querySelector('[data-up]').onclick = () => { if (index) [draft.proposedDecks[index - 1], draft.proposedDecks[index]] = [deck, draft.proposedDecks[index - 1]]; renderDecks(); };
+            row.querySelector('[data-down]').onclick = () => { if (index < draft.proposedDecks.length - 1) [draft.proposedDecks[index + 1], draft.proposedDecks[index]] = [deck, draft.proposedDecks[index + 1]]; renderDecks(); };
+            row.querySelector('[data-remove]').onclick = () => { draft.proposedDecks.splice(index, 1); renderDecks(); };
+            deckList.appendChild(row);
+        });
+        validate();
+    };
+    content.querySelector('[data-add-deck]').onclick = () => {
+        draft.proposedDecks.push({ id: '', description: '', prerequisites: [] });
+        renderDecks();
+    };
+    form.addEventListener('input', validate);
+    form.onsubmit = async event => {
+        event.preventDefault();
+        if (!githubAuth.isAuthenticated()) return alert('Sign in with GitHub to queue a curriculum draft.');
+        try {
+            const job = generationJobForDraft(readDraft(), { providerId: field('provider').value });
+            const button = form.querySelector('[type="submit"]');
+            button.disabled = true;
+            button.textContent = 'Queueing…';
+            const result = await githubAuth.apiRequest('/api/generation-requests', {
+                method: 'POST', body: JSON.stringify(job)
+            });
+            content.innerHTML = `<div class="curriculum-builder-success"><h3>Draft queued</h3><p>Request ${escapeHtml(result.request.id)} is waiting for your local isolated runner.</p><code>flashcards requests run --registry-root /path/to/curricula</code><p>The runner will open a draft pull request; nothing merges automatically.</p></div>`;
+        } catch (error) {
+            content.querySelector('[data-errors]').textContent = error.message;
+        }
+    };
+    renderDecks();
 }
 
 function dependencyItemMarkup(name, meta, command = null) {

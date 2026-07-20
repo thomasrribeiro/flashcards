@@ -4,6 +4,7 @@ public/data/*
 !public/data/curriculum.json
 .DS_Store
 *.log
+test-results/
 .env
 
 public/collection/index.json
