@@ -3266,6 +3266,214 @@ body.standalone-phone .mobile-sidebar-close {
     font-size: 0.72rem;
 }
 
+.curriculum-recommended-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 40px;
+    padding: 0 10px;
+    border: 1px solid var(--black);
+    background: var(--white);
+    color: var(--black);
+    font-size: 0.68rem;
+    white-space: nowrap;
+}
+
+.curriculum-recommended-toggle input {
+    min-height: auto;
+    margin: 0;
+    padding: 0;
+}
+
+.curriculum-graph-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 42px;
+    padding: 5px 8px;
+    border: 1px solid var(--black);
+    border-bottom: 0;
+    background: var(--light-gray);
+}
+
+.curriculum-graph-legend,
+.curriculum-graph-legend > span,
+.curriculum-graph-zoom {
+    display: inline-flex;
+    align-items: center;
+}
+
+.curriculum-graph-legend {
+    gap: 15px;
+    color: var(--muted);
+    font-size: 0.64rem;
+}
+
+.curriculum-graph-legend > span {
+    gap: 6px;
+}
+
+.curriculum-graph-legend i {
+    display: inline-block;
+    width: 28px;
+    height: 0;
+    border-top: 2px solid var(--muted);
+}
+
+.curriculum-graph-legend i.recommended {
+    border-top-style: dashed;
+    border-top-color: var(--gold);
+}
+
+.curriculum-graph-zoom {
+    gap: 5px;
+}
+
+.curriculum-graph-zoom button {
+    min-width: 34px;
+    min-height: 30px;
+    border: 1px solid var(--black);
+    background: var(--white);
+    color: var(--black);
+    font: inherit;
+    font-size: 0.68rem;
+}
+
+.curriculum-graph-zoom button:hover,
+.curriculum-graph-zoom button:focus-visible {
+    color: var(--muted);
+}
+
+.curriculum-graph-stage {
+    position: relative;
+    height: clamp(480px, 68dvh, 760px);
+    overflow: hidden;
+    border: 1px solid var(--black);
+    background-color: var(--white);
+    background-image:
+        linear-gradient(to right, var(--subtle-border) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--subtle-border) 1px, transparent 1px);
+    background-size: 28px 28px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.curriculum-graph-stage.is-panning {
+    cursor: grabbing;
+}
+
+.curriculum-graph-viewport {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.curriculum-graph-edges {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.curriculum-graph-edge {
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 1.8;
+    opacity: 0.64;
+    transition: opacity 120ms ease, stroke 120ms ease, stroke-width 120ms ease;
+}
+
+.curriculum-graph-edge.is-recommended {
+    stroke: var(--gold);
+    stroke-dasharray: 8 7;
+    opacity: 0.74;
+}
+
+#curriculum-arrow-required path {
+    fill: var(--muted);
+}
+
+#curriculum-arrow-recommended path {
+    fill: var(--gold);
+}
+
+.curriculum-graph-edge.is-dimmed,
+.curriculum-graph-node.is-dimmed {
+    opacity: 0.1;
+}
+
+.curriculum-graph-edge.is-related {
+    stroke: var(--gold);
+    stroke-width: 3;
+    opacity: 1;
+}
+
+.curriculum-graph-node {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    overflow: hidden;
+    border: 1px solid var(--black);
+    border-left: 4px solid var(--muted);
+    background: var(--white);
+    padding: 8px 10px;
+    color: var(--black);
+    text-align: left;
+    font: inherit;
+    transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.curriculum-graph-node.is-installed {
+    border-left-color: #30964b;
+}
+
+.curriculum-graph-node.is-match {
+    border-left-color: var(--gold);
+    background: color-mix(in srgb, var(--gold) 10%, var(--white));
+}
+
+.curriculum-graph-node:hover,
+.curriculum-graph-node:focus-visible,
+.curriculum-graph-node.is-related {
+    z-index: 2;
+    border-color: var(--gold);
+    background: color-mix(in srgb, var(--gold) 18%, var(--white));
+}
+
+.curriculum-graph-node-subject,
+.curriculum-graph-node-status {
+    color: var(--muted);
+    font-size: 0.52rem;
+    line-height: 1.2;
+}
+
+.curriculum-graph-node-subject {
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.curriculum-graph-node-name {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    margin: 3px 0;
+    font-size: 0.66rem;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.curriculum-graph-empty {
+    min-height: 220px;
+    border: 1px solid var(--black);
+}
+
 .curriculum-map {
     border: 1px solid var(--black);
 }
@@ -3419,6 +3627,20 @@ body.standalone-phone .mobile-sidebar-close {
 
 @media (max-width: 760px) {
     .curriculum-toolbar {
+        flex-direction: column;
+    }
+
+    .curriculum-recommended-toggle {
+        width: 100%;
+    }
+
+    .curriculum-graph-stage {
+        height: 62dvh;
+        min-height: 430px;
+    }
+
+    .curriculum-graph-controls {
+        align-items: flex-start;
         flex-direction: column;
     }
 

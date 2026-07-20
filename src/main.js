@@ -44,9 +44,10 @@ import {
 } from './chapter-progress.js';
 import {
     chapterForFile,
-    curriculumDeckRows,
+    curriculumGraph,
     curriculumMaps,
     dependencyPlan,
+    layoutCurriculumGraph,
     loadCurriculumIndex
 } from './curriculum.js';
 
@@ -416,7 +417,9 @@ function populateCategoryFilter(decks) {
 /**
  * Load and display repositories
  */
+let repositoryRenderGeneration = 0;
 async function loadRepositories() {
+    const renderGeneration = ++repositoryRenderGeneration;
     const grid = document.getElementById('topics-grid');
     const controlsBar = document.getElementById('controls-bar');
 
@@ -476,6 +479,12 @@ async function loadRepositories() {
             }
         }
 
+        // Startup, navigation, and scope mutations may overlap repository
+        // refreshes. Only the newest invocation may render; otherwise a stale
+        // legacy category render can append cards beneath the column viewer.
+        if (renderGeneration !== repositoryRenderGeneration
+            || currentMainView !== 'decks') return;
+
         // Clear loading message
         grid.innerHTML = '';
 
@@ -508,46 +517,18 @@ async function loadRepositories() {
         const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
         const breadcrumb = document.getElementById('deck-breadcrumb');
 
-        if (currentCategory === null) {
-            // HOME LEVEL: tree (default), columns, or legacy category-card grid
-            grid.classList.toggle('tree-mode', deckViewMode === 'tree');
-            grid.classList.toggle('columns-mode', deckViewMode === 'columns');
-            if (deckViewMode === 'tree') {
-                renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid);
-            } else if (deckViewMode === 'columns') {
-                renderColumnsView(displayDecks, allCards, allReviews, allChapterProgress, searchTerm, grid, {
-                    panes: previousColumnScroll,
-                    left: previousColumnsLeft
-                });
-            } else {
-                _renderCategoryGrid(displayDecks, allCards, allReviews, searchTerm, grid);
-            }
-        } else {
-            grid.classList.remove('tree-mode', 'columns-mode');
-            // CATEGORY LEVEL: render deck cards for the current category
-            const filteredDecks = displayDecks.filter(deck => {
-                const subject = subjectSlug(deck.subject);
-                return subject === currentCategory;
-            });
-
-            for (const deck of filteredDecks) {
-                const deckCards = allCards.filter(c => c.deckName === deck.id);
-                const deckReviews = allReviews.filter(r => deckCards.some(c => c.hash === r.cardHash));
-                grid.appendChild(createDeckCard({
-                    ...deck,
-                    cards: deckCards,
-                    reviews: new Map(deckReviews.map(r => [r.cardHash, r]))
-                }));
-            }
-
-            // Render placeholders for repos that failed to load
-            const failedRepos = window.__failedRepos || [];
-            for (const failed of failedRepos) {
-                grid.appendChild(createFailedRepoCard(failed));
-            }
-
-            renderEvictedNotice();
-        }
+        // Columns is the sole collection view. Legacy tree/card renderers stay
+        // available only to restore old in-flight study URLs and can no longer
+        // be selected by stale category state.
+        deckViewMode = 'columns';
+        currentCategory = null;
+        currentDeck = null;
+        grid.classList.remove('tree-mode');
+        grid.classList.add('columns-mode');
+        renderColumnsView(displayDecks, allCards, allReviews, allChapterProgress, searchTerm, grid, {
+            panes: previousColumnScroll,
+            left: previousColumnsLeft
+        });
 
         updateDeckBreadcrumb();
 
@@ -557,6 +538,8 @@ async function loadRepositories() {
 
     } catch (error) {
         console.error('Error loading repositories:', error);
+        if (renderGeneration !== repositoryRenderGeneration
+            || currentMainView !== 'decks') return;
         grid.innerHTML = `
             <div class="loading">
                 Error loading repositories. Please check the console for details.
@@ -1196,6 +1179,11 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 let columnsSel = { subject: null, deck: null, chapter: null };
 let curriculumIndex = null;
 let activeDependencyTarget = null;
+const curriculumViewState = {
+    query: '',
+    subject: '',
+    includeRecommended: true
+};
 
 function curriculumDeckForRepository(deckId, subject = null) {
     if (!curriculumIndex) return null;
@@ -2277,21 +2265,192 @@ function curriculumStatus(deck, installed) {
     return 'planned';
 }
 
-async function renderCurriculumView({ query = '', subject = '' } = {}) {
+function curriculumEdgePath(source, target) {
+    const x1 = source.x + source.width;
+    const y1 = source.y + source.height / 2;
+    const x2 = target.x;
+    const y2 = target.y + target.height / 2;
+    const bend = Math.max(44, (x2 - x1) * 0.44);
+    return `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`;
+}
+
+function renderCurriculumGraphCanvas(root, graph, installed) {
+    const layout = layoutCurriculumGraph(graph);
+    const stage = document.createElement('div');
+    stage.className = 'curriculum-graph-stage';
+    stage.setAttribute('aria-label', 'Interactive curriculum prerequisite graph');
+    const viewport = document.createElement('div');
+    viewport.className = 'curriculum-graph-viewport';
+    viewport.style.width = `${layout.width}px`;
+    viewport.style.height = `${layout.height}px`;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add('curriculum-graph-edges');
+    svg.setAttribute('width', String(layout.width));
+    svg.setAttribute('height', String(layout.height));
+    svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
+    svg.innerHTML = `
+        <defs>
+            <marker id="curriculum-arrow-required" viewBox="0 0 8 8" refX="7" refY="4"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 8 4 L 0 8 z"></path>
+            </marker>
+            <marker id="curriculum-arrow-recommended" viewBox="0 0 8 8" refX="7" refY="4"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 8 4 L 0 8 z"></path>
+            </marker>
+        </defs>
+    `;
+    const positioned = new Map(layout.nodes.map(node => [node.id, node]));
+    for (const edge of layout.edges) {
+        const source = positioned.get(edge.source);
+        const target = positioned.get(edge.target);
+        if (!source || !target) continue;
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.classList.add('curriculum-graph-edge', `is-${edge.type}`);
+        path.dataset.source = edge.source;
+        path.dataset.target = edge.target;
+        path.setAttribute('d', curriculumEdgePath(source, target));
+        path.setAttribute('marker-end', `url(#curriculum-arrow-${edge.type})`);
+        svg.appendChild(path);
+    }
+    viewport.appendChild(svg);
+
+    const nodeElements = [];
+    const highlightsMatches = graph.seedIds.length < graph.nodes.length;
+    for (const deck of layout.nodes) {
+        const node = document.createElement('button');
+        node.type = 'button';
+        node.className = 'curriculum-graph-node';
+        if (installed.has(deck.id)) node.classList.add('is-installed');
+        if (highlightsMatches && graph.seedIds.includes(deck.id)) node.classList.add('is-match');
+        node.dataset.deckId = deck.id;
+        node.style.left = `${deck.x}px`;
+        node.style.top = `${deck.y}px`;
+        node.style.width = `${deck.width}px`;
+        node.style.height = `${deck.height}px`;
+        node.title = `${deck.id}\n${deck.description || ''}`;
+        node.innerHTML = `
+            <span class="curriculum-graph-node-subject">${escapeHtml(deck.subject)}</span>
+            <span class="curriculum-graph-node-name">${escapeHtml(`${deck.order}. ${deck.deck}`)}</span>
+            <span class="curriculum-graph-node-status">${escapeHtml(curriculumStatus(deck, installed))}</span>
+        `;
+        node.onclick = () => openDependencyModal(deck.id);
+        nodeElements.push(node);
+        viewport.appendChild(node);
+    }
+    stage.appendChild(viewport);
+    root.appendChild(stage);
+
+    const edgeElements = [...svg.querySelectorAll('.curriculum-graph-edge')];
+    const setRelated = deckId => {
+        const related = new Set([deckId]);
+        for (const edge of layout.edges) {
+            if (edge.source === deckId || edge.target === deckId) {
+                related.add(edge.source);
+                related.add(edge.target);
+            }
+        }
+        nodeElements.forEach(node => {
+            node.classList.toggle('is-dimmed', !related.has(node.dataset.deckId));
+            node.classList.toggle('is-related', related.has(node.dataset.deckId));
+        });
+        edgeElements.forEach(edge => {
+            const active = edge.dataset.source === deckId || edge.dataset.target === deckId;
+            edge.classList.toggle('is-dimmed', !active);
+            edge.classList.toggle('is-related', active);
+        });
+    };
+    const clearRelated = () => {
+        [...nodeElements, ...edgeElements].forEach(element =>
+            element.classList.remove('is-dimmed', 'is-related'));
+    };
+    nodeElements.forEach(node => {
+        node.addEventListener('pointerenter', () => setRelated(node.dataset.deckId));
+        node.addEventListener('pointerleave', clearRelated);
+        node.addEventListener('focus', () => setRelated(node.dataset.deckId));
+        node.addEventListener('blur', clearRelated);
+    });
+
+    let transform = { x: 24, y: 24, scale: 1 };
+    const applyTransform = () => {
+        viewport.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`;
+    };
+    const fit = () => {
+        const width = Math.max(1, stage.clientWidth - 48);
+        const height = Math.max(1, stage.clientHeight - 48);
+        transform.scale = Math.min(1, width / layout.width, height / layout.height);
+        transform.x = (stage.clientWidth - layout.width * transform.scale) / 2;
+        transform.y = (stage.clientHeight - layout.height * transform.scale) / 2;
+        applyTransform();
+    };
+    const zoomAt = (factor, clientX = null, clientY = null) => {
+        const rect = stage.getBoundingClientRect();
+        const pointX = clientX == null ? rect.width / 2 : clientX - rect.left;
+        const pointY = clientY == null ? rect.height / 2 : clientY - rect.top;
+        const next = Math.min(1.8, Math.max(0.15, transform.scale * factor));
+        const worldX = (pointX - transform.x) / transform.scale;
+        const worldY = (pointY - transform.y) / transform.scale;
+        transform.x = pointX - worldX * next;
+        transform.y = pointY - worldY * next;
+        transform.scale = next;
+        applyTransform();
+    };
+
+    let drag = null;
+    stage.addEventListener('pointerdown', event => {
+        if (event.target.closest('.curriculum-graph-node')) return;
+        drag = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            originX: transform.x,
+            originY: transform.y
+        };
+        stage.setPointerCapture(event.pointerId);
+        stage.classList.add('is-panning');
+    });
+    stage.addEventListener('pointermove', event => {
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        transform.x = drag.originX + event.clientX - drag.startX;
+        transform.y = drag.originY + event.clientY - drag.startY;
+        applyTransform();
+    });
+    const endDrag = event => {
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        drag = null;
+        stage.classList.remove('is-panning');
+    };
+    stage.addEventListener('pointerup', endDrag);
+    stage.addEventListener('pointercancel', endDrag);
+    stage.addEventListener('wheel', event => {
+        event.preventDefault();
+        zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX, event.clientY);
+    }, { passive: false });
+    requestAnimationFrame(fit);
+    return {
+        fit,
+        zoomIn: () => zoomAt(1.2),
+        zoomOut: () => zoomAt(1 / 1.2)
+    };
+}
+
+async function renderCurriculumView(options = {}) {
     const root = document.getElementById('curriculum-view');
     if (!root) return;
     if (!curriculumIndex) {
         root.innerHTML = '<div class="loading">Curriculum data is unavailable.</div>';
         return;
     }
+    Object.assign(curriculumViewState, options);
+    const { query, subject, includeRecommended } = curriculumViewState;
     const installed = installedCurriculumIds(await getAllDecks());
     const subjects = [...new Set(curriculumIndex.decks.map(deck => deck.subject))].sort();
-    const rows = curriculumDeckRows(curriculumIndex, { subject: subject || null, query });
-    const grouped = new Map();
-    for (const deck of rows) {
-        if (!grouped.has(deck.subject)) grouped.set(deck.subject, []);
-        grouped.get(deck.subject).push(deck);
-    }
+    const graph = curriculumGraph(curriculumIndex, {
+        subject: subject || null,
+        query,
+        includeRecommended
+    });
 
     root.innerHTML = '';
     const toolbar = document.createElement('div');
@@ -2306,61 +2465,66 @@ async function renderCurriculumView({ query = '', subject = '' } = {}) {
     select.innerHTML = `<option value="">All subjects</option>${subjects
         .map(item => `<option value="${escapeHtml(item)}"${item === subject ? ' selected' : ''}>${escapeHtml(item)}</option>`)
         .join('')}`;
-    toolbar.append(search, select);
+    const recommendedLabel = document.createElement('label');
+    recommendedLabel.className = 'curriculum-recommended-toggle';
+    const recommended = document.createElement('input');
+    recommended.type = 'checkbox';
+    recommended.checked = includeRecommended;
+    recommendedLabel.append(recommended, document.createTextNode('Recommended paths'));
+    toolbar.append(search, select, recommendedLabel);
     root.appendChild(toolbar);
 
     const summary = document.createElement('div');
     summary.className = 'curriculum-summary';
-    summary.textContent = `${rows.length} of ${curriculumIndex.decks.length} decks · solid requirements are listed before each dependent deck · recommended preparation is marked separately`;
+    summary.textContent = `${graph.nodes.length} of ${curriculumIndex.decks.length} decks · arrows point from prerequisite to dependent deck`;
     root.appendChild(summary);
 
-    const map = document.createElement('div');
-    map.className = 'curriculum-map';
-    for (const [subjectId, decks] of grouped) {
-        const section = document.createElement('section');
-        section.className = 'curriculum-subject';
-        const heading = document.createElement('h3');
-        heading.className = 'curriculum-subject-title';
-        heading.textContent = subjectId;
-        section.appendChild(heading);
-        for (const deck of decks) {
-            const node = document.createElement('button');
-            node.type = 'button';
-            node.className = 'curriculum-node';
-            const required = deck.prerequisites?.length
-                ? deck.prerequisites.join(' · ')
-                : 'entry point';
-            const recommended = deck.recommended_after?.length
-                ? `recommended: ${deck.recommended_after.join(' · ')}`
-                : '';
-            node.innerHTML = `
-                <span>
-                    <span class="curriculum-node-status">${escapeHtml(curriculumStatus(deck, installed))}</span>
-                    <span class="curriculum-node-name">${escapeHtml(`${deck.order}. ${deck.deck}`)}</span>
-                    <span class="curriculum-node-meta">${escapeHtml(`${deck.level || 'unspecified'} · ${deck.tier || 'unclassified'}`)}</span>
-                </span>
-                <span class="curriculum-node-description">${escapeHtml(deck.description || '')}</span>
-                <span class="curriculum-node-edges">requires: ${escapeHtml(required)}${recommended ? `<br>${escapeHtml(recommended)}` : ''}</span>
-            `;
-            node.onclick = () => openDependencyModal(deck.id);
-            section.appendChild(node);
-        }
-        map.appendChild(section);
+    const controls = document.createElement('div');
+    controls.className = 'curriculum-graph-controls';
+    controls.innerHTML = `
+        <span class="curriculum-graph-legend">
+            <span><i class="required"></i>Required</span>
+            <span><i class="recommended"></i>Recommended</span>
+        </span>
+        <span class="curriculum-graph-zoom">
+            <button type="button" data-action="out" aria-label="Zoom out">−</button>
+            <button type="button" data-action="in" aria-label="Zoom in">+</button>
+            <button type="button" data-action="fit">Fit</button>
+        </span>
+    `;
+    root.appendChild(controls);
+    const controller = graph.nodes.length
+        ? renderCurriculumGraphCanvas(root, graph, installed)
+        : null;
+    if (!controller) {
+        const empty = document.createElement('div');
+        empty.className = 'loading curriculum-graph-empty';
+        empty.textContent = 'No curriculum matches.';
+        root.appendChild(empty);
+    } else {
+        controls.querySelector('[data-action="out"]').onclick = controller.zoomOut;
+        controls.querySelector('[data-action="in"]').onclick = controller.zoomIn;
+        controls.querySelector('[data-action="fit"]').onclick = controller.fit;
     }
-    if (rows.length === 0) map.innerHTML = '<div class="loading">No curriculum matches.</div>';
-    root.appendChild(map);
 
     let timer = null;
     search.addEventListener('input', () => {
         clearTimeout(timer);
         timer = setTimeout(() => renderCurriculumView({
             query: search.value,
-            subject: select.value
+            subject: select.value,
+            includeRecommended: recommended.checked
         }), 120);
     });
     select.addEventListener('change', () => renderCurriculumView({
         query: search.value,
-        subject: select.value
+        subject: select.value,
+        includeRecommended: recommended.checked
+    }));
+    recommended.addEventListener('change', () => renderCurriculumView({
+        query: search.value,
+        subject: select.value,
+        includeRecommended: recommended.checked
     }));
 }
 

@@ -13,7 +13,7 @@
  * Also handles Web Push (see B3): a push shows a notification; a tap opens the app.
  */
 
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL_CACHE = `shell-${VERSION}`;
 const ASSET_CACHE = `assets-${VERSION}`;
 const GH_CACHE = `github-${VERSION}`;

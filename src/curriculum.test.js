@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
     chapterPrerequisiteClosure,
+    curriculumGraph,
     curriculumDeckRows,
-    dependencyPlan
+    dependencyPlan,
+    layoutCurriculumGraph
 } from './curriculum.js';
 
 const index = {
@@ -95,5 +97,37 @@ describe('curriculum dependency planning', () => {
             'mathematics/arithmetic',
             'mathematics/algebra'
         ]);
+    });
+
+    it('keeps cross-subject ancestors when filtering the interactive graph', () => {
+        const graph = curriculumGraph(index, { subject: 'physics' });
+        expect(graph.nodes.map(node => node.id)).toEqual([
+            'mathematics/arithmetic',
+            'mathematics/algebra',
+            'physics/physical-reasoning'
+        ]);
+        expect(graph.edges.filter(edge => edge.type === 'required')).toEqual([
+            {
+                source: 'mathematics/arithmetic',
+                target: 'mathematics/algebra',
+                type: 'required'
+            },
+            {
+                source: 'mathematics/algebra',
+                target: 'physics/physical-reasoning',
+                type: 'required'
+            }
+        ]);
+    });
+
+    it('lays hard prerequisites in earlier columns', () => {
+        const graph = curriculumGraph(index);
+        const layout = layoutCurriculumGraph(graph);
+        const nodes = new Map(layout.nodes.map(node => [node.id, node]));
+        expect(nodes.get('mathematics/arithmetic').rank).toBe(0);
+        expect(nodes.get('mathematics/algebra').rank).toBe(1);
+        expect(nodes.get('physics/physical-reasoning').rank).toBe(2);
+        expect(layout.width).toBeGreaterThan(0);
+        expect(layout.height).toBeGreaterThan(0);
     });
 });
