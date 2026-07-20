@@ -81,6 +81,10 @@ describe('resolveRepositorySubject', () => {
     it('recognizes misc as an explicit canonical repository topic', () => {
         expect(resolveRepositorySubject(['flashcards', 'misc'], 'physics')).toBe('misc');
     });
+
+    it('falls back to the manifest subject when no canonical topic exists', () => {
+        expect(resolveRepositorySubject(['flashcards'], 'mathematics')).toBe('mathematics');
+    });
 });
 
 describe('parseDeckManifest', () => {
@@ -95,6 +99,7 @@ recommended_decks = [
   "mathematics/geometry",
 ]
 `)).toEqual({
+            subject: 'physics',
             curriculumOrder: 4,
             curriculumId: 'physics/mechanics',
             prerequisiteDecks: ['mathematics/algebra'],
@@ -103,7 +108,13 @@ recommended_decks = [
     });
 
     it('treats missing and zero orders as unlisted', () => {
-        expect(parseDeckManifest('deck = "legacy"\n')).toMatchObject({ curriculumOrder: null });
-        expect(parseDeckManifest('curriculum_order = 0\n')).toMatchObject({ curriculumOrder: null });
+        expect(parseDeckManifest('deck = "legacy"\n')).toMatchObject({
+            subject: null,
+            curriculumOrder: null
+        });
+        expect(parseDeckManifest('curriculum_order = 0\n')).toMatchObject({
+            subject: null,
+            curriculumOrder: null
+        });
     });
 });

@@ -28,6 +28,7 @@ export function parseDeckManifest(content = '') {
     const subject = string('subject');
     const deck = string('deck');
     return {
+        subject,
         curriculumOrder: Number.isInteger(curriculumOrder) && curriculumOrder > 0
             ? curriculumOrder
             : null,
@@ -106,7 +107,10 @@ export async function loadRepositoryMetadata(repoString, { sync = false } = {}) 
         throw new Error(`No markdown files found in ${owner}/${repo}/flashcards/. Repos must have a flashcards/ folder.`);
     }
 
-    const subject = resolveRepositorySubject(repoInfo.topics || [], existing?.subject);
+    const subject = resolveRepositorySubject(
+        repoInfo.topics || [],
+        curriculumMetadata?.subject || existing?.subject
+    );
     const repoData = githubClient.createRepoData(repoInfo, markdownFiles);
     const deck = {
         ...repoData,
