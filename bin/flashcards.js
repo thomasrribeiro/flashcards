@@ -20,6 +20,7 @@ import {
 import { materializeCurriculumDeck } from './lib/materialize.js';
 import { buildRegistry, formatRegistry, resolveRegistry } from './lib/registry.js';
 import { providerRunner, runExternalProviderJob } from './lib/agent-provider.js';
+import { executionOptionsForGenerationJob } from './lib/generation-job.js';
 import {
     abandonRegistryDraft,
     beginRegistryDraft,
@@ -699,7 +700,7 @@ requests
 
 addAgentOptions(requests
     .command('run')
-    .description('Run the oldest queued request locally in an isolated Codex pilot')
+    .description('Run the oldest queued request with its selected local provider and model')
     .option('--worker-url <url>', 'Flashcards Worker URL')
     .option('--notes-root <path>', 'Notes collection root for deck jobs')
     .option('--registry-root <path>', 'Curriculum registry checkout for subject-design jobs')
@@ -748,7 +749,7 @@ addAgentOptions(requests
                     : runSubjectAgent({
                         subjectPath: subjectResult.subjectPath,
                         model: queued.model_id || options.model,
-                        reasoningEffort: options.reasoningEffort,
+                        reasoningEffort: payload.reasoningEffort || options.reasoningEffort,
                         destination,
                         deckGranularity,
                         focus,
@@ -774,17 +775,13 @@ addAgentOptions(requests
                 });
                 console.log(`${materialized.created ? 'Created' : 'Using'} deck: ${materialized.deckPath}`);
                 const mode = jobType === 'deck-audit' ? 'audit' : 'build';
-                if (jobType === 'chapter-expand') {
-                    const chapter = Number.parseInt(String(payload.chapterId || queued.chapter_id).slice(0, 2), 10);
-                    if (!Number.isInteger(chapter)) throw new Error('Chapter job has no ordered chapter identifier.');
-                    options.chapter = chapter;
-                }
+                const executionOptions = executionOptionsForGenerationJob(queued, payload, options);
                 agent = runner
                     ? runExternalProviderJob({ ...queued, payload }, {
                         workspacePath: materialized.deckPath,
                         command: runner
                     })
-                    : executeAgent(mode, materialized.deckPath, options);
+                    : executeAgent(mode, materialized.deckPath, executionOptions);
             }
             if (agent.status !== 0) throw new Error(`Deck agent exited with status ${agent.status}`);
             await updateGenerationRequest(queued.id, { status: 'needs-review', resultUrl }, {

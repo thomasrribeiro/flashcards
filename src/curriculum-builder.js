@@ -60,7 +60,8 @@ export function generationJobForDraft(input, {
     registryId = 'thomas-ribeiro',
     targetRepository = 'thomasrribeiro-flashcards/curricula',
     providerId = 'codex',
-    modelId = null
+    modelId = null,
+    reasoningEffort = 'high'
 } = {}) {
     const { draft, errors } = validateCurriculumDraft(input);
     if (errors.length) throw new Error(errors.join('\n'));
@@ -70,6 +71,6 @@ export function generationJobForDraft(input, {
         targetRepository,
         providerId,
         modelId: modelId || null,
-        payload: draft
+        payload: { ...draft, reasoningEffort }
     };
 }

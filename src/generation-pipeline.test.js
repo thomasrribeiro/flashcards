@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { providerRunner, runExternalProviderJob } from '../bin/lib/agent-provider.js';
+import { executionOptionsForGenerationJob } from '../bin/lib/generation-job.js';
 import {
     abandonRegistryDraft,
     assertCleanRegistryWorktree,
@@ -19,6 +20,34 @@ const temporaryRoot = async () => {
 afterEach(async () => Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))));
 
 describe('local generation pipeline', () => {
+    it('maps the queued model and approved build scope into the standard CLI options', () => {
+        const options = executionOptionsForGenerationJob({
+            job_type: 'deck-build',
+            model_id: 'gpt-example'
+        }, {
+            buildScope: 'full',
+            reasoningEffort: 'xhigh'
+        }, {
+            model: 'local-default',
+            isolated: true
+        });
+        expect(options).toMatchObject({
+            model: 'gpt-example',
+            reasoningEffort: 'xhigh',
+            full: true,
+            isolated: true
+        });
+    });
+
+    it('keeps pilot jobs partial and resolves chapter expansion deterministically', () => {
+        expect(executionOptionsForGenerationJob({ job_type: 'deck-build' }, {
+            buildScope: 'pilot'
+        }).full).toBe(false);
+        expect(executionOptionsForGenerationJob({ job_type: 'chapter-expand' }, {
+            chapterId: '03_kinematics_1d'
+        }).chapter).toBe(3);
+    });
+
     it('runs a generic provider with a temporary secret-free manifest', async () => {
         const root = await temporaryRoot();
         const runner = path.join(root, 'runner.sh');

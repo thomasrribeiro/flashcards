@@ -159,7 +159,7 @@
                     <div class="modal-overlay"></div>
                     <form id="study-settings-panel" class="modal-content study-settings-modal-content">
                         <div class="modal-header">
-                            <h3 id="study-settings-title">Study settings</h3>
+                            <h3 id="study-settings-title">Settings</h3>
                             <button id="study-settings-close" class="modal-close" type="button" aria-label="Close settings">&times;</button>
                         </div>
                         <div class="modal-body study-settings-body">
@@ -195,6 +195,29 @@
                             </div>
                             <p class="study-settings-help">The target is a guide, not a lock. Extra learning stays in finite batches so future review load remains visible.</p>
                             <p id="reminder-settings-help" class="study-settings-help">Reminders use this device’s timezone and are sent only when cards are due or a session is paused.</p>
+                            <h4 class="study-settings-section-title">Curriculum generation</h4>
+                            <div class="study-setting-field">
+                                <label for="generation-provider">Local agent provider</label>
+                                <select id="generation-provider">
+                                    <option value="codex">Codex CLI</option>
+                                    <option value="custom">Custom local runner</option>
+                                </select>
+                            </div>
+                            <div class="study-setting-field">
+                                <label for="generation-model">Model</label>
+                                <input id="generation-model" type="text" maxlength="120" placeholder="Use the local provider default" autocomplete="off" />
+                            </div>
+                            <div class="study-setting-field">
+                                <label for="generation-reasoning">Reasoning effort</label>
+                                <select id="generation-reasoning">
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                    <option value="xhigh">Extra high</option>
+                                </select>
+                            </div>
+                            <p class="study-settings-help">Only the provider, model name, and reasoning effort are attached to a queued job. API keys are never entered, transmitted, or stored here.</p>
+                            <p class="study-settings-help">Authenticate Codex on the computer that runs the queue with <code>printenv OPENAI_API_KEY | codex login --with-api-key</code>, or provide <code>CODEX_API_KEY</code> to that one CLI run.</p>
                         </div>
                         <div class="modal-footer">
                             <button id="study-settings-cancel" class="btn-cancel" type="button">Cancel</button>
@@ -255,6 +278,7 @@
                         <div class="modal-footer dependency-footer">
                             <button id="dependency-copy-command" class="btn-cancel hidden" type="button">Copy generation command</button>
                             <button id="dependency-request-generation" class="btn-cancel hidden" type="button">Request generation</button>
+                            <button id="dependency-generate-deck" class="btn-primary hidden" type="button">Generate pilot chapter</button>
                             <button id="dependency-add-path" class="btn-primary" type="button">Add prerequisite path</button>
                         </div>
                     </div>

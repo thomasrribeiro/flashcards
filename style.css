@@ -1503,12 +1503,20 @@ kbd {
 
 .study-settings-modal-content {
     max-width: 540px;
+    min-height: 0;
 }
 
 .study-settings-body {
     display: grid;
     grid-template-columns: repeat(2, minmax(180px, 1fr));
     gap: 12px 18px;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.study-settings-modal-content .modal-footer {
+    flex-shrink: 0;
+    background: var(--white);
 }
 
 .study-setting-field {
@@ -1544,6 +1552,13 @@ kbd {
     color: #666;
     font-size: 0.72rem;
     line-height: 1.45;
+}
+
+.study-settings-section-title {
+    margin: 18px 0 2px;
+    padding-top: 14px;
+    border-top: 1px solid var(--subtle-border);
+    font-size: 0.78rem;
 }
 
 #daily-reminder-time {
@@ -3783,6 +3798,13 @@ body.standalone-phone .mobile-sidebar-close {
     color: var(--black);
     font-size: 0.66rem;
     white-space: nowrap;
+}
+
+.dependency-generation-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.5;
 }
 
 .dependency-empty {

@@ -256,8 +256,20 @@ fresh Codex run can consume the oldest request with:
 ```bash
 export FLASHCARDS_WORKER_URL=https://flashcards-worker-prod.example.workers.dev
 flashcards requests list
-flashcards requests run --registry-root /path/to/curricula
+flashcards requests run --notes-root ~/notes --registry-root /path/to/curricula
 ```
+
+In the Curriculum view, select a planned deck and use **Generate pilot
+chapter** to enqueue that same isolated deck pipeline. After the pilot passes
+human review and is explicitly approved, the action becomes **Generate
+remaining chapters**. Generation settings select the local provider, model,
+and reasoning effort for each queued job; leaving the model blank uses the
+runner's configured default.
+
+Authenticate Codex only on the machine that consumes the queue. For API-key
+authentication, use `printenv OPENAI_API_KEY | codex login --with-api-key`, or
+provide `CODEX_API_KEY` to one `codex exec` run. The website and Worker reject
+credential fields rather than storing or relaying secrets.
 
 The CLI uses `FLASHCARDS_GITHUB_TOKEN` or the token returned by `gh auth token`
 to authenticate the queue. Typed jobs cover subject design, deck pilots,

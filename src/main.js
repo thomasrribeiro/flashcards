@@ -58,6 +58,12 @@ import {
     saveCurriculumRegistrySources
 } from './curriculum-registry.js';
 import { generationJobForDraft, validateCurriculumDraft } from './curriculum-builder.js';
+import {
+    deckGenerationScope,
+    generationJobForDeck,
+    getGenerationPreferences,
+    saveGenerationPreferences
+} from './generation-preferences.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -2120,6 +2126,7 @@ function setupEventListeners() {
     document.getElementById('dependency-add-path')?.addEventListener('click', addActiveDependencyPath);
     document.getElementById('dependency-copy-command')?.addEventListener('click', copyMissingGenerationCommands);
     document.getElementById('dependency-request-generation')?.addEventListener('click', requestMissingGeneration);
+    document.getElementById('dependency-generate-deck')?.addEventListener('click', requestTargetDeckGeneration);
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
             if (!document.getElementById('study-settings-modal')?.classList.contains('hidden')) closeStudySettings();
@@ -2540,13 +2547,26 @@ async function renderCurriculumView(options = {}) {
     sourcesButton.className = 'curriculum-toolbar-action';
     sourcesButton.textContent = 'Sources';
     sourcesButton.onclick = openCurriculumSources;
+    const generationSettingsButton = document.createElement('button');
+    generationSettingsButton.type = 'button';
+    generationSettingsButton.className = 'curriculum-toolbar-action';
+    generationSettingsButton.textContent = 'Generation settings';
+    generationSettingsButton.onclick = openStudySettings;
     const createButton = document.createElement('button');
     createButton.type = 'button';
     createButton.className = 'curriculum-toolbar-action is-primary';
     createButton.textContent = subject ? 'Edit subject' : 'Create curriculum';
     createButton.onclick = () => openCurriculumBuilder(subject || '');
     if (mode === 'overview') select.classList.add('hidden');
-    toolbar.append(modes, search, select, recommendedLabel, sourcesButton, createButton);
+    toolbar.append(
+        modes,
+        search,
+        select,
+        recommendedLabel,
+        sourcesButton,
+        generationSettingsButton,
+        createButton
+    );
     root.appendChild(toolbar);
 
     const summary = document.createElement('div');
@@ -2668,6 +2688,7 @@ function openCurriculumSources() {
 }
 
 function openCurriculumBuilder(subjectId = '') {
+    const generationPreferences = getGenerationPreferences();
     const existing = subjectId ? curriculumMaps(curriculumIndex).decks : new Map();
     const subjectMeta = curriculumIndex.subjects?.find(item => item.id === subjectId) || {};
     const draft = {
@@ -2707,6 +2728,7 @@ function openCurriculumBuilder(subjectId = '') {
     const field = name => form.elements.namedItem(name);
     field('destination').value = draft.destination;
     field('deckGranularity').value = draft.deckGranularity;
+    field('provider').value = generationPreferences.providerId;
     const deckList = content.querySelector('[data-decks]');
     const readDraft = () => ({
         subject: field('subject').value,
@@ -2752,7 +2774,11 @@ function openCurriculumBuilder(subjectId = '') {
         event.preventDefault();
         if (!githubAuth.isAuthenticated()) return alert('Sign in with GitHub to queue a curriculum draft.');
         try {
-            const job = generationJobForDraft(readDraft(), { providerId: field('provider').value });
+            const job = generationJobForDraft(readDraft(), {
+                providerId: field('provider').value,
+                modelId: generationPreferences.modelId,
+                reasoningEffort: generationPreferences.reasoningEffort
+            });
             const button = form.querySelector('[type="submit"]');
             button.disabled = true;
             button.textContent = 'Queueing…';
@@ -2789,7 +2815,8 @@ async function renderDependencyModal() {
     const add = document.getElementById('dependency-add-path');
     const copy = document.getElementById('dependency-copy-command');
     const request = document.getElementById('dependency-request-generation');
-    if (!title || !path || !body || !add || !copy || !request || !plan.target) return;
+    const generate = document.getElementById('dependency-generate-deck');
+    if (!title || !path || !body || !add || !copy || !request || !generate || !plan.target) return;
 
     title.textContent = targetChapter?.title || plan.target.deck;
     path.textContent = `~ / curriculum / ${deckId}${targetChapter ? ` / ${targetChapter.id}` : ''}`;
@@ -2806,6 +2833,14 @@ async function renderDependencyModal() {
         deck.id,
         `${curriculumStatus(deck, installed)} · optional preparation`
     )).join('');
+    const generationScope = deckGenerationScope(plan.target);
+    const generationNote = generationScope
+        ? generationScope === 'full'
+            ? 'The pilot is approved. The local runner can now author the remaining chapters through the same isolated CLI pipeline.'
+            : 'Generation starts with one novice-first pilot chapter. Review and approve that pilot before generating the remaining chapters.'
+        : ['pilot-built', 'needs-review'].includes(String(plan.target.status || '').toLowerCase())
+            ? 'The pilot is awaiting human review and approval before the remaining chapters can be generated.'
+            : 'This deck does not currently need generation.';
 
     body.innerHTML = `
         <section class="dependency-section">
@@ -2815,6 +2850,10 @@ async function renderDependencyModal() {
                 : '<div class="dependency-item dependency-empty">No declared prerequisite.</div>'}</div>
         </section>
         ${recommended ? `<section class="dependency-section"><h4>Recommended preparation</h4><div class="dependency-chain">${recommended}</div></section>` : ''}
+        <section class="dependency-section">
+            <h4>Deck generation</h4>
+            <p class="dependency-generation-note">${escapeHtml(generationNote)}</p>
+        </section>
     `;
     add.disabled = plan.requiredDecks.length === 0;
     add.textContent = plan.missingDecks.length
@@ -2822,6 +2861,11 @@ async function renderDependencyModal() {
         : 'Add prerequisite path';
     copy.classList.toggle('hidden', plan.missingDecks.length === 0);
     request.classList.toggle('hidden', plan.missingDecks.length === 0 || !githubAuth.isAuthenticated());
+    generate.classList.toggle('hidden', !generationScope || !githubAuth.isAuthenticated());
+    generate.textContent = generationScope === 'full'
+        ? 'Generate remaining chapters'
+        : 'Generate pilot chapter';
+    generate.disabled = false;
 }
 
 async function openDependencyModal(deckId, chapterId = null) {
@@ -2879,6 +2923,30 @@ async function requestMissingGeneration() {
         if (button) button.textContent = 'Request generation';
     } finally {
         if (button) button.disabled = false;
+    }
+}
+
+async function requestTargetDeckGeneration() {
+    if (!activeDependencyTarget || !curriculumIndex || !githubAuth.isAuthenticated()) return;
+    const deck = curriculumMaps(curriculumIndex).decks.get(activeDependencyTarget.deckId);
+    const button = document.getElementById('dependency-generate-deck');
+    if (!deck || !button) return;
+    try {
+        button.disabled = true;
+        button.textContent = 'Queueing…';
+        const job = generationJobForDeck(deck, getGenerationPreferences());
+        const result = await githubAuth.apiRequest('/api/generation-requests', {
+            method: 'POST',
+            body: JSON.stringify(job)
+        });
+        button.textContent = result.existing ? 'Already queued' : 'Generation queued';
+    } catch (error) {
+        console.error('[Curriculum] Deck generation request failed:', error);
+        alert(`Could not queue deck generation: ${error.message}`);
+        button.disabled = false;
+        button.textContent = deckGenerationScope(deck) === 'full'
+            ? 'Generate remaining chapters'
+            : 'Generate pilot chapter';
     }
 }
 
@@ -4006,7 +4074,11 @@ async function openStudySettings() {
     const reminderEnabled = document.getElementById('daily-reminder-enabled');
     const reminderTime = document.getElementById('daily-reminder-time');
     const reminderHelp = document.getElementById('reminder-settings-help');
-    if (!modal || !button || !target || !custom || !batch || !reminderEnabled || !reminderTime) return;
+    const generationProvider = document.getElementById('generation-provider');
+    const generationModel = document.getElementById('generation-model');
+    const generationReasoning = document.getElementById('generation-reasoning');
+    if (!modal || !button || !target || !custom || !batch || !reminderEnabled || !reminderTime
+        || !generationProvider || !generationModel || !generationReasoning) return;
 
     if (!modal.classList.contains('hidden')) {
         closeStudySettings();
@@ -4026,6 +4098,10 @@ async function openStudySettings() {
     reflectCustomTargetField();
     reminderEnabled.value = 'false';
     reminderTime.value = '18:00';
+    const generation = getGenerationPreferences();
+    generationProvider.value = generation.providerId;
+    generationModel.value = generation.modelId;
+    generationReasoning.value = generation.reasoningEffort;
     modal.classList.remove('hidden');
     button.setAttribute('aria-expanded', 'true');
     target.focus();
@@ -4054,7 +4130,11 @@ async function saveStudySettingsFromForm(event) {
     const batchSelect = document.getElementById('new-session-size');
     const reminderEnabled = document.getElementById('daily-reminder-enabled');
     const reminderTime = document.getElementById('daily-reminder-time');
-    if (!targetSelect || !custom || !batchSelect || !reminderEnabled || !reminderTime) return;
+    const generationProvider = document.getElementById('generation-provider');
+    const generationModel = document.getElementById('generation-model');
+    const generationReasoning = document.getElementById('generation-reasoning');
+    if (!targetSelect || !custom || !batchSelect || !reminderEnabled || !reminderTime
+        || !generationProvider || !generationModel || !generationReasoning) return;
 
     let newPerDay;
     if (targetSelect.value === 'unlimited') newPerDay = -1;
@@ -4062,10 +4142,22 @@ async function saveStudySettingsFromForm(event) {
         newPerDay = Math.min(500, Math.max(1, Math.floor(Number(custom.value) || 10)));
     } else newPerDay = Number(targetSelect.value);
     const newBatchSize = Number(batchSelect.value);
+    try {
+        saveGenerationPreferences({
+            providerId: generationProvider.value,
+            modelId: generationModel.value,
+            reasoningEffort: generationReasoning.value
+        });
+    } catch (error) {
+        alert(error.message);
+        return;
+    }
 
     const wantsReminder = reminderEnabled.value === 'true';
+    // Keep settings responsive even when the service-worker readiness promise
+    // takes time (notably in a fresh browser or an iOS standalone launch).
+    closeStudySettings();
     if (wantsReminder && !isStandalone()) {
-        closeStudySettings();
         openPwaInstallGuide();
     } else if (wantsReminder) {
         const enabled = await subscribeToPush({
@@ -4081,7 +4173,6 @@ async function saveStudySettingsFromForm(event) {
     }
 
     habitSettings = { ...(habitSettings || {}), newPerDay, newBatchSize };
-    closeStudySettings();
     await renderReviewButton({ refreshStatus: false });
     const saved = await saveSettings({ newPerDay, newBatchSize });
     habitSettings = { ...habitSettings, ...saved, newPerDay, newBatchSize };
