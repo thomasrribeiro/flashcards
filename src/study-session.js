@@ -6,6 +6,7 @@ import { getAllCards, getAllReviews, saveReview } from './storage.js';
 import { reviewCard, createCard, Rating, GradeKeys, State } from './fsrs-client.js';
 import { recordReviewLocally } from './habit-client.js';
 import { renderCardFront, renderCardBack, parseSolutionSteps, markdownToHtml, setCardContext } from './markdown.js';
+import { partitionScopedReviewCards } from './scoped-review.js';
 
 // Session state
 let state = {
@@ -216,7 +217,9 @@ export async function startSession(deckId, fileFilter, onComplete, onCardChange)
     };
 
     // Load due cards
-    await loadDueCards(deckId, fileFilter);
+    await loadDueCards(deckId, fileFilter, {
+        includeScheduled: Boolean(fileFilter)
+    });
 
     // Update stats display
     updateStats();
@@ -228,7 +231,7 @@ export async function startSession(deckId, fileFilter, onComplete, onCardChange)
 /**
  * Load due cards for the session
  */
-async function loadDueCards(deckId, fileFilter) {
+async function loadDueCards(deckId, fileFilter, { includeScheduled = false } = {}) {
     // Get ALL cards for this deck
     const allCards = await getAllCards();
     let deckCards = allCards.filter(card => card.deckName === deckId || card.source?.repo === deckId);
@@ -258,8 +261,6 @@ async function loadDueCards(deckId, fileFilter) {
 
     // Get all reviews
     const allReviews = await getAllReviews();
-    const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
-
     // Sort cards by order metadata (if present) and then by file path
     deckCards.sort((a, b) => {
         const orderA = a.deckMetadata?.order;
@@ -280,27 +281,15 @@ async function loadDueCards(deckId, fileFilter) {
         return pathA.localeCompare(pathB);
     });
 
-    // Build list of cards to study
-    const cardsToStudy = [];
-
-    for (const card of deckCards) {
-        const review = reviewMap.get(card.hash);
-
-        if (review) {
-            const fsrsCard = review.fsrsCard;
-            const dueDate = new Date(fsrsCard.due);
-            const now = new Date();
-            const isDue = dueDate <= now;
-            console.log(`[StudySession] Card ${card.hash.substring(0, 8)}: due=${dueDate.toISOString()}, now=${now.toISOString()}, isDue=${isDue}`);
-            if (isDue) {
-                cardsToStudy.push({ card, fsrsCard, cardHash: card.hash });
-            }
-        } else {
-            console.log(`[StudySession] Card ${card.hash.substring(0, 8)}: NEW (no review found)`);
-            const fsrsCard = createCard();
-            cardsToStudy.push({ card, fsrsCard, cardHash: card.hash });
-        }
-    }
+    const { due, fresh, scheduled } = partitionScopedReviewCards(
+        deckCards,
+        allReviews,
+        { includeScheduled }
+    );
+    const cardsToStudy = [...due, ...fresh, ...scheduled].map(entry => ({
+        ...entry,
+        fsrsCard: entry.fsrsCard || createCard()
+    }));
 
     state.dueCards = cardsToStudy;
     state.totalCards = cardsToStudy.length;

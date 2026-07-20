@@ -42,6 +42,7 @@ import {
     buildChapterProgressSnapshot,
     chapterProgressTargets
 } from './chapter-progress.js';
+import { partitionScopedReviewCards } from './scoped-review.js';
 import {
     chapterForFile,
     chapterGraph,
@@ -715,19 +716,14 @@ async function startScopedReview(filterFn, label, breadcrumb, repoIds = [], file
     }
     const allCards = await getAllCards();
     const allReviews = await getAllReviews();
-    const reviewMap = new Map(allReviews.map(r => [r.cardHash, r]));
-    const now = new Date();
-    const due = [], fresh = [];
-    for (const card of allCards) {
-        if (!filterFn(card)) continue;
-        const r = reviewMap.get(card.hash);
-        if (!r) fresh.push({ card, fsrsCard: null, cardHash: card.hash });
-        else {
-            const d = new Date(r.fsrsCard.due);
-            if (d <= now) due.push({ card, fsrsCard: r.fsrsCard, cardHash: card.hash, dueDate: d });
-        }
-    }
-    const queue = [...interleaveDueCards(due), ...fresh];
+    const scopedCards = allCards.filter(filterFn);
+    const includeScheduled = Array.isArray(fileSpecs) && fileSpecs.length === 1;
+    const { due, fresh, scheduled } = partitionScopedReviewCards(
+        scopedCards,
+        allReviews,
+        { includeScheduled }
+    );
+    const queue = [...interleaveDueCards(due), ...fresh, ...scheduled];
     if (queue.length === 0) {
         alert('Nothing to review here right now — all caught up.');
         return;
@@ -1159,11 +1155,11 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
                             caret: null,
                             name: chName, nameCls: 'tree-chapter-name', rowCls: 'tree-chapter-row',
                             meta: `${chCards.length} card${chCards.length === 1 ? '' : 's'} · ${cProg.pct}%`,
-                            title: 'Review this chapter (due + new)',
+                            title: 'Drill every card in this chapter',
                             onBody: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, null, [deckId], [{ repo: deckId, path: file }]),
                             actions: [
                                 { cls: 'tree-act', title: 'Browse all cards in this chapter (read-only)', html: BROWSE_IMG, onclick: () => openChapterBrowser({ deckId, file, subject, deckName, chapterName: chName }) },
-                                { cls: 'tree-act', title: 'Review this chapter (due + new)', html: GAVEL_IMG, onclick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, null, [deckId], [{ repo: deckId, path: file }]) },
+                                { cls: 'tree-act', title: 'Drill every card in this chapter', html: GAVEL_IMG, onclick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, null, [deckId], [{ repo: deckId, path: file }]) },
                                 { cls: 'tree-act', title: 'Reset progress in this chapter', html: RESET_IMG, onclick: () => resetScope([{ deckId, file }], `Reset progress in "${chName}"?`) },
                                 null
                             ]
@@ -1552,7 +1548,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
                 actions: [
                     ...dependencyAction,
                     { html: BROWSE_IMG, title: 'Browse all cards in this chapter (read-only)', onClick: browse },
-                    { html: GAVEL_IMG, title: 'Review this chapter (due + new)', onClick: review },
+                    { html: GAVEL_IMG, title: 'Drill every card in this chapter', onClick: review },
                     { html: RESET_IMG, title: 'Reset progress in this chapter', onClick: () => resetScope([{ deckId, file }], `Reset progress in "${chName}"?`) }
                 ],
                 hasChildren: false, selected: columnsSel.chapter === file,
