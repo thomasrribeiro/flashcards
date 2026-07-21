@@ -1217,6 +1217,50 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(formatInvocation(invocation)).toContain('codex');
     });
 
+    it('routes Claude model aliases through a fresh non-persistent Claude Code session', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'mathematics',
+            deck: 'arithmetic',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations']
+        });
+        const invocation = buildAgentInvocation({
+            mode: 'build',
+            deckPath,
+            model: 'fable',
+            reasoningEffort: 'high'
+        });
+
+        expect(invocation.command).toBe('claude');
+        expect(invocation.args).toContain('--safe-mode');
+        expect(invocation.args).toContain('--no-session-persistence');
+        expect(invocation.args).toContain('--dangerously-skip-permissions');
+        expect(invocation.args).toContain('fable');
+        expect(invocation.provider).toBe('claude-code');
+    });
+
+    it('preserves the configured credential store while ignoring other user config', async () => {
+        const previous = process.env.FLASHCARDS_CODEX_AUTH_CREDENTIALS_STORE;
+        process.env.FLASHCARDS_CODEX_AUTH_CREDENTIALS_STORE = 'keyring';
+        try {
+            const notesRoot = await temporaryRoot();
+            const { deckPath } = await createDeck({
+                subject: 'biology',
+                deck: 'credential-test',
+                notesRoot,
+                initializeGit: false
+            });
+            const invocation = buildAgentInvocation({ mode: 'build', deckPath });
+            expect(invocation.args).toContain('cli_auth_credentials_store="keyring"');
+            expect(invocation.args).toContain('--ignore-user-config');
+        } finally {
+            if (previous === undefined) delete process.env.FLASHCARDS_CODEX_AUTH_CREDENTIALS_STORE;
+            else process.env.FLASHCARDS_CODEX_AUTH_CREDENTIALS_STORE = previous;
+        }
+    });
+
     it('reports subject creation context and creates a fresh subject invocation', async () => {
         const notesRoot = await temporaryRoot();
         const { subjectPath } = await ensureSubject({ subject: 'earth-science', notesRoot });
@@ -1277,6 +1321,33 @@ describe('flashcards CLI validation and Codex handoff', () => {
             expect(result.changed).toBe(true);
             expect(await readFile(path.join(deckPath, 'README.md'), 'utf8')).toBe('# Revised in isolation\n');
             expect(await readFile(manifest.files[0].path, 'utf8')).not.toBe('# Attempted context mutation\n');
+            await rm(prepared.runPath, { recursive: true, force: true });
+        } finally {
+            discardIsolatedRun(prepared);
+        }
+    });
+
+    it('preserves an inspectable patch without applying it', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'biology',
+            deck: 'genetics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations']
+        });
+        const manifest = buildContextManifest({ deckPath, mode: 'build' });
+        const prepared = prepareIsolatedRun({
+            sourcePath: deckPath,
+            contextFiles: manifest.files,
+            label: 'preserve-only-test'
+        });
+        try {
+            await writeFile(path.join(prepared.workspacePath, 'README.md'), '# Partial provider output\n');
+            const result = finishIsolatedRun(prepared, { applyChanges: false });
+            expect(result.changed).toBe(true);
+            expect(await readFile(path.join(deckPath, 'README.md'), 'utf8')).not.toBe('# Partial provider output\n');
+            expect(await readFile(path.join(result.runPath, 'changes.patch'), 'utf8')).toContain('Partial provider output');
             await rm(prepared.runPath, { recursive: true, force: true });
         } finally {
             discardIsolatedRun(prepared);
@@ -1364,6 +1435,93 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.prompt).toContain('02_vectors-cold-start.md');
         expect(invocation.prompt).toContain('resolved local prerequisite closure (01_foundations)');
         expect(invocation.prompt).toContain('intentionally blanked');
+    });
+
+    it('blanks a fresh chapter before the isolated Git baseline is created', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations', 'vectors']
+        });
+        const second = path.join(deckPath, 'flashcards', '02_vectors.md');
+        await writeFile(second, '+++\norder = 2\nsubject = "physics"\ntags = ["mechanics"]\nprerequisites = ["chapter:01_foundations"]\nprovides = []\n+++\n\n<!-- card-id: secret-old-card -->\nQ: Old target?\nA: Old answer.\n');
+        const manifest = buildContextManifest({ deckPath, mode: 'build', chapterNumber: 2 });
+        const prepared = prepareIsolatedRun({
+            sourcePath: deckPath,
+            contextFiles: manifest.files,
+            label: 'fresh-baseline-test',
+            prepareWorkspace(workspacePath) {
+                resetChapterForRegeneration(workspacePath, 2);
+            }
+        });
+        try {
+            const baseline = spawnSync(
+                'git',
+                ['show', 'HEAD:flashcards/02_vectors.md'],
+                { cwd: prepared.workspacePath, encoding: 'utf8' }
+            );
+            expect(baseline.status).toBe(0);
+            expect(baseline.stdout).toContain('Fresh isolated chapter-2 regeneration');
+            expect(baseline.stdout).not.toContain('secret-old-card');
+            const diff = spawnSync('git', ['diff', 'HEAD'], { cwd: prepared.workspacePath, encoding: 'utf8' });
+            expect(diff.stdout).not.toContain('secret-old-card');
+        } finally {
+            await rm(prepared.runPath, { recursive: true, force: true });
+            discardIsolatedRun(prepared);
+        }
+    });
+
+    it('atomically replaces a fresh chapter while applying compatible deck-document changes', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations', 'vectors']
+        });
+        const chapterPath = path.join(deckPath, 'flashcards', '02_vectors.md');
+        const figurePath = path.join(deckPath, 'figures', '02_vectors');
+        await writeFile(chapterPath, '+++\norder = 2\nsubject = "physics"\ntags = ["mechanics"]\nprerequisites = ["chapter:01_foundations"]\nprovides = []\n+++\n\n<!-- card-id: hidden-old-card -->\nQ: Old?\nA: Old.\n');
+        await writeFile(path.join(figurePath, 'old.svg'), '<svg>old</svg>\n');
+        const manifest = buildContextManifest({ deckPath, mode: 'build', chapterNumber: 2 });
+        const prepared = prepareIsolatedRun({
+            sourcePath: deckPath,
+            contextFiles: manifest.files,
+            label: 'fresh-replacement-test',
+            prepareWorkspace(workspacePath) {
+                resetChapterForRegeneration(workspacePath, 2);
+            }
+        });
+        try {
+            await writeFile(
+                path.join(prepared.workspacePath, 'flashcards', '02_vectors.md'),
+                '+++\norder = 2\nsubject = "physics"\ntags = ["mechanics"]\nprerequisites = ["chapter:01_foundations"]\nprovides = []\n+++\n\n<!-- card-id: generated-new-card -->\nQ: New?\nA: New.\n'
+            );
+            await rm(path.join(prepared.workspacePath, 'figures', '02_vectors', '.gitkeep'));
+            await writeFile(
+                path.join(prepared.workspacePath, 'figures', '02_vectors', 'new.svg'),
+                '<svg>new</svg>\n'
+            );
+            await writeFile(path.join(prepared.workspacePath, 'README.md'), '# Revised deck\n');
+
+            finishIsolatedRun(prepared, {
+                allowedPaths: ['flashcards/02_vectors.md', 'figures/02_vectors', 'README.md'],
+                replacePaths: ['flashcards/02_vectors.md', 'figures/02_vectors']
+            });
+
+            expect(await readFile(chapterPath, 'utf8')).toContain('generated-new-card');
+            expect(await readFile(chapterPath, 'utf8')).not.toContain('hidden-old-card');
+            expect(await readFile(path.join(figurePath, 'new.svg'), 'utf8')).toContain('new');
+            await expect(stat(path.join(figurePath, 'old.svg'))).rejects.toMatchObject({ code: 'ENOENT' });
+            expect(await readFile(path.join(deckPath, 'README.md'), 'utf8')).toBe('# Revised deck\n');
+        } finally {
+            await rm(prepared.runPath, { recursive: true, force: true });
+            discardIsolatedRun(prepared);
+        }
     });
 
     it('applies only allowlisted paths from a bounded isolated run', async () => {

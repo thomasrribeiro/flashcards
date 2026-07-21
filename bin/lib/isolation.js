@@ -138,8 +138,22 @@ function restoreProtectedContext(workspacePath) {
         path.join('.flashcards', 'prerequisites'),
         'AGENTS.override.md'
     ];
-    const presentPaths = protectedPaths.filter(target => existsSync(path.join(workspacePath, target)));
-    runGit(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...presentPaths], workspacePath);
+    const presentPaths = protectedPaths.filter(target => {
+        if (!existsSync(path.join(workspacePath, target))) return false;
+        const tracked = spawnSync('git', ['ls-files', '--error-unmatch', '--', target], {
+            cwd: workspacePath,
+            encoding: 'utf8'
+        });
+        if (tracked.status === 0) return true;
+        const beneath = spawnSync('git', ['ls-files', '--', target], {
+            cwd: workspacePath,
+            encoding: 'utf8'
+        });
+        return beneath.status === 0 && Boolean(beneath.stdout.trim());
+    });
+    if (presentPaths.length) {
+        runGit(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...presentPaths], workspacePath);
+    }
     runGit(['clean', '-q', '-fd', '--', ...protectedPaths], workspacePath);
 }
 
@@ -182,6 +196,53 @@ function applyPatch(targetPath, patch) {
     if (applied.status !== 0) {
         throw new Error(`Unable to apply isolated agent changes: ${(applied.stderr || applied.stdout || '').trim()}`);
     }
+}
+
+function pathIsWithin(candidate, parent) {
+    return candidate === parent || candidate.startsWith(`${parent}${path.sep}`);
+}
+
+function applyPatchWithReplacements(targetPath, workspacePath, patch, allowedPaths, replacePaths) {
+    const replacements = replacePaths.map(value => path.normalize(value));
+    const patchPaths = (allowedPaths || []).filter(candidate =>
+        !replacements.some(replacement => pathIsWithin(path.normalize(candidate), replacement))
+    );
+    const compatiblePatch = patchPaths.length ? createPatch(workspacePath, patchPaths) : '';
+    const backupRoot = mkdtempSync(path.join(os.tmpdir(), 'flashcards-apply-backup-'));
+    const pathsToBackup = [...new Set([...(allowedPaths || []), ...replacePaths])];
+
+    try {
+        for (const relative of pathsToBackup) {
+            const source = path.join(targetPath, relative);
+            if (existsSync(source)) cpSync(source, path.join(backupRoot, relative), { recursive: true });
+        }
+
+        applyPatch(targetPath, compatiblePatch);
+        for (const relative of replacements) {
+            const source = path.join(workspacePath, relative);
+            const destination = path.join(targetPath, relative);
+            rmSync(destination, { recursive: true, force: true });
+            if (existsSync(source)) {
+                mkdirSync(path.dirname(destination), { recursive: true });
+                cpSync(source, destination, { recursive: true });
+            }
+        }
+    } catch (error) {
+        for (const relative of pathsToBackup) {
+            const destination = path.join(targetPath, relative);
+            const backup = path.join(backupRoot, relative);
+            rmSync(destination, { recursive: true, force: true });
+            if (existsSync(backup)) {
+                mkdirSync(path.dirname(destination), { recursive: true });
+                cpSync(backup, destination, { recursive: true });
+            }
+        }
+        throw error;
+    } finally {
+        rmSync(backupRoot, { recursive: true, force: true });
+    }
+
+    return patch;
 }
 
 export function prepareIsolatedRun({
@@ -239,11 +300,21 @@ export function recordIsolatedInvocation(prepared, { prompt, invocation, metadat
     }, null, 2)}\n`);
 }
 
-export function finishIsolatedRun(prepared, { applyChanges = true, allowedPaths } = {}) {
+export function finishIsolatedRun(prepared, { applyChanges = true, allowedPaths, replacePaths = [] } = {}) {
     restoreProtectedContext(prepared.workspacePath);
     const patch = createPatch(prepared.workspacePath, allowedPaths);
     writeFileSync(path.join(prepared.runPath, 'changes.patch'), patch);
-    if (applyChanges) applyPatch(prepared.sourcePath, patch);
+    if (applyChanges && replacePaths.length) {
+        applyPatchWithReplacements(
+            prepared.sourcePath,
+            prepared.workspacePath,
+            patch,
+            allowedPaths,
+            replacePaths
+        );
+    } else if (applyChanges) {
+        applyPatch(prepared.sourcePath, patch);
+    }
     return { patch, runPath: prepared.runPath, changed: Boolean(patch.trim()) };
 }
 

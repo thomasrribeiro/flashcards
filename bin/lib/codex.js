@@ -38,11 +38,31 @@ function configuredModel() {
     return /^model\s*=\s*"([^"]+)"/m.exec(readFileSync(configPath, 'utf8'))?.[1];
 }
 
-function codexVersion() {
-    const result = spawnSync('codex', ['--version'], { encoding: 'utf8' });
-    if (result.error?.code === 'ENOENT') throw new Error('Codex CLI is not installed or not available on PATH.');
-    if (result.status !== 0) throw new Error(`Unable to inspect Codex: ${(result.stderr || result.stdout).trim()}`);
-    return result.stdout.trim();
+function configuredAuthCredentialsStore() {
+    if (process.env.FLASHCARDS_CODEX_AUTH_CREDENTIALS_STORE) {
+        return process.env.FLASHCARDS_CODEX_AUTH_CREDENTIALS_STORE;
+    }
+    const configPath = path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'config.toml');
+    if (!existsSync(configPath)) return undefined;
+    return /^cli_auth_credentials_store\s*=\s*"([^"]+)"/m.exec(readFileSync(configPath, 'utf8'))?.[1];
+}
+
+function isClaudeModel(model) {
+    return /^(?:fable|opus|sonnet|haiku|claude-)/.test(model || '');
+}
+
+function agentVersion(model) {
+    const command = isClaudeModel(model) ? 'claude' : 'codex';
+    const result = spawnSync(command, ['--version'], { encoding: 'utf8' });
+    if (result.error?.code === 'ENOENT') {
+        throw new Error(`${command === 'claude' ? 'Claude Code' : 'Codex CLI'} is not installed or not available on PATH.`);
+    }
+    if (result.status !== 0) {
+        throw new Error(`Unable to inspect ${command}: ${(result.stderr || result.stdout).trim()}`);
+    }
+    return isClaudeModel(model)
+        ? `${model} via ${result.stdout.trim()} (Claude Code)`
+        : result.stdout.trim();
 }
 
 function requireSafeAuditWorktree(deckPath, allowDirty) {
@@ -232,6 +252,31 @@ function buildCodexInvocation({
     resultPath
 }) {
     const resolvedModel = model || configuredModel();
+    if (isClaudeModel(resolvedModel)) {
+        return {
+            command: 'claude',
+            args: [
+                '--print',
+                '--model', resolvedModel,
+                '--effort', reasoningEffort,
+                '--permission-mode', reportOnly ? 'dontAsk' : 'bypassPermissions',
+                ...(reportOnly ? [] : ['--dangerously-skip-permissions']),
+                '--safe-mode',
+                '--no-session-persistence',
+                '--output-format', 'stream-json',
+                '--verbose',
+                '--prompt-suggestions', 'false',
+                prompt
+            ],
+            prompt,
+            workspacePath,
+            model: resolvedModel,
+            reasoningEffort,
+            isolated,
+            provider: 'claude-code'
+        };
+    }
+    const authCredentialsStore = configuredAuthCredentialsStore();
     const args = [
         '--search',
         '--sandbox', reportOnly ? 'read-only' : 'workspace-write',
@@ -243,7 +288,12 @@ function buildCodexInvocation({
             '-c', `model_reasoning_effort=${JSON.stringify(reasoningEffort)}`,
             '-c', 'personality="none"',
             '-c', 'features.memories=false',
-            '-c', 'features.multi_agent=false',
+            '-c', 'features.multi_agent=false'
+        );
+        if (authCredentialsStore) {
+            args.push('-c', `cli_auth_credentials_store=${JSON.stringify(authCredentialsStore)}`);
+        }
+        args.push(
             'exec',
             '--ephemeral',
             '--ignore-user-config',
@@ -257,7 +307,16 @@ function buildCodexInvocation({
     } else {
         args.push(prompt);
     }
-    return { command: 'codex', args, prompt, workspacePath, model: resolvedModel, reasoningEffort, isolated };
+    return {
+        command: 'codex',
+        args,
+        prompt,
+        workspacePath,
+        model: resolvedModel,
+        reasoningEffort,
+        isolated,
+        provider: 'codex'
+    };
 }
 
 export function buildAgentInvocation({
@@ -388,14 +447,43 @@ function runPreparedInvocation(prepared, invocation, {
     reportOnly,
     metadata,
     allowedPaths,
-    validateWorkspace
+    replacePaths,
+    validateWorkspace,
+    recoverOnFailure
 }) {
     recordIsolatedInvocation(prepared, { prompt: invocation.prompt, invocation, metadata });
-    const result = spawnSync(invocation.command, invocation.args, { stdio: 'inherit' });
+    const result = spawnSync(invocation.command, invocation.args, {
+        cwd: prepared.workspacePath,
+        stdio: 'inherit'
+    });
     if (result.error) throw new Error(`Unable to launch Codex: ${result.error.message}`);
-    if (result.status !== 0) return { status: result.status, runPath: prepared.runPath };
+    if (result.status !== 0) {
+        if (recoverOnFailure) {
+            try {
+                recoverOnFailure(prepared.workspacePath);
+                const recovered = finishIsolatedRun(prepared, {
+                    applyChanges: !reportOnly,
+                    allowedPaths,
+                    replacePaths
+                });
+                return { status: 0, recoveredAfterProviderFailure: true, ...recovered };
+            } catch (recoveryError) {
+                console.warn(`Provider failed and the workspace was not complete enough to recover: ${recoveryError.message}`);
+            }
+        }
+        const preserved = finishIsolatedRun(prepared, {
+            applyChanges: false,
+            allowedPaths,
+            replacePaths
+        });
+        return { status: result.status, ...preserved };
+    }
     if (validateWorkspace) validateWorkspace(prepared.workspacePath);
-    const finished = finishIsolatedRun(prepared, { applyChanges: !reportOnly, allowedPaths });
+    const finished = finishIsolatedRun(prepared, {
+        applyChanges: !reportOnly,
+        allowedPaths,
+        replacePaths
+    });
     return { status: 0, ...finished };
 }
 
@@ -432,7 +520,7 @@ export function runSubjectAgent({
         nonInteractive
     });
     if (dryRun) return { invocation: preview, status: 0, dryRun: true };
-    const version = codexVersion();
+    const version = agentVersion(model || configuredModel());
     if (!isolated) {
         const result = spawnSync(preview.command, preview.args, { stdio: 'inherit' });
         if (result.error) throw new Error(`Unable to launch Codex: ${result.error.message}`);
@@ -597,7 +685,7 @@ export function runDeckAgent({
     });
     if (dryRun) return { invocation: preview, status: 0, dryRun: true };
 
-    const version = codexVersion();
+    const version = agentVersion(model || configuredModel());
     let result;
     if (isolated) {
         const chapterName = buildScope === 'chapter' ? chapterNameForOrder(deckPath, chapterNumber) : undefined;
@@ -606,6 +694,12 @@ export function runDeckAgent({
             contextFiles: preview.contextManifest.files,
             label: chapterName ? `${mode}-${chapterName.replace(/\.md$/, '')}` : `${mode}-${buildScope}`,
             prepareWorkspace(workspacePath) {
+                if (mode === 'build' && buildScope === 'pilot' && freshPilot) {
+                    resetPilotForRegeneration(workspacePath);
+                }
+                if (mode === 'build' && buildScope === 'chapter' && freshChapter) {
+                    resetChapterForRegeneration(workspacePath, chapterNumber);
+                }
                 if (preview.prerequisiteResolution) {
                     constrainWorkspaceToChapter(workspacePath, preview.prerequisiteResolution);
                 }
@@ -617,12 +711,6 @@ export function runDeckAgent({
             }
         });
         try {
-            if (mode === 'build' && buildScope === 'pilot' && freshPilot) {
-                resetPilotForRegeneration(prepared.workspacePath);
-            }
-            if (mode === 'build' && buildScope === 'chapter' && freshChapter) {
-                resetChapterForRegeneration(prepared.workspacePath, chapterNumber);
-            }
             const localPreflight = preflightPath
                 ? prepared.stagedContext.find(file => file.source === preflightPath)?.path
                 : undefined;
@@ -653,16 +741,54 @@ export function runDeckAgent({
                 isolated: true,
                 resultPath: isolatedResultPath(prepared)
             });
-            const allowedPaths = buildScope === 'chapter' ? [
-                path.join('flashcards', chapterName),
-                path.join('figures', chapterName.replace(/\.md$/, '')),
-                path.join('.flashcards', 'audits', chapterAuditName(chapterName)),
-                'README.md',
-                'CARD_README.md'
-            ] : undefined;
+            const allowedPaths = buildScope === 'chapter'
+                ? [
+                    path.join('flashcards', chapterName),
+                    path.join('figures', chapterName.replace(/\.md$/, '')),
+                    path.join('.flashcards', 'audits', chapterAuditName(chapterName)),
+                    'README.md',
+                    'CARD_README.md'
+                ]
+                : buildScope === 'pilot' && freshPilot
+                    ? [
+                        path.join('flashcards', chapterNameForOrder(deckPath, 1)),
+                        path.join('figures', chapterNameForOrder(deckPath, 1).replace(/\.md$/, '')),
+                        path.join('.flashcards', 'audits', 'pilot-cold-start.md'),
+                        'README.md',
+                        'CARD_README.md'
+                    ]
+                    : undefined;
+            const replacementPaths = mode === 'build' && buildScope === 'chapter' && freshChapter
+                ? [
+                    path.join('flashcards', chapterName),
+                    path.join('figures', chapterName.replace(/\.md$/, ''))
+                ]
+                : mode === 'build' && buildScope === 'pilot' && freshPilot
+                    ? [
+                        path.join('flashcards', chapterNameForOrder(deckPath, 1)),
+                        path.join('figures', chapterNameForOrder(deckPath, 1).replace(/\.md$/, ''))
+                    ]
+                    : undefined;
             result = runPreparedInvocation(prepared, invocation, {
                 reportOnly,
                 allowedPaths,
+                replacePaths: replacementPaths,
+                recoverOnFailure: mode === 'build' ? workspacePath => {
+                    const validation = validateDeck(workspacePath, { quiet: true });
+                    if (validation.status !== 0) {
+                        throw new Error('deck validation did not pass');
+                    }
+                    const auditPath = buildScope === 'chapter'
+                        ? path.join(workspacePath, '.flashcards', 'audits', chapterAuditName(chapterName))
+                        : buildScope === 'pilot'
+                            ? path.join(workspacePath, '.flashcards', 'audits', 'pilot-cold-start.md')
+                            : path.join(workspacePath, '.flashcards', 'audits', 'full-cold-start.md');
+                    if (!existsSync(auditPath)) throw new Error(`required audit is missing: ${auditPath}`);
+                    const audit = readFileSync(auditPath, 'utf8');
+                    if (!/^cold_start_status: pass$/m.test(audit) || !/^unresolved_dependencies: 0$/m.test(audit)) {
+                        throw new Error('required cold-start audit is incomplete');
+                    }
+                } : undefined,
                 metadata: {
                     operation: mode,
                     buildScope,
