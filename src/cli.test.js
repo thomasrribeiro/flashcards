@@ -1236,6 +1236,8 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.command).toBe('claude');
         expect(invocation.args).toContain('--safe-mode');
         expect(invocation.args).toContain('--no-session-persistence');
+        expect(invocation.args).toContain('--setting-sources');
+        expect(invocation.args[invocation.args.indexOf('--setting-sources') + 1]).toBe('');
         expect(invocation.args).toContain('--dangerously-skip-permissions');
         expect(invocation.args).toContain('fable');
         expect(invocation.provider).toBe('claude-code');

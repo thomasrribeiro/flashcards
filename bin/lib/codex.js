@@ -263,6 +263,7 @@ function buildCodexInvocation({
                 ...(reportOnly ? [] : ['--dangerously-skip-permissions']),
                 '--safe-mode',
                 '--no-session-persistence',
+                '--setting-sources', '',
                 '--output-format', 'stream-json',
                 '--verbose',
                 '--prompt-suggestions', 'false',
