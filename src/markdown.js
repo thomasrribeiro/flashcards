@@ -224,7 +224,8 @@ export function markdownToHtmlInline(markdown) {
 
 /**
  * Parse solution steps from P:/S: card
- * Returns array of {label, content} objects
+ * Returns array of {label, content} objects. An unlabelled solution prelude
+ * uses label null so the UI can reveal it without inventing an authored step.
  */
 export function parseSolutionSteps(solution) {
     const steps = [];
@@ -281,7 +282,7 @@ export function parseSolutionSteps(solution) {
         // Preserve that prelude as its own reveal instead of mislabelling all
         // of it as the first structured step.
         steps.unshift({
-            label: 'ANSWER',
+            label: null,
             content: prelude
         });
     }
@@ -377,7 +378,7 @@ export function renderCardBack(card) {
 export function renderSolutionStep(step) {
     const html = markdownToHtml(step.content.trim());
     return `<div class="solution-step">
-        <div class="solution-step-label">${step.label}:</div>
+        ${step.label ? `<div class="solution-step-label">${step.label}:</div>` : ''}
         <div class="solution-step-content">${html}</div>
     </div>`;
 }

@@ -43,7 +43,9 @@ function renderProblemSolution(card) {
         if (steps.length === 0) return markdownToHtml(card.content?.solution || '');
         return steps.map(step => `
             <div class="browser-solution-step">
-                <div class="solution-step-label">${escapeHtml(step.label)}:</div>
+                ${step.label
+                    ? `<div class="solution-step-label">${escapeHtml(step.label)}:</div>`
+                    : ''}
                 <div class="solution-step-content">${markdownToHtml(step.content.trim())}</div>
             </div>`).join('');
     } finally {

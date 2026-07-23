@@ -78,6 +78,7 @@ export function getState() {
  * Render a step label with info icon
  */
 function renderStepLabel(label) {
+    if (!label) return '';
     const guidance = stepGuidance[label.toUpperCase()];
     if (!guidance) {
         return `<div class="solution-step-label">${label}:</div>`;
