@@ -195,8 +195,9 @@ Severity:
 - **F1 — Canonical frontmatter.** Use TOML `+++` frontmatter with `order`,
   canonical lowercase kebab-case `subject`, kebab-case `tags`, explicit
   `prerequisites`, and `provides`. Agent-built chapters also record the exact
-  `authoring_model`; the isolated CLI stamps this field deterministically rather
-  than trusting the model to self-report it. Preserve supported provenance
+  `authoring_model` and `authoring_reasoning_effort`; the isolated CLI stamps
+  these fields deterministically rather than trusting the model to self-report
+  them. Preserve supported provenance
   tables. Remove the obsolete `name` field. Prerequisite references use
   `chapter:`, `concept:`, `deck:`, or `tool:` prefixes.
 - **F2 — Ordered filenames.** Chapter files use zero-padded

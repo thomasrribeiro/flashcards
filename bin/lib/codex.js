@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -14,6 +15,7 @@ import {
 } from './isolation.js';
 import { markFullBuilt, markPilotBuilt, requireFullBuildApproval } from './pilot.js';
 import {
+    compactTransitivePrerequisiteChapters,
     constrainWorkspaceToChapter,
     formatPrerequisiteGraph,
     resolveChapterClosure,
@@ -93,7 +95,80 @@ function chapterAuditName(chapterName) {
     return `${chapterName.replace(/\.md$/, '')}-cold-start.md`;
 }
 
-export function stampChangedChapterAuthoringModel(workspacePath, model) {
+function markdownSection(content, heading) {
+    const match = new RegExp(`^## ${heading}\\s*$`, 'm').exec(content);
+    if (!match) return '';
+    const tail = content.slice(match.index + match[0].length);
+    const next = /^## .+$/m.exec(tail);
+    return `${match[0]}${tail.slice(0, next ? next.index : tail.length)}`.trim();
+}
+
+function compactRoadmap(content, deckId) {
+    const learnerEnd = /^## Field coverage\s*$/m.exec(content)?.index ?? content.length;
+    const learner = content.slice(0, learnerEnd).trim();
+    const sequence = markdownSection(content, 'Deck sequence');
+    const lines = sequence.split('\n');
+    const preambleEnd = lines.findIndex(line => /^\| Order \|/.test(line));
+    const preamble = preambleEnd >= 0 ? lines.slice(0, preambleEnd + 2) : lines.slice(0, 8);
+    const rows = lines.filter(line => line.includes(`| ${deckId} |`));
+    return `${learner}\n\n${[...preamble, ...rows].join('\n').trim()}\n`;
+}
+
+function compactSubjectToml(content, deckId) {
+    const firstDeck = content.indexOf('[[decks]]');
+    const header = firstDeck >= 0 ? content.slice(0, firstDeck).trim() : '';
+    const blocks = content.split(/(?=^\[\[decks\]\]\s*$)/m);
+    const target = blocks.find(block => new RegExp(`^id\\s*=\\s*${JSON.stringify(deckId)}\\s*$`, 'm').test(block));
+    return `${header}${header ? '\n\n' : ''}${target?.trim() || ''}\n`;
+}
+
+function compactCardBlueprint(content, chapterNumber) {
+    const conceptStart = /^## Concept-dependency ledger\s*$/m.exec(content)?.index ?? content.length;
+    const intro = content.slice(0, conceptStart).trim();
+    const target = String(chapterNumber);
+    const targetMarkers = [`Ch. ${target}`, `Chapter ${target}`, `| ${target}.`];
+    const filteredTable = section => {
+        const lines = section.split('\n');
+        const headers = lines.filter(line => /^\|/.test(line)).slice(0, 2);
+        const rows = lines.filter(line => targetMarkers.some(marker => line.includes(marker)));
+        const prose = lines.filter(line => !/^\|/.test(line));
+        return [...prose, ...headers, ...rows].join('\n').trim();
+    };
+    const sections = [
+        filteredTable(markdownSection(content, 'Concept-dependency ledger')),
+        markdownSection(content, 'Retrieval portfolio'),
+        filteredTable(markdownSection(content, 'Chapter design ledger')),
+        markdownSection(content, 'Initial-learning path'),
+        markdownSection(content, 'Figure policy'),
+        markdownSection(content, 'Sources and accuracy'),
+        filteredTable(markdownSection(content, 'Planned-versus-actual inventory')),
+        markdownSection(content, 'Validation gate')
+    ].filter(Boolean);
+    return `${intro}\n\n${sections.join('\n\n')}\n`;
+}
+
+export function compactStagedChapterContext(stagedContext, deckId, chapterNumber) {
+    const transforms = new Map([
+        ['learner-specific subject roadmap', content => compactRoadmap(content, deckId)],
+        ['machine-readable subject curriculum', content => compactSubjectToml(content, deckId)],
+        ['deck-specific retrieval blueprint', content => compactCardBlueprint(content, chapterNumber)]
+    ]);
+    const compacted = [];
+    for (const file of stagedContext) {
+        const transform = transforms.get(file.role);
+        if (!transform) continue;
+        const content = transform(readFileSync(file.path, 'utf8'));
+        writeFileSync(file.path, content);
+        const trimmed = content.trim();
+        file.bytes = Buffer.byteLength(content);
+        file.words = trimmed ? trimmed.split(/\s+/u).length : 0;
+        file.sha256 = createHash('sha256').update(content).digest('hex');
+        compacted.push({ role: file.role, words: file.words, bytes: file.bytes });
+    }
+    return compacted;
+}
+
+export function stampChangedChapterAuthoringModel(workspacePath, model, reasoningEffort) {
     if (!model) return [];
     const modified = spawnSync(
         'git',
@@ -123,9 +198,15 @@ export function stampChangedChapterAuthoringModel(workspacePath, model) {
             throw new Error(`Generated chapter is missing TOML frontmatter: ${chapterPath}`);
         }
         const field = `authoring_model = ${JSON.stringify(model)}`;
-        const frontmatter = /^authoring_model\s*=/m.test(frontmatterMatch[1])
+        let frontmatter = /^authoring_model\s*=/m.test(frontmatterMatch[1])
             ? frontmatterMatch[1].replace(/^authoring_model\s*=.*$/m, field)
             : frontmatterMatch[1].replace(/^(subject\s*=.*)$/m, `$1\n${field}`);
+        if (reasoningEffort) {
+            const reasoningField = `authoring_reasoning_effort = ${JSON.stringify(reasoningEffort)}`;
+            frontmatter = /^authoring_reasoning_effort\s*=/m.test(frontmatter)
+                ? frontmatter.replace(/^authoring_reasoning_effort\s*=.*$/m, reasoningField)
+                : frontmatter.replace(/^(authoring_model\s*=.*)$/m, `$1\n${reasoningField}`);
+        }
         writeFileSync(
             chapterPath,
             markdown.replace(frontmatterMatch[0], `+++\n${frontmatter}\n+++`)
@@ -212,7 +293,7 @@ function buildDeckPrompt({
             chapter: prerequisiteResolution?.chapter?.order
         })}` : null,
         isolated && prerequisiteGraph
-            ? 'Read .flashcards/prerequisites/graph.json and the applicable scheduled cards in the available local/external prerequisite closure before authoring. Chapters outside the resolved local closure are absent from bounded chapter workspaces.'
+            ? 'Read .flashcards/prerequisites/graph.json and the applicable scheduled cards in the available local/external prerequisite closure before authoring. The complete scheduled cards remain available for each direct local prerequisite; older transitive local prerequisites are intentionally reduced to validator-resolved capability summaries so high-reasoning authoring retains sufficient working context. Chapters outside the resolved local closure are absent from bounded chapter workspaces.'
             : null,
         isolated && prerequisiteResolution
             ? 'Do not add an inbound prerequisite that was not present when this sandbox was resolved. Record the proposed edge as unresolved and stop rather than assuming unavailable knowledge; rerun after the metadata is updated and validated.'
@@ -747,13 +828,21 @@ export function runDeckAgent({
                 }
                 if (preview.prerequisiteResolution) {
                     constrainWorkspaceToChapter(workspacePath, preview.prerequisiteResolution);
+                    compactTransitivePrerequisiteChapters(workspacePath, preview.prerequisiteResolution);
                 }
                 return stageExternalPrerequisites(
                     workspacePath,
                     preview.contextManifest.prerequisiteGraph,
                     preview.prerequisiteResolution
                 );
-            }
+            },
+            prepareContext: mode === 'build' && buildScope === 'chapter'
+                ? (_workspacePath, stagedContext) => compactStagedChapterContext(
+                    stagedContext,
+                    path.basename(deckPath),
+                    chapterNumber
+                )
+                : undefined
         });
         try {
             const localPreflight = preflightPath
@@ -819,7 +908,11 @@ export function runDeckAgent({
                 allowedPaths,
                 replacePaths: replacementPaths,
                 finalizeWorkspace: mode === 'build' && !reportOnly
-                    ? workspacePath => stampChangedChapterAuthoringModel(workspacePath, invocation.model)
+                    ? workspacePath => stampChangedChapterAuthoringModel(
+                        workspacePath,
+                        invocation.model,
+                        invocation.reasoningEffort
+                    )
                     : undefined,
                 recoverOnFailure: mode === 'build' ? workspacePath => {
                     const validation = validateDeck(workspacePath, { quiet: true });

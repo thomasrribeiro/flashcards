@@ -585,10 +585,36 @@ export function constrainWorkspaceToChapter(workspacePath, resolution) {
     const auditsPath = path.join(workspacePath, '.flashcards', 'audits');
     if (existsSync(auditsPath)) {
         for (const filename of readdirSync(auditsPath)) {
-            const chapterId = /^(\d{2}_.+?)-cold-start\.md$/.exec(filename)?.[1];
-            if (chapterId && !allowed.has(chapterId)) rmSync(path.join(auditsPath, filename));
+            if (filename.endsWith('.md')) rmSync(path.join(auditsPath, filename));
         }
     }
+}
+
+export function compactTransitivePrerequisiteChapters(workspacePath, resolution) {
+    if (!resolution?.chapter) return { direct: [], summarized: [] };
+    const direct = new Set(resolution.chapter.dependencies);
+    const summarized = resolution.localChapters.filter(chapter => !direct.has(chapter.id));
+    for (const chapter of summarized) {
+        const chapterPath = path.join(workspacePath, 'flashcards', chapter.filename);
+        const markdown = readFileSync(chapterPath, 'utf8');
+        const frontmatter = /^\+\+\+\r?\n[\s\S]*?\r?\n\+\+\+\r?\n?/.exec(markdown)?.[0];
+        if (!frontmatter) throw new Error(`Cannot summarize prerequisite chapter without TOML frontmatter: ${chapterPath}`);
+        const capabilities = chapter.provides.length
+            ? chapter.provides.map(value => `\`${value}\``).join(', ')
+            : 'none declared';
+        writeFileSync(
+            chapterPath,
+            `${frontmatter}\n# Bounded prerequisite summary\n\n` +
+            'The scheduled card bodies for this transitive prerequisite are intentionally omitted from this isolated run.\n' +
+            `Its validator-resolved capabilities are: ${capabilities}.\n` +
+            'Use the complete scheduled cards in the direct prerequisite chapter instead of inferring additional knowledge from this summary.\n'
+        );
+        rmSync(path.join(workspacePath, 'figures', chapter.id), { recursive: true, force: true });
+    }
+    return {
+        direct: resolution.localChapters.filter(chapter => direct.has(chapter.id)).map(chapter => chapter.id),
+        summarized: summarized.map(chapter => chapter.id)
+    };
 }
 
 function hashFile(filePath) {
@@ -636,6 +662,10 @@ export function stageExternalPrerequisites(workspacePath, graph, resolution) {
         targetChapter: resolution?.chapter?.id || null,
         edgeMode: resolution?.mode || 'whole-deck',
         localChapters: resolution?.localChapterIds || graph.chapters.map(chapter => chapter.id),
+        directLocalChapters: resolution?.chapter?.dependencies || [],
+        summarizedLocalChapters: resolution
+            ? resolution.localChapterIds.filter(id => !resolution.chapter.dependencies.includes(id))
+            : [],
         externalDecks: decks,
         assumedTools: resolution?.assumedTools || graph.root.assumedTools
     };

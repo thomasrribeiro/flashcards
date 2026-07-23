@@ -8,6 +8,7 @@ import { addChapter, createDeck, ensureSubject } from '../bin/lib/scaffold.js';
 import {
     buildAgentInvocation,
     buildSubjectAgentInvocation,
+    compactStagedChapterContext,
     formatInvocation,
     resetChapterForRegeneration,
     resetPilotForRegeneration,
@@ -25,6 +26,7 @@ import { buildRegistry, resolveRegistry } from '../bin/lib/registry.js';
 import { approvePilot, markPilotBuilt, readDeckStatus, requireFullBuildApproval } from '../bin/lib/pilot.js';
 import { requireKebabSlug } from '../bin/lib/paths.js';
 import {
+    compactTransitivePrerequisiteChapters,
     constrainWorkspaceToChapter,
     migratePrerequisites,
     resolveChapterClosure,
@@ -1054,6 +1056,133 @@ assumed_tools = []
         }
     });
 
+    it('keeps direct prerequisite cards and summarizes older transitive chapters', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'mathematics',
+            deck: 'arithmetic',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['quantities', 'addition', 'multiplication', 'fractions']
+        });
+        const auditsPath = path.join(deckPath, '.flashcards', 'audits');
+        await mkdir(auditsPath, { recursive: true });
+        await writeFile(path.join(auditsPath, 'full-cold-start.md'), '# Old full audit\n');
+        await writeFile(path.join(auditsPath, '04_fractions-cold-start.md'), '# Old chapter audit\n');
+        const graph = resolvePrerequisiteGraph(deckPath);
+        const closure = resolveChapterClosure(graph, 4);
+        const prepared = prepareIsolatedRun({
+            sourcePath: deckPath,
+            contextFiles: buildContextManifest({ deckPath, mode: 'build', chapterNumber: 4 }).files,
+            label: 'bounded-prerequisite-test',
+            prepareWorkspace(workspacePath) {
+                constrainWorkspaceToChapter(workspacePath, closure);
+                return compactTransitivePrerequisiteChapters(workspacePath, closure);
+            }
+        });
+        try {
+            const first = await readFile(path.join(prepared.workspacePath, 'flashcards', '01_quantities.md'), 'utf8');
+            const second = await readFile(path.join(prepared.workspacePath, 'flashcards', '02_addition.md'), 'utf8');
+            const third = await readFile(path.join(prepared.workspacePath, 'flashcards', '03_multiplication.md'), 'utf8');
+            expect(first).toContain('# Bounded prerequisite summary');
+            expect(second).toContain('# Bounded prerequisite summary');
+            expect(third).not.toContain('# Bounded prerequisite summary');
+            await expect(stat(path.join(prepared.workspacePath, '.flashcards', 'audits', 'full-cold-start.md')))
+                .rejects.toMatchObject({ code: 'ENOENT' });
+            await expect(stat(path.join(
+                prepared.workspacePath,
+                '.flashcards',
+                'audits',
+                '04_fractions-cold-start.md'
+            ))).rejects.toMatchObject({ code: 'ENOENT' });
+            expect(prepared.preparedWorkspace).toEqual({
+                direct: ['03_multiplication'],
+                summarized: ['01_quantities', '02_addition']
+            });
+            expect(validateDeck(prepared.workspacePath, { quiet: true, capture: true }).status).toBe(0);
+        } finally {
+            discardIsolatedRun(prepared);
+        }
+    });
+
+    it('bounds subject and deck planning context for one chapter build', async () => {
+        const root = await temporaryRoot();
+        const roadmapPath = path.join(root, 'ROADMAP.md');
+        const curriculumPath = path.join(root, 'subject.toml');
+        const blueprintPath = path.join(root, 'CARD_README.md');
+        await writeFile(roadmapPath, `# Roadmap
+
+## Learner and destination
+
+Cold start.
+
+## Field coverage
+
+Large matrix.
+
+## Deck sequence
+
+Sequence notes.
+
+| Order | Deck | Level |
+|---:|---|---|
+| 1 | arithmetic | foundational |
+| 2 | algebra | foundational |
+`);
+        await writeFile(curriculumPath, `schema_version = 3
+subject = "mathematics"
+
+[[decks]]
+id = "arithmetic"
+order = 1
+
+[[decks]]
+id = "algebra"
+order = 2
+`);
+        await writeFile(blueprintPath, `# Blueprint
+
+## Learner model
+
+Cold start.
+
+## Concept-dependency ledger
+
+| Concept | Fronts |
+|---|---|
+| Whole number | Ch. 1 |
+| Fraction | Ch. 6 |
+
+## Retrieval portfolio
+
+Use basic and problem cards.
+
+## Chapter design ledger
+
+| Chapter | Targets |
+|---|---|
+| 1. Whole numbers | counting |
+| 6. Fractions | fractions |
+
+## Validation gate
+
+Validate.
+`);
+        const staged = [
+            { role: 'learner-specific subject roadmap', path: roadmapPath },
+            { role: 'machine-readable subject curriculum', path: curriculumPath },
+            { role: 'deck-specific retrieval blueprint', path: blueprintPath }
+        ];
+        expect(compactStagedChapterContext(staged, 'arithmetic', 6)).toHaveLength(3);
+        expect(await readFile(roadmapPath, 'utf8')).toContain('| 1 | arithmetic |');
+        expect(await readFile(roadmapPath, 'utf8')).not.toContain('| 2 | algebra |');
+        expect(await readFile(curriculumPath, 'utf8')).toContain('id = "arithmetic"');
+        expect(await readFile(curriculumPath, 'utf8')).not.toContain('id = "algebra"');
+        expect(await readFile(blueprintPath, 'utf8')).toContain('| Fraction | Ch. 6 |');
+        expect(await readFile(blueprintPath, 'utf8')).not.toContain('| Whole number | Ch. 1 |');
+        expect(await readFile(blueprintPath, 'utf8')).toContain('| 6. Fractions |');
+    });
+
     it('migrates schema-v1 decks to explicit metadata without changing the closure', async () => {
         const notesRoot = await temporaryRoot();
         const { deckPath } = await createDeck({
@@ -1504,24 +1633,29 @@ describe('flashcards CLI validation and Codex handoff', () => {
             await writeFile(second, `${await readFile(second, 'utf8')}\n`);
             await writeFile(third, '+++\norder = 3\nsubject = "physics"\ntags = ["mechanics"]\nprerequisites = []\nprovides = []\n+++\n');
 
-            expect(stampChangedChapterAuthoringModel(prepared.workspacePath, 'claude-fable-5'))
+            expect(stampChangedChapterAuthoringModel(prepared.workspacePath, 'claude-fable-5', 'high'))
                 .toEqual([
                     'flashcards/01_foundations.md',
                     'flashcards/02_vectors.md',
                     'flashcards/03_new_chapter.md'
                 ]);
             expect(await readFile(first, 'utf8')).toContain('authoring_model = "claude-fable-5"');
+            expect(await readFile(first, 'utf8')).toContain('authoring_reasoning_effort = "high"');
             expect(await readFile(second, 'utf8')).toContain('authoring_model = "claude-fable-5"');
+            expect(await readFile(second, 'utf8')).toContain('authoring_reasoning_effort = "high"');
             expect(await readFile(third, 'utf8')).toContain('authoring_model = "claude-fable-5"');
+            expect(await readFile(third, 'utf8')).toContain('authoring_reasoning_effort = "high"');
 
-            expect(stampChangedChapterAuthoringModel(prepared.workspacePath, 'claude-opus-4-8'))
+            expect(stampChangedChapterAuthoringModel(prepared.workspacePath, 'claude-opus-4-8', 'medium'))
                 .toEqual([
                     'flashcards/01_foundations.md',
                     'flashcards/02_vectors.md',
                     'flashcards/03_new_chapter.md'
                 ]);
             expect(await readFile(first, 'utf8')).toContain('authoring_model = "claude-opus-4-8"');
+            expect(await readFile(first, 'utf8')).toContain('authoring_reasoning_effort = "medium"');
             expect((await readFile(first, 'utf8')).match(/^authoring_model\s*=/gm)).toHaveLength(1);
+            expect((await readFile(first, 'utf8')).match(/^authoring_reasoning_effort\s*=/gm)).toHaveLength(1);
         } finally {
             await rm(prepared.runPath, { recursive: true, force: true });
             discardIsolatedRun(prepared);

@@ -250,7 +250,8 @@ export function prepareIsolatedRun({
     contextFiles,
     label = 'agent',
     includeTopLevel,
-    prepareWorkspace
+    prepareWorkspace,
+    prepareContext
 }) {
     const source = path.resolve(sourcePath);
     const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'flashcards-isolated-'));
@@ -259,6 +260,7 @@ export function prepareIsolatedRun({
     const preparedWorkspace = prepareWorkspace ? prepareWorkspace(workspacePath) : undefined;
     const sourceSnapshot = inventoryFiles(workspacePath);
     const stagedContext = stageContext(workspacePath, contextFiles);
+    const preparedContext = prepareContext ? prepareContext(workspacePath, stagedContext) : undefined;
     const skillPath = vendorSkill(workspacePath);
     const vendoredSkill = inventoryFiles(skillPath);
     const overridePath = writeOverride(workspacePath);
@@ -275,6 +277,7 @@ export function prepareIsolatedRun({
         skillPath,
         sourceSnapshot,
         preparedWorkspace,
+        preparedContext,
         vendoredSkill,
         override: { path: 'AGENTS.override.md', sha256: sha256(overridePath) }
     };
