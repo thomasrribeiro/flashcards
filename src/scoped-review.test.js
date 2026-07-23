@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { partitionScopedReviewCards } from './scoped-review.js';
+import { buildChapterContinuation, partitionScopedReviewCards } from './scoped-review.js';
 
 describe('partitionScopedReviewCards', () => {
     const now = new Date('2026-07-20T12:00:00Z');
@@ -26,5 +26,39 @@ describe('partitionScopedReviewCards', () => {
             ...result.fresh,
             ...result.scheduled
         ].map(entry => entry.cardHash)).toEqual(['due', 'new', 'future']);
+    });
+});
+
+describe('buildChapterContinuation', () => {
+    it('resumes at the first unseen card and keeps reviewed cards out of the chapter queue', () => {
+        const cards = Array.from({ length: 19 }, (_, index) => ({
+            hash: `card-${index + 1}`
+        }));
+        const reviews = [{
+            cardHash: 'card-1',
+            fsrsCard: { due: new Date('2026-07-22T23:50:00Z') }
+        }];
+
+        const continuation = buildChapterContinuation(cards, reviews);
+
+        expect(continuation.totalCards).toBe(19);
+        expect(continuation.introducedCards).toBe(1);
+        expect(continuation.queue).toHaveLength(18);
+        expect(continuation.queue[0].cardHash).toBe('card-2');
+        expect(continuation.queue.some(entry => entry.cardHash === 'card-1')).toBe(false);
+    });
+
+    it('does not re-queue an introduced card even when it is already due', () => {
+        const cards = [{ hash: 'reviewed' }, { hash: 'unseen' }];
+        const reviews = [{
+            cardHash: 'reviewed',
+            fsrsCard: { due: new Date('2020-01-01T00:00:00Z') }
+        }];
+
+        expect(buildChapterContinuation(cards, reviews)).toMatchObject({
+            introducedCards: 1,
+            totalCards: 2,
+            queue: [{ cardHash: 'unseen' }]
+        });
     });
 });

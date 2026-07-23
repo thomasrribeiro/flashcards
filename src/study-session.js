@@ -6,7 +6,7 @@ import { getAllCards, getAllReviews, saveReview } from './storage.js';
 import { reviewCard, createCard, Rating, GradeKeys, State } from './fsrs-client.js';
 import { recordReviewLocally } from './habit-client.js';
 import { renderCardFront, renderCardBack, parseSolutionSteps, markdownToHtml, setCardContext } from './markdown.js';
-import { partitionScopedReviewCards } from './scoped-review.js';
+import { buildChapterContinuation, partitionScopedReviewCards } from './scoped-review.js';
 
 // Session state
 let state = {
@@ -22,6 +22,9 @@ let state = {
     solutionSteps: [],
     deckId: null,
     fileFilter: null,
+    scopeTotalCards: 0,
+    introducedCards: 0,
+    newlyIntroducedCards: 0,
     onComplete: null,
     onCardChange: null,
     onProgress: null
@@ -109,6 +112,9 @@ export async function startDrillSession(onComplete, onCardChange, options = {}) 
         solutionSteps: [],
         deckId: '__drill-all__',
         fileFilter: null,
+        scopeTotalCards: 0,
+        introducedCards: 0,
+        newlyIntroducedCards: 0,
         onComplete,
         onCardChange,
         onProgress: null
@@ -180,6 +186,9 @@ export function startTodaySession(queue, onComplete, onCardChange, {
         solutionSteps: [],
         deckId: '__today__',
         fileFilter: null,
+        scopeTotalCards: 0,
+        introducedCards: 0,
+        newlyIntroducedCards: 0,
         onComplete,
         onCardChange,
         onProgress
@@ -211,6 +220,9 @@ export async function startSession(deckId, fileFilter, onComplete, onCardChange)
         solutionSteps: [],
         deckId,
         fileFilter,
+        scopeTotalCards: 0,
+        introducedCards: 0,
+        newlyIntroducedCards: 0,
         onComplete,
         onCardChange,
         onProgress: null
@@ -218,7 +230,7 @@ export async function startSession(deckId, fileFilter, onComplete, onCardChange)
 
     // Load due cards
     await loadDueCards(deckId, fileFilter, {
-        includeScheduled: Boolean(fileFilter)
+        continueChapter: Boolean(fileFilter)
     });
 
     // Update stats display
@@ -231,7 +243,7 @@ export async function startSession(deckId, fileFilter, onComplete, onCardChange)
 /**
  * Load due cards for the session
  */
-async function loadDueCards(deckId, fileFilter, { includeScheduled = false } = {}) {
+async function loadDueCards(deckId, fileFilter, { continueChapter = false } = {}) {
     // Get ALL cards for this deck
     const allCards = await getAllCards();
     let deckCards = allCards.filter(card => card.deckName === deckId || card.source?.repo === deckId);
@@ -281,19 +293,32 @@ async function loadDueCards(deckId, fileFilter, { includeScheduled = false } = {
         return pathA.localeCompare(pathB);
     });
 
-    const { due, fresh, scheduled } = partitionScopedReviewCards(
-        deckCards,
-        allReviews,
-        { includeScheduled }
-    );
-    const cardsToStudy = [...due, ...fresh, ...scheduled].map(entry => ({
-        ...entry,
-        fsrsCard: entry.fsrsCard || createCard()
-    }));
+    let cardsToStudy;
+    if (continueChapter) {
+        const continuation = buildChapterContinuation(deckCards, allReviews);
+        cardsToStudy = continuation.queue.map(entry => ({
+            ...entry,
+            fsrsCard: createCard()
+        }));
+        state.scopeTotalCards = continuation.totalCards;
+        state.introducedCards = continuation.introducedCards;
+    } else {
+        const { due, fresh } = partitionScopedReviewCards(deckCards, allReviews);
+        cardsToStudy = [
+            ...due.map(entry => ({ ...entry, wasFresh: false })),
+            ...fresh.map(entry => ({ ...entry, wasFresh: true }))
+        ].map(entry => ({
+            ...entry,
+            fsrsCard: entry.fsrsCard || createCard()
+        }));
+        state.scopeTotalCards = deckCards.length;
+        state.introducedCards = deckCards.length - fresh.length;
+    }
 
     state.dueCards = cardsToStudy;
     state.totalCards = cardsToStudy.length;
     state.reviewedCards = 0;
+    state.newlyIntroducedCards = 0;
     console.log(`[StudySession] Found ${state.totalCards} cards to study`);
 }
 
@@ -443,6 +468,8 @@ export function revealAnswer() {
 export async function gradeCard(grade) {
     if (!state.isRevealed || !state.currentCard) return;
 
+    const gradedEntry = state.dueCards[state.currentCardIndex];
+
     // Review the card
     const result = reviewCard(state.currentFsrsCard, grade, new Date());
 
@@ -454,6 +481,7 @@ export async function gradeCard(grade) {
     recordReviewLocally(result.log);
 
     // Update stats and move to next card
+    if (gradedEntry?.wasFresh) state.newlyIntroducedCards++;
     state.reviewedCount++;
     state.currentCardIndex++;
 
@@ -469,19 +497,52 @@ export async function gradeCard(grade) {
  * Update progress bar display
  * Progress = (completed before resume + completed now) / session cards
  */
+export function studyProgressSnapshot(sessionState) {
+    const sessionCompleted = Math.max(
+        0,
+        (Number(sessionState.reviewedCards) || 0)
+            + (Number(sessionState.currentCardIndex) || 0)
+    );
+    const sessionTotal = Math.max(0, Number(sessionState.totalCards) || 0);
+    const scopeTotal = Math.max(0, Number(sessionState.scopeTotalCards) || 0);
+    const introduced = Math.min(
+        scopeTotal,
+        Math.max(
+            0,
+            (Number(sessionState.introducedCards) || 0)
+                + (Number(sessionState.newlyIntroducedCards) || 0)
+        )
+    );
+    const isChapterSweep = Boolean(sessionState.fileFilter && scopeTotal > 0);
+    const completed = isChapterSweep ? introduced : sessionCompleted;
+    const total = isChapterSweep ? scopeTotal : sessionTotal;
+
+    return {
+        completed,
+        total,
+        percent: total ? Math.round((completed / total) * 100) : 0,
+        isChapterSweep
+    };
+}
+
 function updateStats() {
     const progressFill = document.getElementById('study-progress-fill');
     const progressPercent = document.getElementById('study-progress-percent');
+    const progressLabel = document.getElementById('study-progress-label');
 
-    if (progressFill && state.totalCards > 0) {
-        // reviewedCards holds work completed before a resumed session.
-        const completed = state.reviewedCards + state.currentCardIndex;
-        const percent = Math.round((completed / state.totalCards) * 100);
+    if (progressFill) {
+        const {
+            completed,
+            total,
+            percent,
+            isChapterSweep
+        } = studyProgressSnapshot(state);
         progressFill.style.width = `${percent}%`;
+        if (progressLabel) progressLabel.textContent = 'Progress:';
         if (progressPercent) {
-            progressPercent.innerHTML = `<span>${percent}%</span> <span class="study-progress-count">(${completed}/${state.totalCards})</span>`;
+            progressPercent.innerHTML = `<span>${percent}%</span> <span class="study-progress-count">(${completed}/${total})</span>`;
         }
-        console.log(`[StudySession] Progress: ${completed}/${state.totalCards} (${percent}%) - reviewedCards=${state.reviewedCards}, currentCardIndex=${state.currentCardIndex}`);
+        console.log(`[StudySession] ${isChapterSweep ? 'Chapter' : 'Session'} progress: ${completed}/${total} (${percent}%)`);
     }
 }
 
@@ -502,6 +563,9 @@ export function cleanup() {
         solutionSteps: [],
         deckId: null,
         fileFilter: null,
+        scopeTotalCards: 0,
+        introducedCards: 0,
+        newlyIntroducedCards: 0,
         onComplete: null,
         onCardChange: null,
         onProgress: null

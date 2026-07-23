@@ -31,3 +31,34 @@ export function partitionScopedReviewCards(cards, reviews, {
 
     return { due, fresh, scheduled };
 }
+
+/**
+ * Continue initial learning inside an explicitly selected chapter or folder.
+ * Any card with review history is already introduced, regardless of whether
+ * FSRS currently considers it due. Scheduled review belongs to the separate
+ * Review flow; the chapter gavel advances through unseen cards only.
+ */
+export function buildChapterContinuation(cards, reviews) {
+    const reviewMap = new Map((reviews || []).map(review => [review.cardHash, review]));
+    const queue = [];
+    let introducedCards = 0;
+
+    for (const card of cards || []) {
+        if (reviewMap.has(card.hash)) {
+            introducedCards++;
+        } else {
+            queue.push({
+                card,
+                fsrsCard: null,
+                cardHash: card.hash,
+                wasFresh: true
+            });
+        }
+    }
+
+    return {
+        queue,
+        introducedCards,
+        totalCards: (cards || []).length
+    };
+}

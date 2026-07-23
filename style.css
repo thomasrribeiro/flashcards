@@ -3247,6 +3247,21 @@ body.standalone-phone .mobile-sidebar-close {
 }
 .study-progress-count { opacity: 0.55; }
 
+@media (max-width: 620px) {
+    .study-progress {
+        flex-wrap: wrap;
+    }
+
+    .study-progress .progress-bar-container {
+        min-width: 0;
+    }
+
+    .study-progress .progress-percent {
+        flex-basis: 100%;
+        text-align: right;
+    }
+}
+
 /* ── Curriculum and prerequisite graph ── */
 
 .curriculum-view {
