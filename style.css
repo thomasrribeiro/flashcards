@@ -3832,6 +3832,75 @@ body.standalone-phone .mobile-sidebar-close {
     flex-wrap: wrap;
 }
 
+.deck-actions-modal-content {
+    width: min(560px, calc(100vw - 28px));
+    max-height: min(720px, calc(100dvh - 28px));
+}
+
+.deck-actions-modal-content .modal-header {
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.deck-actions-heading {
+    flex: 1;
+    min-width: 0;
+}
+
+.deck-actions-heading h3 {
+    overflow-wrap: anywhere;
+}
+
+.deck-actions-body {
+    display: grid;
+    gap: 8px;
+    overflow-y: auto;
+}
+
+.deck-action-button {
+    width: 100%;
+    padding: 13px 14px;
+    border: 1px solid var(--black);
+    background: var(--white);
+    color: var(--black);
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    text-align: left;
+}
+
+.deck-action-button:hover,
+.deck-action-button:focus-visible {
+    background: var(--light-gray);
+    outline: 2px solid var(--gold);
+    outline-offset: 1px;
+}
+
+.deck-action-button:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
+.deck-action-label {
+    display: block;
+    font-size: 0.78rem;
+}
+
+.deck-action-description {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 0.65rem;
+    line-height: 1.45;
+}
+
+.deck-action-button.danger {
+    border-color: #b00020;
+}
+
+.deck-action-button.danger .deck-action-label {
+    color: #b00020;
+}
+
 @media (max-width: 760px) {
     .curriculum-toolbar {
         flex-direction: column;
@@ -3861,5 +3930,10 @@ body.standalone-phone .mobile-sidebar-close {
         height: 100dvh;
         max-height: 100dvh;
         border: 0;
+    }
+
+    .deck-actions-modal-content {
+        width: calc(100vw - 24px);
+        max-height: calc(100dvh - 24px);
     }
 }

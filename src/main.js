@@ -640,7 +640,7 @@ function treeToggle(key, hasActive) {
 
 const GAVEL_IMG = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review" style="width:13px;height:13px;">`;
 const RESET_IMG = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset" style="width:13px;height:13px;">`;
-const SYNC_IMG = `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 3v11m-4-4 4 4 4-4M5 18h14v3H5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter"/></svg>`;
+const SETTINGS_IMG = `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4M4.9 4.9l2.8 2.8m8.6 8.6 2.8 2.8m0-14.2-2.8 2.8m-8.6 8.6-2.8 2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg>`;
 const BROWSE_IMG = `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`;
 
 /** Match the lowercase kebab-case convention used by deck names. */
@@ -1105,10 +1105,12 @@ async function syncDeckFromGitHub(deckId, button = null) {
         showTransientStatus(updated
             ? `Synced ${deckId.split('/').pop()}: ${updated} chapter file${updated === 1 ? '' : 's'} updated`
             : `${deckId.split('/').pop()} is already current`);
+        return true;
     } catch (error) {
         console.error('[Main] Failed to sync repository:', deckId, error);
         showTransientStatus(`Could not sync ${deckId.split('/').pop()}`);
         alert(`Could not sync the latest GitHub version: ${error.message}`);
+        return false;
     } finally {
         if (button?.isConnected) {
             button.disabled = false;
@@ -1116,6 +1118,114 @@ async function syncDeckFromGitHub(deckId, button = null) {
             button.setAttribute('aria-label', 'Sync latest version from GitHub');
         }
     }
+}
+
+function closeDeckActionsModal({ restoreFocus = true } = {}) {
+    document.getElementById('deck-actions-modal')?.classList.add('hidden');
+    const trigger = activeDeckActionsTrigger;
+    activeDeckActions = null;
+    activeDeckActionsTrigger = null;
+    if (restoreFocus && trigger?.isConnected) trigger.focus();
+}
+
+function appendDeckAction(body, {
+    label,
+    description,
+    danger = false,
+    onClick
+}) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `deck-action-button${danger ? ' danger' : ''}`;
+    const labelElement = document.createElement('span');
+    labelElement.className = 'deck-action-label';
+    labelElement.textContent = label;
+    const descriptionElement = document.createElement('span');
+    descriptionElement.className = 'deck-action-description';
+    descriptionElement.textContent = description;
+    button.append(labelElement, descriptionElement);
+    button.onclick = () => onClick(button);
+    body.appendChild(button);
+    return button;
+}
+
+function openDeckActionsModal({ deckId, deckName, subject, curriculumDeck }, trigger = null) {
+    const modal = document.getElementById('deck-actions-modal');
+    const title = document.getElementById('deck-actions-title');
+    const path = document.getElementById('deck-actions-path');
+    const body = document.getElementById('deck-actions-body');
+    if (!modal || !title || !path || !body) return;
+
+    activeDeckActions = { deckId, deckName, subject, curriculumDeck };
+    activeDeckActionsTrigger = trigger;
+    title.textContent = deckName;
+    path.textContent = `~ / home / ${subject} / ${deckName}`;
+    body.innerHTML = '';
+
+    const review = () => {
+        const target = activeDeckActions;
+        closeDeckActionsModal({ restoreFocus: false });
+        startScopedReview(
+            card => (card.source?.repo || card.deckName) === target.deckId,
+            target.deckName,
+            ['home', target.subject, target.deckName],
+            [target.deckId]
+        );
+    };
+    const firstAction = appendDeckAction(body, {
+        label: 'Review this deck',
+        description: 'Study due and new cards from every chapter in this deck.',
+        onClick: review
+    });
+
+    if (hasCurriculumDependencies(curriculumDeck)) {
+        appendDeckAction(body, {
+            label: 'View prerequisite path',
+            description: 'See required and recommended preparation in the curriculum.',
+            onClick: () => {
+                const target = activeDeckActions;
+                closeDeckActionsModal({ restoreFocus: false });
+                openDependencyModal(target.curriculumDeck.id);
+            }
+        });
+    }
+
+    if (!deckId.startsWith('local/')) {
+        appendDeckAction(body, {
+            label: 'Sync latest version from GitHub',
+            description: 'Update changed chapters and figures without resetting review history.',
+            onClick: async button => {
+                if (await syncDeckFromGitHub(deckId, button)) {
+                    closeDeckActionsModal({ restoreFocus: false });
+                }
+            }
+        });
+    }
+
+    appendDeckAction(body, {
+        label: 'Reset learning progress',
+        description: 'Mark every card in this deck as new.',
+        danger: true,
+        onClick: () => {
+            closeDeckActionsModal({ restoreFocus: false });
+            resetScope([{ deckId }], `Reset all progress in "${deckName}"?`);
+        }
+    });
+
+    if (!deckId.startsWith('local/')) {
+        appendDeckAction(body, {
+            label: 'Remove from collection',
+            description: 'Remove this GitHub deck from your collection.',
+            danger: true,
+            onClick: () => {
+                closeDeckActionsModal({ restoreFocus: false });
+                deleteScope([deckId], `Remove "${deckName}" from your collection?`);
+            }
+        });
+    }
+
+    modal.classList.remove('hidden');
+    firstAction.focus();
 }
 
 async function clearRepositoryScopes(deckIds) {
@@ -1342,6 +1452,8 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 let columnsSel = { subject: null, deck: null, chapter: null };
 let curriculumIndex = null;
 let activeDependencyTarget = null;
+let activeDeckActions = null;
+let activeDeckActionsTrigger = null;
 const curriculumViewState = {
     query: '',
     subject: '',
@@ -1365,8 +1477,8 @@ function hasCurriculumDependencies(deck, chapter = null) {
 
 /**
  * One columns row: optional inline star (left), name and compact metadata,
- * then inline action icons (gavel / reset / delete) + a chevron for drillable
- * items.
+ * then compact contextual actions and a chevron for drillable items. Deck-level
+ * commands live behind one labeled settings modal to keep narrow rows legible.
  */
 function colRow({ name, meta, star, actions, hasChildren, selected, onClick }) {
     const row = document.createElement('div');
@@ -1622,30 +1734,19 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
             const deckFiles = [filesOf(decks)(deckId)];
             const starState = scopeStarState(scopes, deckFiles, completedActiveScopes);
             const curriculumDeck = curriculumDeckForRepository(deckId, columnsSel.subject);
-            const dependencyAction = hasCurriculumDependencies(curriculumDeck)
-                ? [{
-                    html: '↳',
-                    title: 'View prerequisite path',
-                    onClick: () => openDependencyModal(curriculumDeck.id)
-                }]
-                : [];
-            const syncAction = deckId.startsWith('local/')
-                ? []
-                : [{
-                    html: SYNC_IMG,
-                    title: 'Sync latest version from GitHub',
-                    onClick: button => syncDeckFromGitHub(deckId, button)
-                }];
             return colRow({
                 name: deckName,
                 star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Remove deck from daily focus' : 'Add deck to daily focus', onClick: () => toggleScopes(deckFiles) },
-                actions: [
-                    ...dependencyAction,
-                    ...syncAction,
-                    { html: GAVEL_IMG, title: 'Review this deck (due + new)', onClick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName, ['home', columnsSel.subject, deckName], [deckId]) },
-                    { html: RESET_IMG, title: 'Reset progress in this deck', onClick: () => resetScope([{ deckId }], `Reset all progress in "${deckName}"?`) },
-                    { html: '×', danger: true, title: 'Remove this deck', onClick: () => deleteScope([deckId], `Remove "${deckName}" from your collection?`) }
-                ],
+                actions: [{
+                    html: SETTINGS_IMG,
+                    title: 'Deck settings and actions',
+                    onClick: trigger => openDeckActionsModal({
+                        deckId,
+                        deckName,
+                        subject: columnsSel.subject,
+                        curriculumDeck
+                    }, trigger)
+                }],
                 hasChildren: true, selected: columnsSel.deck === deckId,
                 onClick: () => {
                     columnsSel = { subject: columnsSel.subject, deck: deckId, chapter: null };
@@ -2288,6 +2389,8 @@ function setupEventListeners() {
     document.querySelector('#card-browser-modal .modal-overlay')?.addEventListener('click', closeChapterBrowser);
     document.getElementById('dependency-close')?.addEventListener('click', closeDependencyModal);
     document.querySelector('#dependency-modal .modal-overlay')?.addEventListener('click', closeDependencyModal);
+    document.getElementById('deck-actions-close')?.addEventListener('click', closeDeckActionsModal);
+    document.querySelector('#deck-actions-modal .modal-overlay')?.addEventListener('click', closeDeckActionsModal);
     document.getElementById('dependency-add-path')?.addEventListener('click', addActiveDependencyPath);
     document.getElementById('dependency-copy-command')?.addEventListener('click', copyMissingGenerationCommands);
     document.getElementById('dependency-request-generation')?.addEventListener('click', requestMissingGeneration);
@@ -2298,6 +2401,7 @@ function setupEventListeners() {
             if (!document.getElementById('pwa-install-modal')?.classList.contains('hidden')) closePwaInstallGuide();
             if (!document.getElementById('card-browser-modal')?.classList.contains('hidden')) closeChapterBrowser();
             if (!document.getElementById('dependency-modal')?.classList.contains('hidden')) closeDependencyModal();
+            if (!document.getElementById('deck-actions-modal')?.classList.contains('hidden')) closeDeckActionsModal();
         }
     });
     document.getElementById('session-back-home')?.addEventListener('click', () => showMainView('decks'));
