@@ -1045,12 +1045,34 @@ async function resetScope(specs, message) {
     await loadRepositories();
 }
 
+async function clearRepositoryScopes(deckIds) {
+    if (!habitSettings || deckIds.length === 0) return;
+    const activeDecks = scopesWithoutRepositories(
+        habitSettings.activeDecks || [],
+        deckIds
+    );
+    if (activeDecks.length === (habitSettings.activeDecks || []).length) return;
+    habitSettings = await saveSettings({ activeDecks });
+    if (pausedPrimaryStudySession
+        && !studySessionMatchesActiveScope(pausedPrimaryStudySession, activeDecks)) {
+        pausedPrimaryStudySession = null;
+        await clearStudySession();
+    }
+}
+
 async function deleteScope(deckIds, message) {
     const ok = await confirmDialog({ title: 'Remove from collection', message, confirmText: 'Remove', danger: true });
     if (!ok) return;
+    const removedDeckIds = [];
     for (const id of deckIds) {
-        try { await removeRepository(id); } catch (e) { console.error('[Main] delete failed', id, e); }
+        try {
+            await removeRepository(id);
+            removedDeckIds.push(id);
+        } catch (e) {
+            console.error('[Main] delete failed', id, e);
+        }
     }
+    await clearRepositoryScopes(removedDeckIds);
     await loadRepositories();
 }
 
@@ -1970,6 +1992,7 @@ function createDeckCard(deck) {
             if (ok) {
                 try {
                     await removeRepository(deck.id);
+                    await clearRepositoryScopes([deck.id]);
                     await loadRepositories();
                 } catch (error) {
                     console.error('[Main] Error removing deck:', error);
@@ -2031,6 +2054,7 @@ function createFailedRepoCard(failed) {
         if (ok) {
             try {
                 await removeRepository(failed.id);
+                await clearRepositoryScopes([failed.id]);
                 window.__failedRepos = (window.__failedRepos || []).filter(r => r.id !== failed.id);
                 await loadRepositories();
             } catch (err) {
@@ -3252,10 +3276,15 @@ async function handleAddRepository() {
     input.disabled = true;
 
     try {
+        const installedBefore = new Set((await getAllRepos()).map(repo => repo.id.toLowerCase()));
         // Adding a deck reads only repository metadata and the flashcards tree.
         // Card bodies remain lazy until the first review.
-        await loadRepositoryMetadata(repoString, { sync: true });
+        const { deck: addedDeck } = await loadRepositoryMetadata(repoString, { sync: true });
         console.log(`[Main] Added metadata-only deck ${repoString}`);
+
+        if (!installedBefore.has(addedDeck.id.toLowerCase())) {
+            await clearRepositoryScopes([addedDeck.id]);
+        }
 
         const superseded = await getSupersededRepos();
         if (superseded.length > 0) {
