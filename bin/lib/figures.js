@@ -52,6 +52,16 @@ export function decorateTikzSvg(svg, metadata, sourcePath) {
     return svg.replace(openTag, accessibleTag + '\n' + sourceComment + '\n' + accessibility);
 }
 
+export function prepareTikzSourceForDvisvgm(source) {
+    const selectsDvisvgmDriver = /\\def\\pgfsysdriver\{pgfsys-dvisvgm\.def\}/.test(source) ||
+        /\\documentclass\[[^\]]*\bdvisvgm\b[^\]]*\]\{standalone\}/.test(source);
+    if (selectsDvisvgmDriver) return source;
+    return source.replace(
+        /\\documentclass/,
+        '\\def\\pgfsysdriver{pgfsys-dvisvgm.def}\n\\documentclass'
+    );
+}
+
 function findTikzSources(dir) {
     if (!existsSync(dir)) return [];
     const sources = [];
@@ -84,6 +94,8 @@ function renderOne(deckPath, sourcePath, texEnvironment) {
     const temporary = mkdtempSync(path.join(os.tmpdir(), 'flashcards-tikz-'));
     const base = path.basename(sourcePath, '.tex');
     try {
+        const temporarySourcePath = path.join(temporary, base + '.tex');
+        writeFileSync(temporarySourcePath, prepareTikzSourceForDvisvgm(source));
         const env = {
             ...process.env,
             ...texEnvironment,
@@ -99,7 +111,7 @@ function renderOne(deckPath, sourcePath, texEnvironment) {
                 '--interaction=batchmode',
                 '--halt-on-error',
                 '--output-directory=' + temporary,
-                sourcePath
+                temporarySourcePath
             ], temporary, env);
         } catch (error) {
             const logPath = path.join(temporary, base + '.log');

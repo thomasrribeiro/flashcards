@@ -1,7 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { decorateTikzSvg, parseTikzMetadata } from '../bin/lib/figures.js';
+import {
+    decorateTikzSvg,
+    parseTikzMetadata,
+    prepareTikzSourceForDvisvgm
+} from '../bin/lib/figures.js';
 
 describe('TikZ figure rendering', () => {
+    it('selects the native dvisvgm driver when a source omits it', () => {
+        expect(prepareTikzSourceForDvisvgm(
+            '\\documentclass[tikz,border=8pt]{standalone}'
+        )).toBe(
+            '\\def\\pgfsysdriver{pgfsys-dvisvgm.def}\n' +
+            '\\documentclass[tikz,border=8pt]{standalone}'
+        );
+        expect(prepareTikzSourceForDvisvgm(
+            '\\documentclass[dvisvgm,tikz,border=8pt]{standalone}'
+        )).toBe('\\documentclass[dvisvgm,tikz,border=8pt]{standalone}');
+        const explicit = '\\def\\pgfsysdriver{pgfsys-dvisvgm.def}\n' +
+            '\\documentclass[tikz]{standalone}';
+        expect(prepareTikzSourceForDvisvgm(explicit)).toBe(explicit);
+    });
+
     it('requires accessible source metadata', () => {
         const source = '% flashcards-title: Vector components\n' +
             '% flashcards-desc: A vector and its two Cartesian projections.\n' +
