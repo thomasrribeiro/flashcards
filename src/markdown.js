@@ -230,13 +230,23 @@ export function parseSolutionSteps(solution) {
     const steps = [];
     const lines = solution.split('\n');
     let currentStep = null;
+    const leadingContent = [];
+    const plainStepLabels = new Set(['IDENTIFY', 'PLAN', 'EXECUTE', 'EVALUATE']);
 
     for (const line of lines) {
         // Accept both established spellings:
         //   **IDENTIFY**: content
         //   **IDENTIFY:** content
-        // The latter is what the current deck-authoring pipeline emits.
-        const match = line.match(/^\*\*([^*]+?)(?::\*\*|\*\*:)\s*(.*)$/);
+        // Some durable decks also use an unstyled IPEE heading:
+        //   IDENTIFY: content
+        const boldMatch = line.match(/^\*\*([^*]+?)(?::\*\*|\*\*:)\s*(.*)$/);
+        const plainMatch = line.match(/^([A-Za-z]+):\s*(.*)$/);
+        const plainLabel = plainMatch?.[1]?.toUpperCase();
+        const match = boldMatch || (
+            plainStepLabels.has(plainLabel)
+                ? [plainMatch[0], plainLabel, plainMatch[2]]
+                : null
+        );
 
         if (match) {
             // Save previous step if exists
@@ -252,12 +262,23 @@ export function parseSolutionSteps(solution) {
         } else if (currentStep) {
             // Continuation of current step
             currentStep.content += '\n' + line;
+        } else {
+            // Preserve a direct-answer prelude that appears before the first
+            // structured heading instead of dropping it from the reveal flow.
+            leadingContent.push(line);
         }
     }
 
     // Save last step
     if (currentStep) {
         steps.push(currentStep);
+    }
+
+    const prelude = leadingContent.join('\n').trim();
+    if (prelude && steps.length > 0) {
+        steps[0].content = steps[0].content
+            ? `${prelude}\n\n${steps[0].content.replace(/^\n+/, '')}`
+            : prelude;
     }
 
     return steps;

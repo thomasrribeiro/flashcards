@@ -36,6 +36,33 @@ describe('parseSolutionSteps', () => {
         ]);
     });
 
+    it('parses unstyled IPEE headings from durable decks', () => {
+        expect(parseSolutionSteps(
+            'IDENTIFY: Find the target.\n\nPLAN: Choose a method.\n\nEXECUTE: Calculate.\n\nEVALUATE: Check.'
+        )).toEqual([
+            { label: 'IDENTIFY', content: 'Find the target.\n' },
+            { label: 'PLAN', content: 'Choose a method.\n' },
+            { label: 'EXECUTE', content: 'Calculate.\n' },
+            { label: 'EVALUATE', content: 'Check.' }
+        ]);
+    });
+
+    it('preserves a direct answer before the first IPEE heading', () => {
+        expect(parseSolutionSteps(
+            'The note should show 70.\n\nIDENTIFY: Round 73 to the nearest ten.\n\nPLAN: Compare 70 and 80.'
+        )).toEqual([
+            {
+                label: 'IDENTIFY',
+                content: 'The note should show 70.\n\nRound 73 to the nearest ten.\n'
+            },
+            { label: 'PLAN', content: 'Compare 70 and 80.' }
+        ]);
+    });
+
+    it('does not treat arbitrary unstyled labels as solution steps', () => {
+        expect(parseSolutionSteps('Answer: Compute the result directly.')).toEqual([]);
+    });
+
     it('returns no steps for an unstructured solution so the UI can use its fallback', () => {
         expect(parseSolutionSteps('Compute the result directly.')).toEqual([]);
     });
