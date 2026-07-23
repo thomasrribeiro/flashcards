@@ -93,6 +93,48 @@ function chapterAuditName(chapterName) {
     return `${chapterName.replace(/\.md$/, '')}-cold-start.md`;
 }
 
+export function stampChangedChapterAuthoringModel(workspacePath, model) {
+    if (!model) return [];
+    const modified = spawnSync(
+        'git',
+        ['diff', '--name-only', 'HEAD', '--', 'flashcards'],
+        { cwd: workspacePath, encoding: 'utf8' }
+    );
+    const untracked = spawnSync(
+        'git',
+        ['ls-files', '--others', '--exclude-standard', '--', 'flashcards'],
+        { cwd: workspacePath, encoding: 'utf8' }
+    );
+    if (modified.status !== 0 || untracked.status !== 0) {
+        const failure = modified.status !== 0 ? modified : untracked;
+        throw new Error(`Unable to identify generated chapters for provenance: ${(failure.stderr || failure.stdout).trim()}`);
+    }
+
+    const stamped = [];
+    const changedPaths = new Set(
+        `${modified.stdout}\n${untracked.stdout}`.split('\n').map(value => value.trim()).filter(Boolean)
+    );
+    for (const relativePath of [...changedPaths].sort()) {
+        if (!/^flashcards\/\d{2}_.+\.md$/.test(relativePath)) continue;
+        const chapterPath = path.join(workspacePath, relativePath);
+        const markdown = readFileSync(chapterPath, 'utf8');
+        const frontmatterMatch = /^\+\+\+\n([\s\S]*?)\n\+\+\+/.exec(markdown);
+        if (!frontmatterMatch) {
+            throw new Error(`Generated chapter is missing TOML frontmatter: ${chapterPath}`);
+        }
+        const field = `authoring_model = ${JSON.stringify(model)}`;
+        const frontmatter = /^authoring_model\s*=/m.test(frontmatterMatch[1])
+            ? frontmatterMatch[1].replace(/^authoring_model\s*=.*$/m, field)
+            : frontmatterMatch[1].replace(/^(subject\s*=.*)$/m, `$1\n${field}`);
+        writeFileSync(
+            chapterPath,
+            markdown.replace(frontmatterMatch[0], `+++\n${frontmatter}\n+++`)
+        );
+        stamped.push(relativePath);
+    }
+    return stamped;
+}
+
 function deckModeInstruction(mode, buildScope, reportOnly, chapterNumber, chapterName, prerequisiteResolution) {
     if (mode === 'build' && buildScope === 'pilot') {
         return 'Research and design the curriculum, but AUTHOR ONLY THE FIRST ORDERED CHAPTER as a novice-first pilot. If no ordered chapter exists, design the chapter map and create the first chapter. Do not author, delete, or modify cards in later chapters. Complete the pilot dependency ledger and write .flashcards/audits/pilot-cold-start.md with a front-by-front audit. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains, then stop for human approval.';
@@ -448,6 +490,7 @@ function runPreparedInvocation(prepared, invocation, {
     metadata,
     allowedPaths,
     replacePaths,
+    finalizeWorkspace,
     validateWorkspace,
     recoverOnFailure
 }) {
@@ -460,6 +503,7 @@ function runPreparedInvocation(prepared, invocation, {
     if (result.status !== 0) {
         if (recoverOnFailure) {
             try {
+                if (finalizeWorkspace) finalizeWorkspace(prepared.workspacePath);
                 recoverOnFailure(prepared.workspacePath);
                 const recovered = finishIsolatedRun(prepared, {
                     applyChanges: !reportOnly,
@@ -478,6 +522,7 @@ function runPreparedInvocation(prepared, invocation, {
         });
         return { status: result.status, ...preserved };
     }
+    if (finalizeWorkspace) finalizeWorkspace(prepared.workspacePath);
     if (validateWorkspace) validateWorkspace(prepared.workspacePath);
     const finished = finishIsolatedRun(prepared, {
         applyChanges: !reportOnly,
@@ -773,6 +818,9 @@ export function runDeckAgent({
                 reportOnly,
                 allowedPaths,
                 replacePaths: replacementPaths,
+                finalizeWorkspace: mode === 'build' && !reportOnly
+                    ? workspacePath => stampChangedChapterAuthoringModel(workspacePath, invocation.model)
+                    : undefined,
                 recoverOnFailure: mode === 'build' ? workspacePath => {
                     const validation = validateDeck(workspacePath, { quiet: true });
                     if (validation.status !== 0) {

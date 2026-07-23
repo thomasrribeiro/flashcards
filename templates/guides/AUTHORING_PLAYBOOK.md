@@ -320,7 +320,7 @@ Keep each fact in one durable home:
 | deck `README.md` | scope, chapter map, source register, and use | machine-readable prerequisite edges or generic SRS advice |
 | deck `CARD_README.md` | deck-specific retrieval design and justified deviations | copied research literature |
 | deck `deck.toml` | machine-readable identity, deck prerequisites, assumed tools, and standards paths | prose guidance |
-| chapter frontmatter | machine-readable chapter prerequisites and provided concepts | curriculum essays or duplicate dependency tables |
+| chapter frontmatter | machine-readable chapter prerequisites, provided concepts, and exact agent authoring model when applicable | curriculum essays or duplicate dependency tables |
 
 `AGENTS.md` files should route an agent to the canonical documents and state
 write/validation boundaries. They should remain short.

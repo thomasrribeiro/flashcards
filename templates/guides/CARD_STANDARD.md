@@ -194,9 +194,11 @@ Severity:
 
 - **F1 — Canonical frontmatter.** Use TOML `+++` frontmatter with `order`,
   canonical lowercase kebab-case `subject`, kebab-case `tags`, explicit
-  `prerequisites`, and `provides`. Preserve supported provenance tables. Remove
-  the obsolete `name` field. Prerequisite references use `chapter:`, `concept:`,
-  `deck:`, or `tool:` prefixes.
+  `prerequisites`, and `provides`. Agent-built chapters also record the exact
+  `authoring_model`; the isolated CLI stamps this field deterministically rather
+  than trusting the model to self-report it. Preserve supported provenance
+  tables. Remove the obsolete `name` field. Prerequisite references use
+  `chapter:`, `concept:`, `deck:`, or `tool:` prefixes.
 - **F2 — Ordered filenames.** Chapter files use zero-padded
   `NN_snake_case.md` names whose prefix matches `order`.
 - **F3 — Deck metadata.** New and modernized decks contain `AGENTS.md`,

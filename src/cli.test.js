@@ -11,7 +11,8 @@ import {
     formatInvocation,
     resetChapterForRegeneration,
     resetPilotForRegeneration,
-    runDeckAgent
+    runDeckAgent,
+    stampChangedChapterAuthoringModel
 } from '../bin/lib/codex.js';
 import { buildContextManifest, buildSubjectContextManifest, formatContextManifest } from '../bin/lib/context.js';
 import {
@@ -1474,6 +1475,53 @@ describe('flashcards CLI validation and Codex handoff', () => {
             expect(baseline.stdout).not.toContain('secret-old-card');
             const diff = spawnSync('git', ['diff', 'HEAD'], { cwd: prepared.workspacePath, encoding: 'utf8' });
             expect(diff.stdout).not.toContain('secret-old-card');
+        } finally {
+            await rm(prepared.runPath, { recursive: true, force: true });
+            discardIsolatedRun(prepared);
+        }
+    });
+
+    it('stamps changed generated chapters with the exact authoring model', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations', 'vectors']
+        });
+        const manifest = buildContextManifest({ deckPath, mode: 'build', chapterNumber: 2 });
+        const prepared = prepareIsolatedRun({
+            sourcePath: deckPath,
+            contextFiles: manifest.files,
+            label: 'model-provenance-test'
+        });
+        try {
+            const first = path.join(prepared.workspacePath, 'flashcards', '01_foundations.md');
+            const second = path.join(prepared.workspacePath, 'flashcards', '02_vectors.md');
+            const third = path.join(prepared.workspacePath, 'flashcards', '03_new_chapter.md');
+            await writeFile(first, `${await readFile(first, 'utf8')}\n`);
+            await writeFile(second, `${await readFile(second, 'utf8')}\n`);
+            await writeFile(third, '+++\norder = 3\nsubject = "physics"\ntags = ["mechanics"]\nprerequisites = []\nprovides = []\n+++\n');
+
+            expect(stampChangedChapterAuthoringModel(prepared.workspacePath, 'claude-fable-5'))
+                .toEqual([
+                    'flashcards/01_foundations.md',
+                    'flashcards/02_vectors.md',
+                    'flashcards/03_new_chapter.md'
+                ]);
+            expect(await readFile(first, 'utf8')).toContain('authoring_model = "claude-fable-5"');
+            expect(await readFile(second, 'utf8')).toContain('authoring_model = "claude-fable-5"');
+            expect(await readFile(third, 'utf8')).toContain('authoring_model = "claude-fable-5"');
+
+            expect(stampChangedChapterAuthoringModel(prepared.workspacePath, 'claude-opus-4-8'))
+                .toEqual([
+                    'flashcards/01_foundations.md',
+                    'flashcards/02_vectors.md',
+                    'flashcards/03_new_chapter.md'
+                ]);
+            expect(await readFile(first, 'utf8')).toContain('authoring_model = "claude-opus-4-8"');
+            expect((await readFile(first, 'utf8')).match(/^authoring_model\s*=/gm)).toHaveLength(1);
         } finally {
             await rm(prepared.runPath, { recursive: true, force: true });
             discardIsolatedRun(prepared);
