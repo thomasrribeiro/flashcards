@@ -99,7 +99,11 @@ function normalizePath(path) {
 
 marked.setOptions({
     renderer: renderer,
-    breaks: true,
+    // A source file may wrap prose for readability. Treat those newlines as
+    // normal Markdown soft breaks so the browser can reflow the card to the
+    // current laptop or phone width. Authors can still request a hard break
+    // with Markdown's two trailing spaces or an explicit <br>.
+    breaks: false,
     gfm: true
 });
 
