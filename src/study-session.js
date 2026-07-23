@@ -79,6 +79,9 @@ export function getState() {
  */
 function renderStepLabel(label) {
     const guidance = stepGuidance[label.toUpperCase()];
+    if (!guidance) {
+        return `<div class="solution-step-label">${label}:</div>`;
+    }
     const guidanceHtml = guidance ? guidance.map(item => `<li>${item}</li>`).join('') : '';
 
     return `<div class="solution-step-label">

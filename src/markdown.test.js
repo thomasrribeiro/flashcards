@@ -52,10 +52,23 @@ describe('parseSolutionSteps', () => {
             'The note should show 70.\n\nIDENTIFY: Round 73 to the nearest ten.\n\nPLAN: Compare 70 and 80.'
         )).toEqual([
             {
-                label: 'IDENTIFY',
-                content: 'The note should show 70.\n\nRound 73 to the nearest ten.\n'
+                label: 'ANSWER',
+                content: 'The note should show 70.'
             },
+            { label: 'IDENTIFY', content: 'Round 73 to the nearest ten.\n' },
             { label: 'PLAN', content: 'Compare 70 and 80.' }
+        ]);
+    });
+
+    it('keeps faded working separate from a retained EVALUATE step', () => {
+        expect(parseSolutionSteps(
+            'The result is 600.\n\n649 is closer to 600 than 700.\n\nEVALUATE: Check the two distances.'
+        )).toEqual([
+            {
+                label: 'ANSWER',
+                content: 'The result is 600.\n\n649 is closer to 600 than 700.'
+            },
+            { label: 'EVALUATE', content: 'Check the two distances.' }
         ]);
     });
 

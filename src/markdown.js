@@ -276,9 +276,14 @@ export function parseSolutionSteps(solution) {
 
     const prelude = leadingContent.join('\n').trim();
     if (prelude && steps.length > 0) {
-        steps[0].content = steps[0].content
-            ? `${prelude}\n\n${steps[0].content.replace(/^\n+/, '')}`
-            : prelude;
+        // A faded IPEE solution may intentionally leave the answer and working
+        // unlabelled while retaining only a later step such as EVALUATE.
+        // Preserve that prelude as its own reveal instead of mislabelling all
+        // of it as the first structured step.
+        steps.unshift({
+            label: 'ANSWER',
+            content: prelude
+        });
     }
 
     return steps;
