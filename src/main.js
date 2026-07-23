@@ -17,7 +17,13 @@ import {
     saveRepoMetadata,
     syncChapterProgress
 } from './storage.js';
-import { loadRepository, loadRepositoryFiles, loadRepositoryMetadata, removeRepository } from './repo-manager.js';
+import {
+    loadRepository,
+    loadRepositoryFiles,
+    loadRepositoryMetadata,
+    removeRepository,
+    syncRepository
+} from './repo-manager.js';
 import { parseDeck } from './parser.js';
 import { identifyCard } from './hasher.js';
 import { getAuthenticatedUser, getUserRepositories, getOrgRepositories, mergeRepositoryLists } from './github-client.js';
@@ -634,6 +640,7 @@ function treeToggle(key, hasActive) {
 
 const GAVEL_IMG = `<img src="${import.meta.env.BASE_URL}icons/gavel.png" alt="Review" style="width:13px;height:13px;">`;
 const RESET_IMG = `<img src="${import.meta.env.BASE_URL}icons/refresh.png" alt="Reset" style="width:13px;height:13px;">`;
+const SYNC_IMG = `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 3v11m-4-4 4 4 4-4M5 18h14v3H5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter"/></svg>`;
 const BROWSE_IMG = `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`;
 
 /** Match the lowercase kebab-case convention used by deck names. */
@@ -1056,6 +1063,61 @@ async function resetScope(specs, message) {
     await loadRepositories();
 }
 
+function showTransientStatus(message) {
+    const status = document.getElementById('connection-status');
+    if (!status) return;
+    const previous = status.textContent;
+    status.textContent = message;
+    window.setTimeout(() => {
+        if (status.textContent === message) status.textContent = previous;
+    }, 4000);
+}
+
+async function syncDeckFromGitHub(deckId, button = null) {
+    if (!deckId || deckId.startsWith('local/')) return;
+    const previousHtml = button?.innerHTML;
+    if (button) {
+        button.disabled = true;
+        button.textContent = '…';
+        button.setAttribute('aria-label', 'Syncing latest version from GitHub');
+    }
+    try {
+        const { changes } = await syncRepository(deckId);
+        const changedFiles = new Set([
+            ...(changes?.changed || []),
+            ...(changes?.removed || [])
+        ]);
+        if (pausedPrimaryStudySession?.queue?.some(entry =>
+            entry.repo === deckId && changedFiles.has(entry.filepath)
+        )) {
+            cleanupStudySession();
+            pausedPrimaryStudySession = {
+                ...pausedPrimaryStudySession,
+                inMemory: false
+            };
+            currentPrimaryStudyMode = null;
+            await saveStudySession(pausedPrimaryStudySession);
+        }
+        await loadRepositories();
+        const updated = (changes?.added?.length || 0)
+            + (changes?.changed?.length || 0)
+            + (changes?.removed?.length || 0);
+        showTransientStatus(updated
+            ? `Synced ${deckId.split('/').pop()}: ${updated} chapter file${updated === 1 ? '' : 's'} updated`
+            : `${deckId.split('/').pop()} is already current`);
+    } catch (error) {
+        console.error('[Main] Failed to sync repository:', deckId, error);
+        showTransientStatus(`Could not sync ${deckId.split('/').pop()}`);
+        alert(`Could not sync the latest GitHub version: ${error.message}`);
+    } finally {
+        if (button?.isConnected) {
+            button.disabled = false;
+            button.innerHTML = previousHtml;
+            button.setAttribute('aria-label', 'Sync latest version from GitHub');
+        }
+    }
+}
+
 async function clearRepositoryScopes(deckIds) {
     if (!habitSettings || deckIds.length === 0) return;
     const activeDecks = scopesWithoutRepositories(
@@ -1347,7 +1409,7 @@ function colRow({ name, meta, star, actions, hasChildren, selected, onClick }) {
         b.title = a.title;
         b.setAttribute('aria-label', a.title);
         b.innerHTML = a.html;
-        b.onclick = (e) => { e.stopPropagation(); a.onClick(); };
+        b.onclick = (e) => { e.stopPropagation(); a.onClick(b); };
         acts.appendChild(b);
     }
     // Chevron only for drillable rows — leaves have nothing to the right
@@ -1567,11 +1629,19 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
                     onClick: () => openDependencyModal(curriculumDeck.id)
                 }]
                 : [];
+            const syncAction = deckId.startsWith('local/')
+                ? []
+                : [{
+                    html: SYNC_IMG,
+                    title: 'Sync latest version from GitHub',
+                    onClick: button => syncDeckFromGitHub(deckId, button)
+                }];
             return colRow({
                 name: deckName,
                 star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Remove deck from daily focus' : 'Add deck to daily focus', onClick: () => toggleScopes(deckFiles) },
                 actions: [
                     ...dependencyAction,
+                    ...syncAction,
                     { html: GAVEL_IMG, title: 'Review this deck (due + new)', onClick: () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId, deckName, ['home', columnsSel.subject, deckName], [deckId]) },
                     { html: RESET_IMG, title: 'Reset progress in this deck', onClick: () => resetScope([{ deckId }], `Reset all progress in "${deckName}"?`) },
                     { html: '×', danger: true, title: 'Remove this deck', onClick: () => deleteScope([deckId], `Remove "${deckName}" from your collection?`) }

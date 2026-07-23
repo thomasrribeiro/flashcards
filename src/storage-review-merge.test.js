@@ -1,9 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     chapterProgressForCard,
+    clearLocalStorage,
     enrichReviewSources,
-    mergeReviewSnapshots
+    getAllCards,
+    getAllReviews,
+    invalidateRepositoryFiles,
+    mergeReviewSnapshots,
+    saveCards,
+    saveReview,
+    setCurrentUser
 } from './storage.js';
+
+afterEach(async () => {
+    await clearLocalStorage();
+    vi.unstubAllGlobals();
+});
 
 describe('mergeReviewSnapshots', () => {
     it('keeps a newer locally graded review over stale server state', () => {
@@ -87,5 +99,38 @@ describe('chapterProgressForCard', () => {
             totalCards: 2,
             reviewedCards: 1
         });
+    });
+});
+
+describe('invalidateRepositoryFiles', () => {
+    it('drops stale card bodies without deleting their review history', async () => {
+        const values = new Map();
+        vi.stubGlobal('localStorage', {
+            getItem: key => values.get(key) ?? null,
+            setItem: (key, value) => values.set(key, value),
+            removeItem: key => values.delete(key)
+        });
+        setCurrentUser(null);
+        await saveCards([
+            {
+                hash: 'card-a',
+                type: 'basic',
+                content: { question: 'Old question' },
+                deckName: 'owner/deck',
+                source: { repo: 'owner/deck', file: 'flashcards/01.md', sha: 'old-sha' }
+            },
+            {
+                hash: 'card-b',
+                type: 'basic',
+                content: { question: 'Unchanged question' },
+                deckName: 'owner/deck',
+                source: { repo: 'owner/deck', file: 'flashcards/02.md', sha: 'same-sha' }
+            }
+        ]);
+        await saveReview('card-a', { due: '2026-08-01T00:00:00Z' });
+
+        expect(invalidateRepositoryFiles('owner/deck', ['flashcards/01.md'])).toBe(1);
+        expect((await getAllCards()).map(card => card.hash)).toEqual(['card-b']);
+        expect((await getAllReviews()).map(review => review.cardHash)).toEqual(['card-a']);
     });
 });

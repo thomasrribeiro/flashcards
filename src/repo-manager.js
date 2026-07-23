@@ -5,10 +5,42 @@
 import { parseDeck } from './parser.js';
 import { identifyCard } from './hasher.js';
 import * as githubClient from './github-client.js';
-import { saveCards, getAllCards, saveRepoMetadata, getRepoMetadata, getAllRepos, markRepoLoaded } from './storage.js';
+import {
+    saveCards,
+    getAllCards,
+    saveRepoMetadata,
+    getRepoMetadata,
+    getAllRepos,
+    invalidateRepositoryFiles,
+    markRepoLoaded
+} from './storage.js';
 
 const SUBJECT_TOPICS = new Set(['biology', 'computer-science', 'mathematics', 'physics', 'law', 'misc']);
 const fileLoadPromises = new Map();
+
+function fileDescriptorMap(files = []) {
+    return new Map(files.map(file => {
+        const path = typeof file === 'string' ? file : file.path;
+        const sha = typeof file === 'string' ? null : file.sha || null;
+        return [path, sha];
+    }).filter(([path]) => path));
+}
+
+export function repositoryFileChanges(previousFiles = [], nextFiles = []) {
+    const previous = fileDescriptorMap(previousFiles);
+    const next = fileDescriptorMap(nextFiles);
+    const added = [...next.keys()].filter(path => !previous.has(path));
+    const removed = [...previous.keys()].filter(path => !next.has(path));
+    const changed = [...next.keys()].filter(path =>
+        previous.has(path) && previous.get(path) !== next.get(path)
+    );
+    return {
+        added,
+        removed,
+        changed,
+        invalidated: [...new Set([...removed, ...changed])]
+    };
+}
 
 export function resolveRepositorySubject(topics = [], existingSubject = null) {
     return topics.find(topic => SUBJECT_TOPICS.has(topic)) || existingSubject || 'misc';
@@ -110,6 +142,7 @@ export async function loadRepositoryMetadata(repoString, { sync = false } = {}) 
         curriculumMetadata?.subject || existing?.subject
     );
     const repoData = githubClient.createRepoData(repoInfo, markdownFiles);
+    const changes = repositoryFileChanges(existing?.files || [], markdownFiles);
     const deck = {
         ...repoData,
         id: `${owner}/${repo}`,
@@ -129,8 +162,27 @@ export async function loadRepositoryMetadata(repoString, { sync = false } = {}) 
         createdAt: existing?.createdAt || new Date().toISOString()
     };
 
+    if (changes.invalidated.length > 0) {
+        invalidateRepositoryFiles(deck.id, changes.invalidated);
+        for (const filepath of changes.invalidated) {
+            const prefix = `${deck.id}\0${filepath}\0`;
+            for (const key of fileLoadPromises.keys()) {
+                if (key.startsWith(prefix)) fileLoadPromises.delete(key);
+            }
+        }
+    }
     await saveRepoMetadata(deck, { sync });
-    return { repository: deck, deck, cards: [], filesProcessed: markdownFiles.length };
+    return {
+        repository: deck,
+        deck,
+        cards: [],
+        filesProcessed: markdownFiles.length,
+        changes
+    };
+}
+
+export async function syncRepository(repoString) {
+    return loadRepositoryMetadata(repoString, { sync: true });
 }
 
 /**
@@ -154,6 +206,7 @@ export async function loadRepositoryFiles(repoString, filePaths = null) {
             fileLoadPromises.set(key, (async () => {
                 const existingCards = (await getAllCards()).filter(card =>
                     (card.source?.repo || card.deckName) === repoString && card.source?.file === file.path
+                    && (!file.sha || card.source?.sha === file.sha)
                 );
                 if (existingCards.length > 0) return existingCards;
 

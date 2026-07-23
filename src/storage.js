@@ -568,6 +568,26 @@ export async function saveCards(cards) {
 }
 
 /**
+ * Drop cached card bodies for repository files whose GitHub blob changed.
+ * Review rows are intentionally preserved: stable card IDs reconnect them when
+ * the new bodies are parsed, and removed cards remain available for safe
+ * orphan reconciliation after a complete repository load.
+ */
+export function invalidateRepositoryFiles(repoId, filepaths = []) {
+    const files = new Set(filepaths);
+    if (!repoId || files.size === 0) return 0;
+    const before = cardsCache.length;
+    cardsCache = cardsCache.filter(card => {
+        const cardRepo = card.source?.repo || card.deckName;
+        return cardRepo !== repoId || !files.has(card.source?.file || '');
+    });
+    chapterProgressCache = chapterProgressCache.filter(progress =>
+        progress.repo !== repoId || !files.has(progress.filepath)
+    );
+    return before - cardsCache.length;
+}
+
+/**
  * Get all cards
  */
 export async function getAllCards() {
