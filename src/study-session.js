@@ -166,15 +166,24 @@ export async function startDrillSession(onComplete, onCardChange, options = {}) 
  */
 export function startTodaySession(queue, onComplete, onCardChange, {
     completedCards = 0,
-    onProgress = null
+    onProgress = null,
+    fileFilter = null,
+    scopeTotalCards = 0,
+    introducedCards = 0
 } = {}) {
     const completed = Math.max(0, Math.floor(Number(completedCards) || 0));
+    const scopeTotal = Math.max(0, Math.floor(Number(scopeTotalCards) || 0));
+    const introduced = Math.min(
+        scopeTotal,
+        Math.max(0, Math.floor(Number(introducedCards) || 0))
+    );
     state = {
         currentCardIndex: 0,
         dueCards: queue.map(({ card, fsrsCard, cardHash }) => ({
             card,
             fsrsCard: fsrsCard || createCard(),
-            cardHash
+            cardHash,
+            wasFresh: fsrsCard === null
         })),
         totalCards: completed + queue.length,
         reviewedCards: completed,
@@ -185,9 +194,9 @@ export function startTodaySession(queue, onComplete, onCardChange, {
         currentStepIndex: 0,
         solutionSteps: [],
         deckId: '__today__',
-        fileFilter: null,
-        scopeTotalCards: 0,
-        introducedCards: 0,
+        fileFilter,
+        scopeTotalCards: scopeTotal,
+        introducedCards: introduced,
         newlyIntroducedCards: 0,
         onComplete,
         onCardChange,

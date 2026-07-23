@@ -43,7 +43,7 @@ import {
     buildChapterProgressSnapshot,
     chapterProgressTargets
 } from './chapter-progress.js';
-import { partitionScopedReviewCards } from './scoped-review.js';
+import { buildChapterContinuation, partitionScopedReviewCards } from './scoped-review.js';
 import {
     collectionSnapshotForRender,
     commitCollectionSnapshot
@@ -775,20 +775,31 @@ async function startScopedReview(filterFn, label, breadcrumb, repoIds = [], file
     const allCards = await getAllCards();
     const allReviews = await getAllReviews();
     const scopedCards = allCards.filter(filterFn);
-    const includeScheduled = Array.isArray(fileSpecs) && fileSpecs.length === 1;
-    const { due, fresh, scheduled } = partitionScopedReviewCards(
-        scopedCards,
-        allReviews,
-        { includeScheduled }
-    );
-    const queue = [...interleaveDueCards(due), ...fresh, ...scheduled];
+    const isChapterContinuation = Array.isArray(fileSpecs) && fileSpecs.length === 1;
+    const continuation = isChapterContinuation
+        ? buildChapterContinuation(scopedCards, allReviews)
+        : null;
+    const queue = continuation
+        ? continuation.queue
+        : (() => {
+            const { due, fresh } = partitionScopedReviewCards(scopedCards, allReviews);
+            return [...interleaveDueCards(due), ...fresh];
+        })();
     if (queue.length === 0) {
-        alert('Nothing to review here right now — all caught up.');
+        alert(isChapterContinuation
+            ? 'You have introduced every card in this chapter. Scheduled cards will appear under Review when they are due.'
+            : 'Nothing to review here right now — all caught up.');
         return;
     }
     discardPausedPrimaryStudySession();
     enterStudyArea(breadcrumb || ['home', label]);
-    startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb);
+    startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb, continuation
+        ? {
+            fileFilter: fileSpecs[0].path,
+            scopeTotalCards: continuation.totalCards,
+            introducedCards: continuation.introducedCards
+        }
+        : {});
 }
 
 /** Fetch and parse card bodies only when a review action needs them. */
