@@ -9,6 +9,7 @@ import {
     getAllDecks,
     getAllRepos,
     getAllReviews,
+    getSupersededRepos,
     getAllTopics,
     getStats,
     initDB,
@@ -48,6 +49,7 @@ import {
     commitCollectionSnapshot
 } from './collection-navigation.js';
 import { installAvailableDependencyDecks } from './dependency-install.js';
+import { scopesWithoutRepositories } from './collection-reconciliation.js';
 import {
     chapterForFile,
     chapterGraph,
@@ -203,6 +205,14 @@ async function init() {
         habitSettings = await habitSettingsPromise;
         pausedPrimaryStudySession = await pausedSessionPromise;
         curriculumIndex = await curriculumIndexPromise;
+        const retiredRepoIds = window.__retiredRepoIds || [];
+        const activeDecks = scopesWithoutRepositories(
+            habitSettings?.activeDecks || [],
+            retiredRepoIds
+        );
+        if (activeDecks.length !== (habitSettings?.activeDecks || []).length) {
+            habitSettings = await saveSettings({ activeDecks });
+        }
         if (pausedPrimaryStudySession
             && !studySessionMatchesActiveScope(pausedPrimaryStudySession, habitSettings?.activeDecks)) {
             // A session built for an older scope must never override the stars
@@ -265,6 +275,10 @@ async function init() {
         console.log('=== INIT COMPLETE ===');
     } catch (error) {
         console.error('=== INIT ERROR ===', error);
+        const grid = document.getElementById('topics-grid');
+        if (grid) {
+            grid.innerHTML = '<div class="error">Account data could not be loaded. Check your connection and reload.</div>';
+        }
     }
 }
 
@@ -316,7 +330,7 @@ function configureMobileAppShell() {
  * Load user's repos from D1 and fetch their cards
  */
 async function loadUserRepos() {
-    const { loadReposFromD1 } = await import('./storage.js');
+    const { loadReposFromD1, removeRepo } = await import('./storage.js');
     const { loadRepositoryMetadata, removeRepository } = await import('./repo-manager.js');
 
     const repos = await loadReposFromD1();
@@ -351,9 +365,22 @@ async function loadUserRepos() {
         }
     }));
 
+    const superseded = await getSupersededRepos();
+    const retiredRepoIds = [];
+    for (const repo of superseded) {
+        try {
+            await removeRepo(repo.id, { preserveReviews: true });
+            retiredRepoIds.push(repo.id);
+            console.log(`[Main] Retired superseded repository membership: ${repo.id}`);
+        } catch (error) {
+            console.error(`[Main] Failed to retire superseded repository ${repo.id}:`, error);
+        }
+    }
+
     // Stash broken repos and evictions so loadRepositories can surface them
     window.__failedRepos = failedRepos;
     window.__evictedRepos = evicted;
+    window.__retiredRepoIds = retiredRepoIds;
 
     // Orphan cleanup requires complete card hashes, so it runs only after a
     // repository has been fully loaded for review.
@@ -3229,6 +3256,28 @@ async function handleAddRepository() {
         // Card bodies remain lazy until the first review.
         await loadRepositoryMetadata(repoString, { sync: true });
         console.log(`[Main] Added metadata-only deck ${repoString}`);
+
+        const superseded = await getSupersededRepos();
+        if (superseded.length > 0) {
+            const { removeRepo } = await import('./storage.js');
+            const retiredRepoIds = [];
+            for (const repo of superseded) {
+                await removeRepo(repo.id, { preserveReviews: true });
+                retiredRepoIds.push(repo.id);
+            }
+            const activeDecks = scopesWithoutRepositories(
+                habitSettings?.activeDecks || [],
+                retiredRepoIds
+            );
+            if (activeDecks.length !== (habitSettings?.activeDecks || []).length) {
+                habitSettings = await saveSettings({ activeDecks });
+            }
+            if (pausedPrimaryStudySession
+                && !studySessionMatchesActiveScope(pausedPrimaryStudySession, activeDecks)) {
+                pausedPrimaryStudySession = null;
+                await clearStudySession();
+            }
+        }
 
         // Clear input
         input.value = '';

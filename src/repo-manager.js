@@ -8,7 +8,6 @@ import * as githubClient from './github-client.js';
 import { saveCards, getAllCards, saveRepoMetadata, getRepoMetadata, getAllRepos, markRepoLoaded } from './storage.js';
 
 const SUBJECT_TOPICS = new Set(['biology', 'computer-science', 'mathematics', 'physics', 'law', 'misc']);
-const METADATA_CACHE_TTL_MS = 15 * 60 * 1000;
 const fileLoadPromises = new Map();
 
 export function resolveRepositorySubject(topics = [], existingSubject = null) {
@@ -33,6 +32,7 @@ export function parseDeckManifest(content = '') {
             ? curriculumOrder
             : null,
         curriculumId: subject && deck ? `${subject}/${deck}` : null,
+        supersedes: array('supersedes'),
         prerequisiteDecks: array('decks'),
         recommendedDecks: array('recommended_decks')
     };
@@ -65,23 +65,21 @@ async function repositoryIndex(owner, repo, branch, existing = null) {
     return { markdownFiles, deckManifest, curriculumOrder, curriculumMetadata };
 }
 
-function metadataCacheKey(repoString) {
-    return `flashcards_repo_metadata_${repoString.toLowerCase()}`;
-}
-
 /**
  * Load only the information needed by the columns UI: repository metadata,
  * canonical subject topic, and the flashcards/ file tree. No card body is read.
  */
 export async function loadRepositoryMetadata(repoString, { sync = false } = {}) {
     if (!sync) {
-        try {
-            const cached = JSON.parse(localStorage.getItem(metadataCacheKey(repoString)) || 'null');
-            if (cached?.deck && Date.now() - cached.savedAt < METADATA_CACHE_TTL_MS) {
-                await saveRepoMetadata(cached.deck, { sync: false });
-                return { repository: cached.deck, deck: cached.deck, cards: [], filesProcessed: cached.deck.fileCount };
-            }
-        } catch { /* malformed or unavailable cache — fetch fresh metadata */ }
+        const cached = await getRepoMetadata(repoString);
+        if (cached?.files?.length) {
+            return {
+                repository: cached,
+                deck: cached,
+                cards: [],
+                filesProcessed: cached.fileCount
+            };
+        }
     }
 
     const { owner, repo } = githubClient.parseRepoString(repoString);
@@ -121,6 +119,7 @@ export async function loadRepositoryMetadata(repoString, { sync = false } = {}) 
         repo: `${owner}/${repo}`,
         curriculumOrder,
         curriculumId: curriculumMetadata?.curriculumId || existing?.curriculumId || null,
+        supersedes: curriculumMetadata?.supersedes || existing?.supersedes || [],
         prerequisiteDecks: curriculumMetadata?.prerequisiteDecks || existing?.prerequisiteDecks || [],
         recommendedDecks: curriculumMetadata?.recommendedDecks || existing?.recommendedDecks || [],
         deckManifest,
@@ -131,9 +130,6 @@ export async function loadRepositoryMetadata(repoString, { sync = false } = {}) 
     };
 
     await saveRepoMetadata(deck, { sync });
-    try {
-        localStorage.setItem(metadataCacheKey(repoString), JSON.stringify({ savedAt: Date.now(), deck }));
-    } catch { /* localStorage unavailable or full */ }
     return { repository: deck, deck, cards: [], filesProcessed: markdownFiles.length };
 }
 
@@ -330,6 +326,7 @@ export async function loadRepository(repoString) {
         repo: `${owner}/${repo}`,
         curriculumOrder,
         curriculumId: curriculumMetadata?.curriculumId || existing?.curriculumId || null,
+        supersedes: curriculumMetadata?.supersedes || existing?.supersedes || [],
         prerequisiteDecks: curriculumMetadata?.prerequisiteDecks || existing?.prerequisiteDecks || [],
         recommendedDecks: curriculumMetadata?.recommendedDecks || existing?.recommendedDecks || [],
         deckManifest,

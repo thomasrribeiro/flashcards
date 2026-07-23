@@ -92,6 +92,7 @@ describe('parseDeckManifest', () => {
         expect(parseDeckManifest(`subject = "physics"
 deck = "mechanics"
 curriculum_order = 4
+supersedes = ["physics/legacy-mechanics"]
 
 [prerequisites]
 decks = ["mathematics/algebra"]
@@ -102,6 +103,7 @@ recommended_decks = [
             subject: 'physics',
             curriculumOrder: 4,
             curriculumId: 'physics/mechanics',
+            supersedes: ['physics/legacy-mechanics'],
             prerequisiteDecks: ['mathematics/algebra'],
             recommendedDecks: ['mathematics/geometry']
         });

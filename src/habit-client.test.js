@@ -6,11 +6,12 @@ vi.mock('./storage.js', () => ({
 
 import { getSettings, saveSettings } from './habit-client.js';
 
-function memoryStorage() {
-    const values = new Map();
+function memoryStorage(entries = {}) {
+    const values = new Map(Object.entries(entries));
     return {
         getItem: key => values.get(key) ?? null,
         setItem: (key, value) => values.set(key, value),
+        removeItem: key => values.delete(key),
         values
     };
 }
@@ -25,50 +26,44 @@ describe('habit settings persistence', () => {
 
     afterEach(() => vi.unstubAllGlobals());
 
-    it('records optimistic settings as pending until the worker confirms them', async () => {
+    it('persists signed-in settings to D1 without writing localStorage', async () => {
         let resolveFetch;
         vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => { resolveFetch = resolve; })));
 
         const saving = saveSettings({ activeDecks: ['owner/deck'] });
-        const optimistic = JSON.parse(storage.getItem('flashcards_habit'));
-        expect(optimistic.settings.activeDecks).toEqual(['owner/deck']);
-        expect(optimistic.pendingSettings.partial.activeDecks).toEqual(['owner/deck']);
+        expect(storage.getItem('flashcards_habit')).toBeNull();
 
         await vi.waitFor(() => expect(resolveFetch).toBeTypeOf('function'));
         resolveFetch({
             ok: true,
-            json: () => Promise.resolve({ settings: optimistic.settings })
+            json: () => Promise.resolve({
+                settings: { activeDecks: ['owner/deck'], newPerDay: 10, newBatchSize: 10, dailyGoal: 10 }
+            })
         });
-        await saving;
-
-        expect(JSON.parse(storage.getItem('flashcards_habit')).pendingSettings).toBeNull();
+        await expect(saving).resolves.toMatchObject({ activeDecks: ['owner/deck'] });
+        expect(storage.getItem('flashcards_habit')).toBeNull();
     });
 
-    it('uses pending local scope immediately on refresh and retries persistence', async () => {
-        storage.setItem('flashcards_habit', JSON.stringify({
-            settings: { activeDecks: ['owner/deck'], newPerDay: 10, dailyGoal: 10 },
-            days: {},
-            pendingSettings: {
-                version: 'pending-version',
-                partial: { activeDecks: ['owner/deck'] }
-            }
+    it('ignores stale signed-in local settings and reads D1', async () => {
+        storage = memoryStorage({
+            flashcards_habit: JSON.stringify({
+                settings: { activeDecks: ['owner/stale-deck'] },
+                days: {}
+            })
+        });
+        vi.stubGlobal('localStorage', storage);
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve({
+                settings: { activeDecks: ['owner/server-deck'], newPerDay: 20, newBatchSize: 5, dailyGoal: 10 }
+            })
         }));
-        let resolveFetch;
-        vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => { resolveFetch = resolve; })));
 
         const settings = await getSettings();
 
-        expect(settings.activeDecks).toEqual(['owner/deck']);
-        expect(settings.newBatchSize).toBe(10);
-        await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
-        expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/settings'), expect.objectContaining({
-            method: 'POST',
-            keepalive: true
-        }));
-
-        resolveFetch({ ok: true, json: () => Promise.resolve({ settings }) });
-        await vi.waitFor(() => {
-            expect(JSON.parse(storage.getItem('flashcards_habit')).pendingSettings).toBeNull();
-        });
+        expect(settings.activeDecks).toEqual(['owner/server-deck']);
+        expect(settings.newBatchSize).toBe(5);
+        expect(JSON.parse(storage.getItem('flashcards_habit')).settings.activeDecks)
+            .toEqual(['owner/stale-deck']);
     });
 });
