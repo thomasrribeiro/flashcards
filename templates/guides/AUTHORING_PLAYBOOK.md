@@ -109,6 +109,40 @@ to the ledger row or an earlier card. Inspect alt text, axes, symbols, givens,
 and problem context as well as prose. This is a semantic cold-start audit; a
 parser or spellchecker cannot perform it.
 
+### Enforce a strict concept frontier
+
+Treat the learner's established knowledge as a frontier that advances one
+supported step at a time. Before drafting, make a small allowed-vocabulary and
+mechanism inventory from the resolved prerequisite closure. During drafting,
+classify every domain-bearing noun, verb, relationship, and visual convention
+on each front as one of:
+
+1. explicitly mastered inbound knowledge;
+2. established and retrieved on an earlier scheduled card;
+3. minimally explained on this front using only items from categories 1–2; or
+4. an unresolved dependency that must be removed, moved, or explicitly taught.
+
+Examples, analogies, distractors, supplied causal stories, and motivational
+sentences are not exempt. A learner still has to parse them even when the card
+asks about something else. Words that are ordinary in conversation can carry
+technical commitments in context—such as *generation*, *adaptation*, *force*,
+or *proof*—and must be audited by meaning rather than familiarity. Do not label
+an unresolved dependency a “bounded preview.” If the future idea is not the
+retrieval target, choose a simpler example at the current frontier.
+
+For each genuinely new idea, prefer a linear micro-sequence: orient or explain,
+make one supported retrieval decision, vary the representation or context, and
+only then use the idea as a premise for another concept. A single bridge front
+may define an idea and ask for a bounded inference, but it should not quietly
+introduce a cluster of independent technical ideas. Preserve warm, explanatory
+prose by explaining more clearly with established vocabulary—not by reaching
+ahead in the curriculum.
+
+After drafting, run a separate first-use pass before judging answers or style.
+Search every front, figure, alt text, and problem setup for the first occurrence
+of each domain-bearing term and implied process. The chapter cannot pass while
+any first use lacks one of the three allowed sources above.
+
 ### Pilot before scaling
 
 For a new deck, design the curriculum but author only the first prerequisite

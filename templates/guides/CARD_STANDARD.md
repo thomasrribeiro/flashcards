@@ -55,6 +55,15 @@ Severity:
   Separate blocks with blank lines and finish every started block.
 - **U10 — Valid markup and assets.** KaTeX renders, image paths resolve, and
   meaningful alt text is present. Remove decorative media.
+- **U11 — Linear first use and example firewall.** Every domain-bearing word,
+  implied mechanism, and representation on a front must be confirmed inbound,
+  established earlier, or minimally explained there using only already allowed
+  language. This applies equally to motivating examples, supplied premises,
+  distractors, figure labels, and concepts that are not the card's retrieval
+  target. Calling material a “preview,” supplying its conclusion, or using a
+  familiar everyday word in a technical causal sense does not waive the
+  dependency. When a future concept is unnecessary to the current retrieval
+  decision, replace the example instead of importing or pre-teaching it.
 
 ## Card-form selection rules
 
@@ -173,6 +182,13 @@ Severity:
   Any unexplained dependency is a major defect. A full-deck build must not begin
   until the first authored chapter passes this gate and the learner or maintainer
   explicitly approves the pilot.
+- **D8 — Concept frontier.** A chapter maintains an explicit frontier of what a
+  learner has encountered and successfully retrieved so far. Introduce a new
+  concept with a minimal explanation or analyzed example, require a supported
+  retrieval decision, and only then use it as context for another target. Rich
+  explanation is welcome after dependencies are established; density is not a
+  substitute for sequence. Audit every first use, including concepts embedded
+  in examples that the card does not directly test.
 
 ## File and identity rules
 

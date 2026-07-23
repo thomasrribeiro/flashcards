@@ -96,6 +96,57 @@ and probability before depending on them. Introduce an organelle or molecular
 actor before asking the learner to predict its perturbation. A failed
 application card should reveal a reasoning gap, not an omitted definition.
 
+### Linear biology concept frontier
+
+Biology is especially vulnerable to premature concepts because words such as
+*offspring*, *generation*, *inheritance*, *adaptation*, *selection*, *signal*,
+*energy*, and *information* sound familiar while carrying precise biological
+relationships. Treat these meanings as domain knowledge, not ordinary-language
+permission. The five crosscutting ideas above are eventual coverage goals; they
+do not authorize mentioning their mechanisms before the prerequisite path
+reaches them.
+
+Keep examples at the learner's current biological frontier. A card about scale
+does not need an evolutionary story; a card about system boundaries does not
+need an unintroduced physiological cause; and a card about variation does not
+need inheritance or selection. Prefer directly observable comparisons—one
+organism versus a group, visible differences among organisms, or two possible
+study boundaries—until the mechanisms behind those observations have been
+established. When a mechanism is the target, introduce its actors and process
+in dependency order before asking for prediction or diagnosis.
+
+Run a biology-specific first-use scan over every front and figure. Record not
+only named terms but implied processes: reproduction across generations,
+heredity, gene action, metabolism, transport, signaling, regulation, ecological
+interaction, and evolutionary change. Supplying such a process as a premise or
+calling it a preview still requires prior establishment. Replace unnecessary
+future-facing examples rather than adding glossary cards merely to preserve
+them.
+
+For a zero-prerequisite orientation chapter, keep non-target examples
+biologically neutral. Safe patterns include identifying one familiar organism,
+counting a same-kind group in one place, comparing directly visible features,
+choosing which named objects a study includes, or using an ordinary physical
+event such as one pot pressing or tipping another. Do not assert that dry soil
+causes wilting, light causes bending, cells divide or lengthen, organisms obtain
+or use particular materials, or environments cause a biological response until
+the relevant process has been introduced. Supplying the complete causal story
+on the front still violates the frontier when the learner must understand that
+story merely to answer a different question.
+
+A system boundary is an analytical choice, not a rule that every cause must be
+inside. Matter, energy, or information may cross a boundary, and an external
+influence may remain outside while its input is represented. Early boundary
+cards should ask which components a stated study chooses to track, not claim
+that a system is incapable of explaining an outcome unless every cause is
+enclosed.
+
+Treat figure labels as retrieval cues. If the task asks the learner to identify
+the cell, organism, or population scale, label candidate panels with neutral
+letters or numbers rather than printing those scale names on the figure. If the
+names must be printed for orientation, ask a different decision that the labels
+do not answer directly.
+
 ## Figure priorities
 
 High-value original visuals include:

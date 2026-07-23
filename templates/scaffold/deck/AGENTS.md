@@ -34,7 +34,10 @@ one figure per chapter as either a target or a cap.
 For a new deck, author only the first chapter until its concept-dependency
 ledger and `.flashcards/audits/pilot-cold-start.md` pass review and the pilot is
 explicitly approved. Never use a later chapter's vocabulary to scaffold an
-earlier one.
+earlier one. Audit examples, distractors, supplied premises, figure labels, and
+ordinary words used with technical meanings as strictly as retrieval targets.
+Do not call unresolved material a preview; keep every front at the learner's
+current concept frontier.
 
 Run `flashcards deck validate .` before handoff. Do not commit, push, create a
 remote repository, or deploy unless the user asks.

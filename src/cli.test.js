@@ -1234,7 +1234,8 @@ describe('flashcards CLI validation and Codex handoff', () => {
         });
 
         expect(invocation.command).toBe('claude');
-        expect(invocation.args).toContain('--safe-mode');
+        expect(invocation.args).not.toContain('--safe-mode');
+        expect(invocation.args).not.toContain('--prompt-suggestions');
         expect(invocation.args).toContain('--no-session-persistence');
         expect(invocation.args).toContain('--setting-sources');
         expect(invocation.args[invocation.args.indexOf('--setting-sources') + 1]).toBe('');
@@ -1372,6 +1373,9 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.prompt).toContain('ignored by the parser');
         expect(invocation.prompt).toContain('minimal teaching bridge on a scheduled front');
         expect(invocation.prompt).toContain('later chapter');
+        expect(invocation.prompt).toContain('CARD_STANDARD U11 and D8');
+        expect(invocation.prompt).toContain('reject future-facing examples and supplied premises');
+        expect(invocation.prompt).toContain('separate first-use scan');
     });
 
     it('blanks only the first chapter and its figures for fresh pilot regeneration', async () => {

@@ -100,6 +100,17 @@ term, symbol, representation, or procedure, its first explanation, supported
 retrieval, and later application. Do not count revealing an answer after an
 uninformed failure as explanation.
 
+Maintain a strict concept frontier while drafting. Audit every domain-bearing
+word and implied mechanism on each front, including examples, distractors,
+analogies, supplied premises, figure labels, and ordinary words used in a
+technical sense. Each must be confirmed inbound, established and retrieved
+earlier, or minimally self-bridged using only established language. A “preview”
+or supplied conclusion is not an exemption. Replace unnecessary future-facing
+examples rather than importing or pre-teaching later concepts. Introduce a new
+idea through a linear micro-sequence—explain, supported retrieval, then varied
+application—before using it as context for another target. Preserve rich
+explanation by using established vocabulary, not by reaching ahead.
+
 Before authoring, record a chapter design ledger in `CARD_README.md` or an
 equivalent deck-local plan. For each chapter, map retrieval targets to card
 forms, the analyzed-to-independent problem progression, authentic
