@@ -44,6 +44,11 @@ import {
 } from './chapter-progress.js';
 import { partitionScopedReviewCards } from './scoped-review.js';
 import {
+    collectionSnapshotForRender,
+    commitCollectionSnapshot
+} from './collection-navigation.js';
+import { installAvailableDependencyDecks } from './dependency-install.js';
+import {
     chapterForFile,
     chapterGraph,
     curriculumGraph,
@@ -433,7 +438,8 @@ function populateCategoryFilter(decks) {
  * Load and display repositories
  */
 let repositoryRenderGeneration = 0;
-async function loadRepositories() {
+let collectionRenderSnapshot = null;
+async function loadRepositories({ refreshCollection = true } = {}) {
     const renderGeneration = ++repositoryRenderGeneration;
     const grid = document.getElementById('topics-grid');
     const controlsBar = document.getElementById('controls-bar');
@@ -449,56 +455,81 @@ async function loadRepositories() {
     const previousColumnsLeft = grid?.querySelector('.columns-view')?.scrollLeft || 0;
 
     try {
-        // Get all data
-        console.log('Loading repositories...');
-        let allCards = await getAllCards();
-        console.log('All cards:', allCards.length);
-        const allReviews = await getAllReviews();
-        console.log('All reviews:', allReviews.length);
-        const allDecks = await getAllDecks();
-        console.log('All decks:', allDecks.length);
-        let allChapterProgress = await getAllChapterProgress();
-        console.log('Chapter progress snapshots:', allChapterProgress.length);
+        const navigationSnapshot = collectionSnapshotForRender(
+            collectionRenderSnapshot,
+            refreshCollection
+        );
+        let allCards;
+        let allReviews;
+        let allDecks;
+        let allChapterProgress;
+        let nextCollectionSnapshot = null;
+        if (navigationSnapshot) {
+            ({ allCards, allReviews, allDecks, allChapterProgress } = navigationSnapshot);
+        } else {
+            // Get a fresh collection snapshot only for startup or an explicit
+            // collection/state mutation. Plain row navigation reuses it.
+            console.log('Loading repositories...');
+            allCards = await getAllCards();
+            console.log('All cards:', allCards.length);
+            allReviews = await getAllReviews();
+            console.log('All reviews:', allReviews.length);
+            allDecks = await getAllDecks();
+            console.log('All decks:', allDecks.length);
+            allChapterProgress = await getAllChapterProgress();
+            console.log('Chapter progress snapshots:', allChapterProgress.length);
 
-        // D1 is the durable source for chapter completion. Before rendering,
-        // explicitly backfill any reviewed/starred chapter whose snapshot is
-        // missing or tied to an older GitHub blob.
-        if (githubAuth.isAuthenticated()) {
-            const targets = chapterProgressTargets(
-                allDecks,
-                allReviews,
-                allChapterProgress,
-                resolveActiveScopes(allCards, allDecks)
-            );
-            if (targets.length > 0) {
-                await mapWithConcurrency(targets, 4, async target => {
-                    try {
-                        await loadRepositoryFiles(target.repo, [target.filepath]);
-                    } catch (error) {
-                        console.warn('[Main] Failed to backfill chapter progress:', target, error);
+            // D1 is the durable source for chapter completion. Before rendering,
+            // explicitly backfill any reviewed/starred chapter whose snapshot is
+            // missing or tied to an older GitHub blob.
+            if (githubAuth.isAuthenticated()) {
+                const targets = chapterProgressTargets(
+                    allDecks,
+                    allReviews,
+                    allChapterProgress,
+                    resolveActiveScopes(allCards, allDecks)
+                );
+                if (targets.length > 0) {
+                    await mapWithConcurrency(targets, 4, async target => {
+                        try {
+                            await loadRepositoryFiles(target.repo, [target.filepath]);
+                        } catch (error) {
+                            console.warn('[Main] Failed to backfill chapter progress:', target, error);
+                        }
+                    });
+                    allCards = await getAllCards();
+                    const snapshots = targets
+                        .map(target => buildChapterProgressSnapshot(
+                            allCards,
+                            allReviews,
+                            target
+                        ))
+                        .filter(Boolean);
+                    if (snapshots.length > 0) {
+                        await syncChapterProgress(snapshots);
+                        allChapterProgress = await getAllChapterProgress();
+                        console.log(`[Main] Backfilled ${snapshots.length} chapter progress snapshot(s)`);
                     }
-                });
-                allCards = await getAllCards();
-                const snapshots = targets
-                    .map(target => buildChapterProgressSnapshot(
-                        allCards,
-                        allReviews,
-                        target
-                    ))
-                    .filter(Boolean);
-                if (snapshots.length > 0) {
-                    await syncChapterProgress(snapshots);
-                    allChapterProgress = await getAllChapterProgress();
-                    console.log(`[Main] Backfilled ${snapshots.length} chapter progress snapshot(s)`);
                 }
             }
+            nextCollectionSnapshot = { allCards, allReviews, allDecks, allChapterProgress };
         }
 
         // Startup, navigation, and scope mutations may overlap repository
         // refreshes. Only the newest invocation may render; otherwise a stale
         // legacy category render can append cards beneath the column viewer.
-        if (renderGeneration !== repositoryRenderGeneration
-            || currentMainView !== 'decks') return;
+        const renderIsCurrent = renderGeneration === repositoryRenderGeneration
+            && currentMainView === 'decks';
+        collectionRenderSnapshot = commitCollectionSnapshot(
+            collectionRenderSnapshot,
+            nextCollectionSnapshot,
+            {
+                renderGeneration,
+                latestGeneration: repositoryRenderGeneration,
+                isDeckView: currentMainView === 'decks'
+            }
+        );
+        if (!renderIsCurrent) return;
 
         // Clear loading message
         grid.innerHTML = '';
@@ -1451,7 +1482,10 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
                     { html: GAVEL_IMG, title: `Review ${subject} (due + new)`, onClick: () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject, ['home', subject], deckIds) }
                 ],
                 hasChildren: true, selected: columnsSel.subject === subject,
-                onClick: () => { columnsSel = { subject, deck: null, chapter: null }; loadRepositories(); }
+                onClick: () => {
+                    columnsSel = { subject, deck: null, chapter: null };
+                    loadRepositories({ refreshCollection: false });
+                }
             });
         });
     wrap.appendChild(makePane(p1, 'Subjects'));
@@ -1483,7 +1517,10 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
                     { html: '×', danger: true, title: 'Remove this deck', onClick: () => deleteScope([deckId], `Remove "${deckName}" from your collection?`) }
                 ],
                 hasChildren: true, selected: columnsSel.deck === deckId,
-                onClick: () => { columnsSel = { subject: columnsSel.subject, deck: deckId, chapter: null }; loadRepositories(); }
+                onClick: () => {
+                    columnsSel = { subject: columnsSel.subject, deck: deckId, chapter: null };
+                    loadRepositories({ refreshCollection: false });
+                }
             });
         });
     }
@@ -2250,16 +2287,6 @@ async function showMainView(view) {
     }
 }
 
-function repositoryStringForCurriculumDeck(deck) {
-    try {
-        const url = new URL(deck?.repository?.url || '');
-        const [owner, repo] = url.pathname.replace(/^\/|\/$/g, '').split('/');
-        return owner && repo ? `${owner}/${repo}` : null;
-    } catch {
-        return null;
-    }
-}
-
 function installedCurriculumIds(decks) {
     const ids = new Set();
     for (const deck of decks || []) {
@@ -2851,10 +2878,15 @@ async function renderDependencyModal() {
             <p class="dependency-generation-note">${escapeHtml(generationNote)}</p>
         </section>
     `;
-    add.disabled = plan.requiredDecks.length === 0;
-    add.textContent = plan.missingDecks.length
-        ? 'Add available path'
-        : 'Add prerequisite path';
+    const availablePrerequisites = plan.requiredDecks.filter(deck =>
+        deck.repository?.configured && !installed.has(deck.id)
+    );
+    add.disabled = availablePrerequisites.length === 0;
+    add.textContent = availablePrerequisites.length
+        ? 'Add available prerequisites'
+        : plan.requiredDecks.length
+            ? 'Prerequisites installed'
+            : 'No prerequisites';
     copy.classList.toggle('hidden', plan.missingDecks.length === 0);
     request.classList.toggle('hidden', plan.missingDecks.length === 0 || !githubAuth.isAuthenticated());
     generate.classList.toggle('hidden', !generationScope || !githubAuth.isAuthenticated());
@@ -2953,38 +2985,18 @@ async function addActiveDependencyPath() {
         activeDependencyTarget.deckId,
         activeDependencyTarget.chapterId
     );
-    const failures = [];
-    for (const deck of plan.requiredDecks) {
-        if (!deck.repository?.configured) continue;
-        const repo = repositoryStringForCurriculumDeck(deck);
-        if (!repo) continue;
-        try {
-            await loadRepositoryMetadata(repo, { sync: true });
-        } catch (error) {
-            failures.push(`${deck.id}: ${error.message}`);
-        }
-    }
-
-    const [cards, decks] = await Promise.all([getAllCards(), getAllDecks()]);
-    const byCurriculum = new Map();
-    for (const deck of decks) {
-        const curriculumId = deck.curriculumId
-            || `${subjectSlug(deck.subject)}/${String(deck.id || '').split('/').pop()}`;
-        byCurriculum.set(curriculumId, deck);
-    }
-    const scopes = resolveActiveScopes(cards, decks);
-    for (const chapter of plan.exactChapters) {
-        const installedDeck = byCurriculum.get(chapter.deckId);
-        if (installedDeck) scopes.add(chapterScope(installedDeck.id, chapter.file));
-    }
-    for (const required of plan.wholeDecks) {
-        const installedDeck = byCurriculum.get(required.id);
-        if (!installedDeck) continue;
-        for (const file of installedDeck.files || []) {
-            scopes.add(chapterScope(installedDeck.id, typeof file === 'string' ? file : file.path));
-        }
-    }
-    await applyActiveScopes(scopes);
+    const installed = installedCurriculumIds(await getAllDecks());
+    const installPlan = {
+        ...plan,
+        requiredDecks: plan.requiredDecks.filter(deck => !installed.has(deck.id))
+    };
+    const failures = await installAvailableDependencyDecks(
+        installPlan,
+        repo => loadRepositoryMetadata(repo, { sync: true })
+    );
+    // Installing prerequisite repositories must not star them. Refresh the
+    // collection explicitly; the learner can choose a study scope afterward.
+    await loadRepositories();
     await renderDependencyModal();
     if (failures.length) alert(`Some prerequisite decks could not be added:\n${failures.join('\n')}`);
 }
