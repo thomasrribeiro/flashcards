@@ -111,7 +111,12 @@ Severity:
 
 - **P1 — Method before execution.** A full IPEE solution uses IDENTIFY to name
   the problem class, PLAN to choose a method, EXECUTE to carry it out, and
-  EVALUATE to check it. Fade sections only after the pattern is established.
+  EVALUATE to check it. A structured `S:` body begins immediately with its first
+  retained IPEE heading; it never puts an unlabeled result or preamble before
+  IDENTIFY or PLAN. Put the direct result as the first sentence inside EXECUTE.
+  Fade sections only after the pattern is established, preserve the retained
+  stages in source order, and retain EXECUTE whenever the result or calculation
+  is shown.
 - **P2 — Transfer target.** The card practices method selection or execution,
   not merely a remembered final value. Use numbers when computation fluency is
   the target and variables when structure or transfer is the target.

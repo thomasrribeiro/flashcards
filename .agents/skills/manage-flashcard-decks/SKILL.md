@@ -132,6 +132,11 @@ pilot or an established existing deck may proceed chapter by chapter.
 - Use the smallest sufficient set; do not impose per-chapter quotas.
 - Put the direct answer first, followed by only enough explanation to repair an
   error or distinguish a tempting alternative.
+- Never begin an `A:` or `S:` body with a bare number and period such as
+  `9. ...`; use semantic prose, a bolded direct answer, or an escaped period.
+- In structured `P:/S:` cards, begin `S:` at the first retained IPEE heading
+  and put the direct result inside EXECUTE. Never place an unlabeled answer
+  prelude before IDENTIFY or PLAN.
 - Use stable `card-id` comments on every new card block.
 - Preserve an existing ID for corrections, wording, formatting, accessibility,
   or figures when the retrieval target is unchanged.

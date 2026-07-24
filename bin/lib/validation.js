@@ -3,6 +3,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { FLASHCARDS_ROOT, resolvePath } from './paths.js';
 import { resolvePrerequisiteGraph } from './prerequisites.js';
+import { parseDeck } from '../../src/parser.js';
+import { cardMarkupErrors } from '../../src/card-markup-policy.js';
 
 function runNode(script, args, options = {}) {
     const result = spawnSync(process.execPath, [path.join(FLASHCARDS_ROOT, script), ...args], {
@@ -18,6 +20,43 @@ function requireDeckPath(deckPath) {
     if (!existsSync(path.join(deckPath, 'flashcards'))) {
         throw new Error(`Not a flashcard deck (missing flashcards/): ${deckPath}`);
     }
+}
+
+function changedChapterPaths(workspacePath) {
+    const commands = [
+        ['diff', '--name-only', 'HEAD', '--', 'flashcards'],
+        ['ls-files', '--others', '--exclude-standard', '--', 'flashcards']
+    ];
+    const changed = new Set();
+    for (const args of commands) {
+        const result = spawnSync('git', args, { cwd: workspacePath, encoding: 'utf8' });
+        if (result.status !== 0) {
+            throw new Error(
+                `Unable to identify generated chapters: ${(result.stderr || result.stdout || '').trim()}`
+            );
+        }
+        for (const relativePath of result.stdout.split('\n').map(value => value.trim()).filter(Boolean)) {
+            if (/^flashcards\/\d{2}_.+\.md$/.test(relativePath)) changed.add(relativePath);
+        }
+    }
+    return [...changed].sort();
+}
+
+export function validateGeneratedChapterMarkup(workspacePath) {
+    const failures = [];
+    for (const relativePath of changedChapterPaths(workspacePath)) {
+        const chapterPath = path.join(workspacePath, relativePath);
+        const parsed = parseDeck(readFileSync(chapterPath, 'utf8'), path.basename(relativePath));
+        for (const card of parsed.cards) {
+            for (const error of cardMarkupErrors(card, { generated: true })) {
+                failures.push(`${relativePath} [${error.rule}] ${error.msg} :: ${error.excerpt}`);
+            }
+        }
+    }
+    if (failures.length) {
+        throw new Error(`Generated chapter markup validation failed:\n- ${failures.join('\n- ')}`);
+    }
+    return [];
 }
 
 export function validateDeck(inputPath, { outputPath, quiet = false, capture = false } = {}) {

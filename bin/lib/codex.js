@@ -27,7 +27,7 @@ import {
     validateSubjectExtension,
     validateSubjectRoadmap
 } from './subject-curriculum.js';
-import { stabilizeDeck, validateDeck } from './validation.js';
+import { stabilizeDeck, validateDeck, validateGeneratedChapterMarkup } from './validation.js';
 
 function auditTimestamp() {
     return new Date().toISOString().replace(/[:.]/g, '-');
@@ -311,6 +311,8 @@ function buildDeckPrompt({
         'Treat all unconfirmed domain knowledge as unseen. Build a concept-dependency ledger and perform the cold-start scan without reading each answer until that front\'s dependencies are recorded.',
         'Apply CARD_STANDARD U11 and D8 strictly: maintain the learner concept frontier, reject future-facing examples and supplied premises, sequence new ideas before reuse, and document a separate first-use scan.',
         'The application schedules only Q:/A:, C:, and P:/S: blocks. Headings, lesson prose, tables, equations, and figures outside those blocks are ignored by the parser and cannot satisfy initial-learning prerequisites; embed a minimal teaching bridge on a scheduled front or establish it in an earlier scheduled card.',
+        'Author markup defensively: never begin an A: or S: body with a bare number and period such as "9. ..."; use semantic prose, a bolded direct answer such as "**9**.", or an escaped intentional period.',
+        'For structured P:/S: cards, begin S: immediately with the first retained IPEE heading and place the direct result as the first sentence inside EXECUTE. Never put an unlabeled answer prelude before IDENTIFY or PLAN. Generated chapters that violate either markup rule are rejected before they leave the isolated workspace.',
         'Never use terminology, symbols, representations, or examples from a later chapter to scaffold an earlier chapter unless a minimal explicit bridge establishes them first.',
         'Do not optimize for a type distribution or figure count. Zero clozes may be correct; visually rich chapters may need several figures. Do not treat one figure per chapter as a target or cap.',
         'Before handoff, reconcile and report planned versus actual card-type, problem, and figure inventories by chapter, investigating unexplained omissions.',
@@ -908,11 +910,14 @@ export function runDeckAgent({
                 allowedPaths,
                 replacePaths: replacementPaths,
                 finalizeWorkspace: mode === 'build' && !reportOnly
-                    ? workspacePath => stampChangedChapterAuthoringModel(
-                        workspacePath,
-                        invocation.model,
-                        invocation.reasoningEffort
-                    )
+                    ? workspacePath => {
+                        stampChangedChapterAuthoringModel(
+                            workspacePath,
+                            invocation.model,
+                            invocation.reasoningEffort
+                        );
+                        validateGeneratedChapterMarkup(workspacePath);
+                    }
                     : undefined,
                 recoverOnFailure: mode === 'build' ? workspacePath => {
                     const validation = validateDeck(workspacePath, { quiet: true });

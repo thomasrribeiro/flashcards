@@ -33,7 +33,11 @@ import {
     resolvePrerequisiteGraph,
     stageExternalPrerequisites
 } from '../bin/lib/prerequisites.js';
-import { stabilizeDeck, validateDeck } from '../bin/lib/validation.js';
+import {
+    stabilizeDeck,
+    validateDeck,
+    validateGeneratedChapterMarkup
+} from '../bin/lib/validation.js';
 import {
     resolveSubjectCurriculum,
     resolveSubjectDeckClosure,
@@ -1375,6 +1379,8 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.prompt).toContain('AUTHORING_PLAYBOOK.md');
         expect(invocation.prompt).toContain('chapter design ledger');
         expect(invocation.prompt).toContain('one figure per chapter');
+        expect(invocation.prompt).toContain('never begin an A: or S: body with a bare number and period');
+        expect(invocation.prompt).toContain('direct result as the first sentence inside EXECUTE');
         expect(invocation.prompt).toContain('Check prerequisite bridges.');
         expect(formatInvocation(invocation)).toContain('codex');
     });
@@ -1404,6 +1410,68 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.args).toContain('--dangerously-skip-permissions');
         expect(invocation.args).toContain('fable');
         expect(invocation.provider).toBe('claude-code');
+        expect(invocation.prompt).toContain('never begin an A: or S: body with a bare number and period');
+        expect(invocation.prompt).toContain('Never put an unlabeled answer prelude before IDENTIFY or PLAN');
+
+        const opus = buildAgentInvocation({
+            mode: 'build',
+            deckPath,
+            model: 'opus-4.8',
+            reasoningEffort: 'high'
+        });
+        expect(opus.command).toBe('claude');
+        expect(opus.args).toContain('opus-4.8');
+        expect(opus.prompt).toContain('never begin an A: or S: body with a bare number and period');
+        expect(opus.prompt).toContain('Never put an unlabeled answer prelude before IDENTIFY or PLAN');
+    });
+
+    it('rejects newly generated numeric-list answers and IPEE answer preludes', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'mathematics',
+            deck: 'arithmetic',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations']
+        });
+        const manifest = buildContextManifest({ deckPath, mode: 'build', chapterNumber: 1 });
+        const prepared = prepareIsolatedRun({
+            sourcePath: deckPath,
+            contextFiles: manifest.files,
+            label: 'generated-markup-policy-test'
+        });
+        try {
+            const chapterPath = path.join(prepared.workspacePath, 'flashcards', '01_foundations.md');
+            await writeFile(
+                chapterPath,
+                '+++\norder = 1\nsubject = "mathematics"\ntags = ["arithmetic"]\nprerequisites = []\nprovides = []\n+++\n\n' +
+                '<!-- card-id: numeric-prefix -->\nQ: What is the whole?\nA: 9. The parts are 6 and 3.\n\n' +
+                '<!-- card-id: premature-result -->\nP: A shelf holds 32 books and another holds 45. How many books are there?\n' +
+                'S: 77 books.\n\nIDENTIFY: This is addition.\n\nPLAN: Add the two counts.\n\n' +
+                'EXECUTE: $32 + 45 = 77$.\n\nEVALUATE: The total exceeds both addends.\n'
+            );
+
+            expect(() => validateGeneratedChapterMarkup(prepared.workspacePath))
+                .toThrow(/\[U10\][\s\S]*\[P1\]/);
+
+            await writeFile(
+                chapterPath,
+                (await readFile(chapterPath, 'utf8'))
+                    .replace('A: 9.', 'A: **9**.')
+                    .replace(
+                        'S: 77 books.\n\nIDENTIFY:',
+                        'S: IDENTIFY:'
+                    )
+                    .replace(
+                        'EXECUTE: $32 + 45 = 77$.',
+                        'EXECUTE: **77 books.** $32 + 45 = 77$.'
+                    )
+            );
+            expect(validateGeneratedChapterMarkup(prepared.workspacePath)).toEqual([]);
+        } finally {
+            await rm(prepared.runPath, { recursive: true, force: true });
+            discardIsolatedRun(prepared);
+        }
     });
 
     it('preserves the configured credential store while ignoring other user config', async () => {

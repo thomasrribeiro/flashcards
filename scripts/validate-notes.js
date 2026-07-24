@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import katex from 'katex';
 import { parseDeck } from '../src/parser.js';
 import { hashCard, familyHash } from '../src/hasher.js';
+import { cardMarkupErrors } from '../src/card-markup-policy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -127,21 +128,6 @@ function excerptOf(card) {
         : card.type === 'problem' ? card.content.problem
         : card.content.text;
     return text.replace(/\s+/g, ' ').slice(0, 80);
-}
-
-function checkAnswerMarkup(card) {
-    const content = card.type === 'basic'
-        ? card.content.answer
-        : card.type === 'problem'
-            ? card.content.solution
-            : '';
-    const match = content.match(/^\s*(\d+)\.[ \t]+\S/);
-    if (!match) return [];
-    return [{
-        rule: 'U10',
-        msg: `answer starts with bare "${match[1]}."; Markdown renders this as an ordered-list marker—use prose, **${match[1]}**., or ${match[1]}\\.`,
-        excerpt: content.replace(/\s+/g, ' ').slice(0, 80)
-    }];
 }
 
 function checkFrontmatter(raw, fileName, metadata) {
@@ -262,7 +248,7 @@ for (const deck of decks) {
                 aliases: card.legacyHashes || [],
                 excerpt: excerptOf(card)
             });
-            fileReport.markupErrors.push(...checkAnswerMarkup(card));
+            fileReport.markupErrors.push(...cardMarkupErrors(card));
         }
 
         // KaTeX validation on the whole file body (code stripped)

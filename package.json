@@ -15,6 +15,7 @@
     "bin/",
     "scripts/add-card-ids.js",
     "scripts/validate-notes.js",
+    "src/card-markup-policy.js",
     "src/card-id-annotator.js",
     "src/hasher.js",
     "src/parser.js",

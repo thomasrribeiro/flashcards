@@ -206,7 +206,10 @@ practice meaningfully different access paths or transfer contexts. Avoid reverse
 cards that are trivial, many-to-one, or unnatural.
 
 Put the direct answer first, then the smallest explanation needed to correct a
-likely error. Do not turn answers into miniature textbook pages.
+likely error. In a structured IPEE problem, “first” means the first sentence
+inside EXECUTE—not an unlabeled result before IDENTIFY or PLAN. Begin the
+solution at its first retained IPEE heading so the study interface can reveal
+the reasoning in sequence. Do not turn answers into miniature textbook pages.
 
 ## Use examples and problems deliberately
 
