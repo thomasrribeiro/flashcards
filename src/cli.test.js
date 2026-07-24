@@ -1256,6 +1256,38 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(validateDeck(deckPath, { quiet: true, capture: true }).status).toBe(0);
     });
 
+    it('rejects answers that Markdown renders as accidental ordered lists', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'mathematics',
+            deck: 'arithmetic',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['addition']
+        });
+        const chapterPath = path.join(deckPath, 'flashcards', '01_addition.md');
+        await writeFile(
+            chapterPath,
+            '+++\norder = 1\nsubject = "mathematics"\ntags = ["arithmetic"]\nprerequisites = []\nprovides = []\n+++\n\n<!-- card-id: addition-whole -->\nQ: What is the whole?\nA: 9. The parts are 6 and 3.\n'
+        );
+        const reportPath = path.join(notesRoot, 'markup-validation.json');
+        const invalid = validateDeck(deckPath, { outputPath: reportPath, quiet: true, capture: true });
+        expect(invalid.status).toBe(1);
+        expect(invalid.stdout).toContain('markup errors: 1');
+        const report = JSON.parse(await readFile(reportPath, 'utf8'));
+        expect(report.decks[0].files[0].markupErrors[0]).toMatchObject({
+            rule: 'U10'
+        });
+        expect(report.decks[0].files[0].markupErrors[0].msg)
+            .toContain('Markdown renders this as an ordered-list marker');
+
+        await writeFile(
+            chapterPath,
+            (await readFile(chapterPath, 'utf8')).replace('A: 9.', 'A: **9**.')
+        );
+        expect(validateDeck(deckPath, { quiet: true, capture: true }).status).toBe(0);
+    });
+
     it('explains parser-ambiguous math-internal clozes', async () => {
         const notesRoot = await temporaryRoot();
         const { deckPath } = await createDeck({

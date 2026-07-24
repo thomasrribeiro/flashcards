@@ -54,7 +54,11 @@ Severity:
   or `S:` unless it starts a parser block. Do not place `---` inside a card.
   Separate blocks with blank lines and finish every started block.
 - **U10 — Valid markup and assets.** KaTeX renders, image paths resolve, and
-  meaningful alt text is present. Remove decorative media.
+  meaningful alt text is present. Remove decorative media. Do not begin an
+  answer or solution with a bare number and period such as `A: 9. The result
+  is...`; Markdown renders it as an ordered-list marker. Use semantic prose,
+  bold the direct answer (`A: **9**. ...`), or escape an intentional literal
+  period.
 - **U11 — Linear first use and example firewall.** Every domain-bearing word,
   implied mechanism, and representation on a front must be confirmed inbound,
   established earlier, or minimally explained there using only already allowed

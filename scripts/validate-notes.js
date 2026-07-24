@@ -8,6 +8,8 @@
  *   - every image link resolves; images have non-empty alt text
  *   - every SVG marker declares markerUnits explicitly; marker-ended strokes
  *     do not use rounded caps that can protrude through the arrowhead
+ *   - answers/solutions do not begin with an ambiguous Markdown ordered-list
+ *     marker such as `9. The result...`
  *   - cloze lints: deletion inside $...$ math (C4), deletion > 60 chars,
  *     > 2 deletions per block, leftover unmatched '['
  *   - frontmatter/filename lints (F1/F2 of CARD_STANDARD.md)
@@ -127,6 +129,21 @@ function excerptOf(card) {
     return text.replace(/\s+/g, ' ').slice(0, 80);
 }
 
+function checkAnswerMarkup(card) {
+    const content = card.type === 'basic'
+        ? card.content.answer
+        : card.type === 'problem'
+            ? card.content.solution
+            : '';
+    const match = content.match(/^\s*(\d+)\.[ \t]+\S/);
+    if (!match) return [];
+    return [{
+        rule: 'U10',
+        msg: `answer starts with bare "${match[1]}."; Markdown renders this as an ordered-list marker—use prose, **${match[1]}**., or ${match[1]}\\.`,
+        excerpt: content.replace(/\s+/g, ' ').slice(0, 80)
+    }];
+}
+
 function checkFrontmatter(raw, fileName, metadata) {
     const lints = [];
     if (!raw.trimStart().startsWith('+++')) {
@@ -187,7 +204,7 @@ const report = {
     decks: [],
     summary: { decks: decks.length, files: 0, cards: 0, byType: { basic: 0, cloze: 0, problem: 0 },
                parserWarnings: 0, katexErrors: 0, imageErrors: 0, identityErrors: 0,
-               clozeLints: 0, frontmatterLints: 0 }
+               markupErrors: 0, clozeLints: 0, frontmatterLints: 0 }
 };
 
 const origWarn = console.warn;
@@ -202,7 +219,7 @@ for (const deck of decks) {
         const raw = fs.readFileSync(filePath, 'utf8');
         const fileReport = { file, counts: { basic: 0, cloze: 0, problem: 0 },
                              parserWarnings: [], katexErrors: [], imageErrors: [], identityErrors: [],
-                             clozeLints: [], frontmatterLints: [] };
+                             markupErrors: [], clozeLints: [], frontmatterLints: [] };
 
         let parsed;
         try {
@@ -245,6 +262,7 @@ for (const deck of decks) {
                 aliases: card.legacyHashes || [],
                 excerpt: excerptOf(card)
             });
+            fileReport.markupErrors.push(...checkAnswerMarkup(card));
         }
 
         // KaTeX validation on the whole file body (code stripped)
@@ -344,6 +362,7 @@ for (const deck of decks) {
         report.summary.katexErrors += fileReport.katexErrors.filter(e => !e.info).length;
         report.summary.imageErrors += fileReport.imageErrors.length;
         report.summary.identityErrors += fileReport.identityErrors.length;
+        report.summary.markupErrors += fileReport.markupErrors.length;
         report.summary.clozeLints += fileReport.clozeLints.length;
         report.summary.frontmatterLints += fileReport.frontmatterLints.length;
 
@@ -363,7 +382,7 @@ if (outPath) {
 const s = report.summary;
 console.log(`Validated ${s.files} files in ${s.decks} decks under ${root}`);
 console.log(`Cards: ${s.cards} (basic ${s.byType.basic}, cloze ${s.byType.cloze}, problem ${s.byType.problem})`);
-console.log(`Parser warnings: ${s.parserWarnings} | KaTeX errors: ${s.katexErrors} | image errors: ${s.imageErrors} | identity errors: ${s.identityErrors} | cloze lints: ${s.clozeLints} | frontmatter lints: ${s.frontmatterLints}`);
+console.log(`Parser warnings: ${s.parserWarnings} | KaTeX errors: ${s.katexErrors} | image errors: ${s.imageErrors} | identity errors: ${s.identityErrors} | markup errors: ${s.markupErrors} | cloze lints: ${s.clozeLints} | frontmatter lints: ${s.frontmatterLints}`);
 
 if (!quiet) {
     for (const d of report.decks) {
@@ -373,6 +392,7 @@ if (!quiet) {
             f.katexErrors.filter(e => !e.info).forEach(e => issues.push(`  KATEX  ${e.snippet} → ${e.error}`));
             f.imageErrors.forEach(e => issues.push(`  IMAGE  ${e.src}: ${e.msg}`));
             f.identityErrors.forEach(e => issues.push(`  ID      ${e.msg} :: ${e.excerpt}`));
+            f.markupErrors.forEach(e => issues.push(`  MARKUP  [${e.rule}] ${e.msg} :: ${e.excerpt}`));
             f.clozeLints.forEach(e => issues.push(`  CLOZE  [${e.rule}] ${e.msg} :: ${e.excerpt}`));
             f.frontmatterLints.forEach(e => issues.push(`  FRONT  [${e.rule}] ${e.msg}`));
             if (issues.length) {
@@ -383,5 +403,6 @@ if (!quiet) {
     }
 }
 
-const hardFailures = s.parserWarnings + s.katexErrors + s.imageErrors + s.identityErrors + s.frontmatterLints;
+const hardFailures = s.parserWarnings + s.katexErrors + s.imageErrors + s.identityErrors +
+    s.markupErrors + s.frontmatterLints;
 process.exit(hardFailures > 0 ? 1 : 0);
