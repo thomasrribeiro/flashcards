@@ -596,25 +596,65 @@ export function compactTransitivePrerequisiteChapters(workspacePath, resolution)
     const summarized = resolution.localChapters.filter(chapter => !direct.has(chapter.id));
     for (const chapter of summarized) {
         const chapterPath = path.join(workspacePath, 'flashcards', chapter.filename);
-        const markdown = readFileSync(chapterPath, 'utf8');
-        const frontmatter = /^\+\+\+\r?\n[\s\S]*?\r?\n\+\+\+\r?\n?/.exec(markdown)?.[0];
-        if (!frontmatter) throw new Error(`Cannot summarize prerequisite chapter without TOML frontmatter: ${chapterPath}`);
-        const capabilities = chapter.provides.length
-            ? chapter.provides.map(value => `\`${value}\``).join(', ')
-            : 'none declared';
-        writeFileSync(
-            chapterPath,
-            `${frontmatter}\n# Bounded prerequisite summary\n\n` +
-            'The scheduled card bodies for this transitive prerequisite are intentionally omitted from this isolated run.\n' +
-            `Its validator-resolved capabilities are: ${capabilities}.\n` +
-            'Use the complete scheduled cards in the direct prerequisite chapter instead of inferring additional knowledge from this summary.\n'
-        );
+        summarizePrerequisiteChapter(chapterPath, chapter, {
+            scope: 'transitive local prerequisite',
+            guidance: 'Use the complete scheduled cards in the direct prerequisite chapter instead of inferring additional knowledge from this summary.'
+        });
         rmSync(path.join(workspacePath, 'figures', chapter.id), { recursive: true, force: true });
     }
     return {
         direct: resolution.localChapters.filter(chapter => direct.has(chapter.id)).map(chapter => chapter.id),
         summarized: summarized.map(chapter => chapter.id)
     };
+}
+
+function summarizePrerequisiteChapter(chapterPath, chapter, { scope, guidance }) {
+    const markdown = readFileSync(chapterPath, 'utf8');
+    const chapterFrontmatter = /^\+\+\+\r?\n[\s\S]*?\r?\n\+\+\+\r?\n?/.exec(markdown)?.[0];
+    if (!chapterFrontmatter) {
+        throw new Error(`Cannot summarize prerequisite chapter without TOML frontmatter: ${chapterPath}`);
+    }
+    const capabilities = chapter.provides.length
+        ? chapter.provides.map(value => `\`${value}\``).join(', ')
+        : 'none declared';
+    writeFileSync(
+        chapterPath,
+        `${chapterFrontmatter}\n# Bounded prerequisite summary\n\n` +
+        `The scheduled card bodies for this ${scope} are intentionally omitted from this isolated run.\n` +
+        `Its validator-resolved capabilities are: ${capabilities}.\n` +
+        `${guidance}\n`
+    );
+}
+
+export function compactExternalPrerequisiteChapters(workspacePath, graph, resolution) {
+    if (!resolution?.chapter) return { complete: [], summarized: [] };
+    const exactProviders = new Set(
+        resolution.externalConcepts.map(item => `${item.deck}#${item.chapter}`)
+    );
+    const complete = [];
+    const summarized = [];
+    const root = path.join(workspacePath, '.flashcards', 'prerequisites');
+
+    for (const deck of resolution.externalDecks) {
+        for (const chapter of graph.externalChapters[deck.id] || []) {
+            const identity = `${deck.id}#${chapter.id}`;
+            const chapterPath = path.join(root, ...deck.id.split('/'), 'flashcards', chapter.filename);
+            if (exactProviders.has(identity)) {
+                complete.push(identity);
+                continue;
+            }
+            summarizePrerequisiteChapter(chapterPath, chapter, {
+                scope: 'external prerequisite',
+                guidance: 'Treat only the declared capabilities as established; do not infer additional knowledge from omitted card bodies.'
+            });
+            rmSync(
+                path.join(root, ...deck.id.split('/'), 'figures', chapter.id),
+                { recursive: true, force: true }
+            );
+            summarized.push(identity);
+        }
+    }
+    return { complete, summarized };
 }
 
 function hashFile(filePath) {

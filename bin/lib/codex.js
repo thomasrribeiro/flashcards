@@ -15,6 +15,7 @@ import {
 } from './isolation.js';
 import { markFullBuilt, markPilotBuilt, requireFullBuildApproval } from './pilot.js';
 import {
+    compactExternalPrerequisiteChapters,
     compactTransitivePrerequisiteChapters,
     constrainWorkspaceToChapter,
     formatPrerequisiteGraph,
@@ -830,7 +831,25 @@ export function runDeckAgent({
                 }
                 if (preview.prerequisiteResolution) {
                     constrainWorkspaceToChapter(workspacePath, preview.prerequisiteResolution);
-                    compactTransitivePrerequisiteChapters(workspacePath, preview.prerequisiteResolution);
+                    const localPrerequisites = compactTransitivePrerequisiteChapters(
+                        workspacePath,
+                        preview.prerequisiteResolution
+                    );
+                    const stagedPrerequisites = stageExternalPrerequisites(
+                        workspacePath,
+                        preview.contextManifest.prerequisiteGraph,
+                        preview.prerequisiteResolution
+                    );
+                    const externalPrerequisites = compactExternalPrerequisiteChapters(
+                        workspacePath,
+                        preview.contextManifest.prerequisiteGraph,
+                        preview.prerequisiteResolution
+                    );
+                    return {
+                        ...stagedPrerequisites,
+                        localPrerequisites,
+                        externalPrerequisites
+                    };
                 }
                 return stageExternalPrerequisites(
                     workspacePath,

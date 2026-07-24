@@ -26,6 +26,7 @@ import { buildRegistry, resolveRegistry } from '../bin/lib/registry.js';
 import { approvePilot, markPilotBuilt, readDeckStatus, requireFullBuildApproval } from '../bin/lib/pilot.js';
 import { requireKebabSlug } from '../bin/lib/paths.js';
 import {
+    compactExternalPrerequisiteChapters,
     compactTransitivePrerequisiteChapters,
     constrainWorkspaceToChapter,
     migratePrerequisites,
@@ -1055,6 +1056,118 @@ assumed_tools = []
             ))).toBeTruthy();
             expect(prepared.preparedWorkspace.externalDecks.map(deck => deck.id))
                 .toEqual(['mathematics/algebra', 'mathematics/arithmetic']);
+        } finally {
+            discardIsolatedRun(prepared);
+        }
+    });
+
+    it('keeps exact external providers complete and summarizes other external chapters', async () => {
+        const notesRoot = await temporaryRoot();
+        const arithmetic = await createDeck({
+            subject: 'mathematics',
+            deck: 'arithmetic',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['numbers', 'measurement']
+        });
+        const numbers = path.join(arithmetic.deckPath, 'flashcards', '01_numbers.md');
+        const measurement = path.join(arithmetic.deckPath, 'flashcards', '02_measurement.md');
+        await writeFile(
+            numbers,
+            (await readFile(numbers, 'utf8'))
+                .replace('provides = []', 'provides = ["whole-number"]')
+                .replace(
+                    '<!-- Add atomic card blocks here. Every new block requires a stable card-id. -->',
+                    '<!-- card-id: 00000000-0000-4000-8000-000000000001 -->\nQ: Which number?\nA: One.'
+                )
+        );
+        await writeFile(
+            measurement,
+            (await readFile(measurement, 'utf8'))
+                .replace('provides = []', 'provides = ["measurement-unit"]')
+                .replace(
+                    '<!-- Add atomic card blocks here. Every new block requires a stable card-id. -->',
+                    '<!-- card-id: 00000000-0000-4000-8000-000000000002 -->\nQ: Which unit?\nA: The declared unit.'
+                )
+        );
+        const algebra = await createDeck({
+            subject: 'mathematics',
+            deck: 'algebra',
+            notesRoot,
+            initializeGit: false,
+            prerequisiteDecks: ['mathematics/arithmetic'],
+            chapters: ['expressions']
+        });
+        const expressions = path.join(algebra.deckPath, 'flashcards', '01_expressions.md');
+        await writeFile(
+            expressions,
+            (await readFile(expressions, 'utf8'))
+                .replace('provides = []', 'provides = ["algebraic-expression"]')
+                .replace(
+                    '<!-- Add atomic card blocks here. Every new block requires a stable card-id. -->',
+                    '<!-- card-id: 00000000-0000-4000-8000-000000000003 -->\nQ: Which expression?\nA: The algebraic one.'
+                )
+        );
+        const physics = await createDeck({
+            subject: 'physics',
+            deck: 'physical-reasoning',
+            notesRoot,
+            initializeGit: false,
+            prerequisiteDecks: ['mathematics/algebra'],
+            chapters: ['systems', 'units']
+        });
+        const systems = path.join(physics.deckPath, 'flashcards', '01_systems.md');
+        await writeFile(
+            systems,
+            (await readFile(systems, 'utf8')).replace(
+                'prerequisites = []',
+                'prerequisites = ["concept:mathematics/arithmetic#measurement-unit"]'
+            )
+        );
+
+        const graph = resolvePrerequisiteGraph(physics.deckPath);
+        const closure = resolveChapterClosure(graph, 2);
+        const prepared = prepareIsolatedRun({
+            sourcePath: physics.deckPath,
+            contextFiles: buildContextManifest({ deckPath: physics.deckPath, mode: 'build', chapterNumber: 2 }).files,
+            label: 'external-prerequisite-compaction-test',
+            prepareWorkspace(workspacePath) {
+                constrainWorkspaceToChapter(workspacePath, closure);
+                const staged = stageExternalPrerequisites(workspacePath, graph, closure);
+                return {
+                    ...staged,
+                    externalPrerequisites: compactExternalPrerequisiteChapters(workspacePath, graph, closure)
+                };
+            }
+        });
+        try {
+            const prerequisiteRoot = path.join(prepared.workspacePath, '.flashcards', 'prerequisites');
+            const compactedNumbers = await readFile(
+                path.join(prerequisiteRoot, 'mathematics', 'arithmetic', 'flashcards', '01_numbers.md'),
+                'utf8'
+            );
+            const completeMeasurement = await readFile(
+                path.join(prerequisiteRoot, 'mathematics', 'arithmetic', 'flashcards', '02_measurement.md'),
+                'utf8'
+            );
+            const compactedExpressions = await readFile(
+                path.join(prerequisiteRoot, 'mathematics', 'algebra', 'flashcards', '01_expressions.md'),
+                'utf8'
+            );
+            expect(compactedNumbers).toContain('# Bounded prerequisite summary');
+            expect(compactedNumbers).toContain('`whole-number`');
+            expect(compactedNumbers).not.toContain('Q: Which number?');
+            expect(completeMeasurement).toContain('Q: Which unit?');
+            expect(completeMeasurement).not.toContain('# Bounded prerequisite summary');
+            expect(compactedExpressions).toContain('`algebraic-expression`');
+            expect(compactedExpressions).not.toContain('Q: Which expression?');
+            expect(prepared.preparedWorkspace.externalPrerequisites).toEqual({
+                complete: ['mathematics/arithmetic#02_measurement'],
+                summarized: [
+                    'mathematics/algebra#01_expressions',
+                    'mathematics/arithmetic#01_numbers'
+                ]
+            });
         } finally {
             discardIsolatedRun(prepared);
         }
