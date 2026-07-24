@@ -209,7 +209,9 @@ Put the direct answer first, then the smallest explanation needed to correct a
 likely error. In a structured IPEE problem, “first” means the first sentence
 inside EXECUTE—not an unlabeled result before IDENTIFY or PLAN. Begin the
 solution at its first retained IPEE heading so the study interface can reveal
-the reasoning in sequence. Do not turn answers into miniature textbook pages.
+the reasoning in sequence. Keep all four ordered headings on every problem;
+fade the amount of support within a stage rather than removing the stage
+itself. Do not turn answers into miniature textbook pages.
 
 ## Use examples and problems deliberately
 
@@ -255,7 +257,11 @@ runtime compilation to the study client.
 
 Put setup-only visuals on the front; reserve answer-revealing labels, paths, and
 constructions for the back. Use high contrast, redundant non-color cues,
-meaningful alt text, and responsive geometry. For hand-authored SVG arrow
+meaningful alt text, responsive geometry, and a tight canvas whose visible
+drawing is centered. In TikZ, normalize data coordinates to compact local
+drawing coordinates and keep the actual values in node labels; otherwise the
+distance from zero can become invisible whitespace in the exported SVG.
+For hand-authored SVG arrow
 markers, declare the sizing mode explicitly and normally use fixed
 `userSpaceOnUse` dimensions so line-weight changes do not magnify the arrowheads.
 Use butt caps on marker-ended strokes, anchor the endpoint inside the arrowhead

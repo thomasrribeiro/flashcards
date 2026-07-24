@@ -855,7 +855,7 @@ a[href] {
     width: auto;
     object-fit: contain;
     display: block;
-    margin: 20px 0;
+    margin: 20px auto;
 }
 
 .card-content .katex {

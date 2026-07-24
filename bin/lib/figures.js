@@ -30,6 +30,30 @@ export function parseTikzMetadata(source) {
     return { title, desc };
 }
 
+export function validateTikzCanvasCoordinates(source) {
+    const picture = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/.exec(source)?.[0] || '';
+    const coordinates = [...picture.matchAll(
+        /\((-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\)/g
+    )].map(match => [Number(match[1]), Number(match[2])]);
+    if (coordinates.length < 4) return;
+
+    for (const [axis, label] of [[0, 'horizontal'], [1, 'vertical']]) {
+        const values = coordinates.map(point => point[axis]);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const span = max - min;
+        if (span <= 0) continue;
+        const offset = min > 0 ? min : max < 0 ? -max : 0;
+        if (offset > span * 0.75) {
+            throw new Error(
+                `TikZ ${label} coordinates are offset far from the local origin ` +
+                `(${min} to ${max}); this creates an imbalanced invisible canvas. ` +
+                'Use compact local drawing coordinates and put displayed data values in node labels.'
+            );
+        }
+    }
+}
+
 export function decorateTikzSvg(svg, metadata, sourcePath) {
     svg = svg.replace(/<defs>\n([\s\S]*?)\n<\/defs>/, (match, body) => {
         const definitions = body.split('\n').filter(Boolean);
@@ -91,6 +115,7 @@ function run(command, args, cwd, env = process.env) {
 function renderOne(deckPath, sourcePath, texEnvironment) {
     const source = readFileSync(sourcePath, 'utf8');
     const metadata = parseTikzMetadata(source);
+    validateTikzCanvasCoordinates(source);
     const temporary = mkdtempSync(path.join(os.tmpdir(), 'flashcards-tikz-'));
     const base = path.basename(sourcePath, '.tex');
     try {

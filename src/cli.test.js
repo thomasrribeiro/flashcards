@@ -1581,6 +1581,16 @@ describe('flashcards CLI validation and Codex handoff', () => {
                     )
             );
             expect(validateGeneratedChapterMarkup(prepared.workspacePath)).toEqual([]);
+
+            await writeFile(
+                chapterPath,
+                (await readFile(chapterPath, 'utf8')).replace(
+                    'IDENTIFY: This is addition.\n\nPLAN: Add the two counts.\n\n',
+                    ''
+                )
+            );
+            expect(() => validateGeneratedChapterMarkup(prepared.workspacePath))
+                .toThrow(/complete ordered IPEE sequence.*EXECUTE → EVALUATE/);
         } finally {
             await rm(prepared.runPath, { recursive: true, force: true });
             discardIsolatedRun(prepared);

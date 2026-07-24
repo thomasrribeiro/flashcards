@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
     decorateTikzSvg,
     parseTikzMetadata,
-    prepareTikzSourceForDvisvgm
+    prepareTikzSourceForDvisvgm,
+    validateTikzCanvasCoordinates
 } from '../bin/lib/figures.js';
 
 describe('TikZ figure rendering', () => {
@@ -30,6 +31,23 @@ describe('TikZ figure rendering', () => {
             desc: 'A vector and its two Cartesian projections.'
         });
         expect(() => parseTikzMetadata('\\documentclass{standalone}')).toThrow(/requires/);
+    });
+
+    it('rejects TikZ coordinates that create a large one-sided invisible canvas', () => {
+        const offset = String.raw`\begin{tikzpicture}
+            \draw (30,0) -- (61,0);
+            \node at (34,1) {34};
+            \node at (54,1) {54};
+        \end{tikzpicture}`;
+        expect(() => validateTikzCanvasCoordinates(offset))
+            .toThrow(/imbalanced invisible canvas/);
+
+        const local = String.raw`\begin{tikzpicture}
+            \draw (-4,0) -- (27,0);
+            \node at (0,1) {34};
+            \node at (20,1) {54};
+        \end{tikzpicture>`;
+        expect(validateTikzCanvasCoordinates(local)).toBeUndefined();
     });
 
     it('adds accessible metadata and source provenance to generated SVG', () => {

@@ -114,9 +114,10 @@ Severity:
   EVALUATE to check it. A structured `S:` body begins immediately with its first
   retained IPEE heading; it never puts an unlabeled result or preamble before
   IDENTIFY or PLAN. Put the direct result as the first sentence inside EXECUTE.
-  Fade sections only after the pattern is established, preserve the retained
-  stages in source order, and retain EXECUTE whenever the result or calculation
-  is shown.
+  Every `P:/S:` card retains all four stages in source order. Fade support
+  inside the stages as the learner progresses, but do not omit or reorder the
+  headings; consistent structure is what lets the interface reveal the method
+  sequentially.
 - **P2 — Transfer target.** The card practices method selection or execution,
   not merely a remembered final value. Use numbers when computation fluency is
   the target and variables when structure or transfer is the target.
@@ -134,6 +135,10 @@ Severity:
   answer-revealing labels or constructions on the back.
 - **V3 — Accurate and accessible.** Geometry, direction, axes, scale, legends,
   and labels are correct. Do not rely on color alone; inspect at phone width.
+  Center figures in the card and keep the visible drawing centered inside a
+  tight SVG canvas. Use compact local drawing coordinates near the origin;
+  place displayed data values in labels rather than reusing large values as
+  drawing coordinates that create invisible one-sided whitespace.
   SVG markers must declare `markerUnits` explicitly. For ordinary diagram
   arrows, prefer `markerUnits="userSpaceOnUse"` so thicker strokes do not also
   inflate the arrowheads; size the fixed marker in viewBox units and visually

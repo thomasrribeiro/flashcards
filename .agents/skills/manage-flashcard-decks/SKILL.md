@@ -135,8 +135,10 @@ pilot or an established existing deck may proceed chapter by chapter.
 - Never begin an `A:` or `S:` body with a bare number and period such as
   `9. ...`; use semantic prose, a bolded direct answer, or an escaped period.
 - In structured `P:/S:` cards, begin `S:` at the first retained IPEE heading
-  and put the direct result inside EXECUTE. Never place an unlabeled answer
-  prelude before IDENTIFY or PLAN.
+  and put the direct result inside EXECUTE. Every problem retains the complete
+  ordered `IDENTIFY → PLAN → EXECUTE → EVALUATE` sequence; fade support inside
+  stages, never by omitting headings. Never place an unlabeled answer prelude
+  before IDENTIFY or PLAN.
 - Use stable `card-id` comments on every new card block.
 - Preserve an existing ID for corrections, wording, formatting, accessibility,
   or figures when the retrieval target is unchanged.
@@ -160,7 +162,10 @@ a path relative to the source file. Commit source and output together and do
 not compile TikZ in the study client. Use a
 different medium only when the authentic visual target requires it, and record
 the reason. Require a `viewBox`, meaningful `<title>` and `<desc>`, phone-width
-legibility, high contrast, and a redundant cue beyond color.
+legibility, high contrast, and a redundant cue beyond color. Keep the visible
+drawing centered inside a tight canvas. Use compact local TikZ coordinates and
+put displayed data values in node labels so large values do not create
+one-sided invisible SVG whitespace.
 
 Assess figure opportunities by retrieval role rather than chapter count. Do not
 stop at one figure when diagrams, graphs, before/after states, experimental
