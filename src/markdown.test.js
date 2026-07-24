@@ -47,16 +47,17 @@ describe('parseSolutionSteps', () => {
         ]);
     });
 
-    it('preserves a direct answer before the first IPEE heading', () => {
+    it('holds a direct answer until EXECUTE in a full IPEE solution', () => {
         expect(parseSolutionSteps(
-            'The note should show 70.\n\nIDENTIFY: Round 73 to the nearest ten.\n\nPLAN: Compare 70 and 80.'
+            'The note should show 70.\n\nIDENTIFY: Round 73 to the nearest ten.\n\nPLAN: Compare 70 and 80.\n\nEXECUTE: Choose the closer ten.\n\nEVALUATE: Check the distances.'
         )).toEqual([
-            {
-                label: null,
-                content: 'The note should show 70.'
-            },
             { label: 'IDENTIFY', content: 'Round 73 to the nearest ten.\n' },
-            { label: 'PLAN', content: 'Compare 70 and 80.' }
+            { label: 'PLAN', content: 'Compare 70 and 80.\n' },
+            {
+                label: 'EXECUTE',
+                content: 'The note should show 70.\n\nChoose the closer ten.\n'
+            },
+            { label: 'EVALUATE', content: 'Check the distances.' }
         ]);
     });
 
@@ -69,6 +70,29 @@ describe('parseSolutionSteps', () => {
                 content: 'The result is 600.\n\n649 is closer to 600 than 700.'
             },
             { label: 'EVALUATE', content: 'Check the two distances.' }
+        ]);
+    });
+
+    it('holds a direct answer inside EXECUTE when earlier IPEE stages are faded', () => {
+        expect(parseSolutionSteps(
+            'The sum is 3.16.\n\nEXECUTE: Align the decimal points and add.\n\nEVALUATE: Estimate the sum.'
+        )).toEqual([
+            {
+                label: 'EXECUTE',
+                content: 'The sum is 3.16.\n\nAlign the decimal points and add.\n'
+            },
+            { label: 'EVALUATE', content: 'Estimate the sum.' }
+        ]);
+    });
+
+    it('reveals a faded prelude after retained reasoning and before EVALUATE', () => {
+        expect(parseSolutionSteps(
+            'The result is 70.\n\nIDENTIFY: Round to the nearest ten.\n\nPLAN: Compare the neighbors.\n\nEVALUATE: Check the distances.'
+        )).toEqual([
+            { label: 'IDENTIFY', content: 'Round to the nearest ten.\n' },
+            { label: 'PLAN', content: 'Compare the neighbors.\n' },
+            { label: null, content: 'The result is 70.' },
+            { label: 'EVALUATE', content: 'Check the distances.' }
         ]);
     });
 

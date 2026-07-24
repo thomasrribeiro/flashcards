@@ -224,8 +224,9 @@ export function markdownToHtmlInline(markdown) {
 
 /**
  * Parse solution steps from P:/S: card
- * Returns array of {label, content} objects. An unlabelled solution prelude
- * uses label null so the UI can reveal it without inventing an authored step.
+ * Returns array of {label, content} objects. A direct-answer prelude is held
+ * until EXECUTE, or inserted immediately before EVALUATE in a faded solution,
+ * so it cannot reveal the result during IDENTIFY or PLAN.
  */
 export function parseSolutionSteps(solution) {
     const steps = [];
@@ -277,14 +278,27 @@ export function parseSolutionSteps(solution) {
 
     const prelude = leadingContent.join('\n').trim();
     if (prelude && steps.length > 0) {
-        // A faded IPEE solution may intentionally leave the answer and working
-        // unlabelled while retaining only a later step such as EVALUATE.
-        // Preserve that prelude as its own reveal instead of mislabelling all
-        // of it as the first structured step.
-        steps.unshift({
-            label: null,
-            content: prelude
-        });
+        const executeIndex = steps.findIndex(step =>
+            step.label?.toUpperCase() === 'EXECUTE'
+        );
+        if (executeIndex >= 0) {
+            const execute = steps[executeIndex];
+            execute.content = execute.content
+                ? `${prelude}\n\n${execute.content.replace(/^\n+/, '')}`
+                : prelude;
+        } else {
+            // A faded solution may leave its answer and working unlabelled
+            // while retaining only later stages. Reveal that work after any
+            // IDENTIFY/PLAN stages and immediately before EVALUATE.
+            const evaluateIndex = steps.findIndex(step =>
+                step.label?.toUpperCase() === 'EVALUATE'
+            );
+            const insertionIndex = evaluateIndex >= 0 ? evaluateIndex : steps.length;
+            steps.splice(insertionIndex, 0, {
+                label: null,
+                content: prelude
+            });
+        }
     }
 
     return steps;
