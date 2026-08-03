@@ -246,11 +246,14 @@ export async function startSession(deckId, fileFilter, onComplete, onCardChange)
         continueChapter: Boolean(fileFilter)
     });
 
+    if (state.dueCards.length === 0) return false;
+
     // Update stats display
     updateStats();
 
     // Show first card
     showNextCard();
+    return true;
 }
 
 /**

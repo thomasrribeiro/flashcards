@@ -12,6 +12,7 @@ import {
     getRepoMetadata,
     getAllRepos,
     invalidateRepositoryFiles,
+    replaceRepositoryFileCards,
     markRepoLoaded
 } from './storage.js';
 
@@ -211,6 +212,22 @@ export async function loadRepositoryFiles(repoString, filePaths = null) {
                 if (existingCards.length > 0) return existingCards;
 
                 const content = await githubClient.getFileContent(owner, repo, file.path, file.sha);
+
+                // A sync can replace the repository metadata while an older
+                // blob request is still in flight. Never let that request put
+                // the superseded chapter back into the card cache. Re-entering
+                // through loadRepositoryFiles uses the current SHA and shares
+                // any already-running request for it.
+                const latestDeck = await getRepoMetadata(repoString);
+                const latestFile = (latestDeck?.files || []).find(candidate =>
+                    (typeof candidate === 'string' ? candidate : candidate.path) === file.path
+                );
+                if (!latestDeck || !latestFile) return [];
+                const latestSha = typeof latestFile === 'string' ? null : latestFile?.sha || null;
+                if (file.sha && latestSha && file.sha !== latestSha) {
+                    return loadRepositoryFiles(repoString, [file.path]);
+                }
+
                 const { cards, metadata } = parseDeck(content, file.path);
                 const cardsWithMeta = cards.map(card => {
                     const identity = identifyCard(card, repoString);
@@ -224,7 +241,12 @@ export async function loadRepositoryFiles(repoString, filePaths = null) {
                         id: `${repoString}#${identity.hash}`
                     };
                 });
-                await saveCards(cardsWithMeta);
+
+                // Card bodies are derived cache data. Replace the complete
+                // file snapshot rather than merging it by card hash, otherwise
+                // removed or regenerated cards from the previous GitHub blob
+                // can survive alongside the new chapter.
+                await replaceRepositoryFileCards(repoString, file.path, cardsWithMeta);
                 return cardsWithMeta;
             })().catch(error => {
                 fileLoadPromises.delete(key);

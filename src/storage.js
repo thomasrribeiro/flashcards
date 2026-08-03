@@ -568,6 +568,19 @@ export async function saveCards(cards) {
 }
 
 /**
+ * Replace the derived card-body snapshot for one repository file without
+ * disturbing its durable chapter-progress snapshot. GitHub synchronization
+ * invalidates progress separately when the source SHA actually changes.
+ */
+export async function replaceRepositoryFileCards(repoId, filepath, cards) {
+    cardsCache = cardsCache.filter(card => {
+        const cardRepo = card.source?.repo || card.deckName;
+        return cardRepo !== repoId || (card.source?.file || '') !== filepath;
+    });
+    return saveCards(cards);
+}
+
+/**
  * Drop cached card bodies for repository files whose GitHub blob changed.
  * Review rows are intentionally preserved: stable card IDs reconnect them when
  * the new bodies are parsed, and removed cards remain available for safe

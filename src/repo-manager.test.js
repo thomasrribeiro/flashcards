@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
     getRepoMetadata: vi.fn(),
     getAllCards: vi.fn(),
     invalidateRepositoryFiles: vi.fn(),
+    replaceRepositoryFileCards: vi.fn(),
     saveCards: vi.fn(),
     saveRepoMetadata: vi.fn()
 }));
@@ -28,6 +29,7 @@ vi.mock('./storage.js', () => ({
     getRepoMetadata: mocks.getRepoMetadata,
     getAllCards: mocks.getAllCards,
     invalidateRepositoryFiles: mocks.invalidateRepositoryFiles,
+    replaceRepositoryFileCards: mocks.replaceRepositoryFileCards,
     saveCards: mocks.saveCards,
     saveRepoMetadata: mocks.saveRepoMetadata,
     getAllRepos: vi.fn(),
@@ -57,6 +59,7 @@ describe('loadRepositoryFiles', () => {
         mocks.getRepositoryFileIndex.mockReset();
         mocks.getAllCards.mockReset().mockResolvedValue([]);
         mocks.invalidateRepositoryFiles.mockReset();
+        mocks.replaceRepositoryFileCards.mockReset().mockResolvedValue(undefined);
         mocks.saveCards.mockReset().mockResolvedValue(undefined);
         mocks.saveRepoMetadata.mockReset().mockResolvedValue(undefined);
     });
@@ -74,6 +77,11 @@ describe('loadRepositoryFiles', () => {
 
         expect(mocks.getFileContent).toHaveBeenCalledTimes(1);
         expect(mocks.getFileContent).toHaveBeenCalledWith('owner', 'selective', 'flashcards/02.md', 'sha-02');
+        expect(mocks.replaceRepositoryFileCards).toHaveBeenCalledWith(
+            'owner/selective',
+            'flashcards/02.md',
+            expect.any(Array)
+        );
         expect(cards).toHaveLength(1);
         expect(cards[0].source.file).toBe('flashcards/02.md');
     });
@@ -90,7 +98,7 @@ describe('loadRepositoryFiles', () => {
         ]);
 
         expect(mocks.getFileContent).toHaveBeenCalledTimes(1);
-        expect(mocks.saveCards).toHaveBeenCalledTimes(1);
+        expect(mocks.replaceRepositoryFileCards).toHaveBeenCalledTimes(1);
     });
 
     it('does not reuse a loaded card body from an older GitHub blob', async () => {
@@ -118,6 +126,50 @@ describe('loadRepositoryFiles', () => {
         );
         expect(cards).toHaveLength(1);
         expect(cards[0].source.sha).toBe('new-sha');
+    });
+
+    it('discards an in-flight blob when a sync replaces its SHA', async () => {
+        const oldDeck = {
+            id: 'owner/racing-sync',
+            files: [{ path: 'flashcards/01.md', sha: 'old-sha' }]
+        };
+        const newDeck = {
+            id: 'owner/racing-sync',
+            files: [{ path: 'flashcards/01.md', sha: 'new-sha' }]
+        };
+        let currentDeck = oldDeck;
+        mocks.getRepoMetadata.mockImplementation(async () => currentDeck);
+        mocks.getFileContent.mockImplementation(async (_owner, _repo, _path, sha) => {
+            if (sha === 'old-sha') currentDeck = newDeck;
+            return markdown.replace('selective loading', `${sha} loading`);
+        });
+
+        const cards = await loadRepositoryFiles('owner/racing-sync', ['flashcards/01.md']);
+
+        expect(mocks.getFileContent.mock.calls.map(call => call[3])).toEqual([
+            'old-sha',
+            'new-sha'
+        ]);
+        expect(mocks.replaceRepositoryFileCards).toHaveBeenCalledTimes(1);
+        expect(mocks.replaceRepositoryFileCards.mock.calls[0][2][0].source.sha).toBe('new-sha');
+        expect(cards[0].source.sha).toBe('new-sha');
+    });
+
+    it('discards an in-flight blob when a sync removes its chapter', async () => {
+        let currentDeck = {
+            id: 'owner/removed-chapter',
+            files: [{ path: 'flashcards/01.md', sha: 'removed-sha' }]
+        };
+        mocks.getRepoMetadata.mockImplementation(async () => currentDeck);
+        mocks.getFileContent.mockImplementation(async () => {
+            currentDeck = { id: 'owner/removed-chapter', files: [] };
+            return markdown;
+        });
+
+        const cards = await loadRepositoryFiles('owner/removed-chapter', ['flashcards/01.md']);
+
+        expect(cards).toEqual([]);
+        expect(mocks.replaceRepositoryFileCards).not.toHaveBeenCalled();
     });
 });
 

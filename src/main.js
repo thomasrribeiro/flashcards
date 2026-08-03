@@ -799,14 +799,23 @@ async function startScopedReview(filterFn, label, breadcrumb, repoIds = [], file
         return;
     }
     discardPausedPrimaryStudySession();
-    enterStudyArea(breadcrumb || ['home', label]);
-    startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb, continuation
-        ? {
-            fileFilter: fileSpecs[0].path,
-            scopeTotalCards: continuation.totalCards,
-            introducedCards: continuation.introducedCards
-        }
-        : {});
+    try {
+        // Prepare and render the first card while the collection remains on
+        // screen. If parsing/rendering ever fails, the learner should see a
+        // useful error at home, never an empty 0/0 study shell.
+        startTodaySession(queue, onSessionComplete, renderStudyCardBreadcrumb, continuation
+            ? {
+                fileFilter: fileSpecs[0].path,
+                scopeTotalCards: continuation.totalCards,
+                introducedCards: continuation.introducedCards
+            }
+            : {});
+        enterStudyArea(breadcrumb || ['home', label]);
+    } catch (error) {
+        cleanupStudySession();
+        console.error('[Main] Failed to start scoped review:', error);
+        alert('This chapter could not be opened. Sync the deck and try again.');
+    }
 }
 
 /** Fetch and parse card bodies only when a review action needs them. */
@@ -817,21 +826,20 @@ async function ensureRepositoriesLoaded(repoIds, onProgress = null, fileSpecs = 
         return;
     }
     const decks = new Map((await getAllDecks()).map(deck => [deck.id, deck]));
-    const loadedCards = await getAllCards();
-    const loadedFiles = new Set(loadedCards.map(card =>
-        `${card.source?.repo || card.deckName}\0${card.source?.file || ''}`));
     const requestedFiles = fileSpecs || unique.filter(repoId => !repoId.startsWith('local/')).flatMap(repoId =>
         (decks.get(repoId)?.files || []).map(file => ({
             repo: repoId,
             path: typeof file === 'string' ? file : file.path
         }))
     );
-    const files = requestedFiles.filter(({ repo, path }) =>
-        !repo.startsWith('local/') && !loadedFiles.has(`${repo}\0${path}`));
+    const files = requestedFiles.filter(({ repo }) => !repo.startsWith('local/'));
     let completed = 0;
     onProgress?.({ completed, total: files.length });
     await mapWithConcurrency(files, 4, async ({ repo, path }) => {
-        await loadRepositoryFiles(repo, [path]);
+        const cards = await loadRepositoryFiles(repo, [path]);
+        if (cards.length === 0) {
+            throw new Error(`No flashcards were loaded from ${repo}:${path}`);
+        }
         completed++;
         onProgress?.({ completed, total: files.length });
     });

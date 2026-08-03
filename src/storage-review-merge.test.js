@@ -7,6 +7,7 @@ import {
     getAllReviews,
     invalidateRepositoryFiles,
     mergeReviewSnapshots,
+    replaceRepositoryFileCards,
     saveCards,
     saveReview,
     setCurrentUser
@@ -132,5 +133,31 @@ describe('invalidateRepositoryFiles', () => {
         expect(invalidateRepositoryFiles('owner/deck', ['flashcards/01.md'])).toBe(1);
         expect((await getAllCards()).map(card => card.hash)).toEqual(['card-b']);
         expect((await getAllReviews()).map(review => review.cardHash)).toEqual(['card-a']);
+    });
+
+    it('replaces every cached card from one file without touching another file', async () => {
+        await saveCards([
+            {
+                hash: 'old-a',
+                deckName: 'owner/deck',
+                source: { repo: 'owner/deck', file: 'flashcards/01.md', sha: 'old-sha' }
+            },
+            {
+                hash: 'unchanged',
+                deckName: 'owner/deck',
+                source: { repo: 'owner/deck', file: 'flashcards/02.md', sha: 'same-sha' }
+            }
+        ]);
+
+        await replaceRepositoryFileCards('owner/deck', 'flashcards/01.md', [{
+            hash: 'new-a',
+            deckName: 'owner/deck',
+            source: { repo: 'owner/deck', file: 'flashcards/01.md', sha: 'new-sha' }
+        }]);
+
+        expect((await getAllCards()).map(card => card.hash).sort()).toEqual([
+            'new-a',
+            'unchanged'
+        ]);
     });
 });
