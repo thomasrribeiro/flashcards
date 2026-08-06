@@ -208,7 +208,7 @@ flashcards curriculum build ~/notes \
 
 # Materialize a planned deck by canonical id, synchronize its roadmap
 # metadata, and run the usual isolated pilot build.
-flashcards curriculum materialize physics/physical-reasoning-and-measurement
+flashcards curriculum materialize physics/measurement-and-physical-reasoning
 ```
 
 Schema-v3 subject curricula distinguish destination and focus from each deck's

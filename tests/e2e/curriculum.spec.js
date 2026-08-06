@@ -16,7 +16,7 @@ test('semantic zoom keeps the complete curriculum readable', async ({ page }) =>
     await expect(subjectDecks.first()).toBeVisible();
     expect(await subjectDecks.count()).toBeLessThan(135);
 
-    await subjectDecks.filter({ hasText: 'physical-reasoning-and-measurement' }).click();
+    await subjectDecks.filter({ hasText: 'measurement-and-physical-reasoning' }).click();
     await expect(page.locator('.curriculum-summary')).toContainText('prerequisite path');
     const pathNodes = page.locator('.curriculum-graph-node');
     expect(await pathNodes.count()).toBeLessThan(20);
