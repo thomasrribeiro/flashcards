@@ -1,10 +1,11 @@
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { FLASHCARDS_ROOT, resolvePath } from './paths.js';
 import { resolvePrerequisiteGraph } from './prerequisites.js';
 import { parseDeck } from '../../src/parser.js';
 import { cardMarkupErrors } from '../../src/card-markup-policy.js';
+import { annotateNamespaceAliases } from '../../src/card-id-annotator.js';
 
 function runNode(script, args, options = {}) {
     const result = spawnSync(process.execPath, [path.join(FLASHCARDS_ROOT, script), ...args], {
@@ -120,4 +121,34 @@ export function stabilizeDeck(inputPath, { check = false, capture = false } = {}
     args.push(path.join(deckPath, 'flashcards'));
     const result = runNode('scripts/add-card-ids.js', args, { capture });
     return { ...result, deckPath };
+}
+
+function markdownFilesUnder(directory) {
+    return readdirSync(directory, { withFileTypes: true })
+        .flatMap(entry => {
+            const entryPath = path.join(directory, entry.name);
+            if (entry.isDirectory()) return markdownFilesUnder(entryPath);
+            return entry.isFile() && entry.name.endsWith('.md') ? [entryPath] : [];
+        })
+        .sort();
+}
+
+export function preserveDeckNamespace(inputPath, namespace, { check = false } = {}) {
+    const deckPath = resolvePath(inputPath);
+    requireDeckPath(deckPath);
+    let addedBlocks = 0;
+    let addedCards = 0;
+    const changedFiles = [];
+
+    for (const chapterPath of markdownFilesUnder(path.join(deckPath, 'flashcards'))) {
+        const markdown = readFileSync(chapterPath, 'utf8');
+        const annotated = annotateNamespaceAliases(markdown, chapterPath, namespace);
+        addedBlocks += annotated.addedBlocks;
+        addedCards += annotated.addedCards;
+        if (annotated.markdown === markdown) continue;
+        changedFiles.push(path.relative(deckPath, chapterPath));
+        if (!check) writeFileSync(chapterPath, annotated.markdown);
+    }
+
+    return { deckPath, namespace, addedBlocks, addedCards, changedFiles, check };
 }

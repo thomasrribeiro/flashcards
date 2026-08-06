@@ -2,6 +2,8 @@
 
 import { getCurrentUser } from './storage.js';
 import { setCriticalLocalStorageItem } from './browser-storage.js';
+import { remapRepositoryScopes } from './collection-reconciliation.js';
+import { rewriteStudySessionHashes } from './review-identity.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 const LOCAL_KEY = 'flashcards_study_session';
@@ -45,6 +47,22 @@ export function studySessionMatchesActiveScope(session, activeDecks = []) {
     const current = new Set((activeDecks || []).map(scope => String(scope || '')).filter(Boolean));
     if (saved.size !== current.size) return false;
     return [...saved].every(scope => current.has(scope));
+}
+
+export function remapStudySessionRepositories(session, renames = [], hashMapping = new Map()) {
+    if (!session) return null;
+    const repoReplacement = value => remapRepositoryScopes([value], renames)[0] || value;
+    const rewritten = rewriteStudySessionHashes(session, hashMapping);
+    return normalizePersistedStudySession({
+        ...rewritten,
+        queue: (rewritten.queue || []).map(entry => ({
+            ...entry,
+            repo: repoReplacement(entry.repo)
+        })),
+        ...(Array.isArray(rewritten.activeDecks) && {
+            activeDecks: remapRepositoryScopes(rewritten.activeDecks, renames)
+        })
+    });
 }
 
 function readLocal() {

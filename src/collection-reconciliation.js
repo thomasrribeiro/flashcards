@@ -44,3 +44,21 @@ export function scopesWithoutRepositories(scopes = [], repositoryIds = []) {
         return !removed.has(repoId);
     });
 }
+
+export function remapRepositoryScopes(scopes = [], renames = []) {
+    const replacements = new Map(
+        renames
+            .map(({ from, to }) => [normalizedCurriculumId(from), String(to || '').trim()])
+            .filter(([from, to]) => from && to)
+    );
+    if (replacements.size === 0) return [...scopes];
+
+    return [...new Set((scopes || []).map(scope => {
+        const value = String(scope || '');
+        const separator = value.indexOf('\0');
+        const repoId = separator >= 0 ? value.slice(0, separator) : value;
+        const suffix = separator >= 0 ? value.slice(separator) : '';
+        const replacement = replacements.get(normalizedCurriculumId(repoId));
+        return replacement ? `${replacement}${suffix}` : value;
+    }).filter(Boolean))];
+}

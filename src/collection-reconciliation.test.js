@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     reconcileSupersededDecks,
+    remapRepositoryScopes,
     scopesWithoutRepositories,
     supersededRepositoryIds
 } from './collection-reconciliation.js';
@@ -61,6 +62,18 @@ describe('collection supersession', () => {
             'owner/current\0flashcards/01.md'
         ], ['owner/legacy'])).toEqual([
             'owner/current\0flashcards/01.md'
+        ]);
+    });
+
+    it('preserves whole-deck and chapter scopes across repository renames', () => {
+        expect(remapRepositoryScopes([
+            'owner/old-name',
+            'OWNER/OLD-NAME\0flashcards/01.md',
+            'owner/current\0flashcards/02.md'
+        ], [{ from: 'owner/old-name', to: 'owner/new-name' }])).toEqual([
+            'owner/new-name',
+            'owner/new-name\0flashcards/01.md',
+            'owner/current\0flashcards/02.md'
         ]);
     });
 });

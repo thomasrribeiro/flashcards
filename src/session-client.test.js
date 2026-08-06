@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     getStudySession,
     normalizePersistedStudySession,
+    remapStudySessionRepositories,
     saveStudySession,
     studySessionMatchesActiveScope
 } from './session-client.js';
@@ -41,6 +42,23 @@ describe('normalizePersistedStudySession', () => {
         expect(studySessionMatchesActiveScope(session, ['deck-a', 'deck-b'])).toBe(true);
         expect(studySessionMatchesActiveScope(session, ['deck-a'])).toBe(false);
         expect(studySessionMatchesActiveScope({ mode: 'new' }, ['deck-a'])).toBe(false);
+    });
+
+    it('preserves a resumable queue across a repository rename', () => {
+        const remapped = remapStudySessionRepositories({
+            mode: 'new',
+            completedCards: 2,
+            activeDecks: ['owner/old-name\0flashcards/01.md'],
+            queue: [{ cardHash: 'old-hash', repo: 'owner/old-name', filepath: 'flashcards/01.md' }]
+        }, [{ from: 'owner/old-name', to: 'owner/new-name' }], new Map([
+            ['old-hash', 'new-hash']
+        ]));
+
+        expect(remapped).toMatchObject({
+            completedCards: 2,
+            activeDecks: ['owner/new-name\0flashcards/01.md'],
+            queue: [{ cardHash: 'new-hash', repo: 'owner/new-name', filepath: 'flashcards/01.md' }]
+        });
     });
 
     it('reads signed-in sessions from D1 and clears stale local snapshots', async () => {

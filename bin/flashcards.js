@@ -31,7 +31,7 @@ import {
     updateGenerationRequest
 } from './lib/generation-requests.js';
 import { resolveNotesRoot, resolvePath } from './lib/paths.js';
-import { stabilizeDeck, validateDeck } from './lib/validation.js';
+import { preserveDeckNamespace, stabilizeDeck, validateDeck } from './lib/validation.js';
 import {
     DECK_GRANULARITY_RANGES,
     formatSubjectCurriculum,
@@ -650,6 +650,20 @@ deck
         try {
             const result = stabilizeDeck(deckPath, { check: options.check });
             if (result.status !== 0) process.exitCode = result.status;
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+deck
+    .command('preserve-namespace <deck-path> <namespace>')
+    .description('Add review-history aliases before renaming a deck repository')
+    .option('--check', 'Report aliases that would be added without changing files')
+    .action((deckPath, namespace, options) => {
+        try {
+            const result = preserveDeckNamespace(deckPath, namespace, { check: options.check });
+            const verb = options.check ? 'would add' : 'added';
+            console.log(`${verb} ${result.addedCards} namespace alias(es) in ${result.changedFiles.length} file(s)`);
         } catch (error) {
             handleError(error);
         }

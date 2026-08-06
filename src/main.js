@@ -39,7 +39,13 @@ import {
     SCOPE_SEP
 } from './today-queue.js';
 import { getSettings, saveSettings, getHabitStatus } from './habit-client.js';
-import { clearStudySession, getStudySession, saveStudySession, studySessionMatchesActiveScope } from './session-client.js';
+import {
+    clearStudySession,
+    getStudySession,
+    remapStudySessionRepositories,
+    saveStudySession,
+    studySessionMatchesActiveScope
+} from './session-client.js';
 import { renderDashboard } from './dashboard.js';
 import { getReminderPreferences, isIOSDevice, isStandalone, subscribeToPush, unsubscribeFromPush, updateAppBadge } from './push-client.js';
 import { renderBrowsableCards } from './card-browser.js';
@@ -55,7 +61,7 @@ import {
     commitCollectionSnapshot
 } from './collection-navigation.js';
 import { installAvailableDependencyDecks } from './dependency-install.js';
-import { scopesWithoutRepositories } from './collection-reconciliation.js';
+import { remapRepositoryScopes, scopesWithoutRepositories } from './collection-reconciliation.js';
 import {
     chapterForFile,
     chapterGraph,
@@ -211,13 +217,25 @@ async function init() {
         habitSettings = await habitSettingsPromise;
         pausedPrimaryStudySession = await pausedSessionPromise;
         curriculumIndex = await curriculumIndexPromise;
-        const retiredRepoIds = window.__retiredRepoIds || [];
-        const activeDecks = scopesWithoutRepositories(
-            habitSettings?.activeDecks || [],
-            retiredRepoIds
+        const repositoryRenames = window.__repositoryRenames || [];
+        const renameHashMapping = window.__repositoryRenameHashMapping || new Map();
+        const remappedSession = remapStudySessionRepositories(
+            pausedPrimaryStudySession,
+            repositoryRenames,
+            renameHashMapping
         );
-        if (activeDecks.length !== (habitSettings?.activeDecks || []).length) {
+        const sessionWasRemapped = JSON.stringify(remappedSession) !== JSON.stringify(pausedPrimaryStudySession);
+        pausedPrimaryStudySession = remappedSession;
+        const retiredRepoIds = window.__retiredRepoIds || [];
+        const activeDecks = remapRepositoryScopes(
+            scopesWithoutRepositories(habitSettings?.activeDecks || [], retiredRepoIds),
+            repositoryRenames
+        );
+        if (JSON.stringify(activeDecks) !== JSON.stringify(habitSettings?.activeDecks || [])) {
             habitSettings = await saveSettings({ activeDecks });
+        }
+        if (sessionWasRemapped && pausedPrimaryStudySession) {
+            await saveStudySession(pausedPrimaryStudySession);
         }
         if (pausedPrimaryStudySession
             && !studySessionMatchesActiveScope(pausedPrimaryStudySession, habitSettings?.activeDecks)) {
@@ -337,7 +355,7 @@ function configureMobileAppShell() {
  */
 async function loadUserRepos() {
     const { loadReposFromD1, removeRepo } = await import('./storage.js');
-    const { loadRepositoryMetadata, removeRepository } = await import('./repo-manager.js');
+    const { loadRepository, loadRepositoryMetadata } = await import('./repo-manager.js');
 
     const repos = await loadReposFromD1();
     if (!repos || repos.length === 0) {
@@ -349,6 +367,8 @@ async function loadUserRepos() {
 
     const failedRepos = [];
     const evicted = [];
+    const repositoryRenames = [];
+    const renameHashMapping = new Map();
 
     // Load only repo metadata + file trees in parallel. Card bodies are lazy.
     await Promise.all(repos.map(async (repo) => {
@@ -358,11 +378,31 @@ async function loadUserRepos() {
             console.log(`[Main] Loaded repo metadata: ${repo.id}`);
         } catch (error) {
             if (error.status === 404) {
-                // Repo is gone or has moved — silently evict the stale D1 entry
                 const reason = error.movedTo ? `moved to ${error.movedTo}` : 'not found';
+                if (error.movedTo) {
+                    try {
+                        // A one-time full load is intentional: old namespace
+                        // aliases migrate review hashes before membership moves.
+                        const moved = await loadRepository(error.movedTo);
+                        repositoryRenames.push({ from: repo.id, to: moved.deck.id });
+                        for (const card of moved.cards) {
+                            for (const alias of card.legacyHashes || []) {
+                                renameHashMapping.set(alias, card.hash);
+                            }
+                        }
+                        await removeRepo(repo.id, { preserveReviews: true });
+                        console.log(`[Main] Migrated renamed repository ${repo.id} -> ${moved.deck.id}`);
+                        return;
+                    } catch (moveError) {
+                        console.error(`[Main] Failed to migrate renamed repo ${repo.id}:`, moveError);
+                        failedRepos.push({ id: repo.id, name: displayName, error: moveError.message });
+                        return;
+                    }
+                }
+
                 console.warn(`[Main] Auto-removed stale repo ${repo.id} (${reason})`);
-                evicted.push({ id: repo.id, name: displayName, movedTo: error.movedTo || null });
-                try { await removeRepository(repo.id); } catch (e) { /* best-effort */ }
+                evicted.push({ id: repo.id, name: displayName, movedTo: null });
+                try { await removeRepo(repo.id); } catch (e) { /* best-effort */ }
             } else {
                 // Transient failure (rate limit, auth, network) — keep the row, show placeholder
                 console.error(`[Main] Failed to load repo ${repo.id}:`, error);
@@ -387,6 +427,8 @@ async function loadUserRepos() {
     window.__failedRepos = failedRepos;
     window.__evictedRepos = evicted;
     window.__retiredRepoIds = retiredRepoIds;
+    window.__repositoryRenames = repositoryRenames;
+    window.__repositoryRenameHashMapping = renameHashMapping;
 
     // Orphan cleanup requires complete card hashes, so it runs only after a
     // repository has been fully loaded for review.

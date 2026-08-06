@@ -3,7 +3,7 @@ import { parseDeck } from './parser.js';
 import { hashCard, identifyCard } from './hasher.js';
 import { serializeFile, updateCard } from './card-serializer.js';
 import { migrateLegacyReviews, rewriteStudySessionHashes } from './review-identity.js';
-import { annotateCardIds } from './card-id-annotator.js';
+import { annotateCardIds, annotateNamespaceAliases } from './card-id-annotator.js';
 
 describe('stable card identity', () => {
     it('keeps identity annotations outside the card content', () => {
@@ -147,6 +147,21 @@ describe('card ID annotation', () => {
         expect(first.markdown.match(/<!-- card-alias: [a-f0-9]{64} -->/g)).toHaveLength(2);
 
         const second = annotateCardIds(first.markdown, '01.md', () => 'card-should-not-be-used');
+        expect(second.addedBlocks).toBe(0);
+        expect(second.markdown).toBe(first.markdown);
+    });
+
+    it('preserves the old repository namespace as an idempotent review alias', () => {
+        const source = `+++\norder = 1\n+++\n\n<!-- card-id: arithmetic-place-value-001 -->\nQ: What does the 4 mean in 42?\nA: Four tens.\n`;
+        const card = parseDeck(source, '01.md').cards[0];
+        const expectedAlias = identifyCard(card, 'owner/old-name').hash;
+
+        const first = annotateNamespaceAliases(source, '01.md', 'owner/old-name');
+        expect(first.addedBlocks).toBe(1);
+        expect(first.addedCards).toBe(1);
+        expect(first.markdown).toContain(`<!-- card-alias: ${expectedAlias} -->`);
+
+        const second = annotateNamespaceAliases(first.markdown, '01.md', 'owner/old-name');
         expect(second.addedBlocks).toBe(0);
         expect(second.markdown).toBe(first.markdown);
     });
