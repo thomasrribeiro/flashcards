@@ -259,6 +259,81 @@ export function focusedCurriculumGraph(index, targetId, {
     return { nodes, edges, seedIds: [targetId] };
 }
 
+function requiredGraphRanks(graph) {
+    const ids = new Set((graph.nodes || []).map(node => node.id));
+    const parents = new Map([...ids].map(id => [id, []]));
+    for (const edge of graph.edges || []) {
+        if (edge.type === 'required' && ids.has(edge.source) && ids.has(edge.target)) {
+            parents.get(edge.target).push(edge.source);
+        }
+    }
+    const ranks = new Map();
+    const visiting = new Set();
+    const rank = id => {
+        if (ranks.has(id)) return ranks.get(id);
+        if (visiting.has(id)) return 0;
+        visiting.add(id);
+        const prerequisites = parents.get(id) || [];
+        const value = prerequisites.length
+            ? Math.max(...prerequisites.map(parent => rank(parent) + 1))
+            : 0;
+        visiting.delete(id);
+        ranks.set(id, value);
+        return value;
+    };
+    ids.forEach(rank);
+    return ranks;
+}
+
+/**
+ * Reduce a large subject DAG to one navigable layer and its immediate
+ * prerequisite/dependent neighborhood. The current layer remains highlighted
+ * through seedIds; callers can page through every hard-prerequisite rank or
+ * switch back to the untouched full graph.
+ */
+export function curriculumLayerGraph(graph, requestedLayer = null) {
+    if (!graph?.nodes?.length) {
+        return {
+            graph: { nodes: [], edges: [], seedIds: [] },
+            layer: 0,
+            layerCount: 0,
+            focusIds: []
+        };
+    }
+    const ranks = requiredGraphRanks(graph);
+    const layerCount = Math.max(...ranks.values()) + 1;
+    const seedRanks = (graph.seedIds || [])
+        .map(id => ranks.get(id))
+        .filter(Number.isInteger);
+    const defaultLayer = seedRanks.length ? Math.min(...seedRanks) : 0;
+    const numericLayer = requestedLayer == null ? defaultLayer : Number(requestedLayer);
+    const layer = Math.max(0, Math.min(
+        layerCount - 1,
+        Number.isFinite(numericLayer) ? Math.round(numericLayer) : defaultLayer
+    ));
+    const focusIds = (graph.nodes || [])
+        .filter(node => ranks.get(node.id) === layer)
+        .map(node => node.id);
+    const focus = new Set(focusIds);
+    const visible = new Set(focusIds);
+    for (const edge of graph.edges || []) {
+        if (focus.has(edge.source) || focus.has(edge.target)) {
+            visible.add(edge.source);
+            visible.add(edge.target);
+        }
+    }
+    const nodes = graph.nodes.filter(node => visible.has(node.id));
+    const edges = graph.edges.filter(edge =>
+        visible.has(edge.source) && visible.has(edge.target)
+    );
+    return {
+        graph: { nodes, edges, seedIds: focusIds },
+        layer,
+        layerCount,
+        focusIds
+    };
+}
+
 export function chapterGraph(index, deckId) {
     const { decks } = curriculumMaps(index);
     const deck = decks.get(deckId);
@@ -330,26 +405,7 @@ export function layoutCurriculumGraph(graph, {
     rowGap = 24,
     margin = 40
 } = {}) {
-    const byId = new Map(graph.nodes.map(node => [node.id, node]));
-    const requiredParents = new Map(graph.nodes.map(node => [node.id, []]));
-    for (const edge of graph.edges) {
-        if (edge.type === 'required' && byId.has(edge.source) && byId.has(edge.target)) {
-            requiredParents.get(edge.target).push(edge.source);
-        }
-    }
-    const ranks = new Map();
-    const visiting = new Set();
-    const rank = id => {
-        if (ranks.has(id)) return ranks.get(id);
-        if (visiting.has(id)) return 0;
-        visiting.add(id);
-        const parents = requiredParents.get(id) || [];
-        const value = parents.length ? Math.max(...parents.map(parent => rank(parent) + 1)) : 0;
-        visiting.delete(id);
-        ranks.set(id, value);
-        return value;
-    };
-    graph.nodes.forEach(node => rank(node.id));
+    const ranks = requiredGraphRanks(graph);
 
     const columns = new Map();
     for (const node of graph.nodes) {

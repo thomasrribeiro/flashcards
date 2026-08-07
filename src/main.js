@@ -66,6 +66,7 @@ import {
     chapterForFile,
     chapterGraph,
     curriculumGraph,
+    curriculumLayerGraph,
     curriculumMaps,
     dependencyPlan,
     focusedCurriculumGraph,
@@ -1509,7 +1510,9 @@ const curriculumViewState = {
     subject: '',
     includeRecommended: false,
     mode: 'overview',
-    targetId: ''
+    targetId: '',
+    graphView: 'layers',
+    layer: null
 };
 
 function curriculumDeckForRepository(deckId, subject = null) {
@@ -2683,7 +2686,14 @@ async function renderCurriculumGraphCanvas(root, graph, installed) {
         `;
         node.onclick = () => {
             if (deck.nodeType === 'subject') {
-                renderCurriculumView({ mode: 'subject', subject: deck.id, targetId: '', query: '' });
+                renderCurriculumView({
+                    mode: 'subject',
+                    subject: deck.id,
+                    targetId: '',
+                    query: '',
+                    graphView: 'layers',
+                    layer: null
+                });
             } else if (curriculumViewState.mode === 'path' && curriculumViewState.targetId === deck.id) {
                 openDependencyModal(deck.id);
             } else if (deck.nodeType === 'chapter') {
@@ -2800,10 +2810,10 @@ async function renderCurriculumView(options = {}) {
         return;
     }
     Object.assign(curriculumViewState, options);
-    const { query, subject, includeRecommended, mode, targetId } = curriculumViewState;
+    const { query, subject, includeRecommended, mode, targetId, graphView } = curriculumViewState;
     const installed = installedCurriculumIds(await getAllDecks());
     const subjects = [...new Set(curriculumIndex.decks.map(deck => deck.subject))].sort();
-    const graph = mode === 'overview'
+    const completeGraph = mode === 'overview'
         ? subjectOverviewGraph(curriculumIndex, { query, includeRecommended })
         : mode === 'path'
             ? focusedCurriculumGraph(curriculumIndex, targetId, { includeRecommended })
@@ -2814,6 +2824,12 @@ async function renderCurriculumView(options = {}) {
                     query,
                     includeRecommended
                 });
+    const useLayerExplorer = mode === 'subject' && graphView !== 'full' && !query.trim();
+    const layerState = useLayerExplorer
+        ? curriculumLayerGraph(completeGraph, curriculumViewState.layer)
+        : null;
+    if (layerState) curriculumViewState.layer = layerState.layer;
+    const graph = layerState?.graph || completeGraph;
 
     root.innerHTML = '';
     const toolbar = document.createElement('div');
@@ -2831,7 +2847,11 @@ async function renderCurriculumView(options = {}) {
         button.type = 'button';
         button.textContent = label;
         button.classList.toggle('active', mode === value);
-        button.onclick = () => renderCurriculumView({ mode: value, query: '' });
+        button.onclick = () => renderCurriculumView({
+            mode: value,
+            query: '',
+            ...(value === 'subject' ? { graphView: 'layers', layer: null } : {})
+        });
         modes.appendChild(button);
     }
     const search = document.createElement('input');
@@ -2886,6 +2906,8 @@ async function renderCurriculumView(options = {}) {
             ? `${graph.nodes.length} decks in the prerequisite path · select the highlighted target for details`
             : mode === 'chapters'
                 ? `${graph.nodes.length} chapters · arrows point from prerequisite to dependent chapter`
+                : layerState
+                    ? `Layer ${layerState.layer + 1} of ${layerState.layerCount} · ${layerState.focusIds.length} deck${layerState.focusIds.length === 1 ? '' : 's'} highlighted · direct prerequisites and dependents are shown`
                 : `${graph.nodes.length} decks · external prerequisites are retained as entry portals`;
     root.appendChild(summary);
 
@@ -2896,6 +2918,16 @@ async function renderCurriculumView(options = {}) {
             <span><i class="required"></i>Required</span>
             <span><i class="recommended"></i>Recommended</span>
         </span>
+        ${mode === 'subject' && !query.trim() ? `
+            <span class="curriculum-graph-navigation">
+                ${layerState ? `
+                    <button type="button" data-action="previous-layer" aria-label="Previous curriculum layer"${layerState.layer === 0 ? ' disabled' : ''}>←</button>
+                    <span class="curriculum-layer-label">Layer ${layerState.layer + 1} / ${layerState.layerCount}</span>
+                    <button type="button" data-action="next-layer" aria-label="Next curriculum layer"${layerState.layer >= layerState.layerCount - 1 ? ' disabled' : ''}>→</button>
+                    <button type="button" data-action="full-graph">Full graph</button>
+                ` : '<button type="button" data-action="layer-graph">Explore layers</button>'}
+            </span>
+        ` : ''}
         <span class="curriculum-graph-zoom">
             <button type="button" data-action="out" aria-label="Zoom out">−</button>
             <button type="button" data-action="in" aria-label="Zoom in">+</button>
@@ -2915,6 +2947,19 @@ async function renderCurriculumView(options = {}) {
         controls.querySelector('[data-action="out"]').onclick = controller.zoomOut;
         controls.querySelector('[data-action="in"]').onclick = controller.zoomIn;
         controls.querySelector('[data-action="fit"]').onclick = controller.fit;
+        const rerenderLayer = layer => renderCurriculumView({
+            graphView: 'layers',
+            layer,
+            query: ''
+        });
+        const previousLayer = controls.querySelector('[data-action="previous-layer"]');
+        const nextLayer = controls.querySelector('[data-action="next-layer"]');
+        if (previousLayer) previousLayer.onclick = () => rerenderLayer(layerState.layer - 1);
+        if (nextLayer) nextLayer.onclick = () => rerenderLayer(layerState.layer + 1);
+        const fullGraph = controls.querySelector('[data-action="full-graph"]');
+        if (fullGraph) fullGraph.onclick = () => renderCurriculumView({ graphView: 'full' });
+        const layerGraph = controls.querySelector('[data-action="layer-graph"]');
+        if (layerGraph) layerGraph.onclick = () => rerenderLayer(null);
     }
 
     let timer = null;
@@ -2931,7 +2976,9 @@ async function renderCurriculumView(options = {}) {
         query: search.value,
         subject: select.value,
         includeRecommended: recommended.checked,
-        mode: select.value ? 'subject' : 'overview'
+        mode: select.value ? 'subject' : 'overview',
+        graphView: 'layers',
+        layer: null
     }));
     recommended.addEventListener('change', () => renderCurriculumView({
         query: search.value,

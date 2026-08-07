@@ -12,11 +12,25 @@ test('semantic zoom keeps the complete curriculum readable', async ({ page }) =>
     await expect(subjects).toHaveCount(3);
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
     await expect(page.locator('.curriculum-mode-tabs')).toContainText('physics');
+    const layerLabel = page.locator('.curriculum-layer-label');
+    await expect(layerLabel).toContainText('Layer');
     const subjectDecks = page.locator('.curriculum-graph-node');
     await expect(subjectDecks.first()).toBeVisible();
     expect(await subjectDecks.count()).toBeLessThan(135);
 
-    await subjectDecks.filter({ hasText: 'measurement-and-physical-reasoning' }).click();
+    const firstLayer = await layerLabel.textContent();
+    const nextLayer = page.getByRole('button', { name: 'Next curriculum layer' });
+    if (await nextLayer.isEnabled()) {
+        await nextLayer.click();
+        await expect(layerLabel).not.toHaveText(firstLayer);
+    }
+
+    const focusedCount = await page.locator('.curriculum-graph-node').count();
+    await page.getByRole('button', { name: 'Full graph' }).click();
+    await expect(page.getByRole('button', { name: 'Explore layers' })).toBeVisible();
+    expect(await page.locator('.curriculum-graph-node').count()).toBeGreaterThanOrEqual(focusedCount);
+
+    await page.locator('.curriculum-graph-node').filter({ hasText: 'measurement-and-physical-reasoning' }).click();
     await expect(page.locator('.curriculum-summary')).toContainText('prerequisite path');
     const pathNodes = page.locator('.curriculum-graph-node');
     expect(await pathNodes.count()).toBeLessThan(20);

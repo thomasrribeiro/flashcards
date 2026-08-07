@@ -3,6 +3,7 @@ import {
     chapterPrerequisiteClosure,
     curriculumGraph,
     curriculumDeckRows,
+    curriculumLayerGraph,
     dependencyPlan,
     focusedCurriculumGraph,
     layoutCurriculumGraphElk,
@@ -152,6 +153,26 @@ describe('curriculum dependency planning', () => {
             'mathematics/arithmetic',
             'physics/physical-reasoning'
         ]);
+    });
+
+    it('pages a large DAG by layer while retaining direct context', () => {
+        const full = curriculumGraph(index);
+        const first = curriculumLayerGraph(full, 0);
+        expect(first.layerCount).toBe(3);
+        expect(first.focusIds).toEqual(['mathematics/arithmetic']);
+        expect(first.graph.nodes.map(node => node.id).sort()).toEqual([
+            'mathematics/algebra',
+            'mathematics/arithmetic'
+        ]);
+
+        const middle = curriculumLayerGraph(full, 1);
+        expect(middle.focusIds).toEqual(['mathematics/algebra']);
+        expect(middle.graph.nodes.map(node => node.id).sort()).toEqual([
+            'mathematics/algebra',
+            'mathematics/arithmetic',
+            'physics/physical-reasoning'
+        ]);
+        expect(middle.graph.seedIds).toEqual(['mathematics/algebra']);
     });
 
     it('builds chapter-level edges from resolved local dependencies', () => {
