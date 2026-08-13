@@ -2685,6 +2685,62 @@ function curriculumEdgeGeometry(source, target, sourceY = null, targetY = null) 
     };
 }
 
+function curriculumCableEdgeGeometry(source, target, sourceY, targetY, busY) {
+    const x1 = source.x + source.width;
+    const x2 = target.x;
+    const baseX = x2 - 10;
+    const gutter = Math.min(34, Math.max(18, (x2 - x1) * 0.12));
+    const departureX = x1 + gutter;
+    const arrivalX = baseX - gutter;
+    const radius = Math.min(10, gutter / 2, Math.abs(busY - sourceY) / 2, Math.abs(busY - targetY) / 2);
+    return {
+        line: [
+            `M ${x1} ${sourceY}`,
+            `H ${departureX - radius}`,
+            `Q ${departureX} ${sourceY} ${departureX} ${sourceY + radius}`,
+            `V ${busY - radius}`,
+            `Q ${departureX} ${busY} ${departureX + radius} ${busY}`,
+            `H ${arrivalX - radius}`,
+            `Q ${arrivalX} ${busY} ${arrivalX} ${busY - radius}`,
+            `V ${targetY + radius}`,
+            `Q ${arrivalX} ${targetY} ${arrivalX + radius} ${targetY}`,
+            `H ${baseX}`
+        ].join(' '),
+        head: `M ${baseX} ${targetY - 4.25} L ${x2} ${targetY} L ${baseX} ${targetY + 4.25} Z`
+    };
+}
+
+function curriculumCableRouting(layout) {
+    const positioned = new Map(layout.nodes.map(node => [node.id, node]));
+    const nodeBottom = Math.max(0, ...layout.nodes.map(node => node.y + node.height));
+    const routes = new Map();
+    const lanes = [];
+    const longEdges = layout.edges
+        .map(edge => ({ edge, source: positioned.get(edge.source), target: positioned.get(edge.target) }))
+        .filter(({ source, target }) => Number.isInteger(source?.rank)
+            && Number.isInteger(target?.rank)
+            && target.rank - source.rank > 1)
+        .sort((a, b) => (b.target.rank - b.source.rank) - (a.target.rank - a.source.rank)
+            || a.source.x - b.source.x
+            || a.target.x - b.target.x);
+    for (const route of longEdges) {
+        const start = route.source.x + route.source.width;
+        const end = route.target.x;
+        let lane = lanes.findIndex(intervals => intervals.every(interval =>
+            end + 18 < interval.start || start - 18 > interval.end));
+        if (lane < 0) {
+            lane = lanes.length;
+            lanes.push([]);
+        }
+        lanes[lane].push({ start, end });
+        routes.set(route.edge, nodeBottom + 48 + lane * 14);
+    }
+    return {
+        routes,
+        height: routes.size ? nodeBottom + 48 + lanes.length * 14 + 40 : layout.height
+    };
+}
+
 function curriculumElkEdgeGeometry(edge, source, target) {
     const section = edge.sections?.[0];
     if (!section) return curriculumEdgeGeometry(source, target);
@@ -2723,17 +2779,21 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     stage.className = 'curriculum-graph-stage';
     if (graph.nodes.length > 12) stage.classList.add('is-dense');
     stage.setAttribute('aria-label', 'Interactive curriculum prerequisite graph');
+    const positioned = new Map(layout.nodes.map(node => [node.id, node]));
+    const cableRouting = ranked
+        ? curriculumCableRouting(layout)
+        : { routes: new Map(), height: layout.height };
+    const canvasHeight = Math.max(layout.height, cableRouting.height);
     const viewport = document.createElement('div');
     viewport.className = 'curriculum-graph-viewport';
     viewport.style.width = `${layout.width}px`;
-    viewport.style.height = `${layout.height}px`;
+    viewport.style.height = `${canvasHeight}px`;
 
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.classList.add('curriculum-graph-edges');
     svg.setAttribute('width', String(layout.width));
-    svg.setAttribute('height', String(layout.height));
-    svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
-    const positioned = new Map(layout.nodes.map(node => [node.id, node]));
+    svg.setAttribute('height', String(canvasHeight));
+    svg.setAttribute('viewBox', `0 0 ${layout.width} ${canvasHeight}`);
     const portAssignments = new Map();
     const assignPorts = (direction, nodeId, edges, otherId) => {
         const node = positioned.get(nodeId);
@@ -2774,9 +2834,19 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         connection.dataset.source = edge.source;
         connection.dataset.target = edge.target;
         const ports = portAssignments.get(edge) || {};
-        const geometry = edge.sections?.length
-            ? curriculumElkEdgeGeometry(edge, source, target)
-            : curriculumEdgeGeometry(source, target, ports.sourceY, ports.targetY);
+        const cableY = cableRouting.routes.get(edge);
+        if (Number.isFinite(cableY)) connection.dataset.cableY = String(cableY);
+        const geometry = Number.isFinite(cableY)
+            ? curriculumCableEdgeGeometry(
+                source,
+                target,
+                ports.sourceY ?? source.y + source.height / 2,
+                ports.targetY ?? target.y + target.height / 2,
+                cableY
+            )
+            : edge.sections?.length
+                ? curriculumElkEdgeGeometry(edge, source, target)
+                : curriculumEdgeGeometry(source, target, ports.sourceY, ports.targetY);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         line.classList.add('curriculum-graph-edge');
         line.setAttribute('d', geometry.line);

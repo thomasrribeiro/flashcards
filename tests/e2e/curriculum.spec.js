@@ -73,6 +73,24 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(primaryOpacity).toBe(secondaryOpacity);
     await expect(page.locator('.curriculum-graph-connection.is-long .curriculum-graph-edge').first())
         .toHaveCSS('stroke-dasharray', 'none');
+    const cableRouting = await page.locator('.curriculum-graph-stage').evaluate(stage => {
+        const nodes = [...stage.querySelectorAll('.curriculum-graph-node')];
+        const nodeBottom = Math.max(...nodes.map(node =>
+            Number.parseFloat(node.style.top) + Number.parseFloat(node.style.height)));
+        const longConnections = [...stage.querySelectorAll('.curriculum-graph-connection.is-long')];
+        return {
+            nodeBottom,
+            cableYs: longConnections.map(connection => Number(connection.dataset.cableY)),
+            pathsContainLane: longConnections.every(connection =>
+                connection.querySelector('.curriculum-graph-edge').getAttribute('d')
+                    .includes(connection.dataset.cableY)),
+            directCableCount: stage.querySelectorAll('.curriculum-graph-connection.is-primary[data-cable-y]').length
+        };
+    });
+    expect(cableRouting.cableYs.length).toBeGreaterThan(0);
+    expect(cableRouting.cableYs.every(y => y > cableRouting.nodeBottom)).toBe(true);
+    expect(cableRouting.pathsContainLane).toBe(true);
+    expect(cableRouting.directCableCount).toBe(0);
     const arrowGeometry = await page.locator('.curriculum-graph-connection.is-primary').first().evaluate(connection => {
         const line = connection.querySelector('.curriculum-graph-edge');
         const arrowhead = connection.querySelector('.curriculum-graph-arrowhead');
