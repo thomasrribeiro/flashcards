@@ -60,8 +60,12 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-neighborhood-edges')).toHaveCount(0);
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks > h3 span')).not.toHaveText('0');
     await expect(page.getByRole('button', { name: 'Edit subject' })).toHaveCount(0);
-    await expect(page.locator('.curriculum-toolbar button')).toHaveCount(1);
+    await expect(page.locator('.curriculum-toolbar button')).toHaveCount(0);
     await expect(page.locator('.curriculum-selected-item button')).toHaveCount(0);
+    const focusBack = page.getByRole('button', { name: 'Back to previous selected deck' });
+    const focusForward = page.getByRole('button', { name: 'Forward to next selected deck' });
+    await expect(focusBack).toBeDisabled();
+    await expect(focusForward).toBeDisabled();
     if (testInfo.project.name === 'desktop-chromium') {
         const unlocks = page.locator('.curriculum-neighborhood-column.is-unlocks');
         const dimensions = await unlocks.evaluate(element => ({
@@ -81,14 +85,25 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     const firstFocusedDeck = await page.locator('.curriculum-selected-item h2').textContent();
     await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().click();
     await expect(page.locator('.curriculum-selected-item h2')).not.toHaveText(firstFocusedDeck);
+    const secondFocusedDeck = await page.locator('.curriculum-selected-item h2').textContent();
+    await expect(focusBack).toBeEnabled();
+    await expect(focusForward).toBeDisabled();
     await page.reload();
-    await expect(page.locator('.curriculum-selected-item h2')).not.toHaveText(firstFocusedDeck);
-    await page.getByRole('button', { name: 'Back to previous curriculum view' }).click();
+    await expect(page.locator('.curriculum-selected-item h2')).toHaveText(secondFocusedDeck);
+    await expect(focusBack).toBeEnabled();
+    await focusBack.click();
+    await expect(page.locator('.curriculum-selected-item h2')).toHaveText(firstFocusedDeck);
+    await expect(focusBack).toBeDisabled();
+    await expect(focusForward).toBeEnabled();
+    await focusForward.click();
+    await expect(page.locator('.curriculum-selected-item h2')).toHaveText(secondFocusedDeck);
+    await focusBack.click();
     await expect(page.locator('.curriculum-selected-item h2')).toHaveText(firstFocusedDeck);
 
     await page.locator('.curriculum-selected-item').click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Back to previous curriculum view' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Back to previous selected deck' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Forward to next selected deck' })).toHaveCount(0);
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(10);
@@ -116,22 +131,31 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     await page.locator('.curriculum-selected-item').click();
     await expect(page.getByText('This deck does not have a published chapter plan yet.')).toBeVisible();
     await expect(page.locator('.curriculum-layer-label')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Back to previous curriculum view' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /selected deck/ })).toHaveCount(0);
 });
 
 test('generation settings persist provider choices and explain secure key storage', async ({ page }) => {
     await page.locator('#study-settings-btn').click();
     const form = page.locator('#study-settings-panel');
     await expect(form).toBeVisible();
+    await expect(form.getByRole('tab', { name: 'Study' })).toHaveAttribute('aria-selected', 'true');
+    await form.getByRole('tab', { name: 'Connections' }).click();
     await expect(form.getByText('Keys are validated by the provider')).toBeVisible();
-    await expect(form.getByText('Curriculum sources', { exact: true })).toBeVisible();
-    await expect(form.locator('#curriculum-settings-sources .curriculum-source-row')).not.toHaveCount(0);
     await expect(form.locator('input[type="password"]')).toHaveCount(1);
+    await form.getByRole('tab', { name: 'Curriculum' }).click();
+    await expect(form.getByRole('tab', { name: 'Curriculum' })).toHaveAttribute('aria-selected', 'true');
+    await expect(form.locator('#curriculum-settings-sources .curriculum-source-row')).not.toHaveCount(0);
+    await form.getByRole('tab', { name: 'Generation' }).click();
+    const overflowingControls = await form.locator('.study-setting-field select, .study-setting-field input').evaluateAll(elements => (
+        elements.filter(element => element.getBoundingClientRect().right > element.closest('.study-settings-pane').getBoundingClientRect().right + 1).length
+    ));
+    expect(overflowingControls).toBe(0);
     await page.getByLabel('Model').fill('gpt-example');
     await page.getByLabel('Reasoning effort').selectOption('xhigh');
     await form.getByRole('button', { name: 'Save' }).click();
 
     await page.locator('#study-settings-btn').click();
+    await form.getByRole('tab', { name: 'Generation' }).click();
     await expect(page.getByLabel('Model')).toHaveValue('gpt-example');
     await expect(page.getByLabel('Reasoning effort')).toHaveValue('xhigh');
 });

@@ -162,79 +162,90 @@
                             <h3 id="study-settings-title">Settings</h3>
                             <button id="study-settings-close" class="modal-close" type="button" aria-label="Close settings">&times;</button>
                         </div>
+                        <div class="study-settings-tabs" role="tablist" aria-label="Settings sections">
+                            <button id="study-settings-tab-study" type="button" role="tab" aria-selected="true" aria-controls="study-settings-pane-study" data-settings-tab="study">Study</button>
+                            <button id="study-settings-tab-generation" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-generation" data-settings-tab="generation" tabindex="-1">Generation</button>
+                            <button id="study-settings-tab-connections" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-connections" data-settings-tab="connections" tabindex="-1">Connections</button>
+                            <button id="study-settings-tab-curriculum" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-curriculum" data-settings-tab="curriculum" tabindex="-1">Curriculum</button>
+                        </div>
                         <div class="modal-body study-settings-body">
-                            <div class="study-setting-field">
-                                <label for="daily-new-target">Daily new-card target</label>
-                                <select id="daily-new-target">
-                                    <option value="5">5</option>
-                                    <option value="10">10</option>
-                                    <option value="20">20</option>
-                                    <option value="custom">Custom</option>
-                                    <option value="unlimited">Unlimited</option>
-                                </select>
-                                <input id="daily-new-custom" class="hidden" type="number" min="1" max="500" step="1" inputmode="numeric" aria-label="Custom daily new-card target" />
-                            </div>
-                            <div class="study-setting-field">
-                                <label for="new-session-size">New-card session size</label>
-                                <select id="new-session-size">
-                                    <option value="5">5</option>
-                                    <option value="10">10</option>
-                                    <option value="20">20</option>
-                                </select>
-                            </div>
-                            <div class="study-setting-field">
-                                <label for="daily-reminder-enabled">Reminder on this device</label>
-                                <select id="daily-reminder-enabled">
-                                    <option value="false">Off</option>
-                                    <option value="true">On</option>
-                                </select>
-                            </div>
-                            <div class="study-setting-field">
-                                <label for="daily-reminder-time">Reminder time</label>
-                                <input id="daily-reminder-time" type="time" step="900" value="18:00" />
-                            </div>
-                            <p class="study-settings-help">The target is a guide, not a lock. Extra learning stays in finite batches so future review load remains visible.</p>
-                            <p id="reminder-settings-help" class="study-settings-help">Reminders use this device’s timezone and are sent only when cards are due or a session is paused.</p>
-                            <h4 class="study-settings-section-title">Curriculum generation</h4>
-                            <div class="study-setting-field">
-                                <label for="generation-provider">AI provider</label>
-                                <select id="generation-provider">
-                                    <option value="codex">Codex CLI (local account)</option>
-                                    <option value="custom">Custom local runner</option>
-                                </select>
-                            </div>
-                            <div class="study-setting-field">
-                                <label for="generation-model">Model</label>
-                                <input id="generation-model" list="generation-model-options" type="text" maxlength="120" placeholder="Use the local provider default" autocomplete="off" />
-                                <datalist id="generation-model-options"></datalist>
-                            </div>
-                            <div class="study-setting-field">
-                                <label for="generation-reasoning">Reasoning effort</label>
-                                <select id="generation-reasoning">
-                                    <option value="low">Low</option>
-                                    <option value="medium">Medium</option>
-                                    <option value="high">High</option>
-                                    <option value="xhigh">Extra high</option>
-                                </select>
-                            </div>
-                            <p id="generation-model-status" class="study-settings-help">Connect an API provider below to load the models available to your account.</p>
-                            <h4 class="study-settings-section-title">AI provider connections</h4>
-                            <div id="ai-provider-list" class="ai-provider-list" aria-live="polite">
-                                <p class="study-settings-help">Loading provider connections…</p>
-                            </div>
-                            <div id="ai-provider-connect-panel" class="ai-provider-connect-panel hidden">
-                                <label id="ai-provider-key-label" for="ai-provider-key">API key</label>
-                                <input id="ai-provider-key" type="password" maxlength="1024" autocomplete="new-password" spellcheck="false" />
-                                <button id="ai-provider-connect-save" type="button">Connect</button>
-                                <button id="ai-provider-connect-cancel" type="button">Cancel</button>
-                                <p id="ai-provider-connect-status" class="study-settings-help"></p>
-                            </div>
-                            <p class="study-settings-help">Keys are validated by the provider, encrypted server-side, and tied to your signed-in GitHub account. They are never stored in this browser, generation requests, logs, or Git repositories.</p>
-                            <p class="study-settings-help">Consumer subscriptions do not normally include API usage; provider API billing applies.</p>
-                            <h4 class="study-settings-section-title">Curriculum sources</h4>
-                            <p class="study-settings-help">Enabled public GitHub registries supply the subjects, decks, dependencies, and published chapter plans shown in Curriculum.</p>
-                            <div id="curriculum-settings-sources" class="curriculum-settings-sources"></div>
-                            <button id="curriculum-settings-add-source" class="curriculum-settings-add-source" type="button">Add source</button>
+                            <section id="study-settings-pane-study" class="study-settings-pane" role="tabpanel" aria-labelledby="study-settings-tab-study" data-settings-pane="study">
+                                <div class="study-setting-field">
+                                    <label for="daily-new-target">Daily new-card target</label>
+                                    <select id="daily-new-target">
+                                        <option value="5">5</option>
+                                        <option value="10">10</option>
+                                        <option value="20">20</option>
+                                        <option value="custom">Custom</option>
+                                        <option value="unlimited">Unlimited</option>
+                                    </select>
+                                    <input id="daily-new-custom" class="hidden" type="number" min="1" max="500" step="1" inputmode="numeric" aria-label="Custom daily new-card target" />
+                                </div>
+                                <div class="study-setting-field">
+                                    <label for="new-session-size">New-card session size</label>
+                                    <select id="new-session-size">
+                                        <option value="5">5</option>
+                                        <option value="10">10</option>
+                                        <option value="20">20</option>
+                                    </select>
+                                </div>
+                                <div class="study-setting-field">
+                                    <label for="daily-reminder-enabled">Reminder on this device</label>
+                                    <select id="daily-reminder-enabled">
+                                        <option value="false">Off</option>
+                                        <option value="true">On</option>
+                                    </select>
+                                </div>
+                                <div class="study-setting-field">
+                                    <label for="daily-reminder-time">Reminder time</label>
+                                    <input id="daily-reminder-time" type="time" step="900" value="18:00" />
+                                </div>
+                                <p class="study-settings-help">The target is a guide, not a lock. Extra learning stays in finite batches so future review load remains visible.</p>
+                                <p id="reminder-settings-help" class="study-settings-help">Reminders use this device’s timezone and are sent only when cards are due or a session is paused.</p>
+                            </section>
+                            <section id="study-settings-pane-generation" class="study-settings-pane is-single-column" role="tabpanel" aria-labelledby="study-settings-tab-generation" data-settings-pane="generation" hidden>
+                                <div class="study-setting-field">
+                                    <label for="generation-provider">AI provider</label>
+                                    <select id="generation-provider">
+                                        <option value="codex">Codex CLI (local account)</option>
+                                        <option value="custom">Custom local runner</option>
+                                    </select>
+                                </div>
+                                <div class="study-setting-field">
+                                    <label for="generation-model">Model</label>
+                                    <input id="generation-model" list="generation-model-options" type="text" maxlength="120" placeholder="Use the local provider default" autocomplete="off" />
+                                    <datalist id="generation-model-options"></datalist>
+                                </div>
+                                <div class="study-setting-field">
+                                    <label for="generation-reasoning">Reasoning effort</label>
+                                    <select id="generation-reasoning">
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="xhigh">Extra high</option>
+                                    </select>
+                                </div>
+                                <p id="generation-model-status" class="study-settings-help">Connect an API provider in Connections to load the models available to your account.</p>
+                            </section>
+                            <section id="study-settings-pane-connections" class="study-settings-pane is-single-column" role="tabpanel" aria-labelledby="study-settings-tab-connections" data-settings-pane="connections" hidden>
+                                <div id="ai-provider-list" class="ai-provider-list" aria-live="polite">
+                                    <p class="study-settings-help">Loading provider connections…</p>
+                                </div>
+                                <div id="ai-provider-connect-panel" class="ai-provider-connect-panel hidden">
+                                    <label id="ai-provider-key-label" for="ai-provider-key">API key</label>
+                                    <input id="ai-provider-key" type="password" maxlength="1024" autocomplete="new-password" spellcheck="false" />
+                                    <button id="ai-provider-connect-save" type="button">Connect</button>
+                                    <button id="ai-provider-connect-cancel" type="button">Cancel</button>
+                                    <p id="ai-provider-connect-status" class="study-settings-help"></p>
+                                </div>
+                                <p class="study-settings-help">Keys are validated by the provider, encrypted server-side, and tied to your signed-in GitHub account. They are never stored in this browser, generation requests, logs, or Git repositories.</p>
+                                <p class="study-settings-help">Consumer subscriptions do not normally include API usage; provider API billing applies.</p>
+                            </section>
+                            <section id="study-settings-pane-curriculum" class="study-settings-pane is-single-column" role="tabpanel" aria-labelledby="study-settings-tab-curriculum" data-settings-pane="curriculum" hidden>
+                                <p class="study-settings-help">Enabled public GitHub registries supply the subjects, decks, dependencies, and published chapter plans shown in Curriculum.</p>
+                                <div id="curriculum-settings-sources" class="curriculum-settings-sources"></div>
+                                <button id="curriculum-settings-add-source" class="curriculum-settings-add-source" type="button">Add source</button>
+                            </section>
                         </div>
                         <div class="modal-footer">
                             <button id="study-settings-cancel" class="btn-cancel" type="button">Cancel</button>

@@ -300,6 +300,7 @@ async function init() {
         const initialCurriculumState = curriculumStateFromUrl();
         if (initialCurriculumState) {
             Object.assign(curriculumViewState, initialCurriculumState);
+            restoreCurriculumFocusHistory(history.state);
             await showMainView('curriculum');
             writeCurriculumHistory({ replace: true });
         }
@@ -1538,6 +1539,8 @@ const curriculumViewState = {
     parentId: '',
     layerStart: 0
 };
+let curriculumFocusHistory = [];
+let curriculumFocusHistoryIndex = -1;
 
 function curriculumDeckForRepository(deckId, subject = null) {
     if (!curriculumIndex) return null;
@@ -2457,6 +2460,20 @@ function setupEventListeners() {
     document.getElementById('study-settings-close')?.addEventListener('click', closeStudySettings);
     document.querySelector('#study-settings-modal .modal-overlay')?.addEventListener('click', closeStudySettings);
     document.getElementById('daily-new-target')?.addEventListener('change', reflectCustomTargetField);
+    const settingsTabs = [...document.querySelectorAll('[data-settings-tab]')];
+    settingsTabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => activateStudySettingsTab(tab.dataset.settingsTab));
+        tab.addEventListener('keydown', event => {
+            let nextIndex = null;
+            if (event.key === 'ArrowRight') nextIndex = (index + 1) % settingsTabs.length;
+            else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + settingsTabs.length) % settingsTabs.length;
+            else if (event.key === 'Home') nextIndex = 0;
+            else if (event.key === 'End') nextIndex = settingsTabs.length - 1;
+            if (nextIndex === null) return;
+            event.preventDefault();
+            activateStudySettingsTab(settingsTabs[nextIndex].dataset.settingsTab, { focus: true });
+        });
+    });
     document.getElementById('generation-provider')?.addEventListener('change', () => {
         updateGenerationModelChoices().catch(error => showGenerationModelError(error));
     });
@@ -2952,6 +2969,70 @@ function curriculumStateSnapshot() {
     return { mode, hierarchy, targetId, parentId, subject, includeRecommended, layerStart };
 }
 
+function curriculumFocusHistoryKey(state) {
+    if (state?.mode !== 'focus' || !state.targetId) return '';
+    return `${state.hierarchy || ''}:${state.targetId}`;
+}
+
+function curriculumFocusSnapshot(state) {
+    return {
+        ...state,
+        mode: 'focus',
+        query: '',
+        layerStart: 0
+    };
+}
+
+function ensureCurriculumFocusHistory() {
+    const current = curriculumFocusSnapshot(curriculumStateSnapshot());
+    const currentKey = curriculumFocusHistoryKey(current);
+    if (!currentKey) return;
+    const activeKey = curriculumFocusHistoryKey(curriculumFocusHistory[curriculumFocusHistoryIndex]);
+    if (activeKey === currentKey) return;
+    const existingIndex = curriculumFocusHistory.findIndex(item => curriculumFocusHistoryKey(item) === currentKey);
+    if (existingIndex >= 0) {
+        curriculumFocusHistoryIndex = existingIndex;
+        return;
+    }
+    curriculumFocusHistory = [current];
+    curriculumFocusHistoryIndex = 0;
+}
+
+function recordCurriculumFocusNavigation(previous, next) {
+    const nextKey = curriculumFocusHistoryKey(next);
+    if (!nextKey) return;
+    const nextSnapshot = curriculumFocusSnapshot(next);
+    const activeKey = curriculumFocusHistoryKey(curriculumFocusHistory[curriculumFocusHistoryIndex]);
+    if (activeKey === nextKey) return;
+
+    if (previous.mode !== 'focus') {
+        curriculumFocusHistory = [nextSnapshot];
+        curriculumFocusHistoryIndex = 0;
+        return;
+    }
+
+    const previousSnapshot = curriculumFocusSnapshot(previous);
+    const previousKey = curriculumFocusHistoryKey(previousSnapshot);
+    if (curriculumFocusHistoryIndex < 0 || activeKey !== previousKey) {
+        curriculumFocusHistory = [previousSnapshot];
+        curriculumFocusHistoryIndex = 0;
+    } else {
+        curriculumFocusHistory = curriculumFocusHistory.slice(0, curriculumFocusHistoryIndex + 1);
+    }
+    curriculumFocusHistory.push(nextSnapshot);
+    curriculumFocusHistoryIndex = curriculumFocusHistory.length - 1;
+}
+
+function restoreCurriculumFocusHistory(state) {
+    const items = Array.isArray(state?.curriculumFocusHistory)
+        ? state.curriculumFocusHistory.filter(item => curriculumFocusHistoryKey(item))
+        : [];
+    const index = Number(state?.curriculumFocusHistoryIndex);
+    if (!items.length || !Number.isInteger(index) || index < 0 || index >= items.length) return;
+    curriculumFocusHistory = items.map(curriculumFocusSnapshot);
+    curriculumFocusHistoryIndex = index;
+}
+
 function curriculumStateFromUrl(url = new URL(window.location.href)) {
     if (url.searchParams.get('view') !== 'curriculum') return null;
     const hierarchy = ['subject', 'deck', 'chapter'].includes(url.searchParams.get('curriculum-level'))
@@ -2972,7 +3053,7 @@ function curriculumStateFromUrl(url = new URL(window.location.href)) {
     };
 }
 
-function writeCurriculumHistory({ replace = false, previous = null } = {}) {
+function writeCurriculumHistory({ replace = false } = {}) {
     const url = new URL(window.location.href);
     const state = curriculumStateSnapshot();
     url.searchParams.set('view', 'curriculum');
@@ -2992,43 +3073,28 @@ function writeCurriculumHistory({ replace = false, previous = null } = {}) {
     const historyState = {
         mainView: 'curriculum',
         curriculum: state,
-        curriculumPrevious: replace
-            ? history.state?.curriculumPrevious || null
-            : previous
+        curriculumFocusHistory: curriculumFocusHistory.map(item => ({ ...item })),
+        curriculumFocusHistoryIndex
     };
     history[replace ? 'replaceState' : 'pushState'](historyState, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
-async function navigateCurriculum(options, { replace = false } = {}) {
+async function navigateCurriculum(options, { replace = false, trackFocus = true } = {}) {
     const previous = curriculumStateSnapshot();
+    const next = { ...previous, ...options };
+    if (trackFocus) recordCurriculumFocusNavigation(previous, next);
     Object.assign(curriculumViewState, options);
-    writeCurriculumHistory({ replace, previous });
+    writeCurriculumHistory({ replace });
     await renderCurriculumView();
 }
 
-function backFromCurriculumFocus() {
-    if (history.state?.curriculumPrevious) {
-        history.back();
-        return;
-    }
-    const { hierarchy, subject, parentId } = curriculumViewState;
-    if (hierarchy === 'chapter' && parentId) {
-        navigateCurriculum({
-            mode: 'focus', hierarchy: 'deck', subject,
-            parentId: subject, targetId: parentId, query: '', layerStart: 0
-        });
-        return;
-    }
-    if (hierarchy === 'deck') {
-        navigateCurriculum({
-            mode: 'overview', hierarchy: 'subject', subject: '',
-            parentId: '', targetId: '', query: '', layerStart: 0
-        });
-        return;
-    }
-    navigateCurriculum({
-        mode: 'subject', hierarchy: 'deck', subject,
-        parentId: subject, targetId: '', query: '', layerStart: 0
+async function moveCurriculumFocusHistory(offset) {
+    const nextIndex = curriculumFocusHistoryIndex + offset;
+    if (nextIndex < 0 || nextIndex >= curriculumFocusHistory.length) return;
+    curriculumFocusHistoryIndex = nextIndex;
+    await navigateCurriculum(curriculumFocusHistory[nextIndex], {
+        replace: true,
+        trackFocus: false
     });
 }
 
@@ -3069,7 +3135,11 @@ function makeCurriculumItemButton(item, progressStates, extra = '') {
     `;
     button.dataset.curriculumNodeId = item.id;
     button.title = `${item.id}${item.description ? `\n${item.description}` : ''}`;
-    button.onclick = () => navigateCurriculum(curriculumFocusOptions(item));
+    button.onclick = () => navigateCurriculum(curriculumFocusOptions(item), {
+        // Recentering inside the focused three-column browser has its own
+        // Back/Forward trail, so it should remain one browser-history entry.
+        replace: curriculumViewState.mode === 'focus'
+    });
     return button;
 }
 
@@ -3115,6 +3185,7 @@ function renderCurriculumDirectory(root, progressStates) {
 }
 
 function renderCurriculumNeighborhood(root, progressStates) {
+    ensureCurriculumFocusHistory();
     const neighborhood = curriculumNeighborhood(curriculumIndex, {
         hierarchy: curriculumViewState.hierarchy,
         targetId: curriculumViewState.targetId,
@@ -3135,7 +3206,11 @@ function renderCurriculumNeighborhood(root, progressStates) {
     const selected = document.createElement('section');
     selected.className = 'curriculum-neighborhood-column is-selected';
     selected.innerHTML = `
-        <h3>Selected ${escapeHtml(neighborhood.hierarchy)}</h3>
+        <h3 class="curriculum-selected-header">
+            <button type="button" class="curriculum-selected-history" data-focus-history="back" aria-label="Back to previous selected ${escapeHtml(neighborhood.hierarchy)}" title="Back"${curriculumFocusHistoryIndex <= 0 ? ' disabled' : ''}>←</button>
+            <span>Selected ${escapeHtml(neighborhood.hierarchy)}</span>
+            <button type="button" class="curriculum-selected-history" data-focus-history="forward" aria-label="Forward to next selected ${escapeHtml(neighborhood.hierarchy)}" title="Forward"${curriculumFocusHistoryIndex >= curriculumFocusHistory.length - 1 ? ' disabled' : ''}>→</button>
+        </h3>
         <h4 class="curriculum-selected-spacer" aria-hidden="true">Selected item</h4>
         <article class="curriculum-selected-item" data-curriculum-node-id="${escapeHtml(neighborhood.target.id)}">
             <span class="curriculum-selected-kind">${escapeHtml(neighborhood.hierarchy)}</span>
@@ -3145,6 +3220,8 @@ function renderCurriculumNeighborhood(root, progressStates) {
             <p class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(neighborhood.target, progressStates))}</p>
         </article>
     `;
+    selected.querySelector('[data-focus-history="back"]').onclick = () => moveCurriculumFocusHistory(-1);
+    selected.querySelector('[data-focus-history="forward"]').onclick = () => moveCurriculumFocusHistory(1);
     const selectedCard = selected.querySelector('.curriculum-selected-item');
     if (neighborhood.hierarchy === 'subject') {
         selectedCard.classList.add('is-openable');
@@ -3318,20 +3395,6 @@ async function renderCurriculumView(options = {}) {
         parentId: deckId, targetId: '', query: '', layerStart: 0
     }, hierarchy === 'chapter' || (hierarchy === 'deck' && mode === 'focus'));
     root.appendChild(breadcrumbs);
-
-    const toolbar = document.createElement('div');
-    toolbar.className = 'curriculum-toolbar';
-    if (mode === 'focus') {
-        const backButton = document.createElement('button');
-        backButton.type = 'button';
-        backButton.className = 'curriculum-toolbar-action curriculum-focus-back';
-        backButton.textContent = '←';
-        backButton.title = 'Back';
-        backButton.setAttribute('aria-label', 'Back to previous curriculum view');
-        backButton.onclick = backFromCurriculumFocus;
-        toolbar.appendChild(backButton);
-    }
-    if (toolbar.childElementCount) root.appendChild(toolbar);
 
     if (mode === 'focus') renderCurriculumNeighborhood(root, progressStates);
     else if (mode === 'overview') {
@@ -4414,6 +4477,7 @@ async function handlePopState(event) {
     const curriculumState = state?.curriculum || curriculumStateFromUrl();
     if (state?.mainView === 'curriculum' || curriculumState) {
         if (curriculumState) Object.assign(curriculumViewState, curriculumState, { query: '' });
+        restoreCurriculumFocusHistory(state);
         await showMainView('curriculum');
         return;
     }
@@ -5019,6 +5083,20 @@ function closeStudySettings() {
     closeAIProviderConnectPanel();
 }
 
+function activateStudySettingsTab(name, { focus = false } = {}) {
+    const tabs = [...document.querySelectorAll('[data-settings-tab]')];
+    const panes = [...document.querySelectorAll('[data-settings-pane]')];
+    const active = tabs.find(tab => tab.dataset.settingsTab === name) || tabs[0];
+    if (!active) return;
+    for (const tab of tabs) {
+        const selected = tab === active;
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+    }
+    for (const pane of panes) pane.hidden = pane.dataset.settingsPane !== active.dataset.settingsTab;
+    if (focus) active.focus();
+}
+
 function generationApiRequest(endpoint, options) {
     return githubAuth.apiRequest(endpoint, options);
 }
@@ -5069,6 +5147,7 @@ function renderAIProviderConnections() {
                 if (selected) selected.value = provider.id;
                 aiProviderModelCatalogs.delete(provider.id);
                 await updateGenerationModelChoices();
+                activateStudySettingsTab('generation', { focus: true });
             };
             const remove = document.createElement('button');
             remove.type = 'button';
@@ -5307,6 +5386,7 @@ async function openStudySettings() {
     renderCurriculumSettingsSources();
     modal.classList.remove('hidden');
     button.setAttribute('aria-expanded', 'true');
+    activateStudySettingsTab('study');
     target.focus();
 
     loadAIProviderConnections(generation.providerId).catch(error => {
