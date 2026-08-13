@@ -17,7 +17,12 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
     const completeDeckGraphCount = await page.locator('.curriculum-graph-node').count();
     expect(completeDeckGraphCount).toBeGreaterThan(3);
+    await expect(page.locator('.curriculum-graph-stage')).toHaveClass(/is-dense/);
     await expect(page.locator('.curriculum-graph-node[data-deck-id="physics/advanced-quantum-mechanics"]')).toHaveCount(1);
+    const firstNode = page.locator('.curriculum-graph-node').first();
+    await firstNode.hover();
+    await expect(page.locator('.curriculum-graph-edge.is-related')).not.toHaveCount(0);
+    await expect(page.locator('.curriculum-graph-edge.is-dimmed')).not.toHaveCount(0);
     const viewport = page.locator('.curriculum-graph-viewport');
     const transformBeforePan = await viewport.evaluate(element => element.style.transform);
     const stageBox = await page.locator('.curriculum-graph-stage').boundingBox();

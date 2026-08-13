@@ -2638,11 +2638,11 @@ function curriculumStatus(deck, installed) {
     return 'planned';
 }
 
-function curriculumEdgePath(source, target) {
+function curriculumEdgePath(source, target, sourceY = null, targetY = null) {
     const x1 = source.x + source.width;
-    const y1 = source.y + source.height / 2;
+    const y1 = sourceY ?? source.y + source.height / 2;
     const x2 = target.x;
-    const y2 = target.y + target.height / 2;
+    const y2 = targetY ?? target.y + target.height / 2;
     const bend = Math.max(44, (x2 - x1) * 0.44);
     return `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`;
 }
@@ -2665,6 +2665,7 @@ async function renderCurriculumGraphCanvas(root, graph, installed, {
         });
     const stage = document.createElement('div');
     stage.className = 'curriculum-graph-stage';
+    if (graph.nodes.length > 12) stage.classList.add('is-dense');
     stage.setAttribute('aria-label', 'Interactive curriculum prerequisite graph');
     const viewport = document.createElement('div');
     viewport.className = 'curriculum-graph-viewport';
@@ -2689,15 +2690,45 @@ async function renderCurriculumGraphCanvas(root, graph, installed, {
         </defs>
     `;
     const positioned = new Map(layout.nodes.map(node => [node.id, node]));
+    const portAssignments = new Map();
+    const assignPorts = (direction, nodeId, edges, otherId) => {
+        const node = positioned.get(nodeId);
+        if (!node) return;
+        edges
+            .sort((a, b) => {
+                const first = positioned.get(otherId(a));
+                const second = positioned.get(otherId(b));
+                return (first?.y || 0) - (second?.y || 0);
+            })
+            .forEach((edge, index) => {
+                const inset = Math.min(18, node.height * 0.22);
+                const usable = Math.max(1, node.height - inset * 2);
+                const y = node.y + inset + usable * (index + 1) / (edges.length + 1);
+                const assignment = portAssignments.get(edge) || {};
+                assignment[direction] = y;
+                portAssignments.set(edge, assignment);
+            });
+    };
+    for (const node of layout.nodes) {
+        assignPorts('sourceY', node.id, layout.edges.filter(edge => edge.source === node.id), edge => edge.target);
+        assignPorts('targetY', node.id, layout.edges.filter(edge => edge.target === node.id), edge => edge.source);
+    }
     for (const edge of layout.edges) {
         const source = positioned.get(edge.source);
         const target = positioned.get(edge.target);
         if (!source || !target) continue;
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.classList.add('curriculum-graph-edge', `is-${edge.type}`);
+        if (Number.isInteger(source.rank) && Number.isInteger(target.rank)
+            && Math.abs(target.rank - source.rank) > 1) {
+            path.classList.add('is-long');
+        }
         path.dataset.source = edge.source;
         path.dataset.target = edge.target;
-        path.setAttribute('d', curriculumElkEdgePath(edge, source, target));
+        const ports = portAssignments.get(edge) || {};
+        path.setAttribute('d', edge.sections?.length
+            ? curriculumElkEdgePath(edge, source, target)
+            : curriculumEdgePath(source, target, ports.sourceY, ports.targetY));
         path.setAttribute('marker-end', `url(#curriculum-arrow-${edge.type})`);
         svg.appendChild(path);
     }
@@ -3327,8 +3358,8 @@ async function renderCurriculumView(options = {}) {
         : mode === 'overview'
             ? 'Select a subject to open its deck dependency graph.'
             : mode === 'subject'
-                ? 'Three dependency layers are shown at a time. Use the arrows to move through the curriculum.'
-                : 'Three chapter layers are shown at a time. Use the arrows to move through the deck.';
+                ? 'Three dependency layers are shown at a time. Use the arrows to move through the curriculum; hover a node to trace its paths.'
+                : 'Three chapter layers are shown at a time. Use the arrows to move through the deck; hover a node to trace its paths.';
     root.appendChild(summary);
 
     if (mode === 'focus') renderCurriculumNeighborhood(root, installed);
