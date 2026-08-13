@@ -19,7 +19,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(subjects).toHaveCount(3);
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
 
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
     await expect(page.getByRole('button', { name: 'Zoom in' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Zoom out' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Fit', exact: true })).toBeVisible();
@@ -75,11 +75,10 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         .toHaveCSS('stroke-dasharray', 'none');
     const cableRouting = await page.locator('.curriculum-graph-stage').evaluate(stage => {
         const nodes = [...stage.querySelectorAll('.curriculum-graph-node')];
-        const nodeBottom = Math.max(...nodes.map(node =>
-            Number.parseFloat(node.style.top) + Number.parseFloat(node.style.height)));
+        const nodeTop = Math.min(...nodes.map(node => Number.parseFloat(node.style.top)));
         const longConnections = [...stage.querySelectorAll('.curriculum-graph-connection.is-long')];
         return {
-            nodeBottom,
+            nodeTop,
             cableYs: longConnections.map(connection => Number(connection.dataset.cableY)),
             pathsContainLane: longConnections.every(connection =>
                 connection.querySelector('.curriculum-graph-edge').getAttribute('d')
@@ -88,7 +87,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         };
     });
     expect(cableRouting.cableYs.length).toBeGreaterThan(0);
-    expect(cableRouting.cableYs.every(y => y > cableRouting.nodeBottom)).toBe(true);
+    expect(cableRouting.cableYs.every(y => y < cableRouting.nodeTop)).toBe(true);
     expect(cableRouting.pathsContainLane).toBe(true);
     expect(cableRouting.directCableCount).toBe(0);
     const arrowGeometry = await page.locator('.curriculum-graph-connection.is-primary').first().evaluate(connection => {
@@ -119,12 +118,12 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await page.mouse.up();
     await expect.poll(() => viewport.evaluate(element => element.style.transform)).not.toBe(transformBeforePan);
     await page.getByRole('button', { name: 'Show next three dependency layers' }).click();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 2–4');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 3 of');
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(completeDeckGraphCount);
     await expect(page).toHaveURL(/curriculum-layer=1/);
     await page.getByRole('button', { name: 'Show previous three dependency layers' }).click();
     await page.reload();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
 
     await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
@@ -177,14 +176,14 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Back to previous selected deck' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Forward to next selected deck' })).toHaveCount(0);
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(10);
 
     await page.goBack();
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
     await page.goBack();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
 });
 
 test('aligns another focused deck and explains an unpublished chapter plan', async ({ page }, testInfo) => {

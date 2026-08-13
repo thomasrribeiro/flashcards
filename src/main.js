@@ -2693,16 +2693,18 @@ function curriculumCableEdgeGeometry(source, target, sourceY, targetY, busY) {
     const departureX = x1 + gutter;
     const arrivalX = baseX - gutter;
     const radius = Math.min(10, gutter / 2, Math.abs(busY - sourceY) / 2, Math.abs(busY - targetY) / 2);
+    const departureDirection = Math.sign(busY - sourceY) || 1;
+    const arrivalDirection = Math.sign(targetY - busY) || 1;
     return {
         line: [
             `M ${x1} ${sourceY}`,
             `H ${departureX - radius}`,
-            `Q ${departureX} ${sourceY} ${departureX} ${sourceY + radius}`,
-            `V ${busY - radius}`,
+            `Q ${departureX} ${sourceY} ${departureX} ${sourceY + departureDirection * radius}`,
+            `V ${busY - departureDirection * radius}`,
             `Q ${departureX} ${busY} ${departureX + radius} ${busY}`,
             `H ${arrivalX - radius}`,
-            `Q ${arrivalX} ${busY} ${arrivalX} ${busY - radius}`,
-            `V ${targetY + radius}`,
+            `Q ${arrivalX} ${busY} ${arrivalX} ${busY + arrivalDirection * radius}`,
+            `V ${targetY - arrivalDirection * radius}`,
             `Q ${arrivalX} ${targetY} ${arrivalX + radius} ${targetY}`,
             `H ${baseX}`
         ].join(' '),
@@ -2712,8 +2714,7 @@ function curriculumCableEdgeGeometry(source, target, sourceY, targetY, busY) {
 
 function curriculumCableRouting(layout) {
     const positioned = new Map(layout.nodes.map(node => [node.id, node]));
-    const nodeBottom = Math.max(0, ...layout.nodes.map(node => node.y + node.height));
-    const routes = new Map();
+    const laneAssignments = new Map();
     const lanes = [];
     const longEdges = layout.edges
         .map(edge => ({ edge, source: positioned.get(edge.source), target: positioned.get(edge.target) }))
@@ -2733,11 +2734,15 @@ function curriculumCableRouting(layout) {
             lanes.push([]);
         }
         lanes[lane].push({ start, end });
-        routes.set(route.edge, nodeBottom + 48 + lane * 14);
+        laneAssignments.set(route.edge, lane);
     }
+    const topPadding = laneAssignments.size ? 48 + lanes.length * 14 : 0;
+    const routes = new Map([...laneAssignments]
+        .map(([edge, lane]) => [edge, 24 + lane * 14]));
     return {
         routes,
-        height: routes.size ? nodeBottom + 48 + lanes.length * 14 + 40 : layout.height
+        topPadding,
+        height: layout.height + topPadding
     };
 }
 
@@ -2779,10 +2784,13 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     stage.className = 'curriculum-graph-stage';
     if (graph.nodes.length > 12) stage.classList.add('is-dense');
     stage.setAttribute('aria-label', 'Interactive curriculum prerequisite graph');
-    const positioned = new Map(layout.nodes.map(node => [node.id, node]));
     const cableRouting = ranked
         ? curriculumCableRouting(layout)
-        : { routes: new Map(), height: layout.height };
+        : { routes: new Map(), topPadding: 0, height: layout.height };
+    if (cableRouting.topPadding) {
+        layout.nodes.forEach(node => { node.y += cableRouting.topPadding; });
+    }
+    const positioned = new Map(layout.nodes.map(node => [node.id, node]));
     const canvasHeight = Math.max(layout.height, cableRouting.height);
     const viewport = document.createElement('div');
     viewport.className = 'curriculum-graph-viewport';
@@ -3402,10 +3410,13 @@ function renderCurriculumNeighborhood(root, progressStates) {
 function curriculumGraphControls({ windowState = null } = {}) {
     const controls = document.createElement('div');
     controls.className = `curriculum-graph-controls${windowState ? ' is-layered' : ''}`;
+    const focalLayer = windowState
+        ? windowState.start + Math.ceil((windowState.end - windowState.start) / 2)
+        : 0;
     const layerNavigation = windowState ? `
         <span class="curriculum-graph-navigation">
             <button type="button" data-action="previous-layer" aria-label="Show previous three dependency layers"${windowState.start === 0 ? ' disabled' : ''}>←</button>
-            <span class="curriculum-layer-label">Layers ${windowState.start + 1}–${windowState.end} of ${windowState.layerCount}</span>
+            <span class="curriculum-layer-label">Layer ${focalLayer} of ${windowState.layerCount}</span>
             <button type="button" data-action="next-layer" aria-label="Show next three dependency layers"${windowState.end >= windowState.layerCount ? ' disabled' : ''}>→</button>
         </span>` : '';
     controls.innerHTML = `
