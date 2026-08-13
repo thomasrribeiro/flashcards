@@ -3262,28 +3262,37 @@ async function renderCurriculumView(options = {}) {
     const { mode, hierarchy, subject, parentId, includeRecommended } = curriculumViewState;
     root.innerHTML = '';
 
-    const toolbar = document.createElement('div');
-    toolbar.className = 'curriculum-toolbar';
     const breadcrumbs = document.createElement('nav');
-    breadcrumbs.className = 'curriculum-mode-tabs';
+    breadcrumbs.className = 'curriculum-breadcrumb';
     breadcrumbs.setAttribute('aria-label', 'Curriculum hierarchy');
+    breadcrumbs.innerHTML = '<span class="curriculum-breadcrumb-home">~</span><span aria-hidden="true">/</span>';
+    let crumbCount = 0;
     const addCrumb = (label, options, active = false) => {
+        if (crumbCount > 0) {
+            const separator = document.createElement('span');
+            separator.setAttribute('aria-hidden', 'true');
+            separator.textContent = '/';
+            breadcrumbs.appendChild(separator);
+        }
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = label;
-        button.classList.toggle('active', active);
-        button.onclick = () => navigateCurriculum(options);
+        if (active) button.setAttribute('aria-current', 'page');
+        else button.onclick = () => navigateCurriculum(options);
         breadcrumbs.appendChild(button);
+        crumbCount += 1;
     };
-    addCrumb('Subjects', { mode: 'overview', hierarchy: 'subject', subject: '', parentId: '', targetId: '', query: '', layerStart: 0 }, hierarchy === 'subject');
+    addCrumb('subjects', { mode: 'overview', hierarchy: 'subject', subject: '', parentId: '', targetId: '', query: '', layerStart: 0 }, hierarchy === 'subject');
     if (subject) addCrumb(subject, { mode: 'subject', hierarchy: 'deck', subject, parentId: subject, targetId: '', query: '', layerStart: 0 }, hierarchy === 'deck' && mode === 'subject');
     const deckId = hierarchy === 'chapter' ? parentId : hierarchy === 'deck' && mode === 'focus' ? curriculumViewState.targetId : '';
     if (deckId) addCrumb(deckId.split('/').pop(), {
         mode: 'chapters', hierarchy: 'chapter', subject: subject || deckId.split('/')[0],
         parentId: deckId, targetId: '', query: '', layerStart: 0
     }, hierarchy === 'chapter' || (hierarchy === 'deck' && mode === 'focus'));
-    toolbar.appendChild(breadcrumbs);
+    root.appendChild(breadcrumbs);
 
+    const toolbar = document.createElement('div');
+    toolbar.className = 'curriculum-toolbar';
     if (mode === 'focus') {
         const backButton = document.createElement('button');
         backButton.type = 'button';
@@ -3300,6 +3309,7 @@ async function renderCurriculumView(options = {}) {
     recommendedInput.checked = includeRecommended;
     recommendedInput.onchange = () => navigateCurriculum({ includeRecommended: recommendedInput.checked }, { replace: true });
     recommendedLabel.append(recommendedInput, document.createTextNode(mode === 'focus' ? 'Recommended preparation' : 'Recommended paths'));
+    recommendedLabel.title = 'Show optional preparation links in addition to required prerequisites.';
     toolbar.appendChild(recommendedLabel);
     const sourcesButton = document.createElement('button');
     sourcesButton.type = 'button';
@@ -3307,24 +3317,15 @@ async function renderCurriculumView(options = {}) {
     sourcesButton.textContent = 'Sources';
     sourcesButton.onclick = openCurriculumSources;
     toolbar.appendChild(sourcesButton);
-    const createButton = document.createElement('button');
-    createButton.type = 'button';
-    createButton.className = 'curriculum-toolbar-action is-primary';
-    createButton.textContent = subject ? 'Edit subject' : 'Create curriculum';
-    createButton.onclick = () => openCurriculumBuilder(subject || '');
-    toolbar.appendChild(createButton);
+    if (!subject) {
+        const createButton = document.createElement('button');
+        createButton.type = 'button';
+        createButton.className = 'curriculum-toolbar-action is-primary';
+        createButton.textContent = 'Create curriculum';
+        createButton.onclick = () => openCurriculumBuilder('');
+        toolbar.appendChild(createButton);
+    }
     root.appendChild(toolbar);
-
-    const summary = document.createElement('p');
-    summary.className = 'curriculum-summary';
-    summary.textContent = mode === 'focus'
-        ? 'Select a side deck to recenter it, or select the middle deck to open its chapters.'
-        : mode === 'overview'
-            ? 'Select a subject to open its deck dependency graph.'
-            : mode === 'subject'
-                ? 'Three dependency layers are shown at a time. Use the arrows to move through the curriculum; hover a node to trace its paths.'
-                : 'Three chapter layers are shown at a time. Use the arrows to move through the deck; hover a node to trace its paths.';
-    root.appendChild(summary);
 
     if (mode === 'focus') renderCurriculumNeighborhood(root, installed);
     else if (mode === 'overview') {

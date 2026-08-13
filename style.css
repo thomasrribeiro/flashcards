@@ -3360,27 +3360,40 @@ body.standalone-phone .mobile-sidebar-close {
     margin-bottom: 16px;
 }
 
-.curriculum-mode-tabs {
-    display: inline-flex;
-    border: 1px solid var(--black);
-    background: var(--white);
-}
-
-.curriculum-mode-tabs button {
-    min-height: 40px;
-    border: 0;
-    border-right: 1px solid var(--black);
-    background: transparent;
+.curriculum-breadcrumb {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 14px;
     color: var(--muted);
-    padding: 7px 12px;
-    font: inherit;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
+    line-height: 1.5;
 }
 
-.curriculum-mode-tabs button:last-child { border-right: 0; }
-.curriculum-mode-tabs button.active {
-    background: color-mix(in srgb, var(--gold) 22%, var(--white));
+.curriculum-breadcrumb button {
+    min-width: 0;
+    border: 0;
+    background: transparent;
     color: var(--black);
+    padding: 0;
+    font: inherit;
+    overflow-wrap: anywhere;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.curriculum-breadcrumb button:hover,
+.curriculum-breadcrumb button:focus-visible {
+    color: var(--muted);
+}
+
+.curriculum-breadcrumb button[aria-current="page"] {
+    color: var(--muted);
+    cursor: default;
+    text-decoration: none;
 }
 
 .curriculum-toolbar input,
@@ -3605,11 +3618,16 @@ body.standalone-phone .mobile-sidebar-close {
     position: relative;
     z-index: 1;
     min-width: 0;
-    overflow-y: scroll;
+    overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-color: var(--muted) var(--light-gray);
     scrollbar-gutter: stable;
     scrollbar-width: auto;
+}
+
+.curriculum-neighborhood-column.is-prerequisites,
+.curriculum-neighborhood-column.is-unlocks {
+    overflow-y: scroll;
 }
 
 .curriculum-neighborhood-column::-webkit-scrollbar {
@@ -3674,7 +3692,7 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-selected-item {
-    margin: clamp(42px, 13vh, 130px) 18px 20px;
+    margin: 50px 18px 20px;
     border: 2px solid var(--black);
     border-left: 6px solid var(--gold);
     background: color-mix(in srgb, var(--gold) 18%, var(--white));

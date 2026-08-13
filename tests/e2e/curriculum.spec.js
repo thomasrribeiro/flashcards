@@ -4,7 +4,8 @@ test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
     await page.locator('#tab-curriculum').click();
-    await expect(page.locator('.curriculum-summary')).toContainText('subject');
+    await expect(page.locator('.curriculum-breadcrumb')).toBeVisible();
+    await expect(page.locator('.curriculum-view > .curriculum-breadcrumb')).toHaveCount(1);
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {
@@ -46,6 +47,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-neighborhood-column.is-prerequisites')).toBeVisible();
     await expect(page.locator('.curriculum-neighborhood-edges')).toHaveCount(0);
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks > h3 span')).not.toHaveText('0');
+    await expect(page.getByRole('button', { name: 'Edit subject' })).toHaveCount(0);
     if (testInfo.project.name === 'desktop-chromium') {
         const unlocks = page.locator('.curriculum-neighborhood-column.is-unlocks');
         const dimensions = await unlocks.evaluate(element => ({
@@ -55,6 +57,9 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.clientHeight);
         await unlocks.evaluate(element => { element.scrollTop = element.scrollHeight; });
         await expect.poll(() => unlocks.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+        const selectedTop = (await page.locator('.curriculum-selected-item').boundingBox()).y;
+        const prerequisiteTop = (await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().boundingBox()).y;
+        expect(Math.abs(selectedTop - prerequisiteTop)).toBeLessThan(16);
     }
     const firstFocusedDeck = await page.locator('.curriculum-selected-item h2').textContent();
     await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().click();
@@ -157,7 +162,8 @@ test('curriculum controls and builder fit a phone viewport', async ({ page }, te
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks')).toBeHidden();
     await page.getByRole('button', { name: 'Unlocks' }).click();
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks')).toBeVisible();
-    await page.getByRole('button', { name: 'Edit subject' }).click();
+    await page.getByRole('button', { name: 'subjects', exact: true }).click();
+    await page.getByRole('button', { name: 'Create curriculum' }).click();
     const modal = page.locator('.curriculum-builder-modal');
     const modalBox = await modal.boundingBox();
     expect(modalBox.x).toBeGreaterThanOrEqual(0);
