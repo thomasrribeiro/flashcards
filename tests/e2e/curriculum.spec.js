@@ -6,6 +6,8 @@ test.beforeEach(async ({ page }) => {
     await page.locator('#tab-curriculum').click();
     await expect(page.locator('.curriculum-breadcrumb')).toBeVisible();
     await expect(page.locator('.curriculum-view > .curriculum-breadcrumb')).toHaveCount(1);
+    await expect(page.getByText('Recommended paths', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.curriculum-toolbar').getByRole('button', { name: 'Sources' })).toHaveCount(0);
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {
@@ -74,6 +76,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
 
     await page.locator('.curriculum-selected-item').click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Back to previous curriculum view' })).toBeVisible();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(10);
@@ -82,6 +85,26 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
     await page.goBack();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
+});
+
+test('aligns another focused deck and explains an unpublished chapter plan', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop-chromium');
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics/elementary-algebra-and-functions"]').click();
+
+    const selectedTop = (await page.locator('.curriculum-selected-item').boundingBox()).y;
+    const prerequisiteTop = (await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().boundingBox()).y;
+    const unlockTop = (await page.locator('.curriculum-neighborhood-column.is-unlocks .curriculum-explorer-item').first().boundingBox()).y;
+    expect(Math.abs(selectedTop - prerequisiteTop)).toBeLessThan(2);
+    expect(Math.abs(selectedTop - unlockTop)).toBeLessThan(2);
+
+    await page.goBack();
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]')).toBeVisible();
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
+    await page.locator('.curriculum-selected-item').click();
+    await expect(page.getByText('This deck does not have a published chapter plan yet.')).toBeVisible();
+    await expect(page.locator('.curriculum-layer-label')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Back to previous curriculum view' })).toBeVisible();
 });
 
 test('builder validates visual prerequisite edits before queueing', async ({ page }) => {
@@ -101,6 +124,8 @@ test('generation settings persist provider choices and explain secure key storag
     const form = page.locator('#study-settings-panel');
     await expect(form).toBeVisible();
     await expect(form.getByText('Keys are validated by the provider')).toBeVisible();
+    await expect(form.getByText('Curriculum sources', { exact: true })).toBeVisible();
+    await expect(form.locator('#curriculum-settings-sources .curriculum-source-row')).not.toHaveCount(0);
     await expect(form.locator('input[type="password"]')).toHaveCount(1);
     await page.getByLabel('Model').fill('gpt-example');
     await page.getByLabel('Reasoning effort').selectOption('xhigh');

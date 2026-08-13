@@ -1541,10 +1541,34 @@ kbd {
 }
 
 .study-settings-section-title {
+    grid-column: 1 / -1;
     margin: 18px 0 2px;
     padding-top: 14px;
     border-top: 1px solid var(--subtle-border);
     font-size: 0.78rem;
+}
+
+.curriculum-settings-sources {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 8px;
+}
+
+.curriculum-settings-sources .curriculum-source-row {
+    grid-template-columns: auto minmax(0, 1fr) 90px auto;
+    margin: 0;
+}
+
+.curriculum-settings-add-source {
+    grid-column: 1 / -1;
+    justify-self: start;
+    border: 1px solid var(--black);
+    border-radius: 0;
+    background: var(--white);
+    color: var(--black);
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 0.68rem;
 }
 
 .ai-provider-list {

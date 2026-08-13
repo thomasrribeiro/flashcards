@@ -1523,6 +1523,7 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 // Selection path for the columns view (persists across re-renders)
 let columnsSel = { subject: null, deck: null, chapter: null };
 let curriculumIndex = null;
+let pendingCurriculumSources = [];
 let activeDependencyTarget = null;
 let activeDeckActions = null;
 let activeDeckActionsTrigger = null;
@@ -2461,6 +2462,17 @@ function setupEventListeners() {
     document.getElementById('generation-model')?.addEventListener('change', syncGenerationReasoningChoices);
     document.getElementById('ai-provider-connect-save')?.addEventListener('click', saveAIProviderConnection);
     document.getElementById('ai-provider-connect-cancel')?.addEventListener('click', closeAIProviderConnectPanel);
+    document.getElementById('curriculum-settings-add-source')?.addEventListener('click', () => {
+        pendingCurriculumSources.push({
+            id: 'new-source',
+            name: 'New source',
+            repository: '',
+            ref: 'master',
+            path: 'dist/curriculum.json',
+            enabled: true
+        });
+        renderCurriculumSettingsSources();
+    });
     document.getElementById('study-settings-panel')?.addEventListener('submit', saveStudySettingsFromForm);
     document.getElementById('pwa-install-btn')?.addEventListener('click', openPwaInstallGuide);
     document.getElementById('pwa-install-close')?.addEventListener('click', closePwaInstallGuide);
@@ -2929,7 +2941,7 @@ function curriculumStateFromUrl(url = new URL(window.location.href)) {
         targetId: url.searchParams.get('curriculum-target') || '',
         parentId: url.searchParams.get('curriculum-parent') || '',
         subject: url.searchParams.get('curriculum-subject') || '',
-        includeRecommended: url.searchParams.get('recommended') === '1',
+        includeRecommended: false,
         layerStart: Math.max(0, Number(url.searchParams.get('curriculum-layer')) || 0),
         query: ''
     };
@@ -2951,8 +2963,7 @@ function writeCurriculumHistory({ replace = false, previous = null } = {}) {
         if (value) url.searchParams.set(key, value);
         else url.searchParams.delete(key);
     }
-    if (state.includeRecommended) url.searchParams.set('recommended', '1');
-    else url.searchParams.delete('recommended');
+    url.searchParams.delete('recommended');
     const historyState = {
         mainView: 'curriculum',
         curriculum: state,
@@ -2978,8 +2989,15 @@ function backFromCurriculumFocus() {
     const { hierarchy, subject, parentId } = curriculumViewState;
     if (hierarchy === 'chapter' && parentId) {
         navigateCurriculum({
-            mode: 'chapters', hierarchy: 'chapter', subject,
-            parentId, targetId: '', query: '', layerStart: 0
+            mode: 'focus', hierarchy: 'deck', subject,
+            parentId: subject, targetId: parentId, query: '', layerStart: 0
+        });
+        return;
+    }
+    if (hierarchy === 'deck') {
+        navigateCurriculum({
+            mode: 'overview', hierarchy: 'subject', subject: '',
+            parentId: '', targetId: '', query: '', layerStart: 0
         });
         return;
     }
@@ -3070,7 +3088,7 @@ function renderCurriculumNeighborhood(root, installed) {
     const neighborhood = curriculumNeighborhood(curriculumIndex, {
         hierarchy: curriculumViewState.hierarchy,
         targetId: curriculumViewState.targetId,
-        includeRecommended: curriculumViewState.includeRecommended
+        includeRecommended: false
     });
     if (!neighborhood) {
         root.insertAdjacentHTML('beforeend', '<p class="curriculum-explorer-empty">This curriculum item is no longer available.</p>');
@@ -3084,13 +3102,6 @@ function renderCurriculumNeighborhood(root, installed) {
     prerequisites.setAttribute('aria-label', 'Scrollable prerequisite decks');
     prerequisites.innerHTML = `<h3>Prerequisites <span>${neighborhood.prerequisites.length}</span></h3>`;
     appendCurriculumRelationshipGroups(prerequisites, neighborhood.prerequisites, installed, 'No required prerequisites.', 'earlier');
-    if (neighborhood.recommended.length) {
-        const heading = document.createElement('h4');
-        heading.textContent = 'Recommended preparation';
-        prerequisites.appendChild(heading);
-        neighborhood.recommended.forEach(item => prerequisites.appendChild(makeCurriculumItemButton(item, installed, 'recommended')));
-    }
-
     const selected = document.createElement('section');
     selected.className = 'curriculum-neighborhood-column is-selected';
     selected.innerHTML = `
@@ -3206,7 +3217,6 @@ function curriculumGraphControls({ windowState = null } = {}) {
     controls.innerHTML = `
         <span class="curriculum-graph-legend">
             <span><i class="required"></i>Required</span>
-            <span><i class="recommended"></i>Recommended</span>
         </span>
         ${layerNavigation}
         <span class="curriculum-graph-zoom">
@@ -3223,17 +3233,20 @@ function connectCurriculumGraphControls(controls, controller) {
     controls.querySelector('[data-action="fit"]').onclick = controller.fit;
 }
 
-async function renderCurriculumGraph(root, installed, graph, { layered = false } = {}) {
+async function renderCurriculumGraph(root, installed, graph, { layered = false, emptyMessage = 'No curriculum items are available.' } = {}) {
+    if (!graph.nodes.length) {
+        const empty = document.createElement('p');
+        empty.className = 'curriculum-explorer-empty curriculum-graph-empty';
+        empty.textContent = emptyMessage;
+        root.appendChild(empty);
+        return;
+    }
     const windowState = layered
         ? curriculumLayerWindow(graph, curriculumViewState.layerStart, 3)
         : null;
     if (windowState) curriculumViewState.layerStart = windowState.start;
     const controls = curriculumGraphControls({ windowState });
     root.appendChild(controls);
-    if (!graph.nodes.length) {
-        root.insertAdjacentHTML('beforeend', '<p class="curriculum-explorer-empty curriculum-graph-empty">No curriculum items are available.</p>');
-        return;
-    }
     const controller = await renderCurriculumGraphCanvas(root, graph, installed, {
         ranked: layered,
         focusRanks: windowState ? { start: windowState.start, end: windowState.end } : null
@@ -3254,13 +3267,14 @@ async function renderCurriculumView(options = {}) {
         return;
     }
     Object.assign(curriculumViewState, options);
+    curriculumViewState.includeRecommended = false;
     if (curriculumViewState.mode === 'full') {
         curriculumViewState.mode = curriculumViewState.hierarchy === 'subject'
             ? 'overview'
             : curriculumViewState.hierarchy === 'chapter' ? 'chapters' : 'subject';
     }
     const installed = installedCurriculumIds(await getAllDecks());
-    const { mode, hierarchy, subject, parentId, includeRecommended } = curriculumViewState;
+    const { mode, hierarchy, subject, parentId } = curriculumViewState;
     root.innerHTML = '';
 
     const breadcrumbs = document.createElement('nav');
@@ -3294,7 +3308,7 @@ async function renderCurriculumView(options = {}) {
 
     const toolbar = document.createElement('div');
     toolbar.className = 'curriculum-toolbar';
-    if (mode === 'focus') {
+    if (mode !== 'overview') {
         const backButton = document.createElement('button');
         backButton.type = 'button';
         backButton.className = 'curriculum-toolbar-action curriculum-focus-back';
@@ -3303,21 +3317,6 @@ async function renderCurriculumView(options = {}) {
         backButton.onclick = backFromCurriculumFocus;
         toolbar.appendChild(backButton);
     }
-    const recommendedLabel = document.createElement('label');
-    recommendedLabel.className = 'curriculum-recommended-toggle';
-    const recommendedInput = document.createElement('input');
-    recommendedInput.type = 'checkbox';
-    recommendedInput.checked = includeRecommended;
-    recommendedInput.onchange = () => navigateCurriculum({ includeRecommended: recommendedInput.checked }, { replace: true });
-    recommendedLabel.append(recommendedInput, document.createTextNode(mode === 'focus' ? 'Recommended preparation' : 'Recommended paths'));
-    recommendedLabel.title = 'Show optional preparation links in addition to required prerequisites.';
-    toolbar.appendChild(recommendedLabel);
-    const sourcesButton = document.createElement('button');
-    sourcesButton.type = 'button';
-    sourcesButton.className = 'curriculum-toolbar-action';
-    sourcesButton.textContent = 'Sources';
-    sourcesButton.onclick = openCurriculumSources;
-    toolbar.appendChild(sourcesButton);
     if (!subject) {
         const createButton = document.createElement('button');
         createButton.type = 'button';
@@ -3330,11 +3329,14 @@ async function renderCurriculumView(options = {}) {
 
     if (mode === 'focus') renderCurriculumNeighborhood(root, installed);
     else if (mode === 'overview') {
-        await renderCurriculumGraph(root, installed, subjectOverviewGraph(curriculumIndex, { includeRecommended }));
+        await renderCurriculumGraph(root, installed, subjectOverviewGraph(curriculumIndex));
     } else if (mode === 'subject') {
-        await renderCurriculumGraph(root, installed, subjectDeckGraph(curriculumIndex, subject, { includeRecommended }), { layered: true });
+        await renderCurriculumGraph(root, installed, subjectDeckGraph(curriculumIndex, subject), { layered: true });
     } else {
-        await renderCurriculumGraph(root, installed, chapterGraph(curriculumIndex, parentId), { layered: true });
+        await renderCurriculumGraph(root, installed, chapterGraph(curriculumIndex, parentId), {
+            layered: true,
+            emptyMessage: 'This deck does not have a published chapter plan yet.'
+        });
     }
 }
 
@@ -3577,6 +3579,33 @@ function openCurriculumSources() {
             alert(error.message);
         }
     };
+}
+
+function renderCurriculumSettingsSources() {
+    const list = document.getElementById('curriculum-settings-sources');
+    if (!list) return;
+    list.innerHTML = '';
+    pendingCurriculumSources.forEach((source, index) => {
+        const row = document.createElement('div');
+        row.className = 'curriculum-source-row';
+        row.innerHTML = `<input type="checkbox" ${source.enabled !== false ? 'checked' : ''} aria-label="Enable curriculum source ${index + 1}">
+            <input value="${escapeHtml(source.repository)}" placeholder="owner/curricula" aria-label="Curriculum source repository ${index + 1}">
+            <input value="${escapeHtml(source.ref || 'master')}" placeholder="branch" aria-label="Curriculum source branch ${index + 1}">
+            <button type="button" aria-label="Remove curriculum source ${index + 1}">×</button>`;
+        const inputs = row.querySelectorAll('input');
+        inputs[0].onchange = () => { source.enabled = inputs[0].checked; };
+        inputs[1].oninput = () => {
+            source.repository = inputs[1].value.trim();
+            source.id = source.repository.replace('/', '-');
+            source.name = source.repository;
+        };
+        inputs[2].oninput = () => { source.ref = inputs[2].value.trim(); };
+        row.querySelector('button').onclick = () => {
+            pendingCurriculumSources.splice(index, 1);
+            renderCurriculumSettingsSources();
+        };
+        list.appendChild(row);
+    });
 }
 
 function openCurriculumBuilder(subjectId = '') {
@@ -5268,6 +5297,8 @@ async function openStudySettings() {
     const generation = getGenerationPreferences();
     generationModel.value = generation.modelId;
     generationReasoning.value = generation.reasoningEffort;
+    pendingCurriculumSources = getCurriculumRegistrySources().map(source => ({ ...source }));
+    renderCurriculumSettingsSources();
     modal.classList.remove('hidden');
     button.setAttribute('aria-expanded', 'true');
     target.focus();
@@ -5313,6 +5344,15 @@ async function saveStudySettingsFromForm(event) {
         newPerDay = Math.min(500, Math.max(1, Math.floor(Number(custom.value) || 10)));
     } else newPerDay = Number(targetSelect.value);
     const newBatchSize = Number(batchSelect.value);
+    let normalizedCurriculumSources;
+    try {
+        normalizedCurriculumSources = saveCurriculumRegistrySources(pendingCurriculumSources, null);
+    } catch (error) {
+        alert(error.message);
+        return;
+    }
+    const curriculumSourcesChanged = JSON.stringify(normalizedCurriculumSources)
+        !== JSON.stringify(getCurriculumRegistrySources());
     try {
         const apiProvider = providerDefinition(generationProvider.value);
         const connection = aiProviderConnections.find(item => item.id === generationProvider.value);
@@ -5331,6 +5371,7 @@ async function saveStudySettingsFromForm(event) {
             modelId: generationModel.value,
             reasoningEffort: generationReasoning.value
         });
+        if (curriculumSourcesChanged) saveCurriculumRegistrySources(normalizedCurriculumSources);
     } catch (error) {
         alert(error.message);
         return;
@@ -5363,6 +5404,15 @@ async function saveStudySettingsFromForm(event) {
     queueDailyPreparation()
         .then(() => renderReviewButton({ refreshStatus: false }))
         .catch(error => console.warn('[Main] Settings prefetch failed:', error));
+    if (curriculumSourcesChanged) {
+        curriculumIndex = await loadCurriculumIndex().catch(error => {
+            console.warn('[Curriculum] Updated sources could not be loaded:', error);
+            return curriculumIndex;
+        });
+        if (!document.getElementById('curriculum-view')?.classList.contains('hidden')) {
+            await renderCurriculumView();
+        }
+    }
 }
 
 function renderPwaInstallPrompt() {
