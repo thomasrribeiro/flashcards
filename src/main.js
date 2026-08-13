@@ -3905,10 +3905,12 @@ async function requestMissingGeneration() {
         button.textContent = 'Requesting...';
     }
     try {
+        const preferences = await connectedWebsiteGenerationPreferences();
         for (const deck of plan.missingDecks) {
+            const job = generationJobForDeck(deck, preferences);
             await githubAuth.apiRequest('/api/generation-requests', {
                 method: 'POST',
-                body: JSON.stringify({ deckId: deck.id })
+                body: JSON.stringify(job)
             });
         }
         if (button) button.textContent = 'Requested';
@@ -3929,7 +3931,7 @@ async function requestTargetDeckGeneration() {
     try {
         button.disabled = true;
         button.textContent = 'Queueing…';
-        const job = generationJobForDeck(deck, getGenerationPreferences());
+        const job = generationJobForDeck(deck, await connectedWebsiteGenerationPreferences());
         const result = await githubAuth.apiRequest('/api/generation-requests', {
             method: 'POST',
             body: JSON.stringify(job)
@@ -5101,6 +5103,23 @@ function generationApiRequest(endpoint, options) {
     return githubAuth.apiRequest(endpoint, options);
 }
 
+async function connectedWebsiteGenerationPreferences() {
+    const preferences = getGenerationPreferences();
+    const definition = providerDefinition(preferences.providerId);
+    if (!definition) {
+        throw new Error('Connect an AI provider in Settings, then choose its model before requesting generation.');
+    }
+    const providers = await listAIProviders(generationApiRequest);
+    const connection = providers.find(provider => provider.id === preferences.providerId);
+    if (!connection?.connected) {
+        throw new Error(`Connect ${definition.name} in Settings before requesting generation.`);
+    }
+    if (!preferences.modelId) {
+        throw new Error(`Choose a ${definition.name} model in Settings before requesting generation.`);
+    }
+    return preferences;
+}
+
 function providerDefinition(providerId) {
     return AI_PROVIDER_DEFINITIONS.find(provider => provider.id === providerId) || null;
 }
@@ -5165,33 +5184,22 @@ function rebuildGenerationProviderOptions(preferredProvider) {
     if (!select) return;
     select.replaceChildren();
     const connectedProviders = aiProviderConnections.filter(item => item.connected);
-    if (connectedProviders.length) {
-        const connectedGroup = document.createElement('optgroup');
-        connectedGroup.label = 'Connected API providers';
-        for (const provider of connectedProviders) {
-            const option = document.createElement('option');
-            option.value = provider.id;
-            option.textContent = `${provider.name} API`;
-            connectedGroup.append(option);
-        }
-        select.append(connectedGroup);
-    }
-    const localGroup = document.createElement('optgroup');
-    localGroup.label = 'Local runners';
-    const localOptions = [
-        ['codex', 'Codex CLI (local runner)'],
-        ['custom', 'Custom local runner']
-    ];
-    for (const [value, label] of localOptions) {
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = connectedProviders.length
+        ? 'Choose a connected provider'
+        : 'Connect a provider above';
+    select.append(placeholder);
+    for (const provider of connectedProviders) {
         const option = document.createElement('option');
-        option.value = value;
-        option.textContent = label;
-        localGroup.append(option);
+        option.value = provider.id;
+        option.textContent = provider.name;
+        select.append(option);
     }
-    select.append(localGroup);
+    select.disabled = connectedProviders.length === 0;
     select.value = [...select.options].some(option => option.value === preferredProvider)
         ? preferredProvider
-        : 'codex';
+        : '';
 }
 
 function syncGenerationReasoningChoices() {
@@ -5199,6 +5207,11 @@ function syncGenerationReasoningChoices() {
     const modelInput = document.getElementById('generation-model');
     const reasoning = document.getElementById('generation-reasoning');
     if (!provider || !modelInput || !reasoning) return;
+    if (!providerDefinition(provider.value)) {
+        reasoning.disabled = true;
+        return;
+    }
+    reasoning.disabled = false;
     const catalog = aiProviderModelCatalogs.get(provider.value) || [];
     const model = catalog.find(item => item.id === modelInput.value) || null;
     const choices = reasoningEffortsForProvider(provider.value, model);
@@ -5222,15 +5235,19 @@ async function updateGenerationModelChoices() {
     if (!provider || !modelInput || !options || !status) return;
     options.replaceChildren();
     if (!providerDefinition(provider.value)) {
-        modelInput.disabled = false;
-        modelInput.placeholder = 'Use the local provider default';
-        status.textContent = 'A local runner executes on a configured computer and supplies its own authentication; it is not connected to your Flashcards account.';
-        syncGenerationReasoningChoices();
+        modelInput.value = '';
+        modelInput.disabled = true;
+        modelInput.placeholder = 'Connect a provider above';
+        const reasoning = document.getElementById('generation-reasoning');
+        if (reasoning) reasoning.disabled = true;
+        status.textContent = 'Connect an AI provider above, then choose its provider, model, and reasoning level.';
         return;
     }
     const connection = aiProviderConnections.find(item => item.id === provider.value);
     if (!connection?.connected) {
         modelInput.disabled = true;
+        const reasoning = document.getElementById('generation-reasoning');
+        if (reasoning) reasoning.disabled = true;
         status.textContent = 'Connect this provider before selecting a model.';
         return;
     }
@@ -5344,7 +5361,10 @@ async function removeAIProviderConnection(providerId) {
     await disconnectAIProvider(generationApiRequest, providerId);
     aiProviderModelCatalogs.delete(providerId);
     const preferences = getGenerationPreferences();
-    await loadAIProviderConnections(preferences.providerId === providerId ? 'codex' : preferences.providerId);
+    if (preferences.providerId === providerId) {
+        saveGenerationPreferences({ providerId: 'none', modelId: '', reasoningEffort: preferences.reasoningEffort });
+    }
+    await loadAIProviderConnections(preferences.providerId === providerId ? '' : preferences.providerId);
 }
 
 function reflectCustomTargetField() {
@@ -5461,10 +5481,14 @@ async function saveStudySettingsFromForm(event) {
         if (apiProvider && !availableModels.some(model => model.id === generationModel.value.trim())) {
             throw new Error(`Choose a model returned by your ${apiProvider.name} account.`);
         }
-        saveGenerationPreferences({
+        saveGenerationPreferences(apiProvider ? {
             providerId: generationProvider.value,
             modelId: generationModel.value,
             reasoningEffort: generationReasoning.value
+        } : {
+            providerId: 'none',
+            modelId: '',
+            reasoningEffort: generationReasoning.value || 'high'
         });
         if (curriculumSourcesChanged) saveCurriculumRegistrySources(normalizedCurriculumSources);
     } catch (error) {

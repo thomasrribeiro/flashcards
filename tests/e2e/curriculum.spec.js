@@ -134,7 +134,7 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     await expect(page.getByRole('button', { name: /selected deck/ })).toHaveCount(0);
 });
 
-test('generation settings persist provider choices and explain secure key storage', async ({ page }) => {
+test('AI generation stays blank until an API provider is connected', async ({ page }) => {
     await page.locator('#study-settings-btn').click();
     const form = page.locator('#study-settings-panel');
     await expect(form).toBeVisible();
@@ -146,7 +146,12 @@ test('generation settings persist provider choices and explain secure key storag
         [...pane.children].map(element => element.textContent.trim().split('\n')[0])
     ));
     expect(sectionOrder.indexOf('Provider connections')).toBeLessThan(sectionOrder.indexOf('Generation defaults'));
-    await expect(page.getByLabel('Generation provider')).toContainText('Codex CLI (local runner)');
+    await expect(page.getByLabel('Generation provider')).toBeDisabled();
+    await expect(page.getByLabel('Generation provider')).toHaveValue('');
+    await expect(page.getByLabel('Generation provider')).toContainText('Connect a provider above');
+    await expect(page.getByLabel('Model')).toBeDisabled();
+    await expect(page.getByLabel('Reasoning effort')).toBeDisabled();
+    await expect(form.getByText(/local runner/i)).toHaveCount(0);
     await form.getByRole('tab', { name: 'Curriculum' }).click();
     await expect(form.getByRole('tab', { name: 'Curriculum' })).toHaveAttribute('aria-selected', 'true');
     await expect(form.locator('#curriculum-settings-sources .curriculum-source-row')).not.toHaveCount(0);
@@ -155,14 +160,12 @@ test('generation settings persist provider choices and explain secure key storag
         elements.filter(element => element.getBoundingClientRect().right > element.closest('.study-settings-pane').getBoundingClientRect().right + 1).length
     ));
     expect(overflowingControls).toBe(0);
-    await page.getByLabel('Model').fill('gpt-example');
-    await page.getByLabel('Reasoning effort').selectOption('xhigh');
     await form.getByRole('button', { name: 'Save' }).click();
 
     await page.locator('#study-settings-btn').click();
     await form.getByRole('tab', { name: 'AI generation' }).click();
-    await expect(page.getByLabel('Model')).toHaveValue('gpt-example');
-    await expect(page.getByLabel('Reasoning effort')).toHaveValue('xhigh');
+    await expect(page.getByLabel('Generation provider')).toHaveValue('');
+    await expect(page.getByLabel('Model')).toBeDisabled();
 });
 
 test('curriculum controls fit a phone viewport', async ({ page }, testInfo) => {

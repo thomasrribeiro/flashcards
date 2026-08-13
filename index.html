@@ -219,19 +219,18 @@
                                 <h4 class="study-settings-subheading">Generation defaults</h4>
                                 <div class="study-setting-field">
                                     <label for="generation-provider">Generation provider</label>
-                                    <select id="generation-provider">
-                                        <option value="codex">Codex CLI (local runner)</option>
-                                        <option value="custom">Custom local runner</option>
+                                    <select id="generation-provider" disabled>
+                                        <option value="">Connect a provider above</option>
                                     </select>
                                 </div>
                                 <div class="study-setting-field">
                                     <label for="generation-model">Model</label>
-                                    <input id="generation-model" list="generation-model-options" type="text" maxlength="120" placeholder="Use the local provider default" autocomplete="off" />
+                                    <input id="generation-model" list="generation-model-options" type="text" maxlength="120" placeholder="Connect a provider above" autocomplete="off" disabled />
                                     <datalist id="generation-model-options"></datalist>
                                 </div>
                                 <div class="study-setting-field">
                                     <label for="generation-reasoning">Reasoning effort</label>
-                                    <select id="generation-reasoning">
+                                    <select id="generation-reasoning" disabled>
                                         <option value="low">Low</option>
                                         <option value="medium">Medium</option>
                                         <option value="high">High</option>

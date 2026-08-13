@@ -47,6 +47,9 @@ describe('generation preferences', () => {
 
     it('requires an exact model for a connected API provider without persisting a key', () => {
         expect(() => generationJobForDeck({ id: 'biology/foundations', status: 'planned' }, {
+            providerId: 'none', modelId: '', reasoningEffort: 'high'
+        })).toThrow(/Connect an AI provider/);
+        expect(() => generationJobForDeck({ id: 'biology/foundations', status: 'planned' }, {
             providerId: 'anthropic', modelId: '', reasoningEffort: 'high'
         })).toThrow(/Choose a model/);
         const job = generationJobForDeck({ id: 'biology/foundations', status: 'planned' }, {
