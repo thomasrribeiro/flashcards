@@ -2654,7 +2654,10 @@ function curriculumElkEdgePath(edge, source, target) {
     return points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
 }
 
-async function renderCurriculumGraphCanvas(root, graph, installed, { ranked = false } = {}) {
+async function renderCurriculumGraphCanvas(root, graph, installed, {
+    ranked = false,
+    focusRanks = null
+} = {}) {
     const layout = ranked
         ? layoutCurriculumGraph(graph)
         : await layoutCurriculumGraphElk(graph, {
@@ -2795,14 +2798,37 @@ async function renderCurriculumGraphCanvas(root, graph, installed, { ranked = fa
     const applyTransform = () => {
         viewport.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`;
     };
-    const fit = () => {
-        const width = Math.max(1, stage.clientWidth - 48);
-        const height = Math.max(1, stage.clientHeight - 48);
-        transform.scale = Math.min(1, width / layout.width, height / layout.height);
-        transform.x = (stage.clientWidth - layout.width * transform.scale) / 2;
-        transform.y = (stage.clientHeight - layout.height * transform.scale) / 2;
+    const fitBounds = bounds => {
+        const padding = 48;
+        const width = Math.max(1, stage.clientWidth - padding * 2);
+        const height = Math.max(1, stage.clientHeight - padding * 2);
+        transform.scale = Math.min(1, width / bounds.width, height / bounds.height);
+        transform.x = (stage.clientWidth - bounds.width * transform.scale) / 2
+            - bounds.x * transform.scale;
+        transform.y = (stage.clientHeight - bounds.height * transform.scale) / 2
+            - bounds.y * transform.scale;
         applyTransform();
     };
+    const graphBounds = { x: 0, y: 0, width: layout.width, height: layout.height };
+    const rankBounds = range => {
+        if (!range) return graphBounds;
+        const nodes = layout.nodes.filter(node =>
+            Number.isInteger(node.rank)
+            && node.rank >= range.start
+            && node.rank < range.end);
+        if (!nodes.length) return graphBounds;
+        const minX = Math.min(...nodes.map(node => node.x));
+        const minY = Math.min(...nodes.map(node => node.y));
+        const maxX = Math.max(...nodes.map(node => node.x + node.width));
+        const maxY = Math.max(...nodes.map(node => node.y + node.height));
+        return {
+            x: minX,
+            y: minY,
+            width: Math.max(1, maxX - minX),
+            height: Math.max(1, maxY - minY)
+        };
+    };
+    const fit = () => fitBounds(rankBounds(focusRanks));
     const zoomAt = (factor, clientX = null, clientY = null) => {
         const rect = stage.getBoundingClientRect();
         const pointX = clientX == null ? rect.width / 2 : clientX - rect.left;
@@ -3213,14 +3239,16 @@ async function renderCurriculumGraph(root, installed, graph, { layered = false }
         ? curriculumLayerWindow(graph, curriculumViewState.layerStart, 3)
         : null;
     if (windowState) curriculumViewState.layerStart = windowState.start;
-    const visibleGraph = windowState?.graph || graph;
     const controls = curriculumGraphControls({ windowState });
     root.appendChild(controls);
-    if (!visibleGraph.nodes.length) {
+    if (!graph.nodes.length) {
         root.insertAdjacentHTML('beforeend', '<p class="curriculum-explorer-empty curriculum-graph-empty">No curriculum items are available.</p>');
         return;
     }
-    const controller = await renderCurriculumGraphCanvas(root, visibleGraph, installed, { ranked: layered });
+    const controller = await renderCurriculumGraphCanvas(root, graph, installed, {
+        ranked: layered,
+        focusRanks: windowState ? { start: windowState.start, end: windowState.end } : null
+    });
     connectCurriculumGraphControls(controls, controller);
     if (!windowState) return;
     const previous = controls.querySelector('[data-action="previous-layer"]');

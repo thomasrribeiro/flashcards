@@ -15,8 +15,20 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
     await expect(page).toHaveURL(/curriculum-level=deck.*curriculum-subject=physics|curriculum-subject=physics.*curriculum-level=deck/);
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
+    const completeDeckGraphCount = await page.locator('.curriculum-graph-node').count();
+    expect(completeDeckGraphCount).toBeGreaterThan(3);
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="physics/advanced-quantum-mechanics"]')).toHaveCount(1);
+    const viewport = page.locator('.curriculum-graph-viewport');
+    const transformBeforePan = await viewport.evaluate(element => element.style.transform);
+    const stageBox = await page.locator('.curriculum-graph-stage').boundingBox();
+    await page.mouse.move(stageBox.x + stageBox.width / 2, stageBox.y + stageBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(stageBox.x + stageBox.width / 2 - 120, stageBox.y + stageBox.height / 2);
+    await page.mouse.up();
+    await expect.poll(() => viewport.evaluate(element => element.style.transform)).not.toBe(transformBeforePan);
     await page.getByRole('button', { name: 'Show next three dependency layers' }).click();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 2–4');
+    await expect(page.locator('.curriculum-graph-node')).toHaveCount(completeDeckGraphCount);
     await expect(page).toHaveURL(/curriculum-layer=1/);
     await page.getByRole('button', { name: 'Show previous three dependency layers' }).click();
     await page.reload();
@@ -31,6 +43,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
+    await expect(page.locator('.curriculum-graph-node')).toHaveCount(10);
 
     await page.goBack();
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
