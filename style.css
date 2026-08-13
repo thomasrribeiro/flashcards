@@ -3949,9 +3949,9 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-graph-controls {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    justify-content: flex-end;
     gap: 16px;
     min-height: 42px;
     padding: 5px 8px;
@@ -3963,7 +3963,7 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-graph-legend,
 .curriculum-graph-legend > span,
 .curriculum-graph-navigation,
-.curriculum-graph-zoom {
+.curriculum-graph-view-actions {
     display: inline-flex;
     align-items: center;
 }
@@ -3990,14 +3990,16 @@ body.standalone-phone .mobile-sidebar-close {
     border-top-color: var(--gold);
 }
 
-.curriculum-graph-zoom {
-    gap: 5px;
+.curriculum-graph-navigation {
+    grid-column: 2;
+    justify-self: center;
+    justify-content: center;
+    gap: 6px;
 }
 
-.curriculum-graph-navigation {
-    flex: 1;
-    justify-content: center;
-    gap: 5px;
+.curriculum-graph-view-actions {
+    grid-column: 3;
+    justify-self: end;
 }
 
 .curriculum-layer-label {
@@ -4007,7 +4009,7 @@ body.standalone-phone .mobile-sidebar-close {
     text-align: center;
 }
 
-.curriculum-graph-zoom button,
+.curriculum-graph-view-actions button,
 .curriculum-graph-navigation button {
     min-width: 34px;
     min-height: 30px;
@@ -4018,8 +4020,8 @@ body.standalone-phone .mobile-sidebar-close {
     font-size: 0.68rem;
 }
 
-.curriculum-graph-zoom button:hover,
-.curriculum-graph-zoom button:focus-visible,
+.curriculum-graph-view-actions button:hover,
+.curriculum-graph-view-actions button:focus-visible,
 .curriculum-graph-navigation button:hover,
 .curriculum-graph-navigation button:focus-visible {
     color: var(--muted);
@@ -4494,18 +4496,21 @@ body.standalone-phone .mobile-sidebar-close {
     }
 
     .curriculum-graph-controls {
-        align-items: flex-start;
-        flex-direction: column;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px;
     }
 
-    .curriculum-graph-navigation,
-    .curriculum-graph-zoom {
-        width: 100%;
+    .curriculum-graph-navigation {
+        grid-column: 1;
+        justify-self: stretch;
     }
 
-    .curriculum-graph-navigation button,
-    .curriculum-graph-zoom button {
-        flex: 1;
+    .curriculum-graph-view-actions {
+        grid-column: 2;
+    }
+
+    .curriculum-layer-label {
+        min-width: 0;
     }
 
     .curriculum-node {

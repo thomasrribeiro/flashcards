@@ -2782,6 +2782,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         if (curriculumViewState.targetId === deck.id) node.classList.add('is-target');
         if (highlightsMatches && graph.seedIds.includes(deck.id)) node.classList.add('is-match');
         node.dataset.deckId = deck.id;
+        if (Number.isInteger(deck.rank)) node.dataset.rank = String(deck.rank);
         node.style.left = `${deck.x}px`;
         node.style.top = `${deck.y}px`;
         node.style.width = `${deck.width}px`;
@@ -2867,15 +2868,19 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const applyTransform = () => {
         viewport.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`;
     };
-    const fitBounds = bounds => {
+    const fitBounds = (bounds, { horizontal = false } = {}) => {
         const padding = 48;
         const width = Math.max(1, stage.clientWidth - padding * 2);
         const height = Math.max(1, stage.clientHeight - padding * 2);
-        transform.scale = Math.min(1, width / bounds.width, height / bounds.height);
+        transform.scale = horizontal
+            ? Math.min(3, width / bounds.width)
+            : Math.min(1, width / bounds.width, height / bounds.height);
         transform.x = (stage.clientWidth - bounds.width * transform.scale) / 2
             - bounds.x * transform.scale;
-        transform.y = (stage.clientHeight - bounds.height * transform.scale) / 2
-            - bounds.y * transform.scale;
+        transform.y = horizontal
+            ? padding - bounds.y * transform.scale
+            : (stage.clientHeight - bounds.height * transform.scale) / 2
+                - bounds.y * transform.scale;
         applyTransform();
     };
     const graphBounds = { x: 0, y: 0, width: layout.width, height: layout.height };
@@ -2897,7 +2902,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             height: Math.max(1, maxY - minY)
         };
     };
-    const fit = () => fitBounds(rankBounds(focusRanks));
+    const fit = () => fitBounds(rankBounds(focusRanks), { horizontal: Boolean(focusRanks) });
     const fitVisibleViewport = () => {
         const top = stage.getBoundingClientRect().top;
         const available = Math.floor(window.innerHeight - top - 16);
@@ -2912,7 +2917,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const rect = stage.getBoundingClientRect();
         const pointX = clientX == null ? rect.width / 2 : clientX - rect.left;
         const pointY = clientY == null ? rect.height / 2 : clientY - rect.top;
-        const next = Math.min(1.8, Math.max(0.15, transform.scale * factor));
+        const next = Math.min(3, Math.max(0.15, transform.scale * factor));
         const worldX = (pointX - transform.x) / transform.scale;
         const worldY = (pointY - transform.y) / transform.scale;
         transform.x = pointX - worldX * next;
@@ -2949,7 +2954,13 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     stage.addEventListener('pointercancel', endDrag);
     stage.addEventListener('wheel', event => {
         event.preventDefault();
-        zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX, event.clientY);
+        if (event.ctrlKey || event.metaKey) {
+            zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX, event.clientY);
+            return;
+        }
+        transform.x -= event.deltaX;
+        transform.y -= event.deltaY;
+        applyTransform();
     }, { passive: false });
     const onViewportResize = () => {
         if (!stage.isConnected) {
@@ -3298,7 +3309,7 @@ function renderCurriculumNeighborhood(root, progressStates) {
 
 function curriculumGraphControls({ windowState = null } = {}) {
     const controls = document.createElement('div');
-    controls.className = 'curriculum-graph-controls';
+    controls.className = `curriculum-graph-controls${windowState ? ' is-layered' : ''}`;
     const layerNavigation = windowState ? `
         <span class="curriculum-graph-navigation">
             <button type="button" data-action="previous-layer" aria-label="Show previous three dependency layers"${windowState.start === 0 ? ' disabled' : ''}>←</button>
@@ -3307,17 +3318,13 @@ function curriculumGraphControls({ windowState = null } = {}) {
         </span>` : '';
     controls.innerHTML = `
         ${layerNavigation}
-        <span class="curriculum-graph-zoom">
-            <button type="button" data-action="out" aria-label="Zoom out">−</button>
-            <button type="button" data-action="in" aria-label="Zoom in">+</button>
-            <button type="button" data-action="fit">Fit</button>
+        <span class="curriculum-graph-view-actions">
+            <button type="button" data-action="fit">Fit view</button>
         </span>`;
     return controls;
 }
 
 function connectCurriculumGraphControls(controls, controller) {
-    controls.querySelector('[data-action="out"]').onclick = controller.zoomOut;
-    controls.querySelector('[data-action="in"]').onclick = controller.zoomIn;
     controls.querySelector('[data-action="fit"]').onclick = controller.fit;
 }
 
@@ -3538,10 +3545,8 @@ async function renderLegacyCurriculumView(options = {}) {
                 ` : '<button type="button" data-action="layer-graph">Explore layers</button>'}
             </span>
         ` : ''}
-        <span class="curriculum-graph-zoom">
-            <button type="button" data-action="out" aria-label="Zoom out">−</button>
-            <button type="button" data-action="in" aria-label="Zoom in">+</button>
-            <button type="button" data-action="fit">Fit</button>
+        <span class="curriculum-graph-view-actions">
+            <button type="button" data-action="fit">Fit view</button>
         </span>
     `;
     root.appendChild(controls);
@@ -3554,8 +3559,6 @@ async function renderLegacyCurriculumView(options = {}) {
         empty.textContent = 'No curriculum matches.';
         root.appendChild(empty);
     } else {
-        controls.querySelector('[data-action="out"]').onclick = controller.zoomOut;
-        controls.querySelector('[data-action="in"]').onclick = controller.zoomIn;
         controls.querySelector('[data-action="fit"]').onclick = controller.fit;
         const rerenderLayer = layer => renderCurriculumView({
             graphView: 'layers',
