@@ -3665,8 +3665,9 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-neighborhood-edge {
     fill: none;
     stroke: var(--muted);
-    stroke-width: 2;
-    opacity: 0.72;
+    stroke-width: 1.5;
+    opacity: 0.68;
+    stroke-linecap: round;
 }
 
 .curriculum-neighborhood-edge.is-transitive {

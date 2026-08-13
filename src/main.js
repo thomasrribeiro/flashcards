@@ -2976,9 +2976,9 @@ function attachCurriculumNeighborhoodEdges(explorer, selectedNode, columns) {
     svg.setAttribute('aria-hidden', 'true');
     svg.innerHTML = `
         <defs>
-            <marker id="curriculum-neighborhood-arrow" viewBox="0 0 8 8" refX="7" refY="4"
-                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 0 0 L 8 4 L 0 8 z"></path>
+            <marker id="curriculum-neighborhood-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="4.5" markerHeight="4.5" orient="auto">
+                <path d="M 0 1 L 9 5 L 0 9 z"></path>
             </marker>
         </defs>
     `;
@@ -2993,23 +2993,30 @@ function attachCurriculumNeighborhoodEdges(explorer, selectedNode, columns) {
         const selectedRect = selectedNode.getBoundingClientRect();
         svg.setAttribute('width', String(explorer.clientWidth));
         svg.setAttribute('height', String(explorer.clientHeight));
-        for (const node of explorer.querySelectorAll('[data-relationship]')) {
+        const relationshipNodes = [...explorer.querySelectorAll('[data-relationship]')];
+        const sides = [
+            relationshipNodes.filter(node => node.dataset.relationship === 'prerequisite'),
+            relationshipNodes.filter(node => node.dataset.relationship === 'unlock')
+        ];
+        for (const nodes of sides) nodes.forEach((node, index) => {
             const nodeRect = node.getBoundingClientRect();
             const prerequisite = node.dataset.relationship === 'prerequisite';
-            const sourceX = (prerequisite ? nodeRect.right : selectedRect.right) - explorerRect.left;
-            const sourceY = (prerequisite ? nodeRect : selectedRect).top
-                + (prerequisite ? nodeRect : selectedRect).height / 2 - explorerRect.top;
-            const targetX = (prerequisite ? selectedRect.left : nodeRect.left) - explorerRect.left;
-            const targetY = (prerequisite ? selectedRect : nodeRect).top
-                + (prerequisite ? selectedRect : nodeRect).height / 2 - explorerRect.top;
-            const bend = Math.max(30, Math.abs(targetX - sourceX) * 0.46);
+            const selectedPortY = selectedRect.top
+                + selectedRect.height * (index + 1) / (nodes.length + 1)
+                - explorerRect.top;
+            const outerPortY = nodeRect.top + nodeRect.height / 2 - explorerRect.top;
+            const sourceX = (prerequisite ? nodeRect.right + 2 : selectedRect.right + 2) - explorerRect.left;
+            const sourceY = prerequisite ? outerPortY : selectedPortY;
+            const targetX = (prerequisite ? selectedRect.left - 5 : nodeRect.left - 5) - explorerRect.left;
+            const targetY = prerequisite ? selectedPortY : outerPortY;
+            const bend = Math.max(24, Math.abs(targetX - sourceX) * 0.4);
             const path = document.createElementNS(namespace, 'path');
             path.classList.add('curriculum-neighborhood-edge');
             if (Number(node.dataset.distance) > 1) path.classList.add('is-transitive');
             path.setAttribute('d', `M ${sourceX} ${sourceY} C ${sourceX + bend} ${sourceY}, ${targetX - bend} ${targetY}, ${targetX} ${targetY}`);
             path.setAttribute('marker-end', 'url(#curriculum-neighborhood-arrow)');
             svg.appendChild(path);
-        }
+        });
     };
     const scheduleDraw = () => {
         if (frame == null) frame = requestAnimationFrame(draw);
