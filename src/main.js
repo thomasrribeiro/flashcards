@@ -3095,6 +3095,7 @@ function renderCurriculumNeighborhood(root, installed) {
     selected.className = 'curriculum-neighborhood-column is-selected';
     selected.innerHTML = `
         <h3>Selected ${escapeHtml(neighborhood.hierarchy)}</h3>
+        <h4 class="curriculum-selected-spacer" aria-hidden="true">Selected item</h4>
         <article class="curriculum-selected-item" data-curriculum-node-id="${escapeHtml(neighborhood.target.id)}">
             <span class="curriculum-selected-kind">${escapeHtml(neighborhood.hierarchy)}</span>
             <h2>${escapeHtml(curriculumItemName(neighborhood.target))}</h2>

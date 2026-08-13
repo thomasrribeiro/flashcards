@@ -3691,8 +3691,13 @@ body.standalone-phone .mobile-sidebar-close {
     background: transparent;
 }
 
+.curriculum-selected-spacer {
+    visibility: hidden;
+    user-select: none;
+}
+
 .curriculum-selected-item {
-    margin: 50px 18px 20px;
+    margin: 8px 18px 20px;
     border: 2px solid var(--black);
     border-left: 6px solid var(--gold);
     background: color-mix(in srgb, var(--gold) 18%, var(--white));
@@ -4298,6 +4303,10 @@ body.standalone-phone .mobile-sidebar-close {
 
     .curriculum-selected-item {
         margin: 18px 18px 20px;
+    }
+
+    .curriculum-selected-spacer {
+        display: none;
     }
 
     .curriculum-mobile-relation-tabs {

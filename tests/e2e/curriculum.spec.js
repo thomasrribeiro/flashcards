@@ -57,9 +57,12 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.clientHeight);
         await unlocks.evaluate(element => { element.scrollTop = element.scrollHeight; });
         await expect.poll(() => unlocks.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+        await unlocks.evaluate(element => { element.scrollTop = 0; });
         const selectedTop = (await page.locator('.curriculum-selected-item').boundingBox()).y;
         const prerequisiteTop = (await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().boundingBox()).y;
-        expect(Math.abs(selectedTop - prerequisiteTop)).toBeLessThan(16);
+        const unlockTop = (await page.locator('.curriculum-neighborhood-column.is-unlocks .curriculum-explorer-item').first().boundingBox()).y;
+        expect(Math.abs(selectedTop - prerequisiteTop)).toBeLessThan(2);
+        expect(Math.abs(selectedTop - unlockTop)).toBeLessThan(2);
     }
     const firstFocusedDeck = await page.locator('.curriculum-selected-item h2').textContent();
     await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().click();
