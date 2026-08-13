@@ -81,7 +81,8 @@ textarea {
     cursor: not-allowed;
 }
 
-.theme-toggle {
+.theme-toggle,
+.study-settings-btn {
     border: 1px solid var(--black);
     background: var(--white);
     color: var(--black);
@@ -91,7 +92,9 @@ textarea {
     line-height: 1.2;
 }
 
-.theme-toggle:hover {
+.theme-toggle:hover,
+.study-settings-btn:hover,
+.study-settings-btn[aria-expanded="true"] {
     background: var(--light-gray);
 }
 
@@ -1484,24 +1487,6 @@ kbd {
     width: 100%;
 }
 
-.study-settings-btn {
-    margin-left: auto;
-    height: 32px;
-    padding: 0 10px;
-    border: 1px solid transparent;
-    background: transparent;
-    color: #666;
-    cursor: pointer;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.76rem;
-}
-
-.study-settings-btn:hover,
-.study-settings-btn[aria-expanded="true"] {
-    color: var(--black);
-    text-decoration: underline;
-}
-
 .study-settings-modal-content {
     max-width: 540px;
     min-height: 0;
@@ -2751,10 +2736,6 @@ kbd {
 
     .streak-badge {
         margin-left: 0;
-    }
-
-    .study-settings-btn {
-        flex-shrink: 0;
     }
 
     .study-settings-body {
