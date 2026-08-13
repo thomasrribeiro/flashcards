@@ -139,13 +139,13 @@ test('generation settings persist provider choices and explain secure key storag
     const form = page.locator('#study-settings-panel');
     await expect(form).toBeVisible();
     await expect(form.getByRole('tab', { name: 'Study' })).toHaveAttribute('aria-selected', 'true');
-    await form.getByRole('tab', { name: 'Connections' }).click();
+    await form.getByRole('tab', { name: 'AI generation' }).click();
     await expect(form.getByText('Keys are validated by the provider')).toBeVisible();
     await expect(form.locator('input[type="password"]')).toHaveCount(1);
     await form.getByRole('tab', { name: 'Curriculum' }).click();
     await expect(form.getByRole('tab', { name: 'Curriculum' })).toHaveAttribute('aria-selected', 'true');
     await expect(form.locator('#curriculum-settings-sources .curriculum-source-row')).not.toHaveCount(0);
-    await form.getByRole('tab', { name: 'Generation' }).click();
+    await form.getByRole('tab', { name: 'AI generation' }).click();
     const overflowingControls = await form.locator('.study-setting-field select, .study-setting-field input').evaluateAll(elements => (
         elements.filter(element => element.getBoundingClientRect().right > element.closest('.study-settings-pane').getBoundingClientRect().right + 1).length
     ));
@@ -155,7 +155,7 @@ test('generation settings persist provider choices and explain secure key storag
     await form.getByRole('button', { name: 'Save' }).click();
 
     await page.locator('#study-settings-btn').click();
-    await form.getByRole('tab', { name: 'Generation' }).click();
+    await form.getByRole('tab', { name: 'AI generation' }).click();
     await expect(page.getByLabel('Model')).toHaveValue('gpt-example');
     await expect(page.getByLabel('Reasoning effort')).toHaveValue('xhigh');
 });

@@ -164,8 +164,7 @@
                         </div>
                         <div class="study-settings-tabs" role="tablist" aria-label="Settings sections">
                             <button id="study-settings-tab-study" type="button" role="tab" aria-selected="true" aria-controls="study-settings-pane-study" data-settings-tab="study">Study</button>
-                            <button id="study-settings-tab-generation" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-generation" data-settings-tab="generation" tabindex="-1">Generation</button>
-                            <button id="study-settings-tab-connections" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-connections" data-settings-tab="connections" tabindex="-1">Connections</button>
+                            <button id="study-settings-tab-generation" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-generation" data-settings-tab="generation" tabindex="-1">AI generation</button>
                             <button id="study-settings-tab-curriculum" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-curriculum" data-settings-tab="curriculum" tabindex="-1">Curriculum</button>
                         </div>
                         <div class="modal-body study-settings-body">
@@ -225,9 +224,8 @@
                                         <option value="xhigh">Extra high</option>
                                     </select>
                                 </div>
-                                <p id="generation-model-status" class="study-settings-help">Connect an API provider in Connections to load the models available to your account.</p>
-                            </section>
-                            <section id="study-settings-pane-connections" class="study-settings-pane is-single-column" role="tabpanel" aria-labelledby="study-settings-tab-connections" data-settings-pane="connections" hidden>
+                                <p id="generation-model-status" class="study-settings-help">Connect an API provider below to load the models available to your account.</p>
+                                <h4 class="study-settings-subheading">Provider connections</h4>
                                 <div id="ai-provider-list" class="ai-provider-list" aria-live="polite">
                                     <p class="study-settings-help">Loading provider connections…</p>
                                 </div>
