@@ -2315,12 +2315,17 @@ kbd {
 .review-schedule-list {
     max-height: min(52vh, 560px);
     min-height: 180px;
-    overflow-y: scroll;
+    overflow-y: auto;
     border: 1px solid var(--black);
     scrollbar-width: thin;
     scrollbar-color: var(--muted) var(--off-white);
     scrollbar-gutter: stable;
     overscroll-behavior: contain;
+}
+
+.curriculum-neighborhood-column.is-prerequisites,
+.curriculum-neighborhood-column.is-unlocks {
+    overflow-y: scroll;
 }
 
 .review-schedule-list::-webkit-scrollbar {
@@ -3585,8 +3590,7 @@ body.standalone-phone .mobile-sidebar-close {
     position: relative;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    min-height: 480px;
-    max-height: min(68dvh, 760px);
+    height: clamp(480px, 68dvh, 760px);
     overflow: hidden;
     border: 1px solid var(--black);
     background-color: var(--white);
@@ -3601,7 +3605,25 @@ body.standalone-phone .mobile-sidebar-close {
     position: relative;
     z-index: 1;
     min-width: 0;
-    overflow-y: auto;
+    overflow-y: scroll;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--muted) var(--light-gray);
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+}
+
+.curriculum-neighborhood-column::-webkit-scrollbar {
+    width: 11px;
+}
+
+.curriculum-neighborhood-column::-webkit-scrollbar-track {
+    background: var(--light-gray);
+    border-left: 1px solid var(--subtle-border);
+}
+
+.curriculum-neighborhood-column::-webkit-scrollbar-thumb {
+    border: 2px solid var(--light-gray);
+    background: var(--muted);
 }
 
 .curriculum-neighborhood-column + .curriculum-neighborhood-column,
@@ -3619,6 +3641,12 @@ body.standalone-phone .mobile-sidebar-close {
     padding: 10px 12px;
     font-size: 0.72rem;
     font-weight: 600;
+}
+
+.curriculum-neighborhood-column > h3 span {
+    float: right;
+    color: var(--muted);
+    font-weight: 400;
 }
 
 .curriculum-neighborhood-column > h4,
@@ -3663,31 +3691,6 @@ body.standalone-phone .mobile-sidebar-close {
     border-color: var(--gold);
     outline: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
     outline-offset: 3px;
-}
-
-.curriculum-neighborhood-edges {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    overflow: visible;
-    pointer-events: none;
-}
-
-.curriculum-neighborhood-edge {
-    fill: none;
-    stroke: var(--muted);
-    stroke-width: 1.5;
-    opacity: 0.68;
-    stroke-linecap: round;
-}
-
-.curriculum-neighborhood-edge.is-transitive {
-    stroke-dasharray: 7 6;
-    opacity: 0.46;
-}
-
-#curriculum-neighborhood-arrow path {
-    fill: var(--muted);
 }
 
 .curriculum-selected-kind {
@@ -4258,6 +4261,7 @@ body.standalone-phone .mobile-sidebar-close {
     .curriculum-neighborhood {
         display: flex;
         flex-direction: column;
+        height: auto;
         min-height: 0;
         max-height: none;
     }
@@ -4272,10 +4276,6 @@ body.standalone-phone .mobile-sidebar-close {
 
     .curriculum-neighborhood-column.is-unlocks {
         border-left: 0;
-    }
-
-    .curriculum-neighborhood-edges {
-        display: none;
     }
 
     .curriculum-neighborhood-column.is-selected {

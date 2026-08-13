@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
     await expect(page.locator('.curriculum-summary')).toContainText('subject');
 });
 
-test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }) => {
+test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {
     const subjects = page.locator('.curriculum-graph-node');
     await expect(subjects).toHaveCount(3);
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
@@ -43,6 +43,18 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
     await expect(page.locator('.curriculum-neighborhood-column')).toHaveCount(3);
     await expect(page.locator('.curriculum-neighborhood-column.is-prerequisites')).toBeVisible();
+    await expect(page.locator('.curriculum-neighborhood-edges')).toHaveCount(0);
+    await expect(page.locator('.curriculum-neighborhood-column.is-unlocks > h3 span')).not.toHaveText('0');
+    if (testInfo.project.name === 'desktop-chromium') {
+        const unlocks = page.locator('.curriculum-neighborhood-column.is-unlocks');
+        const dimensions = await unlocks.evaluate(element => ({
+            clientHeight: element.clientHeight,
+            scrollHeight: element.scrollHeight
+        }));
+        expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.clientHeight);
+        await unlocks.evaluate(element => { element.scrollTop = element.scrollHeight; });
+        await expect.poll(() => unlocks.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+    }
 
     await page.locator('.curriculum-selected-item').click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
