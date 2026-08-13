@@ -68,7 +68,7 @@ function curriculumHierarchyGraph(index, hierarchy, { includeRecommended = false
                 for (const sourceId of deck.recommended_after || []) add(sourceId.split('/')[0], deck.subject, 'recommended');
             }
         }
-        return { nodes, edges: [...edges.values()] };
+        return transitivelyReduceCurriculumGraph({ nodes, edges: [...edges.values()] });
     }
 
     if (hierarchy === 'chapter') {
@@ -92,7 +92,7 @@ function curriculumHierarchyGraph(index, hierarchy, { includeRecommended = false
                 if (source && ids.has(source)) edges.push({ source, target: chapter.id, type: 'required' });
             }
         }
-        return { nodes, edges };
+        return transitivelyReduceCurriculumGraph({ nodes, edges });
     }
 
     const nodes = [...(index?.decks || [])].map(deck => ({ ...deck, nodeType: 'deck' }));
@@ -108,7 +108,7 @@ function curriculumHierarchyGraph(index, hierarchy, { includeRecommended = false
             }
         }
     }
-    return { nodes, edges };
+    return transitivelyReduceCurriculumGraph({ nodes, edges });
 }
 
 function stronglyConnectedComponents(nodeIds, edges) {
@@ -146,6 +146,53 @@ function stronglyConnectedComponents(nodeIds, edges) {
     };
     nodeIds.forEach(id => { if (!indices.has(id)) visit(id); });
     return components;
+}
+
+/**
+ * Return the minimum required-edge DAG that preserves prerequisite reachability.
+ * Recommended relationships never participate in reduction. Cyclic projections
+ * (which are valid at subject level) are preserved because a directed graph with
+ * cycles has no unique transitive reduction.
+ */
+export function transitivelyReduceCurriculumGraph(graph) {
+    const nodeIds = new Set((graph?.nodes || []).map(node => node.id));
+    const unique = new Map();
+    for (const edge of graph?.edges || []) {
+        if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target) || edge.source === edge.target) continue;
+        const key = `${edge.source}>${edge.target}`;
+        const current = unique.get(key);
+        if (!current || edge.type === 'required') unique.set(key, edge);
+    }
+    const edges = [...unique.values()];
+    const required = edges.filter(edge => edge.type === 'required');
+    if (stronglyConnectedComponents([...nodeIds], required).some(component => component.length > 1)) {
+        return { ...graph, edges };
+    }
+
+    const outgoing = new Map([...nodeIds].map(id => [id, []]));
+    required.forEach(edge => outgoing.get(edge.source)?.push(edge));
+    const redundant = new Set();
+    for (const candidate of required) {
+        const visited = new Set([candidate.source]);
+        const pending = [candidate.source];
+        let reachable = false;
+        while (pending.length && !reachable) {
+            const source = pending.pop();
+            for (const edge of outgoing.get(source) || []) {
+                if (edge === candidate) continue;
+                if (edge.target === candidate.target) {
+                    reachable = true;
+                    break;
+                }
+                if (!visited.has(edge.target)) {
+                    visited.add(edge.target);
+                    pending.push(edge.target);
+                }
+            }
+        }
+        if (reachable) redundant.add(candidate);
+    }
+    return { ...graph, edges: edges.filter(edge => !redundant.has(edge)) };
 }
 
 function distanceFromComponent(edges, component, direction) {
@@ -387,7 +434,11 @@ export function curriculumGraph(index, {
             }
         }
     }
-    return { nodes, edges, seedIds: seeds.map(deck => deck.id) };
+    return transitivelyReduceCurriculumGraph({
+        nodes,
+        edges,
+        seedIds: seeds.map(deck => deck.id)
+    });
 }
 
 /** Build the strict deck DAG owned by one subject without pulling external decks in. */
@@ -407,7 +458,7 @@ export function subjectDeckGraph(index, subject, { includeRecommended = false } 
             }
         }
     }
-    return { nodes, edges, seedIds: [] };
+    return transitivelyReduceCurriculumGraph({ nodes, edges, seedIds: [] });
 }
 
 export function subjectOverviewGraph(index, { includeRecommended = false, query = '' } = {}) {
@@ -441,7 +492,7 @@ export function subjectOverviewGraph(index, { includeRecommended = false, query 
             if (visible.has(source) || visible.has(target)) visible.add(source), visible.add(target);
         }
     }
-    return {
+    return transitivelyReduceCurriculumGraph({
         nodes: [...subjects.values()].filter(subject => visible.has(subject.id)).map(subject => ({
             ...subject,
             subject: subject.id,
@@ -454,7 +505,7 @@ export function subjectOverviewGraph(index, { includeRecommended = false, query 
             return { source, target, type };
         }).filter(edge => visible.has(edge.source) && visible.has(edge.target)),
         seedIds: [...visible]
-    };
+    });
 }
 
 export function focusedCurriculumGraph(index, targetId, {
@@ -491,7 +542,7 @@ export function focusedCurriculumGraph(index, targetId, {
             for (const source of target.recommended_after || []) if (visible.has(source)) edges.push({ source, target: target.id, type: 'recommended' });
         }
     }
-    return { nodes, edges, seedIds: [targetId] };
+    return transitivelyReduceCurriculumGraph({ nodes, edges, seedIds: [targetId] });
 }
 
 function requiredGraphRanks(graph) {
@@ -633,7 +684,7 @@ export function chapterGraph(index, deckId) {
             if (ids.has(dependency)) edges.push({ source: dependency, target: `${deckId}#${chapter.id}`, type: 'required' });
         }
     }
-    return { nodes, edges, seedIds: [] };
+    return transitivelyReduceCurriculumGraph({ nodes, edges, seedIds: [] });
 }
 
 export async function layoutCurriculumGraphElk(graph, {

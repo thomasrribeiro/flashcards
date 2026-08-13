@@ -12,6 +12,7 @@ import {
     layoutCurriculumGraphElk,
     subjectOverviewGraph,
     subjectDeckGraph,
+    transitivelyReduceCurriculumGraph,
     chapterGraph,
     layoutCurriculumGraph
 } from './curriculum.js';
@@ -77,6 +78,40 @@ const index = {
 };
 
 describe('curriculum dependency planning', () => {
+    it('transitively reduces required edges without using recommended paths', () => {
+        const graph = transitivelyReduceCurriculumGraph({
+            nodes: ['a', 'b', 'c', 'd'].map(id => ({ id })),
+            edges: [
+                { source: 'a', target: 'b', type: 'required' },
+                { source: 'b', target: 'c', type: 'required' },
+                { source: 'a', target: 'c', type: 'required' },
+                { source: 'a', target: 'd', type: 'recommended' }
+            ],
+            seedIds: ['c']
+        });
+        expect(graph).toEqual({
+            nodes: ['a', 'b', 'c', 'd'].map(id => ({ id })),
+            edges: [
+                { source: 'a', target: 'b', type: 'required' },
+                { source: 'b', target: 'c', type: 'required' },
+                { source: 'a', target: 'd', type: 'recommended' }
+            ],
+            seedIds: ['c']
+        });
+    });
+
+    it('preserves cyclic subject projections rather than reducing them arbitrarily', () => {
+        const graph = {
+            nodes: ['a', 'b', 'c'].map(id => ({ id })),
+            edges: [
+                { source: 'a', target: 'b', type: 'required' },
+                { source: 'b', target: 'a', type: 'required' },
+                { source: 'a', target: 'c', type: 'required' }
+            ]
+        };
+        expect(transitivelyReduceCurriculumGraph(graph).edges).toEqual(graph.edges);
+    });
+
     it('expands an exact external provider through its local chapter closure', () => {
         expect(chapterPrerequisiteClosure(index, 'physics/physical-reasoning', '01_systems'))
             .toEqual([

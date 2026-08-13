@@ -71,6 +71,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     const primaryOpacity = Number(await page.locator('.curriculum-graph-connection.is-primary').first().evaluate(element => getComputedStyle(element).opacity));
     const secondaryOpacity = Number(await page.locator('.curriculum-graph-connection.is-long').first().evaluate(element => getComputedStyle(element).opacity));
     expect(primaryOpacity).toBe(secondaryOpacity);
+    await expect(page.locator('.curriculum-graph-connection.is-long .curriculum-graph-edge').first())
+        .toHaveCSS('stroke-dasharray', 'none');
     const arrowGeometry = await page.locator('.curriculum-graph-connection.is-primary').first().evaluate(connection => {
         const line = connection.querySelector('.curriculum-graph-edge');
         const arrowhead = connection.querySelector('.curriculum-graph-arrowhead');

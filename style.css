@@ -4095,8 +4095,7 @@ body.standalone-phone .mobile-sidebar-close {
     opacity: 0.74;
 }
 
-.curriculum-graph-connection.is-recommended .curriculum-graph-edge,
-.curriculum-graph-connection.is-long .curriculum-graph-edge {
+.curriculum-graph-connection.is-recommended .curriculum-graph-edge {
     stroke-dasharray: 8 7;
 }
 
