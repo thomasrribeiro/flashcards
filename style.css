@@ -3910,6 +3910,8 @@ body.standalone-phone .mobile-sidebar-close {
     fill: none;
     stroke: var(--muted);
     stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
     opacity: 0.64;
     transition: opacity 120ms ease, stroke 120ms ease, stroke-width 120ms ease;
 }
@@ -3930,14 +3932,6 @@ body.standalone-phone .mobile-sidebar-close {
 
 .curriculum-graph-stage.is-dense .curriculum-graph-edge.is-long {
     opacity: 0.07;
-}
-
-#curriculum-arrow-required path {
-    fill: var(--muted);
-}
-
-#curriculum-arrow-recommended path {
-    fill: var(--gold);
 }
 
 .curriculum-graph-edge.is-dimmed,

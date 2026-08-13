@@ -23,6 +23,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await firstNode.hover();
     await expect(page.locator('.curriculum-graph-edge.is-related')).not.toHaveCount(0);
     await expect(page.locator('.curriculum-graph-edge.is-dimmed')).not.toHaveCount(0);
+    await expect(page.locator('#curriculum-arrow-required path')).toHaveAttribute('fill', 'context-stroke');
     const viewport = page.locator('.curriculum-graph-viewport');
     const transformBeforePan = await viewport.evaluate(element => element.style.transform);
     const stageBox = await page.locator('.curriculum-graph-stage').boundingBox();
@@ -55,6 +56,13 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         await unlocks.evaluate(element => { element.scrollTop = element.scrollHeight; });
         await expect.poll(() => unlocks.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
     }
+    const firstFocusedDeck = await page.locator('.curriculum-selected-item h2').textContent();
+    await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().click();
+    await expect(page.locator('.curriculum-selected-item h2')).not.toHaveText(firstFocusedDeck);
+    await page.reload();
+    await expect(page.locator('.curriculum-selected-item h2')).not.toHaveText(firstFocusedDeck);
+    await page.getByRole('button', { name: 'Back to previous curriculum view' }).click();
+    await expect(page.locator('.curriculum-selected-item h2')).toHaveText(firstFocusedDeck);
 
     await page.locator('.curriculum-selected-item').click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();

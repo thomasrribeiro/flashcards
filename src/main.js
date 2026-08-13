@@ -2678,13 +2678,13 @@ async function renderCurriculumGraphCanvas(root, graph, installed, {
     svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
     svg.innerHTML = `
         <defs>
-            <marker id="curriculum-arrow-required" viewBox="0 0 8 8" refX="7" refY="4"
-                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 0 0 L 8 4 L 0 8 z"></path>
+            <marker id="curriculum-arrow-required" viewBox="0 0 8 8" refX="7.5" refY="4"
+                markerWidth="7" markerHeight="7" orient="auto">
+                <path d="M 0 0.5 L 8 4 L 0 7.5 z" fill="context-stroke"></path>
             </marker>
-            <marker id="curriculum-arrow-recommended" viewBox="0 0 8 8" refX="7" refY="4"
-                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 0 0 L 8 4 L 0 8 z"></path>
+            <marker id="curriculum-arrow-recommended" viewBox="0 0 8 8" refX="7.5" refY="4"
+                markerWidth="7" markerHeight="7" orient="auto">
+                <path d="M 0 0.5 L 8 4 L 0 7.5 z" fill="context-stroke"></path>
             </marker>
         </defs>
     `;
@@ -2935,7 +2935,7 @@ function curriculumStateFromUrl(url = new URL(window.location.href)) {
     };
 }
 
-function writeCurriculumHistory({ replace = false } = {}) {
+function writeCurriculumHistory({ replace = false, previous = null } = {}) {
     const url = new URL(window.location.href);
     const state = curriculumStateSnapshot();
     url.searchParams.set('view', 'curriculum');
@@ -2953,14 +2953,40 @@ function writeCurriculumHistory({ replace = false } = {}) {
     }
     if (state.includeRecommended) url.searchParams.set('recommended', '1');
     else url.searchParams.delete('recommended');
-    const historyState = { mainView: 'curriculum', curriculum: state };
+    const historyState = {
+        mainView: 'curriculum',
+        curriculum: state,
+        curriculumPrevious: replace
+            ? history.state?.curriculumPrevious || null
+            : previous
+    };
     history[replace ? 'replaceState' : 'pushState'](historyState, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
 async function navigateCurriculum(options, { replace = false } = {}) {
+    const previous = curriculumStateSnapshot();
     Object.assign(curriculumViewState, options);
-    writeCurriculumHistory({ replace });
+    writeCurriculumHistory({ replace, previous });
     await renderCurriculumView();
+}
+
+function backFromCurriculumFocus() {
+    if (history.state?.curriculumPrevious) {
+        history.back();
+        return;
+    }
+    const { hierarchy, subject, parentId } = curriculumViewState;
+    if (hierarchy === 'chapter' && parentId) {
+        navigateCurriculum({
+            mode: 'chapters', hierarchy: 'chapter', subject,
+            parentId, targetId: '', query: '', layerStart: 0
+        });
+        return;
+    }
+    navigateCurriculum({
+        mode: 'subject', hierarchy: 'deck', subject,
+        parentId: subject, targetId: '', query: '', layerStart: 0
+    });
 }
 
 function curriculumItemName(item) {
@@ -3258,6 +3284,15 @@ async function renderCurriculumView(options = {}) {
     }, hierarchy === 'chapter' || (hierarchy === 'deck' && mode === 'focus'));
     toolbar.appendChild(breadcrumbs);
 
+    if (mode === 'focus') {
+        const backButton = document.createElement('button');
+        backButton.type = 'button';
+        backButton.className = 'curriculum-toolbar-action curriculum-focus-back';
+        backButton.textContent = '← Back';
+        backButton.setAttribute('aria-label', 'Back to previous curriculum view');
+        backButton.onclick = backFromCurriculumFocus;
+        toolbar.appendChild(backButton);
+    }
     const recommendedLabel = document.createElement('label');
     recommendedLabel.className = 'curriculum-recommended-toggle';
     const recommendedInput = document.createElement('input');
