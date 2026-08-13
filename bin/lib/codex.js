@@ -54,15 +54,17 @@ function isClaudeModel(model) {
     return /^(?:fable|opus|sonnet|haiku|claude-)/.test(model || '');
 }
 
-function agentVersion(model) {
-    const command = isClaudeModel(model) ? 'claude' : 'codex';
+function agentVersion(model, providerId) {
+    const command = providerId === 'google' ? 'gemini' : isClaudeModel(model) ? 'claude' : 'codex';
     const result = spawnSync(command, ['--version'], { encoding: 'utf8' });
     if (result.error?.code === 'ENOENT') {
-        throw new Error(`${command === 'claude' ? 'Claude Code' : 'Codex CLI'} is not installed or not available on PATH.`);
+        const label = command === 'claude' ? 'Claude Code' : command === 'gemini' ? 'Gemini CLI' : 'Codex CLI';
+        throw new Error(`${label} is not installed or not available on PATH.`);
     }
     if (result.status !== 0) {
         throw new Error(`Unable to inspect ${command}: ${(result.stderr || result.stdout).trim()}`);
     }
+    if (command === 'gemini') return `${model} via ${result.stdout.trim()} (Gemini CLI)`;
     return isClaudeModel(model)
         ? `${model} via ${result.stdout.trim()} (Claude Code)`
         : result.stdout.trim();
@@ -373,6 +375,7 @@ function buildCodexInvocation({
     workspacePath,
     prompt,
     reportOnly = false,
+    providerId,
     model,
     reasoningEffort = 'high',
     nonInteractive = false,
@@ -380,6 +383,28 @@ function buildCodexInvocation({
     resultPath
 }) {
     const resolvedModel = model || configuredModel();
+    if (providerId === 'google') {
+        return {
+            command: 'gemini',
+            args: [
+                '--model', resolvedModel,
+                '--prompt', prompt,
+                '--approval-mode', reportOnly ? 'plan' : 'yolo',
+                '--skip-trust',
+                '--output-format', 'stream-json'
+            ],
+            prompt,
+            workspacePath,
+            model: resolvedModel,
+            reasoningEffort,
+            isolated,
+            provider: 'gemini-cli',
+            env: isolated ? {
+                HOME: path.join(workspacePath, '.flashcards', 'gemini-home'),
+                GEMINI_CLI_TRUST_WORKSPACE: 'true'
+            } : {}
+        };
+    }
     if (isClaudeModel(resolvedModel)) {
         return {
             command: 'claude',
@@ -451,6 +476,7 @@ export function buildAgentInvocation({
     deckPath: inputPath,
     nonInteractive = false,
     reportOnly = false,
+    providerId,
     model,
     reasoningEffort = 'high',
     extraInstructions,
@@ -499,6 +525,7 @@ export function buildAgentInvocation({
         workspacePath: deckPath,
         prompt,
         reportOnly,
+        providerId,
         model,
         reasoningEffort,
         nonInteractive,
@@ -516,6 +543,7 @@ export function buildAgentInvocation({
 export function buildSubjectAgentInvocation({
     subjectPath: inputPath,
     model,
+    providerId,
     reasoningEffort = 'high',
     operation = 'create',
     destination = 'whole-field',
@@ -558,6 +586,7 @@ export function buildSubjectAgentInvocation({
     const invocation = buildCodexInvocation({
         workspacePath: subjectPath,
         prompt,
+        providerId,
         model,
         reasoningEffort,
         nonInteractive,
@@ -577,12 +606,15 @@ function runPreparedInvocation(prepared, invocation, {
     replacePaths,
     finalizeWorkspace,
     validateWorkspace,
-    recoverOnFailure
+    recoverOnFailure,
+    agentEnv = {}
 }) {
     recordIsolatedInvocation(prepared, { prompt: invocation.prompt, invocation, metadata });
+    if (invocation.env?.HOME) mkdirSync(invocation.env.HOME, { recursive: true });
     const result = spawnSync(invocation.command, invocation.args, {
         cwd: prepared.workspacePath,
-        stdio: 'inherit'
+        stdio: 'inherit',
+        env: { ...process.env, ...(invocation.env || {}), ...agentEnv }
     });
     if (result.error) throw new Error(`Unable to launch Codex: ${result.error.message}`);
     if (result.status !== 0) {
@@ -620,6 +652,7 @@ function runPreparedInvocation(prepared, invocation, {
 export function runSubjectAgent({
     subjectPath: inputPath,
     model,
+    providerId,
     reasoningEffort = 'high',
     operation = 'create',
     destination = 'whole-field',
@@ -628,7 +661,8 @@ export function runSubjectAgent({
     extraInstructions,
     dryRun = false,
     isolated = true,
-    nonInteractive = false
+    nonInteractive = false,
+    agentEnv = {}
 }) {
     const subjectPath = resolvePath(inputPath);
     const baseline = operation === 'extend'
@@ -640,6 +674,7 @@ export function runSubjectAgent({
     const preview = buildSubjectAgentInvocation({
         subjectPath,
         model,
+        providerId,
         reasoningEffort,
         operation,
         destination,
@@ -650,9 +685,12 @@ export function runSubjectAgent({
         nonInteractive
     });
     if (dryRun) return { invocation: preview, status: 0, dryRun: true };
-    const version = agentVersion(model || configuredModel());
+    const version = agentVersion(model || configuredModel(), providerId);
     if (!isolated) {
-        const result = spawnSync(preview.command, preview.args, { stdio: 'inherit' });
+        const result = spawnSync(preview.command, preview.args, {
+            stdio: 'inherit',
+            env: { ...process.env, ...(preview.env || {}), ...agentEnv }
+        });
         if (result.error) throw new Error(`Unable to launch Codex: ${result.error.message}`);
         if (result.status === 0) {
             const curriculum = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
@@ -707,6 +745,7 @@ export function runSubjectAgent({
         });
         const result = runPreparedInvocation(prepared, invocation, {
             reportOnly: false,
+            agentEnv,
             metadata: {
                 operation: `subject-${operation}`,
                 codexVersion: version,
@@ -760,6 +799,7 @@ export function runDeckAgent({
     nonInteractive = false,
     reportOnly = false,
     model,
+    providerId,
     reasoningEffort = 'high',
     extraInstructions,
     dryRun = false,
@@ -768,7 +808,8 @@ export function runDeckAgent({
     chapterNumber,
     freshChapter = false,
     freshPilot = false,
-    isolated = true
+    isolated = true,
+    agentEnv = {}
 }) {
     const deckPath = resolvePath(inputPath);
     let preflightPath;
@@ -804,6 +845,7 @@ export function runDeckAgent({
         nonInteractive,
         reportOnly,
         model,
+        providerId,
         reasoningEffort,
         extraInstructions,
         preflightPath,
@@ -815,7 +857,7 @@ export function runDeckAgent({
     });
     if (dryRun) return { invocation: preview, status: 0, dryRun: true };
 
-    const version = agentVersion(model || configuredModel());
+    const version = agentVersion(model || configuredModel(), providerId);
     let result;
     if (isolated) {
         const chapterName = buildScope === 'chapter' ? chapterNameForOrder(deckPath, chapterNumber) : undefined;
@@ -892,6 +934,7 @@ export function runDeckAgent({
                 workspacePath: prepared.workspacePath,
                 prompt,
                 reportOnly,
+                providerId,
                 model,
                 reasoningEffort,
                 isolated: true,
@@ -927,6 +970,7 @@ export function runDeckAgent({
                     : undefined;
             result = runPreparedInvocation(prepared, invocation, {
                 reportOnly,
+                agentEnv,
                 allowedPaths,
                 replacePaths: replacementPaths,
                 finalizeWorkspace: mode === 'build' && !reportOnly
@@ -980,7 +1024,10 @@ export function runDeckAgent({
             discardIsolatedRun(prepared);
         }
     } else {
-        const launched = spawnSync(preview.command, preview.args, { stdio: 'inherit' });
+        const launched = spawnSync(preview.command, preview.args, {
+            stdio: 'inherit',
+            env: { ...process.env, ...(preview.env || {}), ...agentEnv }
+        });
         if (launched.error) throw new Error(`Unable to launch Codex: ${launched.error.message}`);
         result = { invocation: preview, status: launched.status };
     }

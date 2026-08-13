@@ -42,31 +42,31 @@ The CLI separates deterministic operations from agent judgment:
 - curriculum research, card writing, figures, and semantic audits use Codex and
   the versioned `$manage-flashcard-decks` skill in `.agents/skills/`.
 
-By default every judgment-heavy command starts a fresh, non-resumable Codex
+By default every judgment-heavy command starts a fresh, non-resumable agent
 process in a temporary copy of the target. Only the ordered Markdown context
 reported by `subject context` or `deck context`, the target chapter, and its
 machine-resolved transitive prerequisite closure are staged. Unrelated chapters
 are absent from bounded chapter workspaces. Live web research remains
 available. A clean patch is applied back after the agent succeeds, and the
 prompt, constrained target snapshot, prerequisite-closure hashes, ordered
-context and vendored-skill hashes, model, Codex version, result, and patch are
+context and vendored-skill hashes, provider/model version, result, and patch are
 recorded under
 `~/.flashcards/runs/`.
 
-The isolated run uses `codex exec --ephemeral --ignore-user-config
---ignore-rules`; it does not resume a prior conversation or persist a new one.
-Codex platform instructions and the selected model still come from Codex itself,
-while all repository- and learner-specific initial context is explicit and
-inspectable. Use `--no-isolated` only when intentionally opting into the legacy
-local interactive workspace.
+Codex runs use `codex exec --ephemeral --ignore-user-config --ignore-rules`,
+Claude runs disable session persistence and setting sources, and Gemini runs
+with an isolated home directory. They do not resume prior conversations or
+persist new ones. Provider platform instructions and the selected model still
+come from the provider, while all repository- and learner-specific initial
+context is explicit and inspectable. Use `--no-isolated` only when intentionally
+opting into the legacy local interactive workspace.
 
 This makes runs input-auditable, not bit-for-bit deterministic: model behavior,
 live search results, and upstream web pages can change. The source register and
 run manifest make those differences reviewable.
 
-Normal local use relies on `codex login`; the CLI does not request, store, or
-forward an API key. API-key authentication is only necessary if you separately
-choose to run Codex in unattended automation.
+Normal local use may rely on the provider CLI's own login. The website can also
+connect a provider API key for unattended generation as described below.
 
 ## Create a subject and deck
 
@@ -251,7 +251,7 @@ publishers define the same `subject/deck`. Its Sources control adds or disables
 public registries without storing their full indexes in localStorage.
 
 Generation requests are deliberately executed outside the browser. A local,
-fresh Codex run can consume the oldest request with:
+fresh agent run can consume the oldest request with its local CLI account:
 
 ```bash
 export FLASHCARDS_WORKER_URL=https://flashcards-worker-prod.example.workers.dev
@@ -262,21 +262,36 @@ flashcards requests run --notes-root ~/notes --registry-root /path/to/curricula
 In the Curriculum view, select a planned deck and use **Generate pilot
 chapter** to enqueue that same isolated deck pipeline. After the pilot passes
 human review and is explicitly approved, the action becomes **Generate
-remaining chapters**. Generation settings select the local provider, model,
-and reasoning effort for each queued job; leaving the model blank uses the
-runner's configured default.
+remaining chapters**. Generation settings select the provider, exact model,
+and reasoning effort for each queued job. Anthropic, OpenAI, and Google Gemini
+connections load the models available to that user's API account; local Codex
+and custom runners may still use their configured defaults.
 
-Authenticate Codex only on the machine that consumes the queue. For API-key
-authentication, use `printenv OPENAI_API_KEY | codex login --with-api-key`, or
-provide `CODEX_API_KEY` to one `codex exec` run. The website and Worker reject
-credential fields rather than storing or relaying secrets.
+API keys entered in Settings are validated against the provider and encrypted
+server-side with user- and provider-bound authenticated encryption. The browser,
+queued job, run manifest, logs, and Git repository never receive the stored key.
+Only a trusted generation runner may atomically claim a job and receive that
+job owner's credential for the lifetime of its child process:
 
-The CLI uses `FLASHCARDS_GITHUB_TOKEN` or the token returned by `gh auth token`
-to authenticate the queue. Typed jobs cover subject design, deck pilots,
-chapter expansion, and audits. Codex is the default local provider; a custom
-provider can implement the one-manifest executable protocol configured through
-`FLASHCARDS_AGENT_RUNNER`. Provider credentials remain in that process's local
-environment and are never accepted by the website or Worker. Subject changes
+```bash
+export FLASHCARDS_WORKER_URL=https://flashcards-worker-prod.example.workers.dev
+export FLASHCARDS_RUNNER_TOKEN=... # provisioned out of band by the operator
+flashcards requests run --notes-root ~/notes --registry-root /path/to/curricula
+```
+
+On macOS the CLI also reads a `flashcards-generation-runner` generic-password
+item for the current account, so the runner token need not live in shell files.
+
+The runner needs the corresponding provider CLI on `PATH`: Codex CLI for
+OpenAI, Claude Code for Anthropic, or Gemini CLI for Google. Consumer chat
+subscriptions and API billing are separate.
+
+The untrusted local path uses `FLASHCARDS_GITHUB_TOKEN` or the token returned by
+`gh auth token` to authenticate the user's queue. Typed jobs cover subject
+design, deck pilots, chapter expansion, and audits. Codex is the default local
+provider; a custom provider can implement the one-manifest executable protocol
+configured through `FLASHCARDS_AGENT_RUNNER`. Provider credentials exist only
+in the claimed child-process environment. Subject changes
 are committed to an isolated branch and opened as a draft pull request. A
 successful job is marked `needs-review`; nothing merges or publishes
 automatically.

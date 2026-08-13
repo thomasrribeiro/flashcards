@@ -186,12 +186,13 @@ class GitHubAuth {
         });
 
         if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
             if (response.status === 401) {
                 // Token expired, log out
                 this.logout();
                 throw new Error('Session expired. Please log in again.');
             }
-            throw new Error(`API request failed: ${response.statusText}`);
+            throw new Error(payload.error || `API request failed: ${response.statusText}`);
         }
 
         return response.json();

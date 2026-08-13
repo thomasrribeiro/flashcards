@@ -14,6 +14,29 @@ function workerUrl(explicit) {
     return value.replace(/\/$/, '');
 }
 
+function runnerToken(explicit) {
+    const value = explicit || process.env.FLASHCARDS_RUNNER_TOKEN;
+    if (value) return value;
+    if (process.platform === 'darwin') {
+        const keychain = spawnSync('security', [
+            'find-generic-password',
+            '-a', process.env.USER || '',
+            '-s', 'flashcards-generation-runner',
+            '-w'
+        ], { encoding: 'utf8' });
+        if (keychain.status === 0 && keychain.stdout.trim()) return keychain.stdout.trim();
+    }
+    throw new Error('Set --runner-token or FLASHCARDS_RUNNER_TOKEN, or provision the macOS flashcards-generation-runner keychain item.');
+}
+
+export function hasGenerationRunnerToken(explicit) {
+    try {
+        return Boolean(runnerToken(explicit));
+    } catch {
+        return false;
+    }
+}
+
 async function request(endpoint, { method = 'GET', body, token, url } = {}) {
     const response = await fetch(`${workerUrl(url)}${endpoint}`, {
         method,
@@ -50,6 +73,36 @@ export function updateGenerationRequest(id, partial, options = {}) {
         method: 'PATCH',
         body: partial,
         token: options.token,
+        url: options.workerUrl
+    });
+}
+
+async function runnerRequest(endpoint, { method = 'POST', body, token, url } = {}) {
+    const response = await fetch(`${workerUrl(url)}${endpoint}`, {
+        method,
+        headers: {
+            'X-Flashcards-Runner-Token': runnerToken(token),
+            'Content-Type': 'application/json'
+        },
+        body: body == null ? undefined : JSON.stringify(body)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `${response.status} ${response.statusText}`);
+    return payload;
+}
+
+export function claimGenerationRequest(options = {}) {
+    return runnerRequest('/api/generation-runner/claim', {
+        token: options.runnerToken,
+        url: options.workerUrl
+    });
+}
+
+export function updateClaimedGenerationRequest(id, partial, options = {}) {
+    return runnerRequest(`/api/generation-runner/requests/${id}`, {
+        method: 'PATCH',
+        body: partial,
+        token: options.runnerToken,
         url: options.workerUrl
     });
 }

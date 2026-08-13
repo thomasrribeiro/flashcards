@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'flashcards_generation_preferences_v1';
-const PROVIDERS = new Set(['codex', 'custom']);
+const PROVIDERS = new Set(['codex', 'custom', 'anthropic', 'openai', 'google']);
 const REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh']);
 
 export const DEFAULT_GENERATION_PREFERENCES = Object.freeze({
@@ -46,6 +46,9 @@ export function generationJobForDeck(deck, preferences = getGenerationPreference
     const buildScope = deckGenerationScope(deck);
     if (!deck?.id || !buildScope) throw new Error('This deck is not ready for another generation job.');
     const normalized = normalizeGenerationPreferences(preferences);
+    if (['anthropic', 'openai', 'google'].includes(normalized.providerId) && !normalized.modelId) {
+        throw new Error('Choose a model from the connected AI provider before requesting generation.');
+    }
     return {
         jobType: 'deck-build',
         registryId: deck.registry_id || 'thomas-ribeiro',

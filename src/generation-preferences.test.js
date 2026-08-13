@@ -44,4 +44,15 @@ describe('generation preferences', () => {
             }
         });
     });
+
+    it('requires an exact model for a connected API provider without persisting a key', () => {
+        expect(() => generationJobForDeck({ id: 'biology/foundations', status: 'planned' }, {
+            providerId: 'anthropic', modelId: '', reasoningEffort: 'high'
+        })).toThrow(/Choose a model/);
+        const job = generationJobForDeck({ id: 'biology/foundations', status: 'planned' }, {
+            providerId: 'anthropic', modelId: 'claude-example', reasoningEffort: 'high'
+        });
+        expect(job).toMatchObject({ providerId: 'anthropic', modelId: 'claude-example' });
+        expect(JSON.stringify(job)).not.toMatch(/api[-_]?key|secret|credential/i);
+    });
 });

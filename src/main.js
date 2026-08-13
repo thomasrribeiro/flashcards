@@ -85,6 +85,15 @@ import {
     getGenerationPreferences,
     saveGenerationPreferences
 } from './generation-preferences.js';
+import {
+    AI_PROVIDER_DEFINITIONS,
+    connectAIProvider,
+    disconnectAIProvider,
+    generationEligibleModels,
+    listAIProviders,
+    loadAIProviderModels,
+    reasoningEffortsForProvider
+} from './ai-provider-client.js';
 
 // Card editor imports
 import { initDeckCreator, openDeckCreator } from './deck-creator.js';
@@ -2433,6 +2442,12 @@ function setupEventListeners() {
     document.getElementById('study-settings-close')?.addEventListener('click', closeStudySettings);
     document.querySelector('#study-settings-modal .modal-overlay')?.addEventListener('click', closeStudySettings);
     document.getElementById('daily-new-target')?.addEventListener('change', reflectCustomTargetField);
+    document.getElementById('generation-provider')?.addEventListener('change', () => {
+        updateGenerationModelChoices().catch(error => showGenerationModelError(error));
+    });
+    document.getElementById('generation-model')?.addEventListener('change', syncGenerationReasoningChoices);
+    document.getElementById('ai-provider-connect-save')?.addEventListener('click', saveAIProviderConnection);
+    document.getElementById('ai-provider-connect-cancel')?.addEventListener('click', closeAIProviderConnectPanel);
     document.getElementById('study-settings-panel')?.addEventListener('submit', saveStudySettingsFromForm);
     document.getElementById('pwa-install-btn')?.addEventListener('click', openPwaInstallGuide);
     document.getElementById('pwa-install-close')?.addEventListener('click', closePwaInstallGuide);
@@ -3728,6 +3743,9 @@ async function loadLocalRepo(repoInfo) {
 let currentCategory = null; // The currently selected category folder (null = at home level)
 let currentDeck = null;
 let habitSettings = null; // Cached habit settings (active decks, daily goal)
+let aiProviderConnections = [];
+let aiProviderModelCatalogs = new Map();
+let pendingAIProviderId = null;
 let lastHabitStatus = null;
 let currentPath = [];
 let folderHierarchy = null;
@@ -4423,6 +4441,247 @@ function discardPausedPrimaryStudySession() {
 function closeStudySettings() {
     document.getElementById('study-settings-modal')?.classList.add('hidden');
     document.getElementById('study-settings-btn')?.setAttribute('aria-expanded', 'false');
+    closeAIProviderConnectPanel();
+}
+
+function generationApiRequest(endpoint, options) {
+    return githubAuth.apiRequest(endpoint, options);
+}
+
+function providerDefinition(providerId) {
+    return AI_PROVIDER_DEFINITIONS.find(provider => provider.id === providerId) || null;
+}
+
+function showGenerationModelError(error) {
+    const status = document.getElementById('generation-model-status');
+    if (status) status.textContent = error?.message || 'Could not load provider models.';
+}
+
+function renderAIProviderConnections() {
+    const container = document.getElementById('ai-provider-list');
+    if (!container) return;
+    container.replaceChildren();
+    if (!githubAuth.isAuthenticated()) {
+        const help = document.createElement('p');
+        help.className = 'study-settings-help';
+        help.textContent = 'Sign in with GitHub to connect AI providers across your devices.';
+        container.append(help);
+        return;
+    }
+    for (const provider of aiProviderConnections) {
+        const row = document.createElement('div');
+        row.className = 'ai-provider-row';
+        const name = document.createElement('span');
+        name.textContent = provider.name;
+        const state = document.createElement('span');
+        state.className = `ai-provider-state${provider.connected ? ' connected' : ''}`;
+        state.textContent = provider.connected
+            ? `Connected ${provider.keyHint || ''}`.trim()
+            : 'Not connected';
+        const actions = document.createElement('span');
+        actions.className = 'ai-provider-actions';
+        const connect = document.createElement('button');
+        connect.type = 'button';
+        connect.textContent = provider.connected ? 'Replace' : 'Connect';
+        connect.onclick = () => openAIProviderConnectPanel(provider.id);
+        actions.append(connect);
+        if (provider.connected) {
+            const refresh = document.createElement('button');
+            refresh.type = 'button';
+            refresh.textContent = 'Models';
+            refresh.onclick = async () => {
+                const selected = document.getElementById('generation-provider');
+                if (selected) selected.value = provider.id;
+                aiProviderModelCatalogs.delete(provider.id);
+                await updateGenerationModelChoices();
+            };
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.textContent = 'Remove';
+            remove.onclick = () => removeAIProviderConnection(provider.id);
+            actions.append(refresh, remove);
+        }
+        row.append(name, state, actions);
+        container.append(row);
+    }
+}
+
+function rebuildGenerationProviderOptions(preferredProvider) {
+    const select = document.getElementById('generation-provider');
+    if (!select) return;
+    select.replaceChildren();
+    const localOptions = [
+        ['codex', 'Codex CLI (local account)'],
+        ['custom', 'Custom local runner']
+    ];
+    for (const [value, label] of localOptions) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        select.append(option);
+    }
+    for (const provider of aiProviderConnections.filter(item => item.connected)) {
+        const option = document.createElement('option');
+        option.value = provider.id;
+        option.textContent = `${provider.name} API`;
+        select.append(option);
+    }
+    select.value = [...select.options].some(option => option.value === preferredProvider)
+        ? preferredProvider
+        : 'codex';
+}
+
+function syncGenerationReasoningChoices() {
+    const provider = document.getElementById('generation-provider');
+    const modelInput = document.getElementById('generation-model');
+    const reasoning = document.getElementById('generation-reasoning');
+    if (!provider || !modelInput || !reasoning) return;
+    const catalog = aiProviderModelCatalogs.get(provider.value) || [];
+    const model = catalog.find(item => item.id === modelInput.value) || null;
+    const choices = reasoningEffortsForProvider(provider.value, model);
+    const previous = reasoning.value;
+    reasoning.replaceChildren(...choices.map(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value === 'xhigh'
+            ? 'Extra high'
+            : `${value[0].toUpperCase()}${value.slice(1)}`;
+        return option;
+    }));
+    reasoning.value = choices.includes(previous) ? previous : choices.includes('high') ? 'high' : choices[0];
+}
+
+async function updateGenerationModelChoices() {
+    const provider = document.getElementById('generation-provider');
+    const modelInput = document.getElementById('generation-model');
+    const options = document.getElementById('generation-model-options');
+    const status = document.getElementById('generation-model-status');
+    if (!provider || !modelInput || !options || !status) return;
+    options.replaceChildren();
+    if (!providerDefinition(provider.value)) {
+        modelInput.disabled = false;
+        modelInput.placeholder = 'Use the local provider default';
+        status.textContent = 'The selected local runner supplies its own authenticated environment.';
+        syncGenerationReasoningChoices();
+        return;
+    }
+    const connection = aiProviderConnections.find(item => item.id === provider.value);
+    if (!connection?.connected) {
+        modelInput.disabled = true;
+        status.textContent = 'Connect this provider before selecting a model.';
+        return;
+    }
+    modelInput.disabled = true;
+    status.textContent = `Loading models available to your ${connection.name} API key…`;
+    let models = aiProviderModelCatalogs.get(provider.value);
+    if (!models) {
+        models = await loadAIProviderModels(generationApiRequest, provider.value);
+        aiProviderModelCatalogs.set(provider.value, models);
+    }
+    if (modelInput.value && !models.some(model => model.id === modelInput.value)) {
+        modelInput.value = '';
+    }
+    for (const model of models) {
+        const option = document.createElement('option');
+        option.value = model.id;
+        option.label = model.name;
+        options.append(option);
+    }
+    modelInput.disabled = false;
+    modelInput.placeholder = models.length ? 'Choose an available model' : 'No eligible models returned';
+    status.textContent = models.length
+        ? `${models.length} generation-capable model${models.length === 1 ? '' : 's'} available. Choose the exact model ID for reproducibility.`
+        : 'The provider returned no models eligible for the flashcard-generation pipeline.';
+    syncGenerationReasoningChoices();
+}
+
+async function loadAIProviderConnections(preferredProvider) {
+    if (!githubAuth.isAuthenticated()) {
+        aiProviderConnections = AI_PROVIDER_DEFINITIONS.map(provider => ({ ...provider, connected: false }));
+        rebuildGenerationProviderOptions(preferredProvider);
+        renderAIProviderConnections();
+        await updateGenerationModelChoices();
+        return;
+    }
+    const container = document.getElementById('ai-provider-list');
+    if (container) container.innerHTML = '<p class="study-settings-help">Loading provider connections…</p>';
+    aiProviderConnections = await listAIProviders(generationApiRequest);
+    rebuildGenerationProviderOptions(preferredProvider);
+    renderAIProviderConnections();
+    await updateGenerationModelChoices();
+}
+
+function openAIProviderConnectPanel(providerId) {
+    const definition = providerDefinition(providerId);
+    const panel = document.getElementById('ai-provider-connect-panel');
+    const label = document.getElementById('ai-provider-key-label');
+    const key = document.getElementById('ai-provider-key');
+    const status = document.getElementById('ai-provider-connect-status');
+    if (!definition || !panel || !label || !key || !status) return;
+    pendingAIProviderId = providerId;
+    label.textContent = `${definition.name} API key`;
+    key.placeholder = definition.keyPlaceholder;
+    key.value = '';
+    status.textContent = 'The key will be validated before it is encrypted and stored.';
+    panel.classList.remove('hidden');
+    key.focus();
+}
+
+function closeAIProviderConnectPanel() {
+    pendingAIProviderId = null;
+    document.getElementById('ai-provider-connect-panel')?.classList.add('hidden');
+    const key = document.getElementById('ai-provider-key');
+    const status = document.getElementById('ai-provider-connect-status');
+    if (key) key.value = '';
+    if (status) status.textContent = '';
+}
+
+async function saveAIProviderConnection() {
+    const providerId = pendingAIProviderId;
+    const keyInput = document.getElementById('ai-provider-key');
+    const status = document.getElementById('ai-provider-connect-status');
+    const button = document.getElementById('ai-provider-connect-save');
+    if (!providerId || !keyInput || !status || !button) return;
+    if (!keyInput.value.trim()) {
+        status.textContent = 'Enter an API key.';
+        return;
+    }
+    button.disabled = true;
+    status.textContent = 'Validating the key and loading models…';
+    try {
+        const result = await connectAIProvider(generationApiRequest, providerId, keyInput.value);
+        aiProviderModelCatalogs.set(providerId, generationEligibleModels(result.models));
+        aiProviderConnections = aiProviderConnections.map(provider => (
+            provider.id === providerId ? { ...provider, ...result.provider } : provider
+        ));
+        closeAIProviderConnectPanel();
+        renderAIProviderConnections();
+        rebuildGenerationProviderOptions(providerId);
+        const modelInput = document.getElementById('generation-model');
+        if (modelInput) modelInput.value = '';
+        await updateGenerationModelChoices();
+    } catch (error) {
+        status.textContent = error.message;
+    } finally {
+        button.disabled = false;
+        keyInput.value = '';
+    }
+}
+
+async function removeAIProviderConnection(providerId) {
+    const definition = providerDefinition(providerId);
+    if (!definition) return;
+    const approved = await confirmDialog({
+        title: `Remove ${definition.name}`,
+        message: `Delete the encrypted ${definition.name} API key from your flashcards account? Queued jobs using it will not run until another key is connected.`,
+        confirmText: 'Remove key',
+        danger: true
+    });
+    if (!approved) return;
+    await disconnectAIProvider(generationApiRequest, providerId);
+    aiProviderModelCatalogs.delete(providerId);
+    const preferences = getGenerationPreferences();
+    await loadAIProviderConnections(preferences.providerId === providerId ? 'codex' : preferences.providerId);
 }
 
 function reflectCustomTargetField() {
@@ -4467,12 +4726,16 @@ async function openStudySettings() {
     reminderEnabled.value = 'false';
     reminderTime.value = '18:00';
     const generation = getGenerationPreferences();
-    generationProvider.value = generation.providerId;
     generationModel.value = generation.modelId;
     generationReasoning.value = generation.reasoningEffort;
     modal.classList.remove('hidden');
     button.setAttribute('aria-expanded', 'true');
     target.focus();
+
+    loadAIProviderConnections(generation.providerId).catch(error => {
+        renderAIProviderConnections();
+        showGenerationModelError(error);
+    });
 
     const reminder = await getReminderPreferences();
     if (modal.classList.contains('hidden')) return;
@@ -4511,6 +4774,18 @@ async function saveStudySettingsFromForm(event) {
     } else newPerDay = Number(targetSelect.value);
     const newBatchSize = Number(batchSelect.value);
     try {
+        const apiProvider = providerDefinition(generationProvider.value);
+        const connection = aiProviderConnections.find(item => item.id === generationProvider.value);
+        if (apiProvider && !connection?.connected) {
+            throw new Error(`Connect ${apiProvider.name} before saving it as the generation provider.`);
+        }
+        if (apiProvider && !generationModel.value.trim()) {
+            throw new Error(`Choose a ${apiProvider.name} model before saving.`);
+        }
+        const availableModels = aiProviderModelCatalogs.get(generationProvider.value) || [];
+        if (apiProvider && !availableModels.some(model => model.id === generationModel.value.trim())) {
+            throw new Error(`Choose a model returned by your ${apiProvider.name} account.`);
+        }
         saveGenerationPreferences({
             providerId: generationProvider.value,
             modelId: generationModel.value,

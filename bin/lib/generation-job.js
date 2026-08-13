@@ -9,6 +9,7 @@ export function executionOptionsForGenerationJob(queued, payload, options = {}) 
         allowDirty: options.allowDirty,
         isolated: options.isolated,
         reasoningEffort: payload?.reasoningEffort || options.reasoningEffort,
+        agentEnv: options.agentEnv || {},
         full: jobType === 'deck-build' && payload?.buildScope === 'full',
         freshChapter: false,
         freshPilot: false

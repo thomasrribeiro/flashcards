@@ -54,14 +54,17 @@ describe('local generation pipeline', () => {
         await writeFile(runner, '#!/bin/sh\ncp "$1" received.json\n');
         await chmod(runner, 0o755);
         expect(providerRunner('codex')).toBeNull();
+        expect(providerRunner('google')).toBeNull();
         expect(() => providerRunner('custom')).toThrow(/FLASHCARDS_AGENT_RUNNER/);
         const result = runExternalProviderJob({ job_type: 'subject-design', payload: { subject: 'biology' } }, {
             workspacePath: root,
-            command: runner
+            command: runner,
+            agentEnv: { GEMINI_API_KEY: 'provider-secret-never-in-manifest' }
         });
         expect(result.status).toBe(0);
         const received = JSON.parse(await readFile(path.join(root, 'received.json'), 'utf8'));
         expect(received.payload.subject).toBe('biology');
+        expect(JSON.stringify(received)).not.toContain('provider-secret-never-in-manifest');
         await expect(readFile(path.join(root, '.flashcards-generation-job.json'))).rejects.toThrow();
     });
 

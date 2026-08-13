@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 export function providerRunner(providerId, explicitCommand) {
-    if (!providerId || providerId === 'codex') return null;
+    if (!providerId || ['codex', 'openai', 'anthropic', 'google'].includes(providerId)) return null;
     const command = explicitCommand || process.env.FLASHCARDS_AGENT_RUNNER;
     if (!command) {
         throw new Error(`Provider ${providerId} requires FLASHCARDS_AGENT_RUNNER or --agent-runner.`);
@@ -16,7 +16,7 @@ export function providerRunner(providerId, explicitCommand) {
  * path. It may edit only workspacePath and must return exit code zero. API
  * credentials remain in the runner's environment and never enter the job.
  */
-export function runExternalProviderJob(job, { workspacePath, command }) {
+export function runExternalProviderJob(job, { workspacePath, command, agentEnv = {} }) {
     if (!existsSync(workspacePath)) throw new Error(`Provider workspace does not exist: ${workspacePath}`);
     const manifestPath = path.join(workspacePath, '.flashcards-generation-job.json');
     writeFileSync(manifestPath, `${JSON.stringify({
@@ -25,7 +25,11 @@ export function runExternalProviderJob(job, { workspacePath, command }) {
         workspacePath
     }, null, 2)}\n`);
     try {
-        const result = spawnSync(command, [manifestPath], { cwd: workspacePath, stdio: 'inherit' });
+        const result = spawnSync(command, [manifestPath], {
+            cwd: workspacePath,
+            stdio: 'inherit',
+            env: { ...process.env, ...agentEnv }
+        });
         if (result.error) throw new Error(`Unable to launch provider runner: ${result.error.message}`);
         return { status: result.status ?? 1 };
     } finally {

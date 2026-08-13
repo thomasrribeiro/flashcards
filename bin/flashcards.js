@@ -27,7 +27,10 @@ import {
     publishRegistryDraft
 } from './lib/github-publisher.js';
 import {
+    claimGenerationRequest,
+    hasGenerationRunnerToken,
     listGenerationRequests,
+    updateClaimedGenerationRequest,
     updateGenerationRequest
 } from './lib/generation-requests.js';
 import { resolveNotesRoot, resolvePath } from './lib/paths.js';
@@ -118,6 +121,7 @@ function executeAgent(mode, deckPath, options) {
         nonInteractive: options.nonInteractive,
         reportOnly: options.reportOnly,
         model: options.model,
+        providerId: options.providerId,
         extraInstructions: options.instructions,
         dryRun: options.dryRun,
         allowDirty: options.allowDirty,
@@ -126,7 +130,8 @@ function executeAgent(mode, deckPath, options) {
         freshChapter,
         freshPilot,
         isolated: options.isolated,
-        reasoningEffort: options.reasoningEffort
+        reasoningEffort: options.reasoningEffort,
+        agentEnv: options.agentEnv || {}
     });
     if (result.dryRun) {
         console.log('Preview only: a live isolated run replaces these source paths with hash-recorded staged copies.');
@@ -718,21 +723,42 @@ addAgentOptions(requests
     .option('--worker-url <url>', 'Flashcards Worker URL')
     .option('--notes-root <path>', 'Notes collection root for deck jobs')
     .option('--registry-root <path>', 'Curriculum registry checkout for subject-design jobs')
+    .option('--runner-token <token>', 'Trusted hosted-runner token (prefer FLASHCARDS_RUNNER_TOKEN)')
     .option('--agent-runner <command>', 'Executable implementing the generic local provider protocol'), { build: true })
     .action(async options => {
         let queued = null;
         let registryDraft = null;
         let registryRoot = null;
+        const trustedRunner = hasGenerationRunnerToken(options.runnerToken);
         try {
-            const result = await listGenerationRequests({ workerUrl: options.workerUrl });
-            queued = result.requests?.find(item => item.status === 'queued') || null;
+            const result = trustedRunner
+                ? await claimGenerationRequest({
+                    workerUrl: options.workerUrl,
+                    runnerToken: options.runnerToken
+                })
+                : await listGenerationRequests({ workerUrl: options.workerUrl });
+            queued = trustedRunner
+                ? result.request
+                : result.requests?.find(item => item.status === 'queued') || null;
             if (!queued) {
                 console.log('No queued generation requests.');
                 return;
             }
-            await updateGenerationRequest(queued.id, { status: 'running' }, {
-                workerUrl: options.workerUrl
-            });
+            const credential = trustedRunner ? result.credential : null;
+            const agentEnv = credential?.apiKey
+                ? credential.providerId === 'anthropic'
+                    ? { ANTHROPIC_API_KEY: credential.apiKey }
+                    : credential.providerId === 'openai'
+                        ? { OPENAI_API_KEY: credential.apiKey, CODEX_API_KEY: credential.apiKey }
+                        : credential.providerId === 'google'
+                            ? { GEMINI_API_KEY: credential.apiKey }
+                            : {}
+                : {};
+            if (!trustedRunner) {
+                await updateGenerationRequest(queued.id, { status: 'running' }, {
+                    workerUrl: options.workerUrl
+                });
+            }
             const jobType = queued.job_type || 'deck-build';
             const payload = queued.payload || {};
             const runner = providerRunner(queued.provider_id, options.agentRunner);
@@ -758,11 +784,13 @@ addAgentOptions(requests
                 agent = runner
                     ? runExternalProviderJob({ ...queued, payload }, {
                         workspacePath: subjectResult.subjectPath,
-                        command: runner
+                        command: runner,
+                        agentEnv
                     })
                     : runSubjectAgent({
                         subjectPath: subjectResult.subjectPath,
                         model: queued.model_id || options.model,
+                        providerId: queued.provider_id,
                         reasoningEffort: payload.reasoningEffort || options.reasoningEffort,
                         destination,
                         deckGranularity,
@@ -773,7 +801,8 @@ addAgentOptions(requests
                                 ? `The user supplied this ordered visual draft. Treat it as an explicit design constraint, preserve valid existing identities, and change an edge only when validation or a documented false prerequisite requires it:\n${JSON.stringify(payload.proposedDecks, null, 2)}`
                                 : null
                         ].filter(Boolean).join('\n\n'),
-                        isolated: options.isolated
+                        isolated: options.isolated,
+                        agentEnv
                     });
                 if (agent.status !== 0) throw new Error(`Subject agent exited with status ${agent.status}`);
                 buildRegistry(registryRoot);
@@ -793,22 +822,33 @@ addAgentOptions(requests
                 agent = runner
                     ? runExternalProviderJob({ ...queued, payload }, {
                         workspacePath: materialized.deckPath,
-                        command: runner
+                        command: runner,
+                        agentEnv
                     })
-                    : executeAgent(mode, materialized.deckPath, executionOptions);
+                    : executeAgent(mode, materialized.deckPath, {
+                        ...executionOptions,
+                        providerId: queued.provider_id,
+                        agentEnv
+                    });
             }
             if (agent.status !== 0) throw new Error(`Deck agent exited with status ${agent.status}`);
-            await updateGenerationRequest(queued.id, { status: 'needs-review', resultUrl }, {
-                workerUrl: options.workerUrl
+            const update = trustedRunner ? updateClaimedGenerationRequest : updateGenerationRequest;
+            await update(queued.id, { status: 'needs-review', resultUrl }, {
+                workerUrl: options.workerUrl,
+                runnerToken: options.runnerToken
             });
             console.log(`Request ${queued.id} is ready for human review${resultUrl ? `: ${resultUrl}` : '.'}`);
         } catch (error) {
             if (registryDraft && registryRoot) abandonRegistryDraft(registryRoot, registryDraft);
             if (queued) {
-                await updateGenerationRequest(queued.id, {
+                const update = trustedRunner ? updateClaimedGenerationRequest : updateGenerationRequest;
+                await update(queued.id, {
                     status: 'failed',
                     error: error.message
-                }, { workerUrl: options.workerUrl }).catch(() => {});
+                }, {
+                    workerUrl: options.workerUrl,
+                    runnerToken: options.runnerToken
+                }).catch(() => {});
             }
             handleError(error);
         }
