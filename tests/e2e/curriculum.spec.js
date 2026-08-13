@@ -22,7 +22,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
     await expect(page.getByRole('button', { name: 'Zoom in' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Zoom out' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Fit view' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Fit', exact: true })).toBeVisible();
     await expect(page).toHaveURL(/curriculum-level=deck.*curriculum-subject=physics|curriculum-subject=physics.*curriculum-level=deck/);
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
     const completeDeckGraphCount = await page.locator('.curriculum-graph-node').count();
@@ -59,19 +59,37 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         await page.mouse.wheel(0, 180);
         await expect.poll(() => page.locator('.curriculum-graph-viewport')
             .evaluate(element => element.style.transform)).not.toBe(transformBeforeWheel);
-        await page.getByRole('button', { name: 'Fit view' }).click();
+        await page.getByRole('button', { name: 'Fit', exact: true }).click();
     }
     const firstNode = page.locator('.curriculum-graph-node').first();
     await firstNode.hover();
-    await expect(page.locator('.curriculum-graph-edge.is-related')).not.toHaveCount(0);
-    await expect(page.locator('.curriculum-graph-edge.is-dimmed')).not.toHaveCount(0);
-    await expect(page.locator('#curriculum-arrow-required .curriculum-arrow-head')).toHaveAttribute('fill', 'context-stroke');
-    await expect(page.locator('#curriculum-arrow-required')).toHaveAttribute('refX', '10');
-    await expect(page.locator('#curriculum-arrow-required .curriculum-arrow-stem')).toHaveCount(0);
-    await expect(page.locator('.curriculum-graph-edge.is-primary')).not.toHaveCount(0);
-    const primaryOpacity = Number(await page.locator('.curriculum-graph-edge.is-primary').first().evaluate(element => getComputedStyle(element).opacity));
-    const secondaryOpacity = Number(await page.locator('.curriculum-graph-edge.is-long').first().evaluate(element => getComputedStyle(element).opacity));
-    expect(primaryOpacity).toBeGreaterThan(secondaryOpacity);
+    await expect(page.locator('.curriculum-graph-connection.is-related')).not.toHaveCount(0);
+    await expect(page.locator('.curriculum-graph-connection.is-dimmed')).not.toHaveCount(0);
+    await expect(page.locator('.curriculum-graph-arrowhead')).not.toHaveCount(0);
+    await expect(page.locator('.curriculum-graph-edge[marker-end]')).toHaveCount(0);
+    await expect(page.locator('.curriculum-graph-connection.is-primary')).not.toHaveCount(0);
+    const primaryOpacity = Number(await page.locator('.curriculum-graph-connection.is-primary').first().evaluate(element => getComputedStyle(element).opacity));
+    const secondaryOpacity = Number(await page.locator('.curriculum-graph-connection.is-long').first().evaluate(element => getComputedStyle(element).opacity));
+    expect(primaryOpacity).toBe(secondaryOpacity);
+    const arrowGeometry = await page.locator('.curriculum-graph-connection.is-primary').first().evaluate(connection => {
+        const line = connection.querySelector('.curriculum-graph-edge');
+        const arrowhead = connection.querySelector('.curriculum-graph-arrowhead');
+        const end = line.getPointAtLength(line.getTotalLength());
+        const headBounds = arrowhead.getBBox();
+        const target = [...document.querySelectorAll('.curriculum-graph-node')]
+            .find(node => node.dataset.deckId === connection.dataset.target);
+        return {
+            lineX: end.x,
+            lineY: end.y,
+            headBaseX: headBounds.x,
+            headCenterY: headBounds.y + headBounds.height / 2,
+            headTipX: headBounds.x + headBounds.width,
+            targetX: Number.parseFloat(target.style.left)
+        };
+    });
+    expect(Math.abs(arrowGeometry.lineX - arrowGeometry.headBaseX)).toBeLessThan(0.5);
+    expect(Math.abs(arrowGeometry.lineY - arrowGeometry.headCenterY)).toBeLessThan(0.5);
+    expect(Math.abs(arrowGeometry.headTipX - arrowGeometry.targetX)).toBeLessThan(0.5);
     const viewport = page.locator('.curriculum-graph-viewport');
     const transformBeforePan = await viewport.evaluate(element => element.style.transform);
     const stageBox = await page.locator('.curriculum-graph-stage').boundingBox();

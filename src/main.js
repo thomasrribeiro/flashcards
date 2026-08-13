@@ -2670,20 +2670,44 @@ function curriculumStatus(deck, progressStates) {
     return deck.repository?.configured || deck.materialized ? 'learning' : 'unavailable';
 }
 
-function curriculumEdgePath(source, target, sourceY = null, targetY = null) {
+function curriculumEdgeGeometry(source, target, sourceY = null, targetY = null) {
     const x1 = source.x + source.width;
     const y1 = sourceY ?? source.y + source.height / 2;
     const x2 = target.x;
     const y2 = targetY ?? target.y + target.height / 2;
+    const headLength = 10;
+    const headHalfHeight = 4.25;
+    const baseX = x2 - headLength;
     const bend = Math.max(44, (x2 - x1) * 0.44);
-    return `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`;
+    return {
+        line: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${baseX - bend} ${y2}, ${baseX} ${y2}`,
+        head: `M ${baseX} ${y2 - headHalfHeight} L ${x2} ${y2} L ${baseX} ${y2 + headHalfHeight} Z`
+    };
 }
 
-function curriculumElkEdgePath(edge, source, target) {
+function curriculumElkEdgeGeometry(edge, source, target) {
     const section = edge.sections?.[0];
-    if (!section) return curriculumEdgePath(source, target);
+    if (!section) return curriculumEdgeGeometry(source, target);
     const points = [section.startPoint, ...(section.bendPoints || []), section.endPoint];
-    return points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
+    const tip = points.at(-1);
+    const previous = points.at(-2) || { x: tip.x - 1, y: tip.y };
+    const dx = tip.x - previous.x;
+    const dy = tip.y - previous.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const unitX = dx / length;
+    const unitY = dy / length;
+    const headLength = Math.max(1, Math.min(10, length * 0.45));
+    const headHalfWidth = 4.25;
+    const base = {
+        x: tip.x - unitX * headLength,
+        y: tip.y - unitY * headLength
+    };
+    const linePoints = [...points.slice(0, -1), base];
+    const perpendicular = { x: -unitY * headHalfWidth, y: unitX * headHalfWidth };
+    return {
+        line: linePoints.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' '),
+        head: `M ${base.x + perpendicular.x} ${base.y + perpendicular.y} L ${tip.x} ${tip.y} L ${base.x - perpendicular.x} ${base.y - perpendicular.y} Z`
+    };
 }
 
 async function renderCurriculumGraphCanvas(root, graph, progressStates, {
@@ -2709,14 +2733,6 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     svg.setAttribute('width', String(layout.width));
     svg.setAttribute('height', String(layout.height));
     svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
-    svg.innerHTML = `
-        <defs>
-            <marker id="curriculum-arrow-required" viewBox="0 0 10 10" refX="10" refY="5"
-                markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto" overflow="visible">
-                <path class="curriculum-arrow-head" d="M 0 0.75 L 10 5 L 0 9.25 z" fill="context-stroke"></path>
-            </marker>
-        </defs>
-    `;
     const positioned = new Map(layout.nodes.map(node => [node.id, node]));
     const portAssignments = new Map();
     const assignPorts = (direction, nodeId, edges, otherId) => {
@@ -2745,24 +2761,30 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const source = positioned.get(edge.source);
         const target = positioned.get(edge.target);
         if (!source || !target) continue;
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.classList.add('curriculum-graph-edge', `is-${edge.type}`);
+        const connection = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        connection.classList.add('curriculum-graph-connection', `is-${edge.type}`);
         const rankDistance = Number.isInteger(source.rank) && Number.isInteger(target.rank)
             ? Math.abs(target.rank - source.rank)
             : 1;
         if (rankDistance > 1) {
-            path.classList.add('is-long');
+            connection.classList.add('is-long');
         } else {
-            path.classList.add('is-primary');
+            connection.classList.add('is-primary');
         }
-        path.dataset.source = edge.source;
-        path.dataset.target = edge.target;
+        connection.dataset.source = edge.source;
+        connection.dataset.target = edge.target;
         const ports = portAssignments.get(edge) || {};
-        path.setAttribute('d', edge.sections?.length
-            ? curriculumElkEdgePath(edge, source, target)
-            : curriculumEdgePath(source, target, ports.sourceY, ports.targetY));
-        path.setAttribute('marker-end', 'url(#curriculum-arrow-required)');
-        svg.appendChild(path);
+        const geometry = edge.sections?.length
+            ? curriculumElkEdgeGeometry(edge, source, target)
+            : curriculumEdgeGeometry(source, target, ports.sourceY, ports.targetY);
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        line.classList.add('curriculum-graph-edge');
+        line.setAttribute('d', geometry.line);
+        const arrowhead = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        arrowhead.classList.add('curriculum-graph-arrowhead');
+        arrowhead.setAttribute('d', geometry.head);
+        connection.append(line, arrowhead);
+        svg.appendChild(connection);
     }
     viewport.appendChild(svg);
 
@@ -2834,7 +2856,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     stage.appendChild(viewport);
     root.appendChild(stage);
 
-    const edgeElements = [...svg.querySelectorAll('.curriculum-graph-edge')];
+    const edgeElements = [...svg.querySelectorAll('.curriculum-graph-connection')];
     const setRelated = deckId => {
         const related = new Set([deckId]);
         for (const edge of layout.edges) {
@@ -3319,7 +3341,7 @@ function curriculumGraphControls({ windowState = null } = {}) {
     controls.innerHTML = `
         ${layerNavigation}
         <span class="curriculum-graph-view-actions">
-            <button type="button" data-action="fit">Fit view</button>
+            <button type="button" data-action="fit">Fit</button>
         </span>`;
     return controls;
 }
@@ -3546,7 +3568,7 @@ async function renderLegacyCurriculumView(options = {}) {
             </span>
         ` : ''}
         <span class="curriculum-graph-view-actions">
-            <button type="button" data-action="fit">Fit view</button>
+            <button type="button" data-action="fit">Fit</button>
         </span>
     `;
     root.appendChild(controls);
