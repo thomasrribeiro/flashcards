@@ -1523,6 +1523,7 @@ let curriculumIndex = null;
 let activeDependencyTarget = null;
 let activeDeckActions = null;
 let activeDeckActionsTrigger = null;
+let activeCurriculumNeighborhoodCleanup = null;
 const curriculumViewState = {
     query: '',
     subject: '',
@@ -2933,6 +2934,7 @@ function makeCurriculumItemButton(item, installed, extra = '') {
         <span class="curriculum-explorer-item-name">${escapeHtml(curriculumItemName(item))}</span>
         <span class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(item, installed))}${extra ? ` · ${escapeHtml(extra)}` : ''}</span>
     `;
+    button.dataset.curriculumNodeId = item.id;
     button.title = `${item.id}${item.description ? `\n${item.description}` : ''}`;
     button.onclick = () => navigateCurriculum(curriculumFocusOptions(item));
     return button;
@@ -2947,11 +2949,14 @@ function appendCurriculumRelationshipGroups(column, entries, installed, emptyTex
         heading.textContent = title;
         column.appendChild(heading);
         for (const entry of items) {
-            column.appendChild(makeCurriculumItemButton(
+            const button = makeCurriculumItemButton(
                 entry.item,
                 installed,
                 entry.distance === 1 ? 'direct' : `${entry.distance} steps ${direction}`
-            ));
+            );
+            button.dataset.relationship = direction === 'earlier' ? 'prerequisite' : 'unlock';
+            button.dataset.distance = String(entry.distance);
+            column.appendChild(button);
         }
     };
     appendGroup(direction === 'earlier' ? 'Direct prerequisites' : 'Directly unlocks', direct);
@@ -2962,6 +2967,66 @@ function appendCurriculumRelationshipGroups(column, entries, installed, emptyTex
         empty.textContent = emptyText;
         column.appendChild(empty);
     }
+}
+
+function attachCurriculumNeighborhoodEdges(explorer, selectedNode, columns) {
+    const namespace = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(namespace, 'svg');
+    svg.classList.add('curriculum-neighborhood-edges');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = `
+        <defs>
+            <marker id="curriculum-neighborhood-arrow" viewBox="0 0 8 8" refX="7" refY="4"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 8 4 L 0 8 z"></path>
+            </marker>
+        </defs>
+    `;
+    explorer.prepend(svg);
+
+    let frame = null;
+    const draw = () => {
+        frame = null;
+        svg.querySelectorAll('.curriculum-neighborhood-edge').forEach(path => path.remove());
+        if (window.matchMedia('(max-width: 760px)').matches) return;
+        const explorerRect = explorer.getBoundingClientRect();
+        const selectedRect = selectedNode.getBoundingClientRect();
+        svg.setAttribute('width', String(explorer.clientWidth));
+        svg.setAttribute('height', String(explorer.clientHeight));
+        for (const node of explorer.querySelectorAll('[data-relationship]')) {
+            const nodeRect = node.getBoundingClientRect();
+            const prerequisite = node.dataset.relationship === 'prerequisite';
+            const sourceX = (prerequisite ? nodeRect.right : selectedRect.right) - explorerRect.left;
+            const sourceY = (prerequisite ? nodeRect : selectedRect).top
+                + (prerequisite ? nodeRect : selectedRect).height / 2 - explorerRect.top;
+            const targetX = (prerequisite ? selectedRect.left : nodeRect.left) - explorerRect.left;
+            const targetY = (prerequisite ? selectedRect : nodeRect).top
+                + (prerequisite ? selectedRect : nodeRect).height / 2 - explorerRect.top;
+            const bend = Math.max(30, Math.abs(targetX - sourceX) * 0.46);
+            const path = document.createElementNS(namespace, 'path');
+            path.classList.add('curriculum-neighborhood-edge');
+            if (Number(node.dataset.distance) > 1) path.classList.add('is-transitive');
+            path.setAttribute('d', `M ${sourceX} ${sourceY} C ${sourceX + bend} ${sourceY}, ${targetX - bend} ${targetY}, ${targetX} ${targetY}`);
+            path.setAttribute('marker-end', 'url(#curriculum-neighborhood-arrow)');
+            svg.appendChild(path);
+        }
+    };
+    const scheduleDraw = () => {
+        if (frame == null) frame = requestAnimationFrame(draw);
+    };
+    columns.forEach(column => column.addEventListener('scroll', scheduleDraw, { passive: true }));
+    let observer = null;
+    if (typeof ResizeObserver !== 'undefined') {
+        observer = new ResizeObserver(scheduleDraw);
+        observer.observe(explorer);
+        observer.observe(selectedNode);
+    }
+    requestAnimationFrame(scheduleDraw);
+    return () => {
+        if (frame != null) cancelAnimationFrame(frame);
+        columns.forEach(column => column.removeEventListener('scroll', scheduleDraw));
+        observer?.disconnect();
+    };
 }
 
 function renderCurriculumDirectory(root, installed) {
@@ -3003,7 +3068,7 @@ function renderCurriculumNeighborhood(root, installed) {
     selected.className = 'curriculum-neighborhood-column is-selected';
     selected.innerHTML = `
         <h3>Selected ${escapeHtml(neighborhood.hierarchy)}</h3>
-        <article class="curriculum-selected-item">
+        <article class="curriculum-selected-item" data-curriculum-node-id="${escapeHtml(neighborhood.target.id)}">
             <span class="curriculum-selected-kind">${escapeHtml(neighborhood.hierarchy)}</span>
             <h2>${escapeHtml(curriculumItemName(neighborhood.target))}</h2>
             <p class="curriculum-selected-id">${escapeHtml(neighborhood.target.id)}</p>
@@ -3082,6 +3147,11 @@ function renderCurriculumNeighborhood(root, installed) {
     });
     explorer.append(prerequisites, selected, mobileTabs, unlocks);
     root.appendChild(explorer);
+    activeCurriculumNeighborhoodCleanup = attachCurriculumNeighborhoodEdges(
+        explorer,
+        selected.querySelector('.curriculum-selected-item'),
+        [prerequisites, selected, unlocks]
+    );
 }
 
 async function renderFullCurriculumMap(root, installed) {
@@ -3112,6 +3182,8 @@ async function renderCurriculumView(options = {}) {
         root.innerHTML = '<div class="loading">Curriculum data is unavailable.</div>';
         return;
     }
+    activeCurriculumNeighborhoodCleanup?.();
+    activeCurriculumNeighborhoodCleanup = null;
     Object.assign(curriculumViewState, options);
     const installed = installedCurriculumIds(await getAllDecks());
     const { mode, hierarchy, subject, parentId, includeRecommended } = curriculumViewState;
