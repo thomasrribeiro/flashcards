@@ -286,6 +286,12 @@ The runner needs the corresponding provider CLI on `PATH`: Codex CLI for
 OpenAI, Claude Code for Anthropic, or Gemini CLI for Google. Consumer chat
 subscriptions and API billing are separate.
 
+The built-in runners also keep provider secrets out of model-launched commands:
+Codex applies automatic secret-name environment filtering, Claude disables its
+shell tool, and Gemini receives an isolated tool allowlist without shell access.
+Use dedicated, spend-limited provider keys and rotate or remove them from
+Settings whenever their use is no longer needed.
+
 The untrusted local path uses `FLASHCARDS_GITHUB_TOKEN` or the token returned by
 `gh auth token` to authenticate the user's queue. Typed jobs cover subject
 design, deck pilots, chapter expansion, and audits. Codex is the default local

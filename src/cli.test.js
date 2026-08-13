@@ -1488,6 +1488,7 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.args).toContain('--ignore-user-config');
         expect(invocation.args).toContain('--ignore-rules');
         expect(invocation.args).toContain('--json');
+        expect(invocation.args).toContain('shell_environment_policy.ignore_default_excludes=false');
         expect(invocation.prompt).toContain('$manage-flashcard-decks');
         expect(invocation.prompt).toContain('AUTHORING_PLAYBOOK.md');
         expect(invocation.prompt).toContain('chapter design ledger');
@@ -1521,6 +1522,9 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.args).toContain('--setting-sources');
         expect(invocation.args[invocation.args.indexOf('--setting-sources') + 1]).toBe('');
         expect(invocation.args).toContain('--dangerously-skip-permissions');
+        expect(invocation.args).toContain('--disallowedTools');
+        expect(invocation.args).toContain('Bash');
+        expect(invocation.args).toContain('--bare');
         expect(invocation.args).toContain('fable');
         expect(invocation.provider).toBe('claude-code');
         expect(invocation.prompt).toContain('never begin an A: or S: body with a bare number and period');
@@ -1536,6 +1540,29 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(opus.args).toContain('opus-4.8');
         expect(opus.prompt).toContain('never begin an A: or S: body with a bare number and period');
         expect(opus.prompt).toContain('Never put an unlabeled answer prelude before IDENTIFY or PLAN');
+    });
+
+    it('routes Google models through Gemini with a shell-free isolated home', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['foundations']
+        });
+        const invocation = buildAgentInvocation({
+            mode: 'build',
+            deckPath,
+            providerId: 'google',
+            model: 'gemini-example'
+        });
+        expect(invocation.command).toBe('gemini');
+        expect(invocation.args).toEqual(expect.arrayContaining([
+            '--model', 'gemini-example', '--approval-mode', 'yolo', '--skip-trust'
+        ]));
+        expect(invocation.env.HOME).toContain('gemini-home');
+        expect(invocation.env).not.toHaveProperty('GEMINI_API_KEY');
     });
 
     it('rejects newly generated numeric-list answers and IPEE answer preludes', async () => {

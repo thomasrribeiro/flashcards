@@ -414,6 +414,8 @@ function buildCodexInvocation({
                 '--effort', reasoningEffort,
                 '--permission-mode', reportOnly ? 'dontAsk' : 'bypassPermissions',
                 ...(reportOnly ? [] : ['--dangerously-skip-permissions']),
+                '--disallowedTools', 'Bash',
+                '--bare',
                 '--no-session-persistence',
                 '--setting-sources', '',
                 '--output-format', 'stream-json',
@@ -440,7 +442,8 @@ function buildCodexInvocation({
             '-c', `model_reasoning_effort=${JSON.stringify(reasoningEffort)}`,
             '-c', 'personality="none"',
             '-c', 'features.memories=false',
-            '-c', 'features.multi_agent=false'
+            '-c', 'features.multi_agent=false',
+            '-c', 'shell_environment_policy.ignore_default_excludes=false'
         );
         if (authCredentialsStore) {
             args.push('-c', `cli_auth_credentials_store=${JSON.stringify(authCredentialsStore)}`);
@@ -610,7 +613,19 @@ function runPreparedInvocation(prepared, invocation, {
     agentEnv = {}
 }) {
     recordIsolatedInvocation(prepared, { prompt: invocation.prompt, invocation, metadata });
-    if (invocation.env?.HOME) mkdirSync(invocation.env.HOME, { recursive: true });
+    if (invocation.provider === 'gemini-cli' && invocation.env?.HOME) {
+        const configRoot = path.join(invocation.env.HOME, '.gemini');
+        mkdirSync(configRoot, { recursive: true });
+        writeFileSync(path.join(configRoot, 'settings.json'), `${JSON.stringify({
+            tools: {
+                core: [
+                    'glob', 'grep_search', 'list_directory', 'read_file',
+                    'read_many_files', 'write_file', 'replace',
+                    'google_web_search', 'web_fetch'
+                ]
+            }
+        }, null, 2)}\n`);
+    }
     const result = spawnSync(invocation.command, invocation.args, {
         cwd: prepared.workspacePath,
         stdio: 'inherit',
