@@ -36,7 +36,12 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-graph-edge.is-related')).not.toHaveCount(0);
     await expect(page.locator('.curriculum-graph-edge.is-dimmed')).not.toHaveCount(0);
     await expect(page.locator('#curriculum-arrow-required .curriculum-arrow-head')).toHaveAttribute('fill', 'context-stroke');
-    await expect(page.locator('#curriculum-arrow-required .curriculum-arrow-stem')).toHaveAttribute('stroke', 'context-stroke');
+    await expect(page.locator('#curriculum-arrow-required')).toHaveAttribute('refX', '10');
+    await expect(page.locator('#curriculum-arrow-required .curriculum-arrow-stem')).toHaveCount(0);
+    await expect(page.locator('.curriculum-graph-edge.is-primary')).not.toHaveCount(0);
+    const primaryOpacity = Number(await page.locator('.curriculum-graph-edge.is-primary').first().evaluate(element => getComputedStyle(element).opacity));
+    const secondaryOpacity = Number(await page.locator('.curriculum-graph-edge.is-long').first().evaluate(element => getComputedStyle(element).opacity));
+    expect(primaryOpacity).toBeGreaterThan(secondaryOpacity);
     const viewport = page.locator('.curriculum-graph-viewport');
     const transformBeforePan = await viewport.evaluate(element => element.style.transform);
     const stageBox = await page.locator('.curriculum-graph-stage').boundingBox();

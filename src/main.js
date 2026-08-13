@@ -2711,10 +2711,9 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
     svg.innerHTML = `
         <defs>
-            <marker id="curriculum-arrow-required" viewBox="0 0 12 10" refX="11.5" refY="5"
-                markerWidth="12" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
-                <path class="curriculum-arrow-stem" d="M 0 5 H 7" fill="none" stroke="context-stroke" stroke-width="1.8"></path>
-                <path class="curriculum-arrow-head" d="M 5.5 1 L 11.5 5 L 5.5 9 z" fill="context-stroke"></path>
+            <marker id="curriculum-arrow-required" viewBox="0 0 10 10" refX="10" refY="5"
+                markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto" overflow="visible">
+                <path class="curriculum-arrow-head" d="M 0 0.75 L 10 5 L 0 9.25 z" fill="context-stroke"></path>
             </marker>
         </defs>
     `;
@@ -2748,9 +2747,13 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         if (!source || !target) continue;
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.classList.add('curriculum-graph-edge', `is-${edge.type}`);
-        if (Number.isInteger(source.rank) && Number.isInteger(target.rank)
-            && Math.abs(target.rank - source.rank) > 1) {
+        const rankDistance = Number.isInteger(source.rank) && Number.isInteger(target.rank)
+            ? Math.abs(target.rank - source.rank)
+            : 1;
+        if (rankDistance > 1) {
             path.classList.add('is-long');
+        } else {
+            path.classList.add('is-primary');
         }
         path.dataset.source = edge.source;
         path.dataset.target = edge.target;

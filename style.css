@@ -4080,8 +4080,18 @@ body.standalone-phone .mobile-sidebar-close {
     opacity: 0.74;
 }
 
+.curriculum-graph-edge.is-primary {
+    stroke-width: 2.3;
+    opacity: 0.8;
+}
+
 .curriculum-graph-stage.is-dense .curriculum-graph-edge {
     opacity: 0.16;
+}
+
+.curriculum-graph-stage.is-dense .curriculum-graph-edge.is-primary {
+    stroke-width: 2.3;
+    opacity: 0.48;
 }
 
 .curriculum-graph-stage.is-dense .curriculum-graph-edge.is-recommended {
