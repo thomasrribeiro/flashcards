@@ -65,9 +65,11 @@ import { remapRepositoryScopes, scopesWithoutRepositories } from './collection-r
 import {
     chapterForFile,
     chapterGraph,
+    curriculumDirectory,
     curriculumGraph,
     curriculumLayerGraph,
     curriculumMaps,
+    curriculumNeighborhood,
     dependencyPlan,
     focusedCurriculumGraph,
     layoutCurriculumGraphElk,
@@ -290,6 +292,13 @@ async function init() {
         }
 
         setupEventListeners();
+
+        const initialCurriculumState = curriculumStateFromUrl();
+        if (initialCurriculumState) {
+            Object.assign(curriculumViewState, initialCurriculumState);
+            await showMainView('curriculum');
+            writeCurriculumHistory({ replace: true });
+        }
 
         // Repo input is available in both states; data source differs.
         // Logged-in: searches the user's own repos. Logged-out: searches the
@@ -1519,9 +1528,9 @@ const curriculumViewState = {
     subject: '',
     includeRecommended: false,
     mode: 'overview',
+    hierarchy: 'subject',
     targetId: '',
-    graphView: 'layers',
-    layer: null
+    parentId: ''
 };
 
 function curriculumDeckForRepository(deckId, subject = null) {
@@ -2489,9 +2498,9 @@ function setupEventListeners() {
     const tabDecks = document.getElementById('tab-decks');
     const tabCurriculum = document.getElementById('tab-curriculum');
     const tabProgress = document.getElementById('tab-progress');
-    if (tabDecks) tabDecks.addEventListener('click', () => showMainView('decks'));
-    if (tabCurriculum) tabCurriculum.addEventListener('click', () => showMainView('curriculum'));
-    if (tabProgress) tabProgress.addEventListener('click', () => showMainView('progress'));
+    if (tabDecks) tabDecks.addEventListener('click', () => navigateMainView('decks'));
+    if (tabCurriculum) tabCurriculum.addEventListener('click', () => navigateMainView('curriculum'));
+    if (tabProgress) tabProgress.addEventListener('click', () => navigateMainView('progress'));
 
     // Back-to-decks button shown during a study session
     const studyBackBtn = document.getElementById('study-back-btn');
@@ -2528,6 +2537,21 @@ function setDeckView(mode) {
  * Exits any in-progress study session first so returning is always clean.
  */
 let currentMainView = 'decks';
+async function navigateMainView(view) {
+    if (currentMainView === view) return;
+    await showMainView(view);
+    if (view === 'curriculum') {
+        writeCurriculumHistory();
+        return;
+    }
+    const url = new URL(window.location.href);
+    for (const key of [
+        'view', 'curriculum-mode', 'curriculum-level', 'curriculum-target',
+        'curriculum-parent', 'curriculum-subject', 'recommended'
+    ]) url.searchParams.delete(key);
+    history.pushState({ mainView: view }, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
 async function showMainView(view) {
     const dashboard = document.getElementById('dashboard');
     const curriculumView = document.getElementById('curriculum-view');
@@ -2701,21 +2725,32 @@ async function renderCurriculumGraphCanvas(root, graph, installed) {
         `;
         node.onclick = () => {
             if (deck.nodeType === 'subject') {
-                renderCurriculumView({
-                    mode: 'subject',
+                navigateCurriculum({
+                    mode: 'focus',
+                    hierarchy: 'subject',
                     subject: deck.id,
-                    targetId: '',
-                    query: '',
-                    graphView: 'layers',
-                    layer: null
+                    targetId: deck.id,
+                    parentId: '',
+                    query: ''
                 });
-            } else if (curriculumViewState.mode === 'path' && curriculumViewState.targetId === deck.id) {
-                openDependencyModal(deck.id);
             } else if (deck.nodeType === 'chapter') {
-                const [deckId, chapterId] = deck.id.split('#');
-                openDependencyModal(deckId, chapterId);
+                navigateCurriculum({
+                    mode: 'focus',
+                    hierarchy: 'chapter',
+                    subject: deck.subject,
+                    targetId: deck.id,
+                    parentId: deck.deckId,
+                    query: ''
+                });
             } else {
-                renderCurriculumView({ mode: 'path', subject: deck.subject, targetId: deck.id, query: '' });
+                navigateCurriculum({
+                    mode: 'focus',
+                    hierarchy: 'deck',
+                    subject: deck.subject,
+                    targetId: deck.id,
+                    parentId: deck.subject,
+                    query: ''
+                });
             }
         };
         nodeElements.push(node);
@@ -2817,7 +2852,354 @@ async function renderCurriculumGraphCanvas(root, graph, installed) {
     };
 }
 
+function curriculumStateSnapshot() {
+    const { mode, hierarchy, targetId, parentId, subject, includeRecommended } = curriculumViewState;
+    return { mode, hierarchy, targetId, parentId, subject, includeRecommended };
+}
+
+function curriculumStateFromUrl(url = new URL(window.location.href)) {
+    if (url.searchParams.get('view') !== 'curriculum') return null;
+    const hierarchy = ['subject', 'deck', 'chapter'].includes(url.searchParams.get('curriculum-level'))
+        ? url.searchParams.get('curriculum-level')
+        : 'subject';
+    const mode = ['overview', 'subject', 'chapters', 'focus', 'full'].includes(url.searchParams.get('curriculum-mode'))
+        ? url.searchParams.get('curriculum-mode')
+        : 'overview';
+    return {
+        mode,
+        hierarchy,
+        targetId: url.searchParams.get('curriculum-target') || '',
+        parentId: url.searchParams.get('curriculum-parent') || '',
+        subject: url.searchParams.get('curriculum-subject') || '',
+        includeRecommended: url.searchParams.get('recommended') === '1',
+        query: ''
+    };
+}
+
+function writeCurriculumHistory({ replace = false } = {}) {
+    const url = new URL(window.location.href);
+    const state = curriculumStateSnapshot();
+    url.searchParams.set('view', 'curriculum');
+    url.searchParams.set('curriculum-mode', state.mode);
+    url.searchParams.set('curriculum-level', state.hierarchy);
+    const optional = [
+        ['curriculum-target', state.targetId],
+        ['curriculum-parent', state.parentId],
+        ['curriculum-subject', state.subject]
+    ];
+    for (const [key, value] of optional) {
+        if (value) url.searchParams.set(key, value);
+        else url.searchParams.delete(key);
+    }
+    if (state.includeRecommended) url.searchParams.set('recommended', '1');
+    else url.searchParams.delete('recommended');
+    const historyState = { mainView: 'curriculum', curriculum: state };
+    history[replace ? 'replaceState' : 'pushState'](historyState, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+async function navigateCurriculum(options, { replace = false } = {}) {
+    Object.assign(curriculumViewState, options);
+    writeCurriculumHistory({ replace });
+    await renderCurriculumView();
+}
+
+function curriculumItemName(item) {
+    if (item.nodeType === 'subject') return item.title || item.id;
+    if (item.nodeType === 'chapter') return item.title || item.deck || item.id.split('#').pop();
+    return item.deck || item.id.split('/').pop();
+}
+
+function curriculumItemMeta(item, installed) {
+    if (item.nodeType === 'subject') return `${item.deck_count || 0} decks`;
+    if (item.nodeType === 'chapter') return `${item.card_count || 0} cards · ${item.deckId}`;
+    return `${item.subject} · ${curriculumStatus(item, installed)}`;
+}
+
+function curriculumFocusOptions(item) {
+    if (item.nodeType === 'subject') {
+        return { mode: 'focus', hierarchy: 'subject', subject: item.id, parentId: '', targetId: item.id, query: '' };
+    }
+    if (item.nodeType === 'chapter') {
+        return { mode: 'focus', hierarchy: 'chapter', subject: item.subject, parentId: item.deckId, targetId: item.id, query: '' };
+    }
+    return { mode: 'focus', hierarchy: 'deck', subject: item.subject, parentId: item.subject, targetId: item.id, query: '' };
+}
+
+function makeCurriculumItemButton(item, installed, extra = '') {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'curriculum-explorer-item';
+    button.innerHTML = `
+        <span class="curriculum-explorer-item-name">${escapeHtml(curriculumItemName(item))}</span>
+        <span class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(item, installed))}${extra ? ` · ${escapeHtml(extra)}` : ''}</span>
+    `;
+    button.title = `${item.id}${item.description ? `\n${item.description}` : ''}`;
+    button.onclick = () => navigateCurriculum(curriculumFocusOptions(item));
+    return button;
+}
+
+function appendCurriculumRelationshipGroups(column, entries, installed, emptyText, direction) {
+    const direct = entries.filter(entry => entry.distance === 1);
+    const indirect = entries.filter(entry => entry.distance > 1);
+    const appendGroup = (title, items) => {
+        if (!items.length) return;
+        const heading = document.createElement('h4');
+        heading.textContent = title;
+        column.appendChild(heading);
+        for (const entry of items) {
+            column.appendChild(makeCurriculumItemButton(
+                entry.item,
+                installed,
+                entry.distance === 1 ? 'direct' : `${entry.distance} steps ${direction}`
+            ));
+        }
+    };
+    appendGroup(direction === 'earlier' ? 'Direct prerequisites' : 'Directly unlocks', direct);
+    appendGroup(direction === 'earlier' ? 'Earlier prerequisites' : 'Later unlocks', indirect);
+    if (!entries.length) {
+        const empty = document.createElement('p');
+        empty.className = 'curriculum-explorer-empty';
+        empty.textContent = emptyText;
+        column.appendChild(empty);
+    }
+}
+
+function renderCurriculumDirectory(root, installed) {
+    const { hierarchy, parentId, query } = curriculumViewState;
+    const items = curriculumDirectory(curriculumIndex, { hierarchy, parentId, query });
+    const directory = document.createElement('div');
+    directory.className = 'curriculum-directory';
+    for (const item of items) directory.appendChild(makeCurriculumItemButton(item, installed));
+    if (!items.length) {
+        directory.innerHTML = '<p class="curriculum-explorer-empty">No curriculum items match this search.</p>';
+    }
+    root.appendChild(directory);
+}
+
+function renderCurriculumNeighborhood(root, installed) {
+    const neighborhood = curriculumNeighborhood(curriculumIndex, {
+        hierarchy: curriculumViewState.hierarchy,
+        targetId: curriculumViewState.targetId,
+        includeRecommended: curriculumViewState.includeRecommended
+    });
+    if (!neighborhood) {
+        root.insertAdjacentHTML('beforeend', '<p class="curriculum-explorer-empty">This curriculum item is no longer available.</p>');
+        return;
+    }
+    const explorer = document.createElement('div');
+    explorer.className = 'curriculum-neighborhood';
+    const prerequisites = document.createElement('section');
+    prerequisites.className = 'curriculum-neighborhood-column is-prerequisites';
+    prerequisites.innerHTML = '<h3>Prerequisites</h3>';
+    appendCurriculumRelationshipGroups(prerequisites, neighborhood.prerequisites, installed, 'No required prerequisites.', 'earlier');
+    if (neighborhood.recommended.length) {
+        const heading = document.createElement('h4');
+        heading.textContent = 'Recommended preparation';
+        prerequisites.appendChild(heading);
+        neighborhood.recommended.forEach(item => prerequisites.appendChild(makeCurriculumItemButton(item, installed, 'recommended')));
+    }
+
+    const selected = document.createElement('section');
+    selected.className = 'curriculum-neighborhood-column is-selected';
+    selected.innerHTML = `
+        <h3>Selected ${escapeHtml(neighborhood.hierarchy)}</h3>
+        <article class="curriculum-selected-item">
+            <span class="curriculum-selected-kind">${escapeHtml(neighborhood.hierarchy)}</span>
+            <h2>${escapeHtml(curriculumItemName(neighborhood.target))}</h2>
+            <p class="curriculum-selected-id">${escapeHtml(neighborhood.target.id)}</p>
+            ${neighborhood.target.description ? `<p>${escapeHtml(neighborhood.target.description)}</p>` : ''}
+            <p class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(neighborhood.target, installed))}</p>
+            <div class="curriculum-selected-actions"></div>
+        </article>
+    `;
+    const actions = selected.querySelector('.curriculum-selected-actions');
+    if (neighborhood.hierarchy === 'subject') {
+        const descend = document.createElement('button');
+        descend.type = 'button';
+        descend.textContent = 'View decks';
+        descend.onclick = () => navigateCurriculum({
+            mode: 'subject', hierarchy: 'deck', subject: neighborhood.target.id,
+            parentId: neighborhood.target.id, targetId: '', query: ''
+        });
+        actions.appendChild(descend);
+    } else if (neighborhood.hierarchy === 'deck') {
+        const descend = document.createElement('button');
+        descend.type = 'button';
+        descend.textContent = 'View chapters';
+        descend.onclick = () => navigateCurriculum({
+            mode: 'chapters', hierarchy: 'chapter', subject: neighborhood.target.subject,
+            parentId: neighborhood.target.id, targetId: '', query: ''
+        });
+        actions.appendChild(descend);
+        const details = document.createElement('button');
+        details.type = 'button';
+        details.textContent = 'Preparation details';
+        details.onclick = () => openDependencyModal(neighborhood.target.id);
+        actions.appendChild(details);
+    } else {
+        const details = document.createElement('button');
+        details.type = 'button';
+        details.textContent = 'Chapter details';
+        details.onclick = () => {
+            const separator = neighborhood.target.id.indexOf('#');
+            openDependencyModal(
+                neighborhood.target.id.slice(0, separator),
+                neighborhood.target.id.slice(separator + 1)
+            );
+        };
+        actions.appendChild(details);
+    }
+    if (neighborhood.interdependent.length) {
+        const block = document.createElement('div');
+        block.className = 'curriculum-interdependent';
+        block.innerHTML = '<h4>Interdependent at the deck level</h4><p>These subjects feed one another in different advanced paths. Open their decks to see the actual ordering.</p>';
+        neighborhood.interdependent.forEach(item => block.appendChild(makeCurriculumItemButton(item, installed)));
+        selected.appendChild(block);
+    }
+    if (neighborhood.cycle.length) {
+        const block = document.createElement('div');
+        block.className = 'curriculum-cycle-warning';
+        block.innerHTML = '<h4>Invalid required cycle</h4><p>This strict prerequisite loop must be resolved in the curriculum source before it can define a learning order.</p>';
+        neighborhood.cycle.forEach(item => block.appendChild(makeCurriculumItemButton(item, installed)));
+        selected.appendChild(block);
+    }
+
+    const unlocks = document.createElement('section');
+    unlocks.className = 'curriculum-neighborhood-column is-unlocks';
+    unlocks.innerHTML = '<h3>Unlocks</h3>';
+    appendCurriculumRelationshipGroups(unlocks, neighborhood.unlocks, installed, 'Nothing currently declares this as a prerequisite.', 'later');
+    const mobileTabs = document.createElement('div');
+    mobileTabs.className = 'curriculum-mobile-relation-tabs';
+    mobileTabs.innerHTML = '<button type="button" class="active" data-relation="prerequisites">Prerequisites</button><button type="button" data-relation="unlocks">Unlocks</button>';
+    prerequisites.classList.add('is-mobile-active');
+    mobileTabs.querySelectorAll('button').forEach(button => {
+        button.onclick = () => {
+            const showPrerequisites = button.dataset.relation === 'prerequisites';
+            prerequisites.classList.toggle('is-mobile-active', showPrerequisites);
+            unlocks.classList.toggle('is-mobile-active', !showPrerequisites);
+            mobileTabs.querySelectorAll('button').forEach(item => item.classList.toggle('active', item === button));
+        };
+    });
+    explorer.append(prerequisites, selected, mobileTabs, unlocks);
+    root.appendChild(explorer);
+}
+
+async function renderFullCurriculumMap(root, installed) {
+    const { hierarchy, subject, parentId, includeRecommended } = curriculumViewState;
+    const graph = hierarchy === 'subject'
+        ? subjectOverviewGraph(curriculumIndex, { includeRecommended })
+        : hierarchy === 'chapter'
+            ? chapterGraph(curriculumIndex, parentId)
+            : curriculumGraph(curriculumIndex, { subject: subject || null, includeRecommended });
+    const controls = document.createElement('div');
+    controls.className = 'curriculum-graph-controls';
+    controls.innerHTML = `<span class="curriculum-graph-legend"><span><i class="required"></i>Required</span><span><i class="recommended"></i>Recommended</span></span><span class="curriculum-graph-zoom"><button type="button" data-action="out" aria-label="Zoom out">−</button><button type="button" data-action="in" aria-label="Zoom in">+</button><button type="button" data-action="fit">Fit</button></span>`;
+    root.appendChild(controls);
+    const controller = graph.nodes.length ? await renderCurriculumGraphCanvas(root, graph, installed) : null;
+    if (!controller) {
+        root.insertAdjacentHTML('beforeend', '<p class="curriculum-explorer-empty">No curriculum items are available.</p>');
+        return;
+    }
+    controls.querySelector('[data-action="out"]').onclick = controller.zoomOut;
+    controls.querySelector('[data-action="in"]').onclick = controller.zoomIn;
+    controls.querySelector('[data-action="fit"]').onclick = controller.fit;
+}
+
 async function renderCurriculumView(options = {}) {
+    const root = document.getElementById('curriculum-view');
+    if (!root) return;
+    if (!curriculumIndex) {
+        root.innerHTML = '<div class="loading">Curriculum data is unavailable.</div>';
+        return;
+    }
+    Object.assign(curriculumViewState, options);
+    const installed = installedCurriculumIds(await getAllDecks());
+    const { mode, hierarchy, subject, parentId, includeRecommended } = curriculumViewState;
+    root.innerHTML = '';
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'curriculum-toolbar';
+    const breadcrumbs = document.createElement('nav');
+    breadcrumbs.className = 'curriculum-mode-tabs';
+    breadcrumbs.setAttribute('aria-label', 'Curriculum hierarchy');
+    const addCrumb = (label, options, active = false) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.classList.toggle('active', active);
+        button.onclick = () => navigateCurriculum(options);
+        breadcrumbs.appendChild(button);
+    };
+    addCrumb('Subjects', { mode: 'overview', hierarchy: 'subject', subject: '', parentId: '', targetId: '', query: '' }, hierarchy === 'subject' && mode !== 'full');
+    if (subject) addCrumb(subject, { mode: 'subject', hierarchy: 'deck', subject, parentId: subject, targetId: '', query: '' }, hierarchy === 'deck' && mode !== 'focus' && mode !== 'full');
+    const deckId = hierarchy === 'chapter' ? parentId : hierarchy === 'deck' && mode === 'focus' ? curriculumViewState.targetId : '';
+    if (deckId) addCrumb(deckId.split('/').pop(), {
+        mode: 'chapters', hierarchy: 'chapter', subject: subject || deckId.split('/')[0],
+        parentId: deckId, targetId: '', query: ''
+    }, hierarchy === 'chapter' && mode !== 'focus' && mode !== 'full');
+    toolbar.appendChild(breadcrumbs);
+
+    const directoryMode = ['overview', 'subject', 'chapters'].includes(mode);
+    if (directoryMode) {
+        const search = document.createElement('input');
+        search.type = 'search';
+        search.placeholder = `Search ${hierarchy === 'subject' ? 'subjects' : hierarchy === 'deck' ? 'decks' : 'chapters'}...`;
+        search.value = curriculumViewState.query;
+        search.setAttribute('aria-label', search.placeholder);
+        let timer = null;
+        search.oninput = () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => renderCurriculumView({ query: search.value }), 120);
+        };
+        toolbar.appendChild(search);
+    }
+    if (mode === 'focus') {
+        const recommendedLabel = document.createElement('label');
+        recommendedLabel.className = 'curriculum-recommended-toggle';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = includeRecommended;
+        input.onchange = () => navigateCurriculum({ includeRecommended: input.checked }, { replace: true });
+        recommendedLabel.append(input, document.createTextNode('Recommended preparation'));
+        toolbar.appendChild(recommendedLabel);
+    }
+    const mapButton = document.createElement('button');
+    mapButton.type = 'button';
+    mapButton.className = 'curriculum-toolbar-action';
+    mapButton.textContent = mode === 'full' ? 'Focused view' : 'Full map';
+    mapButton.onclick = () => mode === 'full'
+        ? navigateCurriculum({ mode: curriculumViewState.targetId ? 'focus' : hierarchy === 'subject' ? 'overview' : hierarchy === 'deck' ? 'subject' : 'chapters' })
+        : navigateCurriculum({ mode: 'full' });
+    toolbar.appendChild(mapButton);
+    const sourcesButton = document.createElement('button');
+    sourcesButton.type = 'button';
+    sourcesButton.className = 'curriculum-toolbar-action';
+    sourcesButton.textContent = 'Sources';
+    sourcesButton.onclick = openCurriculumSources;
+    toolbar.appendChild(sourcesButton);
+    const createButton = document.createElement('button');
+    createButton.type = 'button';
+    createButton.className = 'curriculum-toolbar-action is-primary';
+    createButton.textContent = subject ? 'Edit subject' : 'Create curriculum';
+    createButton.onclick = () => openCurriculumBuilder(subject || '');
+    toolbar.appendChild(createButton);
+    root.appendChild(toolbar);
+
+    const summary = document.createElement('p');
+    summary.className = 'curriculum-summary';
+    summary.textContent = mode === 'focus'
+        ? 'Select any prerequisite or unlocked item to recenter this view.'
+        : mode === 'full'
+            ? 'Diagnostic map · select any item to open its focused three-column view.'
+            : `Select a ${hierarchy} to see what comes before it and what it unlocks.`;
+    root.appendChild(summary);
+
+    if (mode === 'focus') renderCurriculumNeighborhood(root, installed);
+    else if (mode === 'full') await renderFullCurriculumMap(root, installed);
+    else renderCurriculumDirectory(root, installed);
+}
+
+async function renderLegacyCurriculumView(options = {}) {
     const root = document.getElementById('curriculum-view');
     if (!root) return;
     if (!curriculumIndex) {
@@ -3853,6 +4235,25 @@ async function handlePopState(event) {
         studyArea.classList.add('hidden');
         sessionComplete.classList.add('hidden');
         topicsGrid.classList.remove('hidden');
+    }
+
+    const curriculumState = state?.curriculum || curriculumStateFromUrl();
+    if (state?.mainView === 'curriculum' || curriculumState) {
+        if (curriculumState) Object.assign(curriculumViewState, curriculumState, { query: '' });
+        await showMainView('curriculum');
+        return;
+    }
+    if (state?.mainView === 'progress') {
+        await showMainView('progress');
+        return;
+    }
+    if (state?.mainView === 'decks') {
+        await showMainView('decks');
+        return;
+    }
+    if (!state && currentMainView !== 'decks') {
+        await showMainView('decks');
+        return;
     }
 
     if (state && state.deck) {

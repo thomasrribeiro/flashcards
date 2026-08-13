@@ -4,37 +4,34 @@ test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
     await page.locator('#tab-curriculum').click();
-    await expect(page.locator('.curriculum-summary')).toContainText('subjects');
+    await expect(page.locator('.curriculum-summary')).toContainText('subject');
 });
 
-test('semantic zoom keeps the complete curriculum readable', async ({ page }) => {
-    const subjects = page.locator('.curriculum-graph-node');
+test('focused explorer keeps prerequisite relationships at one hierarchy', async ({ page }) => {
+    const subjects = page.locator('.curriculum-directory .curriculum-explorer-item');
     await expect(subjects).toHaveCount(3);
-    await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
-    await expect(page.locator('.curriculum-mode-tabs')).toContainText('physics');
-    const layerLabel = page.locator('.curriculum-layer-label');
-    await expect(layerLabel).toContainText('Layer');
-    const subjectDecks = page.locator('.curriculum-graph-node');
-    await expect(subjectDecks.first()).toBeVisible();
-    expect(await subjectDecks.count()).toBeLessThan(135);
+    await subjects.filter({ hasText: 'physics' }).click();
 
-    const firstLayer = await layerLabel.textContent();
-    const nextLayer = page.getByRole('button', { name: 'Next curriculum layer' });
-    if (await nextLayer.isEnabled()) {
-        await nextLayer.click();
-        await expect(layerLabel).not.toHaveText(firstLayer);
-    }
+    await expect(page.locator('.curriculum-neighborhood-column')).toHaveCount(3);
+    await expect(page.locator('.curriculum-selected-item h2')).toHaveText('physics');
+    await expect(page).toHaveURL(/curriculum-level=subject.*curriculum-target=physics|curriculum-target=physics.*curriculum-level=subject/);
+    await expect(page.locator('.curriculum-neighborhood .curriculum-explorer-item-meta').first()).toContainText('decks');
+    await page.reload();
+    await expect(page.locator('.curriculum-selected-item h2')).toHaveText('physics');
 
-    const focusedCount = await page.locator('.curriculum-graph-node').count();
-    await page.getByRole('button', { name: 'Full graph' }).click();
-    await expect(page.getByRole('button', { name: 'Explore layers' })).toBeVisible();
-    expect(await page.locator('.curriculum-graph-node').count()).toBeGreaterThanOrEqual(focusedCount);
+    await page.getByRole('button', { name: 'View decks' }).click();
+    await expect(page.locator('.curriculum-directory')).toBeVisible();
+    await page.locator('.curriculum-directory .curriculum-explorer-item')
+        .filter({ hasText: 'measurement-and-physical-reasoning' }).click();
+    await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
+    await expect(page.locator('.curriculum-neighborhood-column.is-prerequisites')).toBeVisible();
 
-    await page.locator('.curriculum-graph-node').filter({ hasText: 'measurement-and-physical-reasoning' }).click();
-    await expect(page.locator('.curriculum-summary')).toContainText('prerequisite path');
-    const pathNodes = page.locator('.curriculum-graph-node');
-    expect(await pathNodes.count()).toBeLessThan(20);
-    await expect(page.locator('.curriculum-graph-node.is-target')).toHaveCount(1);
+    await page.goBack();
+    await expect(page.locator('.curriculum-directory')).toBeVisible();
+    await page.getByRole('button', { name: 'Full map' }).click();
+    await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
+    await page.getByRole('button', { name: 'Focused view' }).click();
+    await expect(page.locator('.curriculum-directory')).toBeVisible();
 });
 
 test('builder validates visual prerequisite edits before queueing', async ({ page }) => {
@@ -49,17 +46,17 @@ test('builder validates visual prerequisite edits before queueing', async ({ pag
     await expect(page.locator('.curriculum-builder-errors')).toBeEmpty();
 });
 
-test('generation settings persist provider choices without collecting an API key', async ({ page }) => {
-    await page.getByRole('button', { name: 'Generation settings' }).click();
+test('generation settings persist provider choices and explain secure key storage', async ({ page }) => {
+    await page.locator('#study-settings-btn').click();
     const form = page.locator('#study-settings-panel');
     await expect(form).toBeVisible();
-    await expect(form.getByText('API keys are never entered')).toBeVisible();
-    await expect(form.locator('input[type="password"], input[name*="key" i], input[id*="key" i]')).toHaveCount(0);
+    await expect(form.getByText('Keys are validated by the provider')).toBeVisible();
+    await expect(form.locator('input[type="password"]')).toHaveCount(1);
     await page.getByLabel('Model').fill('gpt-example');
     await page.getByLabel('Reasoning effort').selectOption('xhigh');
     await form.getByRole('button', { name: 'Save' }).click();
 
-    await page.getByRole('button', { name: 'Generation settings' }).click();
+    await page.locator('#study-settings-btn').click();
     await expect(page.getByLabel('Model')).toHaveValue('gpt-example');
     await expect(page.getByLabel('Reasoning effort')).toHaveValue('xhigh');
 });
@@ -89,10 +86,11 @@ test('a signed-in learner can queue the selected planned deck as a pilot', async
     });
     await page.reload();
     await page.locator('#tab-curriculum').click();
-    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
-    const target = page.locator('.curriculum-graph-node[data-deck-id="mathematics/elementary-algebra-and-functions"]');
-    await target.click();
-    await page.locator('.curriculum-graph-node.is-target').click();
+    await page.locator('.curriculum-directory .curriculum-explorer-item').filter({ hasText: 'mathematics' }).click();
+    await page.getByRole('button', { name: 'View decks' }).click();
+    await page.locator('.curriculum-directory .curriculum-explorer-item')
+        .filter({ hasText: 'geometry-and-measurement' }).click();
+    await page.getByRole('button', { name: 'Preparation details' }).click();
     const generate = page.getByRole('button', { name: 'Generate pilot chapter' });
     await expect(generate).toBeVisible();
     await generate.click();
@@ -100,7 +98,7 @@ test('a signed-in learner can queue the selected planned deck as a pilot', async
         jobType: 'deck-build',
         providerId: 'codex',
         payload: {
-            deckId: 'mathematics/elementary-algebra-and-functions',
+            deckId: 'mathematics/geometry-and-measurement',
             buildScope: 'pilot'
         }
     });
@@ -108,11 +106,17 @@ test('a signed-in learner can queue the selected planned deck as a pilot', async
 
 test('curriculum controls and builder fit a phone viewport', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile-chromium');
-    const stage = page.locator('.curriculum-graph-stage');
-    await expect(stage).toBeVisible();
-    const box = await stage.boundingBox();
+    await page.locator('.curriculum-directory .curriculum-explorer-item').filter({ hasText: 'physics' }).click();
+    const explorer = page.locator('.curriculum-neighborhood');
+    await expect(explorer).toBeVisible();
+    const box = await explorer.boundingBox();
     expect(box.x + box.width).toBeLessThanOrEqual(391);
-    await page.getByRole('button', { name: 'Create curriculum' }).click();
+    await expect(page.locator('.curriculum-neighborhood-column.is-selected')).toBeVisible();
+    await expect(page.locator('.curriculum-neighborhood-column.is-prerequisites')).toBeVisible();
+    await expect(page.locator('.curriculum-neighborhood-column.is-unlocks')).toBeHidden();
+    await page.getByRole('button', { name: 'Unlocks' }).click();
+    await expect(page.locator('.curriculum-neighborhood-column.is-unlocks')).toBeVisible();
+    await page.getByRole('button', { name: 'Edit subject' }).click();
     const modal = page.locator('.curriculum-builder-modal');
     const modalBox = await modal.boundingBox();
     expect(modalBox.x).toBeGreaterThanOrEqual(0);

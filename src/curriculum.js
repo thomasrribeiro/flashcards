@@ -22,6 +22,221 @@ export function curriculumMaps(index) {
     return { decks, chapters };
 }
 
+function curriculumSubjectNodes(index) {
+    const subjects = new Map((index?.subjects || []).map(subject => [subject.id, subject]));
+    for (const deck of index?.decks || []) {
+        if (!subjects.has(deck.subject)) subjects.set(deck.subject, { id: deck.subject });
+    }
+    return [...subjects.values()].map(subject => ({
+        ...subject,
+        id: subject.id,
+        subject: subject.id,
+        deck: subject.id,
+        title: subject.title || subject.id,
+        nodeType: 'subject',
+        deck_count: (index?.decks || []).filter(deck => deck.subject === subject.id).length,
+        order: 0
+    }));
+}
+
+function chapterDependencyId(detail, deckId) {
+    if (!detail?.resolved) return null;
+    if (detail.kind === 'external-concept') return detail.resolved;
+    if (detail.kind !== 'chapter' && detail.kind !== 'concept') return null;
+    return detail.resolved.includes('#') ? detail.resolved : `${deckId}#${detail.resolved}`;
+}
+
+function curriculumHierarchyGraph(index, hierarchy, { includeRecommended = false } = {}) {
+    if (hierarchy === 'subject') {
+        const nodes = curriculumSubjectNodes(index);
+        const ids = new Set(nodes.map(node => node.id));
+        const edges = new Map();
+        const add = (source, target, type) => {
+            if (!source || !target || source === target || !ids.has(source) || !ids.has(target)) return;
+            const key = `${source}>${target}`;
+            if (!edges.has(key) || type === 'required') edges.set(key, { source, target, type });
+        };
+        for (const subject of index?.subjects || []) {
+            for (const source of subject.prerequisites || []) add(source, subject.id, 'required');
+            if (includeRecommended) {
+                for (const source of subject.recommended_after || []) add(source, subject.id, 'recommended');
+            }
+        }
+        for (const deck of index?.decks || []) {
+            for (const sourceId of deck.prerequisites || []) add(sourceId.split('/')[0], deck.subject, 'required');
+            if (includeRecommended) {
+                for (const sourceId of deck.recommended_after || []) add(sourceId.split('/')[0], deck.subject, 'recommended');
+            }
+        }
+        return { nodes, edges: [...edges.values()] };
+    }
+
+    if (hierarchy === 'chapter') {
+        const { chapters } = curriculumMaps(index);
+        const nodes = [...chapters.entries()].map(([id, chapter]) => {
+            const deck = (index?.decks || []).find(item => item.id === chapter.deckId);
+            return {
+                ...chapter,
+                id,
+                subject: deck?.subject || chapter.deckId.split('/')[0],
+                deck: chapter.title || chapter.id,
+                deckId: chapter.deckId,
+                nodeType: 'chapter'
+            };
+        });
+        const ids = new Set(nodes.map(node => node.id));
+        const edges = [];
+        for (const chapter of nodes) {
+            for (const detail of chapter.resolved_dependencies || []) {
+                const source = chapterDependencyId(detail, chapter.deckId);
+                if (source && ids.has(source)) edges.push({ source, target: chapter.id, type: 'required' });
+            }
+        }
+        return { nodes, edges };
+    }
+
+    const nodes = [...(index?.decks || [])].map(deck => ({ ...deck, nodeType: 'deck' }));
+    const ids = new Set(nodes.map(node => node.id));
+    const edges = [];
+    for (const target of nodes) {
+        for (const source of target.prerequisites || []) {
+            if (ids.has(source)) edges.push({ source, target: target.id, type: 'required' });
+        }
+        if (includeRecommended) {
+            for (const source of target.recommended_after || []) {
+                if (ids.has(source)) edges.push({ source, target: target.id, type: 'recommended' });
+            }
+        }
+    }
+    return { nodes, edges };
+}
+
+function stronglyConnectedComponents(nodeIds, edges) {
+    const outgoing = new Map(nodeIds.map(id => [id, []]));
+    for (const edge of edges) outgoing.get(edge.source)?.push(edge.target);
+    let nextIndex = 0;
+    const stack = [];
+    const onStack = new Set();
+    const indices = new Map();
+    const lowLinks = new Map();
+    const components = [];
+    const visit = id => {
+        indices.set(id, nextIndex);
+        lowLinks.set(id, nextIndex);
+        nextIndex += 1;
+        stack.push(id);
+        onStack.add(id);
+        for (const target of outgoing.get(id) || []) {
+            if (!indices.has(target)) {
+                visit(target);
+                lowLinks.set(id, Math.min(lowLinks.get(id), lowLinks.get(target)));
+            } else if (onStack.has(target)) {
+                lowLinks.set(id, Math.min(lowLinks.get(id), indices.get(target)));
+            }
+        }
+        if (lowLinks.get(id) !== indices.get(id)) return;
+        const component = [];
+        let member;
+        do {
+            member = stack.pop();
+            onStack.delete(member);
+            component.push(member);
+        } while (member !== id);
+        components.push(component);
+    };
+    nodeIds.forEach(id => { if (!indices.has(id)) visit(id); });
+    return components;
+}
+
+function distanceFromComponent(edges, component, direction) {
+    const blocked = new Set(component);
+    const distances = new Map();
+    let frontier = new Set(component);
+    let distance = 0;
+    while (frontier.size) {
+        distance += 1;
+        const next = new Set();
+        for (const edge of edges) {
+            const from = direction === 'backward' ? edge.target : edge.source;
+            const to = direction === 'backward' ? edge.source : edge.target;
+            if (!frontier.has(from) || blocked.has(to) || distances.has(to)) continue;
+            distances.set(to, distance);
+            next.add(to);
+        }
+        frontier = next;
+    }
+    return distances;
+}
+
+/**
+ * Return a hierarchy-preserving prerequisite neighborhood for one selected
+ * subject, deck, or chapter. Required cycles are collapsed around the target
+ * so traversal remains finite. Subject-level cycles are projections of more
+ * specific deck relationships and are reported as interdependence; deck and
+ * chapter cycles remain invalid curriculum data.
+ */
+export function curriculumNeighborhood(index, {
+    hierarchy = 'deck',
+    targetId,
+    includeRecommended = false
+} = {}) {
+    const graph = curriculumHierarchyGraph(index, hierarchy, { includeRecommended });
+    const nodes = new Map(graph.nodes.map(node => [node.id, node]));
+    const target = nodes.get(targetId) || null;
+    if (!target) return null;
+    const required = graph.edges.filter(edge => edge.type === 'required');
+    const component = stronglyConnectedComponents([...nodes.keys()], required)
+        .find(ids => ids.includes(targetId)) || [targetId];
+    const hasSelfLoop = required.some(edge => edge.source === targetId && edge.target === targetId);
+    const cyclic = component.length > 1 || hasSelfLoop;
+    const before = distanceFromComponent(required, component, 'backward');
+    const after = distanceFromComponent(required, component, 'forward');
+    const entries = distances => [...distances]
+        .map(([id, distance]) => ({ item: nodes.get(id), distance }))
+        .filter(entry => entry.item)
+        .sort((a, b) => a.distance - b.distance
+            || a.item.subject.localeCompare(b.item.subject)
+            || Number(a.item.order || 0) - Number(b.item.order || 0)
+            || a.item.id.localeCompare(b.item.id));
+    const recommended = includeRecommended
+        ? graph.edges
+            .filter(edge => edge.type === 'recommended' && component.includes(edge.target) && !component.includes(edge.source))
+            .map(edge => nodes.get(edge.source))
+            .filter(Boolean)
+        : [];
+    return {
+        hierarchy,
+        target,
+        prerequisites: entries(before),
+        unlocks: entries(after),
+        recommended,
+        interdependent: hierarchy === 'subject'
+            ? component.filter(id => id !== targetId).map(id => nodes.get(id)).filter(Boolean)
+            : [],
+        cycle: hierarchy === 'subject' || !cyclic
+            ? []
+            : component.filter(id => id !== targetId).map(id => nodes.get(id)).filter(Boolean),
+        cyclic
+    };
+}
+
+export function curriculumDirectory(index, {
+    hierarchy = 'subject',
+    parentId = null,
+    query = ''
+} = {}) {
+    const term = query.trim().toLowerCase();
+    const graph = curriculumHierarchyGraph(index, hierarchy);
+    return graph.nodes
+        .filter(item => hierarchy === 'subject'
+            || hierarchy === 'deck' && (!parentId || item.subject === parentId)
+            || hierarchy === 'chapter' && (!parentId || item.deckId === parentId))
+        .filter(item => !term || `${item.id} ${item.title || ''} ${item.description || ''}`.toLowerCase().includes(term))
+        .sort((a, b) => a.subject.localeCompare(b.subject)
+            || Number(a.order || 0) - Number(b.order || 0)
+            || a.id.localeCompare(b.id));
+}
+
 export function deckPrerequisiteClosure(index, targetId) {
     const { decks } = curriculumMaps(index);
     const visited = new Set();

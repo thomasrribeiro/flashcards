@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
     chapterPrerequisiteClosure,
+    curriculumDirectory,
     curriculumGraph,
+    curriculumNeighborhood,
     curriculumDeckRows,
     curriculumLayerGraph,
     dependencyPlan,
@@ -182,6 +184,91 @@ describe('curriculum dependency planning', () => {
             target: 'mathematics/arithmetic#02_measurement',
             type: 'required'
         }]);
+    });
+
+    it('builds a three-column deck neighborhood with direct and transitive distances', () => {
+        const neighborhood = curriculumNeighborhood(index, {
+            hierarchy: 'deck',
+            targetId: 'mathematics/algebra'
+        });
+        expect(neighborhood.target.id).toBe('mathematics/algebra');
+        expect(neighborhood.prerequisites.map(entry => [entry.item.id, entry.distance])).toEqual([
+            ['mathematics/arithmetic', 1]
+        ]);
+        expect(neighborhood.unlocks.map(entry => [entry.item.id, entry.distance])).toEqual([
+            ['physics/physical-reasoning', 1]
+        ]);
+    });
+
+    it('keeps every neighborhood item at the selected hierarchy', () => {
+        const subjects = curriculumDirectory(index, { hierarchy: 'subject' });
+        const decks = curriculumDirectory(index, { hierarchy: 'deck', parentId: 'mathematics' });
+        const chapters = curriculumDirectory(index, {
+            hierarchy: 'chapter',
+            parentId: 'mathematics/arithmetic'
+        });
+        expect(subjects.every(item => item.nodeType === 'subject')).toBe(true);
+        expect(decks.map(item => item.id)).toEqual([
+            'mathematics/arithmetic',
+            'mathematics/algebra'
+        ]);
+        expect(chapters.map(item => item.id)).toEqual([
+            'mathematics/arithmetic#01_numbers',
+            'mathematics/arithmetic#02_measurement'
+        ]);
+    });
+
+    it('turns reciprocal subject projections into interdependence', () => {
+        const cyclicIndex = {
+            ...index,
+            subjects: [{ id: 'mathematics' }, { id: 'physics' }],
+            decks: [
+                ...index.decks,
+                {
+                    id: 'mathematics/mathematical-physics',
+                    subject: 'mathematics',
+                    deck: 'mathematical-physics',
+                    order: 3,
+                    prerequisites: ['physics/physical-reasoning'],
+                    recommended_after: [],
+                    chapters: []
+                }
+            ]
+        };
+        const neighborhood = curriculumNeighborhood(cyclicIndex, {
+            hierarchy: 'subject',
+            targetId: 'physics'
+        });
+        expect(neighborhood.prerequisites).toEqual([]);
+        expect(neighborhood.unlocks).toEqual([]);
+        expect(neighborhood.interdependent.map(item => item.id)).toEqual(['mathematics']);
+        expect(neighborhood.cyclic).toBe(true);
+    });
+
+    it('flags a true deck cycle instead of recursing forever', () => {
+        const cyclicIndex = {
+            ...index,
+            decks: index.decks.map(deck => deck.id === 'mathematics/arithmetic'
+                ? { ...deck, prerequisites: ['mathematics/algebra'] }
+                : deck)
+        };
+        const neighborhood = curriculumNeighborhood(cyclicIndex, {
+            hierarchy: 'deck',
+            targetId: 'mathematics/algebra'
+        });
+        expect(neighborhood.cycle.map(item => item.id)).toEqual(['mathematics/arithmetic']);
+        expect(neighborhood.cyclic).toBe(true);
+    });
+
+    it('supports cross-deck chapter prerequisites at chapter hierarchy', () => {
+        const neighborhood = curriculumNeighborhood(index, {
+            hierarchy: 'chapter',
+            targetId: 'physics/physical-reasoning#01_systems'
+        });
+        expect(neighborhood.prerequisites.map(entry => [entry.item.id, entry.distance])).toEqual([
+            ['mathematics/arithmetic#02_measurement', 1],
+            ['mathematics/arithmetic#01_numbers', 2]
+        ]);
     });
 
     it('uses ELK to route a readable layered graph', async () => {

@@ -3538,6 +3538,187 @@ body.standalone-phone .mobile-sidebar-close {
     font-size: 0.72rem;
 }
 
+.curriculum-directory {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    border-top: 1px solid var(--black);
+    border-left: 1px solid var(--black);
+}
+
+.curriculum-explorer-item {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-right: 1px solid var(--black);
+    border-bottom: 1px solid var(--black);
+    background: var(--white);
+    color: var(--black);
+    padding: 12px 14px;
+    text-align: left;
+    font: inherit;
+}
+
+.curriculum-explorer-item:hover,
+.curriculum-explorer-item:focus-visible {
+    background: color-mix(in srgb, var(--gold) 17%, var(--white));
+}
+
+.curriculum-explorer-item-name,
+.curriculum-explorer-item-meta {
+    display: block;
+}
+
+.curriculum-explorer-item-name {
+    overflow-wrap: anywhere;
+    font-size: 0.76rem;
+    line-height: 1.35;
+}
+
+.curriculum-explorer-item-meta {
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 0.58rem;
+    line-height: 1.4;
+}
+
+.curriculum-neighborhood {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    min-height: 480px;
+    max-height: min(68dvh, 760px);
+    border: 1px solid var(--black);
+    background: var(--white);
+}
+
+.curriculum-neighborhood-column {
+    min-width: 0;
+    overflow-y: auto;
+}
+
+.curriculum-neighborhood-column + .curriculum-neighborhood-column {
+    border-left: 1px solid var(--black);
+}
+
+.curriculum-neighborhood-column.is-unlocks {
+    border-left: 1px solid var(--black);
+}
+
+.curriculum-neighborhood-column > h3 {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin: 0;
+    border-bottom: 1px solid var(--black);
+    background: var(--light-gray);
+    padding: 10px 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.curriculum-neighborhood-column > h4,
+.curriculum-interdependent h4,
+.curriculum-cycle-warning h4 {
+    margin: 0;
+    padding: 12px 12px 7px;
+    color: var(--muted);
+    font-size: 0.58rem;
+    font-weight: 500;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.curriculum-neighborhood-column .curriculum-explorer-item {
+    border-right: 0;
+}
+
+.curriculum-neighborhood-column.is-selected {
+    background: color-mix(in srgb, var(--gold) 7%, var(--white));
+}
+
+.curriculum-selected-item {
+    padding: 22px 18px;
+}
+
+.curriculum-selected-kind {
+    color: var(--muted);
+    font-size: 0.56rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.curriculum-selected-item h2 {
+    margin: 7px 0;
+    overflow-wrap: anywhere;
+    font-size: 1rem;
+    line-height: 1.35;
+}
+
+.curriculum-selected-item > p {
+    font-size: 0.66rem;
+    line-height: 1.55;
+}
+
+.curriculum-selected-id {
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.curriculum-selected-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 16px;
+}
+
+.curriculum-selected-actions button,
+.curriculum-mobile-relation-tabs button {
+    min-height: 34px;
+    border: 1px solid var(--black);
+    border-radius: 0;
+    background: var(--white);
+    color: var(--black);
+    padding: 6px 9px;
+    font: inherit;
+    font-size: 0.62rem;
+}
+
+.curriculum-selected-actions button:first-child,
+.curriculum-mobile-relation-tabs button.active {
+    background: var(--gold);
+}
+
+.curriculum-interdependent,
+.curriculum-cycle-warning {
+    margin-top: 18px;
+    border: 1px solid var(--black);
+    background: var(--white);
+}
+
+.curriculum-interdependent > p,
+.curriculum-cycle-warning > p {
+    margin: 0;
+    padding: 0 12px 12px;
+    color: var(--muted);
+    font-size: 0.6rem;
+    line-height: 1.5;
+}
+
+.curriculum-cycle-warning {
+    border-color: #c22;
+}
+
+.curriculum-explorer-empty {
+    margin: 0;
+    padding: 18px 12px;
+    color: var(--muted);
+    font-size: 0.66rem;
+    line-height: 1.5;
+}
+
+.curriculum-mobile-relation-tabs {
+    display: none;
+}
+
 .curriculum-recommended-toggle {
     display: inline-flex;
     align-items: center;
@@ -4005,6 +4186,57 @@ body.standalone-phone .mobile-sidebar-close {
 @media (max-width: 760px) {
     .curriculum-toolbar {
         flex-direction: column;
+    }
+
+    .curriculum-neighborhood {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        max-height: none;
+    }
+
+    .curriculum-neighborhood-column {
+        max-height: 58dvh;
+    }
+
+    .curriculum-neighborhood-column + .curriculum-neighborhood-column {
+        border-left: 0;
+    }
+
+    .curriculum-neighborhood-column.is-unlocks {
+        border-left: 0;
+    }
+
+    .curriculum-neighborhood-column.is-selected {
+        order: 1;
+        max-height: none;
+        border-bottom: 1px solid var(--black);
+    }
+
+    .curriculum-mobile-relation-tabs {
+        order: 2;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border-bottom: 1px solid var(--black);
+    }
+
+    .curriculum-mobile-relation-tabs button {
+        min-height: 42px;
+        border: 0;
+    }
+
+    .curriculum-mobile-relation-tabs button + button {
+        border-left: 1px solid var(--black);
+    }
+
+    .curriculum-neighborhood-column.is-prerequisites,
+    .curriculum-neighborhood-column.is-unlocks {
+        display: none;
+        order: 3;
+    }
+
+    .curriculum-neighborhood-column.is-mobile-active {
+        display: block;
     }
 
     .curriculum-recommended-toggle {
