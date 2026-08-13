@@ -7,31 +7,35 @@ test.beforeEach(async ({ page }) => {
     await expect(page.locator('.curriculum-summary')).toContainText('subject');
 });
 
-test('focused explorer keeps prerequisite relationships at one hierarchy', async ({ page }) => {
-    const subjects = page.locator('.curriculum-directory .curriculum-explorer-item');
+test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }) => {
+    const subjects = page.locator('.curriculum-graph-node');
     await expect(subjects).toHaveCount(3);
-    await subjects.filter({ hasText: 'physics' }).click();
+    await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
 
-    await expect(page.locator('.curriculum-neighborhood-column')).toHaveCount(3);
-    await expect(page.locator('.curriculum-selected-item h2')).toHaveText('physics');
-    await expect(page).toHaveURL(/curriculum-level=subject.*curriculum-target=physics|curriculum-target=physics.*curriculum-level=subject/);
-    await expect(page.locator('.curriculum-neighborhood .curriculum-explorer-item-meta').first()).toContainText('decks');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
+    await expect(page).toHaveURL(/curriculum-level=deck.*curriculum-subject=physics|curriculum-subject=physics.*curriculum-level=deck/);
+    await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
+    await page.getByRole('button', { name: 'Show next three dependency layers' }).click();
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 2–4');
+    await expect(page).toHaveURL(/curriculum-layer=1/);
+    await page.getByRole('button', { name: 'Show previous three dependency layers' }).click();
     await page.reload();
-    await expect(page.locator('.curriculum-selected-item h2')).toHaveText('physics');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
 
-    await page.getByRole('button', { name: 'View decks' }).click();
-    await expect(page.locator('.curriculum-directory')).toBeVisible();
-    await page.locator('.curriculum-directory .curriculum-explorer-item')
-        .filter({ hasText: 'measurement-and-physical-reasoning' }).click();
+    await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
+    await expect(page.locator('.curriculum-neighborhood-column')).toHaveCount(3);
     await expect(page.locator('.curriculum-neighborhood-column.is-prerequisites')).toBeVisible();
 
-    await page.goBack();
-    await expect(page.locator('.curriculum-directory')).toBeVisible();
-    await page.getByRole('button', { name: 'Full map' }).click();
+    await page.locator('.curriculum-selected-item').click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
-    await page.getByRole('button', { name: 'Focused view' }).click();
-    await expect(page.locator('.curriculum-directory')).toBeVisible();
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
+    await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
+
+    await page.goBack();
+    await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
+    await page.goBack();
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
 });
 
 test('builder validates visual prerequisite edits before queueing', async ({ page }) => {
@@ -86,10 +90,8 @@ test('a signed-in learner can queue the selected planned deck as a pilot', async
     });
     await page.reload();
     await page.locator('#tab-curriculum').click();
-    await page.locator('.curriculum-directory .curriculum-explorer-item').filter({ hasText: 'mathematics' }).click();
-    await page.getByRole('button', { name: 'View decks' }).click();
-    await page.locator('.curriculum-directory .curriculum-explorer-item')
-        .filter({ hasText: 'geometry-and-measurement' }).click();
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
     await page.getByRole('button', { name: 'Preparation details' }).click();
     const generate = page.getByRole('button', { name: 'Generate pilot chapter' });
     await expect(generate).toBeVisible();
@@ -106,7 +108,8 @@ test('a signed-in learner can queue the selected planned deck as a pilot', async
 
 test('curriculum controls and builder fit a phone viewport', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile-chromium');
-    await page.locator('.curriculum-directory .curriculum-explorer-item').filter({ hasText: 'physics' }).click();
+    await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
+    await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
     const explorer = page.locator('.curriculum-neighborhood');
     await expect(explorer).toBeVisible();
     const box = await explorer.boundingBox();

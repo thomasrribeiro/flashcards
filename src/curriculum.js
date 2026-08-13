@@ -390,6 +390,26 @@ export function curriculumGraph(index, {
     return { nodes, edges, seedIds: seeds.map(deck => deck.id) };
 }
 
+/** Build the strict deck DAG owned by one subject without pulling external decks in. */
+export function subjectDeckGraph(index, subject, { includeRecommended = false } = {}) {
+    const nodes = (index?.decks || [])
+        .filter(deck => deck.subject === subject)
+        .map(deck => ({ ...deck, nodeType: 'deck' }));
+    const visible = new Set(nodes.map(node => node.id));
+    const edges = [];
+    for (const target of nodes) {
+        for (const source of target.prerequisites || []) {
+            if (visible.has(source)) edges.push({ source, target: target.id, type: 'required' });
+        }
+        if (includeRecommended) {
+            for (const source of target.recommended_after || []) {
+                if (visible.has(source)) edges.push({ source, target: target.id, type: 'recommended' });
+            }
+        }
+    }
+    return { nodes, edges, seedIds: [] };
+}
+
 export function subjectOverviewGraph(index, { includeRecommended = false, query = '' } = {}) {
     const term = query.trim().toLowerCase();
     const subjects = new Map((index?.subjects || []).map(subject => [subject.id, subject]));
@@ -549,6 +569,52 @@ export function curriculumLayerGraph(graph, requestedLayer = null) {
     };
 }
 
+/**
+ * Return a horizontally sliding window of dependency ranks. Unlike the older
+ * neighborhood layer view, this always retains up to `width` complete ranks,
+ * so every visible column has one unambiguous prerequisite order.
+ */
+export function curriculumLayerWindow(graph, requestedStart = 0, width = 3) {
+    if (!graph?.nodes?.length) {
+        return {
+            graph: { nodes: [], edges: [], seedIds: [] },
+            start: 0,
+            end: 0,
+            layerCount: 0,
+            width: Math.max(1, width)
+        };
+    }
+    const ranks = requiredGraphRanks(graph);
+    const layerCount = Math.max(...ranks.values()) + 1;
+    const windowWidth = Math.max(1, Math.round(width));
+    const maxStart = Math.max(0, layerCount - windowWidth);
+    const numericStart = Number(requestedStart);
+    const start = Math.max(0, Math.min(
+        maxStart,
+        Number.isFinite(numericStart) ? Math.round(numericStart) : 0
+    ));
+    const end = Math.min(layerCount, start + windowWidth);
+    const visible = new Set(graph.nodes
+        .filter(node => {
+            const rank = ranks.get(node.id);
+            return rank >= start && rank < end;
+        })
+        .map(node => node.id));
+    return {
+        graph: {
+            nodes: graph.nodes
+                .filter(node => visible.has(node.id))
+                .map(node => ({ ...node, curriculumRank: ranks.get(node.id) })),
+            edges: graph.edges.filter(edge => visible.has(edge.source) && visible.has(edge.target)),
+            seedIds: []
+        },
+        start,
+        end,
+        layerCount,
+        width: windowWidth
+    };
+}
+
 export function chapterGraph(index, deckId) {
     const { decks } = curriculumMaps(index);
     const deck = decks.get(deckId);
@@ -620,7 +686,14 @@ export function layoutCurriculumGraph(graph, {
     rowGap = 24,
     margin = 40
 } = {}) {
-    const ranks = requiredGraphRanks(graph);
+    const suppliedRanks = graph.nodes.length > 0
+        && graph.nodes.every(node => Number.isInteger(node.curriculumRank));
+    const rankOffset = suppliedRanks
+        ? Math.min(...graph.nodes.map(node => node.curriculumRank))
+        : 0;
+    const ranks = suppliedRanks
+        ? new Map(graph.nodes.map(node => [node.id, node.curriculumRank - rankOffset]))
+        : requiredGraphRanks(graph);
 
     const columns = new Map();
     for (const node of graph.nodes) {

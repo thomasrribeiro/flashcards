@@ -68,12 +68,15 @@ import {
     curriculumDirectory,
     curriculumGraph,
     curriculumLayerGraph,
+    curriculumLayerWindow,
     curriculumMaps,
     curriculumNeighborhood,
     dependencyPlan,
     focusedCurriculumGraph,
     layoutCurriculumGraphElk,
+    layoutCurriculumGraph,
     loadCurriculumIndex,
+    subjectDeckGraph,
     subjectOverviewGraph
 } from './curriculum.js';
 import {
@@ -1531,7 +1534,8 @@ const curriculumViewState = {
     mode: 'overview',
     hierarchy: 'subject',
     targetId: '',
-    parentId: ''
+    parentId: '',
+    layerStart: 0
 };
 
 function curriculumDeckForRepository(deckId, subject = null) {
@@ -2650,10 +2654,12 @@ function curriculumElkEdgePath(edge, source, target) {
     return points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
 }
 
-async function renderCurriculumGraphCanvas(root, graph, installed) {
-    const layout = await layoutCurriculumGraphElk(graph, {
-        direction: graph.nodes.every(node => node.nodeType === 'subject') ? 'DOWN' : 'RIGHT'
-    });
+async function renderCurriculumGraphCanvas(root, graph, installed, { ranked = false } = {}) {
+    const layout = ranked
+        ? layoutCurriculumGraph(graph)
+        : await layoutCurriculumGraphElk(graph, {
+            direction: graph.nodes.every(node => node.nodeType === 'subject') ? 'DOWN' : 'RIGHT'
+        });
     const stage = document.createElement('div');
     stage.className = 'curriculum-graph-stage';
     stage.setAttribute('aria-label', 'Interactive curriculum prerequisite graph');
@@ -2727,22 +2733,17 @@ async function renderCurriculumGraphCanvas(root, graph, installed) {
         node.onclick = () => {
             if (deck.nodeType === 'subject') {
                 navigateCurriculum({
-                    mode: 'focus',
-                    hierarchy: 'subject',
+                    mode: 'subject',
+                    hierarchy: 'deck',
                     subject: deck.id,
-                    targetId: deck.id,
-                    parentId: '',
-                    query: ''
+                    targetId: '',
+                    parentId: deck.id,
+                    query: '',
+                    layerStart: 0
                 });
             } else if (deck.nodeType === 'chapter') {
-                navigateCurriculum({
-                    mode: 'focus',
-                    hierarchy: 'chapter',
-                    subject: deck.subject,
-                    targetId: deck.id,
-                    parentId: deck.deckId,
-                    query: ''
-                });
+                const separator = deck.id.indexOf('#');
+                openDependencyModal(deck.id.slice(0, separator), deck.id.slice(separator + 1));
             } else {
                 navigateCurriculum({
                     mode: 'focus',
@@ -2854,8 +2855,8 @@ async function renderCurriculumGraphCanvas(root, graph, installed) {
 }
 
 function curriculumStateSnapshot() {
-    const { mode, hierarchy, targetId, parentId, subject, includeRecommended } = curriculumViewState;
-    return { mode, hierarchy, targetId, parentId, subject, includeRecommended };
+    const { mode, hierarchy, targetId, parentId, subject, includeRecommended, layerStart } = curriculumViewState;
+    return { mode, hierarchy, targetId, parentId, subject, includeRecommended, layerStart };
 }
 
 function curriculumStateFromUrl(url = new URL(window.location.href)) {
@@ -2873,6 +2874,7 @@ function curriculumStateFromUrl(url = new URL(window.location.href)) {
         parentId: url.searchParams.get('curriculum-parent') || '',
         subject: url.searchParams.get('curriculum-subject') || '',
         includeRecommended: url.searchParams.get('recommended') === '1',
+        layerStart: Math.max(0, Number(url.searchParams.get('curriculum-layer')) || 0),
         query: ''
     };
 }
@@ -2886,7 +2888,8 @@ function writeCurriculumHistory({ replace = false } = {}) {
     const optional = [
         ['curriculum-target', state.targetId],
         ['curriculum-parent', state.parentId],
-        ['curriculum-subject', state.subject]
+        ['curriculum-subject', state.subject],
+        ['curriculum-layer', state.layerStart || '']
     ];
     for (const [key, value] of optional) {
         if (value) url.searchParams.set(key, value);
@@ -2918,7 +2921,7 @@ function curriculumItemMeta(item, installed) {
 
 function curriculumFocusOptions(item) {
     if (item.nodeType === 'subject') {
-        return { mode: 'focus', hierarchy: 'subject', subject: item.id, parentId: '', targetId: item.id, query: '' };
+        return { mode: 'subject', hierarchy: 'deck', subject: item.id, parentId: item.id, targetId: '', query: '', layerStart: 0 };
     }
     if (item.nodeType === 'chapter') {
         return { mode: 'focus', hierarchy: 'chapter', subject: item.subject, parentId: item.deckId, targetId: item.id, query: '' };
@@ -3085,6 +3088,7 @@ function renderCurriculumNeighborhood(root, installed) {
         </article>
     `;
     const actions = selected.querySelector('.curriculum-selected-actions');
+    const selectedCard = selected.querySelector('.curriculum-selected-item');
     if (neighborhood.hierarchy === 'subject') {
         const descend = document.createElement('button');
         descend.type = 'button';
@@ -3095,13 +3099,27 @@ function renderCurriculumNeighborhood(root, installed) {
         });
         actions.appendChild(descend);
     } else if (neighborhood.hierarchy === 'deck') {
+        selectedCard.classList.add('is-openable');
+        selectedCard.tabIndex = 0;
+        selectedCard.setAttribute('role', 'button');
+        selectedCard.setAttribute('aria-label', `Open chapters for ${curriculumItemName(neighborhood.target)}`);
+        const openChapters = () => navigateCurriculum({
+            mode: 'chapters', hierarchy: 'chapter', subject: neighborhood.target.subject,
+            parentId: neighborhood.target.id, targetId: '', query: '', layerStart: 0
+        });
+        selectedCard.onclick = event => {
+            if (!event.target.closest('button')) openChapters();
+        };
+        selectedCard.onkeydown = event => {
+            if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('button')) {
+                event.preventDefault();
+                openChapters();
+            }
+        };
         const descend = document.createElement('button');
         descend.type = 'button';
         descend.textContent = 'View chapters';
-        descend.onclick = () => navigateCurriculum({
-            mode: 'chapters', hierarchy: 'chapter', subject: neighborhood.target.subject,
-            parentId: neighborhood.target.id, targetId: '', query: ''
-        });
+        descend.onclick = openChapters;
         actions.appendChild(descend);
         const details = document.createElement('button');
         details.type = 'button';
@@ -3161,25 +3179,54 @@ function renderCurriculumNeighborhood(root, installed) {
     );
 }
 
-async function renderFullCurriculumMap(root, installed) {
-    const { hierarchy, subject, parentId, includeRecommended } = curriculumViewState;
-    const graph = hierarchy === 'subject'
-        ? subjectOverviewGraph(curriculumIndex, { includeRecommended })
-        : hierarchy === 'chapter'
-            ? chapterGraph(curriculumIndex, parentId)
-            : curriculumGraph(curriculumIndex, { subject: subject || null, includeRecommended });
+function curriculumGraphControls({ windowState = null } = {}) {
     const controls = document.createElement('div');
     controls.className = 'curriculum-graph-controls';
-    controls.innerHTML = `<span class="curriculum-graph-legend"><span><i class="required"></i>Required</span><span><i class="recommended"></i>Recommended</span></span><span class="curriculum-graph-zoom"><button type="button" data-action="out" aria-label="Zoom out">−</button><button type="button" data-action="in" aria-label="Zoom in">+</button><button type="button" data-action="fit">Fit</button></span>`;
-    root.appendChild(controls);
-    const controller = graph.nodes.length ? await renderCurriculumGraphCanvas(root, graph, installed) : null;
-    if (!controller) {
-        root.insertAdjacentHTML('beforeend', '<p class="curriculum-explorer-empty">No curriculum items are available.</p>');
-        return;
-    }
+    const layerNavigation = windowState ? `
+        <span class="curriculum-graph-navigation">
+            <button type="button" data-action="previous-layer" aria-label="Show previous three dependency layers"${windowState.start === 0 ? ' disabled' : ''}>←</button>
+            <span class="curriculum-layer-label">Layers ${windowState.start + 1}–${windowState.end} of ${windowState.layerCount}</span>
+            <button type="button" data-action="next-layer" aria-label="Show next three dependency layers"${windowState.end >= windowState.layerCount ? ' disabled' : ''}>→</button>
+        </span>` : '';
+    controls.innerHTML = `
+        <span class="curriculum-graph-legend">
+            <span><i class="required"></i>Required</span>
+            <span><i class="recommended"></i>Recommended</span>
+        </span>
+        ${layerNavigation}
+        <span class="curriculum-graph-zoom">
+            <button type="button" data-action="out" aria-label="Zoom out">−</button>
+            <button type="button" data-action="in" aria-label="Zoom in">+</button>
+            <button type="button" data-action="fit">Fit</button>
+        </span>`;
+    return controls;
+}
+
+function connectCurriculumGraphControls(controls, controller) {
     controls.querySelector('[data-action="out"]').onclick = controller.zoomOut;
     controls.querySelector('[data-action="in"]').onclick = controller.zoomIn;
     controls.querySelector('[data-action="fit"]').onclick = controller.fit;
+}
+
+async function renderCurriculumGraph(root, installed, graph, { layered = false } = {}) {
+    const windowState = layered
+        ? curriculumLayerWindow(graph, curriculumViewState.layerStart, 3)
+        : null;
+    if (windowState) curriculumViewState.layerStart = windowState.start;
+    const visibleGraph = windowState?.graph || graph;
+    const controls = curriculumGraphControls({ windowState });
+    root.appendChild(controls);
+    if (!visibleGraph.nodes.length) {
+        root.insertAdjacentHTML('beforeend', '<p class="curriculum-explorer-empty curriculum-graph-empty">No curriculum items are available.</p>');
+        return;
+    }
+    const controller = await renderCurriculumGraphCanvas(root, visibleGraph, installed, { ranked: layered });
+    connectCurriculumGraphControls(controls, controller);
+    if (!windowState) return;
+    const previous = controls.querySelector('[data-action="previous-layer"]');
+    const next = controls.querySelector('[data-action="next-layer"]');
+    previous.onclick = () => navigateCurriculum({ layerStart: windowState.start - 1 });
+    next.onclick = () => navigateCurriculum({ layerStart: windowState.start + 1 });
 }
 
 async function renderCurriculumView(options = {}) {
@@ -3192,6 +3239,11 @@ async function renderCurriculumView(options = {}) {
     activeCurriculumNeighborhoodCleanup?.();
     activeCurriculumNeighborhoodCleanup = null;
     Object.assign(curriculumViewState, options);
+    if (curriculumViewState.mode === 'full') {
+        curriculumViewState.mode = curriculumViewState.hierarchy === 'subject'
+            ? 'overview'
+            : curriculumViewState.hierarchy === 'chapter' ? 'chapters' : 'subject';
+    }
     const installed = installedCurriculumIds(await getAllDecks());
     const { mode, hierarchy, subject, parentId, includeRecommended } = curriculumViewState;
     root.innerHTML = '';
@@ -3209,47 +3261,23 @@ async function renderCurriculumView(options = {}) {
         button.onclick = () => navigateCurriculum(options);
         breadcrumbs.appendChild(button);
     };
-    addCrumb('Subjects', { mode: 'overview', hierarchy: 'subject', subject: '', parentId: '', targetId: '', query: '' }, hierarchy === 'subject' && mode !== 'full');
-    if (subject) addCrumb(subject, { mode: 'subject', hierarchy: 'deck', subject, parentId: subject, targetId: '', query: '' }, hierarchy === 'deck' && mode !== 'focus' && mode !== 'full');
+    addCrumb('Subjects', { mode: 'overview', hierarchy: 'subject', subject: '', parentId: '', targetId: '', query: '', layerStart: 0 }, hierarchy === 'subject');
+    if (subject) addCrumb(subject, { mode: 'subject', hierarchy: 'deck', subject, parentId: subject, targetId: '', query: '', layerStart: 0 }, hierarchy === 'deck' && mode === 'subject');
     const deckId = hierarchy === 'chapter' ? parentId : hierarchy === 'deck' && mode === 'focus' ? curriculumViewState.targetId : '';
     if (deckId) addCrumb(deckId.split('/').pop(), {
         mode: 'chapters', hierarchy: 'chapter', subject: subject || deckId.split('/')[0],
-        parentId: deckId, targetId: '', query: ''
-    }, hierarchy === 'chapter' && mode !== 'focus' && mode !== 'full');
+        parentId: deckId, targetId: '', query: '', layerStart: 0
+    }, hierarchy === 'chapter' || (hierarchy === 'deck' && mode === 'focus'));
     toolbar.appendChild(breadcrumbs);
 
-    const directoryMode = ['overview', 'subject', 'chapters'].includes(mode);
-    if (directoryMode) {
-        const search = document.createElement('input');
-        search.type = 'search';
-        search.placeholder = `Search ${hierarchy === 'subject' ? 'subjects' : hierarchy === 'deck' ? 'decks' : 'chapters'}...`;
-        search.value = curriculumViewState.query;
-        search.setAttribute('aria-label', search.placeholder);
-        let timer = null;
-        search.oninput = () => {
-            clearTimeout(timer);
-            timer = setTimeout(() => renderCurriculumView({ query: search.value }), 120);
-        };
-        toolbar.appendChild(search);
-    }
-    if (mode === 'focus') {
-        const recommendedLabel = document.createElement('label');
-        recommendedLabel.className = 'curriculum-recommended-toggle';
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.checked = includeRecommended;
-        input.onchange = () => navigateCurriculum({ includeRecommended: input.checked }, { replace: true });
-        recommendedLabel.append(input, document.createTextNode('Recommended preparation'));
-        toolbar.appendChild(recommendedLabel);
-    }
-    const mapButton = document.createElement('button');
-    mapButton.type = 'button';
-    mapButton.className = 'curriculum-toolbar-action';
-    mapButton.textContent = mode === 'full' ? 'Focused view' : 'Full map';
-    mapButton.onclick = () => mode === 'full'
-        ? navigateCurriculum({ mode: curriculumViewState.targetId ? 'focus' : hierarchy === 'subject' ? 'overview' : hierarchy === 'deck' ? 'subject' : 'chapters' })
-        : navigateCurriculum({ mode: 'full' });
-    toolbar.appendChild(mapButton);
+    const recommendedLabel = document.createElement('label');
+    recommendedLabel.className = 'curriculum-recommended-toggle';
+    const recommendedInput = document.createElement('input');
+    recommendedInput.type = 'checkbox';
+    recommendedInput.checked = includeRecommended;
+    recommendedInput.onchange = () => navigateCurriculum({ includeRecommended: recommendedInput.checked }, { replace: true });
+    recommendedLabel.append(recommendedInput, document.createTextNode(mode === 'focus' ? 'Recommended preparation' : 'Recommended paths'));
+    toolbar.appendChild(recommendedLabel);
     const sourcesButton = document.createElement('button');
     sourcesButton.type = 'button';
     sourcesButton.className = 'curriculum-toolbar-action';
@@ -3267,15 +3295,22 @@ async function renderCurriculumView(options = {}) {
     const summary = document.createElement('p');
     summary.className = 'curriculum-summary';
     summary.textContent = mode === 'focus'
-        ? 'Select any prerequisite or unlocked item to recenter this view.'
-        : mode === 'full'
-            ? 'Diagnostic map · select any item to open its focused three-column view.'
-            : `Select a ${hierarchy} to see what comes before it and what it unlocks.`;
+        ? 'Select a side deck to recenter it, or select the middle deck to open its chapters.'
+        : mode === 'overview'
+            ? 'Select a subject to open its deck dependency graph.'
+            : mode === 'subject'
+                ? 'Three dependency layers are shown at a time. Use the arrows to move through the curriculum.'
+                : 'Three chapter layers are shown at a time. Use the arrows to move through the deck.';
     root.appendChild(summary);
 
     if (mode === 'focus') renderCurriculumNeighborhood(root, installed);
-    else if (mode === 'full') await renderFullCurriculumMap(root, installed);
-    else renderCurriculumDirectory(root, installed);
+    else if (mode === 'overview') {
+        await renderCurriculumGraph(root, installed, subjectOverviewGraph(curriculumIndex, { includeRecommended }));
+    } else if (mode === 'subject') {
+        await renderCurriculumGraph(root, installed, subjectDeckGraph(curriculumIndex, subject, { includeRecommended }), { layered: true });
+    } else {
+        await renderCurriculumGraph(root, installed, chapterGraph(curriculumIndex, parentId), { layered: true });
+    }
 }
 
 async function renderLegacyCurriculumView(options = {}) {

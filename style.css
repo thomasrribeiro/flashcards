@@ -3654,6 +3654,17 @@ body.standalone-phone .mobile-sidebar-close {
     padding: 20px 16px;
 }
 
+.curriculum-selected-item.is-openable {
+    cursor: pointer;
+}
+
+.curriculum-selected-item.is-openable:hover,
+.curriculum-selected-item.is-openable:focus-visible {
+    border-color: var(--gold);
+    outline: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+    outline-offset: 3px;
+}
+
 .curriculum-neighborhood-edges {
     position: absolute;
     inset: 0;
@@ -3829,7 +3840,7 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-layer-label {
-    min-width: 94px;
+    min-width: 150px;
     color: var(--muted);
     font-size: 0.64rem;
     text-align: center;

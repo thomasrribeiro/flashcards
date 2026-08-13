@@ -6,10 +6,12 @@ import {
     curriculumNeighborhood,
     curriculumDeckRows,
     curriculumLayerGraph,
+    curriculumLayerWindow,
     dependencyPlan,
     focusedCurriculumGraph,
     layoutCurriculumGraphElk,
     subjectOverviewGraph,
+    subjectDeckGraph,
     chapterGraph,
     layoutCurriculumGraph
 } from './curriculum.js';
@@ -148,6 +150,31 @@ describe('curriculum dependency planning', () => {
         }]);
     });
 
+    it('preserves reciprocal subject relationships in the overview graph', () => {
+        const cyclicIndex = {
+            ...index,
+            decks: [...index.decks, {
+                id: 'mathematics/mathematical-physics',
+                subject: 'mathematics',
+                deck: 'mathematical-physics',
+                order: 3,
+                prerequisites: ['physics/physical-reasoning'],
+                recommended_after: [],
+                chapters: []
+            }]
+        };
+        expect(subjectOverviewGraph(cyclicIndex).edges).toEqual([
+            { source: 'mathematics', target: 'physics', type: 'required' },
+            { source: 'physics', target: 'mathematics', type: 'required' }
+        ]);
+    });
+
+    it('builds a subject-owned deck DAG without importing external prerequisites', () => {
+        const graph = subjectDeckGraph(index, 'physics');
+        expect(graph.nodes.map(node => node.id)).toEqual(['physics/physical-reasoning']);
+        expect(graph.edges).toEqual([]);
+    });
+
     it('builds a focused ancestor path with only immediate descendants', () => {
         const graph = focusedCurriculumGraph(index, 'mathematics/algebra');
         expect(graph.nodes.map(node => node.id).sort()).toEqual([
@@ -175,6 +202,34 @@ describe('curriculum dependency planning', () => {
             'physics/physical-reasoning'
         ]);
         expect(middle.graph.seedIds).toEqual(['mathematics/algebra']);
+    });
+
+    it('shows three complete dependency ranks and slides one rank at a time', () => {
+        const graph = curriculumGraph(index);
+        const first = curriculumLayerWindow(graph, 0, 3);
+        expect(first).toMatchObject({ start: 0, end: 3, layerCount: 3, width: 3 });
+        expect(first.graph.nodes.map(node => [node.id, node.curriculumRank])).toEqual([
+            ['mathematics/arithmetic', 0],
+            ['mathematics/algebra', 1],
+            ['physics/physical-reasoning', 2]
+        ]);
+
+        const extended = {
+            nodes: [...graph.nodes, {
+                id: 'physics/mechanics', subject: 'physics', deck: 'mechanics', order: 2
+            }],
+            edges: [...graph.edges, {
+                source: 'physics/physical-reasoning', target: 'physics/mechanics', type: 'required'
+            }],
+            seedIds: []
+        };
+        const second = curriculumLayerWindow(extended, 1, 3);
+        expect(second).toMatchObject({ start: 1, end: 4, layerCount: 4 });
+        expect(second.graph.nodes.map(node => node.id)).toEqual([
+            'mathematics/algebra',
+            'physics/physical-reasoning',
+            'physics/mechanics'
+        ]);
     });
 
     it('builds chapter-level edges from resolved local dependencies', () => {
