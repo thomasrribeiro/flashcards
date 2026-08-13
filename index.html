@@ -203,10 +203,24 @@
                                 <p id="reminder-settings-help" class="study-settings-help">Reminders use this device’s timezone and are sent only when cards are due or a session is paused.</p>
                             </section>
                             <section id="study-settings-pane-generation" class="study-settings-pane is-single-column" role="tabpanel" aria-labelledby="study-settings-tab-generation" data-settings-pane="generation" hidden>
+                                <h4 class="study-settings-subheading">Provider connections</h4>
+                                <div id="ai-provider-list" class="ai-provider-list" aria-live="polite">
+                                    <p class="study-settings-help">Loading provider connections…</p>
+                                </div>
+                                <div id="ai-provider-connect-panel" class="ai-provider-connect-panel hidden">
+                                    <label id="ai-provider-key-label" for="ai-provider-key">API key</label>
+                                    <input id="ai-provider-key" type="password" maxlength="1024" autocomplete="new-password" spellcheck="false" />
+                                    <button id="ai-provider-connect-save" type="button">Connect</button>
+                                    <button id="ai-provider-connect-cancel" type="button">Cancel</button>
+                                    <p id="ai-provider-connect-status" class="study-settings-help"></p>
+                                </div>
+                                <p class="study-settings-help">Keys are validated by the provider, encrypted server-side, and tied to your signed-in GitHub account. They are never stored in this browser, generation requests, logs, or Git repositories.</p>
+                                <p class="study-settings-help">Consumer subscriptions do not normally include API usage; provider API billing applies.</p>
+                                <h4 class="study-settings-subheading">Generation defaults</h4>
                                 <div class="study-setting-field">
-                                    <label for="generation-provider">AI provider</label>
+                                    <label for="generation-provider">Generation provider</label>
                                     <select id="generation-provider">
-                                        <option value="codex">Codex CLI (local account)</option>
+                                        <option value="codex">Codex CLI (local runner)</option>
                                         <option value="custom">Custom local runner</option>
                                     </select>
                                 </div>
@@ -224,20 +238,7 @@
                                         <option value="xhigh">Extra high</option>
                                     </select>
                                 </div>
-                                <p id="generation-model-status" class="study-settings-help">Connect an API provider below to load the models available to your account.</p>
-                                <h4 class="study-settings-subheading">Provider connections</h4>
-                                <div id="ai-provider-list" class="ai-provider-list" aria-live="polite">
-                                    <p class="study-settings-help">Loading provider connections…</p>
-                                </div>
-                                <div id="ai-provider-connect-panel" class="ai-provider-connect-panel hidden">
-                                    <label id="ai-provider-key-label" for="ai-provider-key">API key</label>
-                                    <input id="ai-provider-key" type="password" maxlength="1024" autocomplete="new-password" spellcheck="false" />
-                                    <button id="ai-provider-connect-save" type="button">Connect</button>
-                                    <button id="ai-provider-connect-cancel" type="button">Cancel</button>
-                                    <p id="ai-provider-connect-status" class="study-settings-help"></p>
-                                </div>
-                                <p class="study-settings-help">Keys are validated by the provider, encrypted server-side, and tied to your signed-in GitHub account. They are never stored in this browser, generation requests, logs, or Git repositories.</p>
-                                <p class="study-settings-help">Consumer subscriptions do not normally include API usage; provider API billing applies.</p>
+                                <p id="generation-model-status" class="study-settings-help">Connect an API provider above to load the models available to your account.</p>
                             </section>
                             <section id="study-settings-pane-curriculum" class="study-settings-pane is-single-column" role="tabpanel" aria-labelledby="study-settings-tab-curriculum" data-settings-pane="curriculum" hidden>
                                 <p class="study-settings-help">Enabled public GitHub registries supply the subjects, decks, dependencies, and published chapter plans shown in Curriculum.</p>

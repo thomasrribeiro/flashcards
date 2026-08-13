@@ -142,6 +142,11 @@ test('generation settings persist provider choices and explain secure key storag
     await form.getByRole('tab', { name: 'AI generation' }).click();
     await expect(form.getByText('Keys are validated by the provider')).toBeVisible();
     await expect(form.locator('input[type="password"]')).toHaveCount(1);
+    const sectionOrder = await form.locator('#study-settings-pane-generation').evaluate(pane => (
+        [...pane.children].map(element => element.textContent.trim().split('\n')[0])
+    ));
+    expect(sectionOrder.indexOf('Provider connections')).toBeLessThan(sectionOrder.indexOf('Generation defaults'));
+    await expect(page.getByLabel('Generation provider')).toContainText('Codex CLI (local runner)');
     await form.getByRole('tab', { name: 'Curriculum' }).click();
     await expect(form.getByRole('tab', { name: 'Curriculum' })).toHaveAttribute('aria-selected', 'true');
     await expect(form.locator('#curriculum-settings-sources .curriculum-source-row')).not.toHaveCount(0);

@@ -1556,6 +1556,12 @@ kbd {
     font-weight: 500;
 }
 
+.study-settings-pane > .study-settings-subheading:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+}
+
 .study-settings-modal-content .modal-footer {
     flex-shrink: 0;
     background: var(--white);

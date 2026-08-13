@@ -5164,22 +5164,31 @@ function rebuildGenerationProviderOptions(preferredProvider) {
     const select = document.getElementById('generation-provider');
     if (!select) return;
     select.replaceChildren();
+    const connectedProviders = aiProviderConnections.filter(item => item.connected);
+    if (connectedProviders.length) {
+        const connectedGroup = document.createElement('optgroup');
+        connectedGroup.label = 'Connected API providers';
+        for (const provider of connectedProviders) {
+            const option = document.createElement('option');
+            option.value = provider.id;
+            option.textContent = `${provider.name} API`;
+            connectedGroup.append(option);
+        }
+        select.append(connectedGroup);
+    }
+    const localGroup = document.createElement('optgroup');
+    localGroup.label = 'Local runners';
     const localOptions = [
-        ['codex', 'Codex CLI (local account)'],
+        ['codex', 'Codex CLI (local runner)'],
         ['custom', 'Custom local runner']
     ];
     for (const [value, label] of localOptions) {
         const option = document.createElement('option');
         option.value = value;
         option.textContent = label;
-        select.append(option);
+        localGroup.append(option);
     }
-    for (const provider of aiProviderConnections.filter(item => item.connected)) {
-        const option = document.createElement('option');
-        option.value = provider.id;
-        option.textContent = `${provider.name} API`;
-        select.append(option);
-    }
+    select.append(localGroup);
     select.value = [...select.options].some(option => option.value === preferredProvider)
         ? preferredProvider
         : 'codex';
@@ -5215,7 +5224,7 @@ async function updateGenerationModelChoices() {
     if (!providerDefinition(provider.value)) {
         modelInput.disabled = false;
         modelInput.placeholder = 'Use the local provider default';
-        status.textContent = 'The selected local runner supplies its own authenticated environment.';
+        status.textContent = 'A local runner executes on a configured computer and supplies its own authentication; it is not connected to your Flashcards account.';
         syncGenerationReasoningChoices();
         return;
     }
