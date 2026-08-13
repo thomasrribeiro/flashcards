@@ -3447,6 +3447,16 @@ body.standalone-phone .mobile-sidebar-close {
     white-space: nowrap;
 }
 
+.curriculum-focus-back {
+    display: inline-grid;
+    width: 40px;
+    min-height: 36px;
+    place-items: center;
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+}
+
 .curriculum-toolbar-action.is-primary {
     background: var(--gold);
 }
@@ -3764,14 +3774,6 @@ body.standalone-phone .mobile-sidebar-close {
     overflow-wrap: anywhere;
 }
 
-.curriculum-selected-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-    margin-top: 16px;
-}
-
-.curriculum-selected-actions button,
 .curriculum-mobile-relation-tabs button {
     min-height: 34px;
     border: 1px solid var(--black);
@@ -3783,7 +3785,6 @@ body.standalone-phone .mobile-sidebar-close {
     font-size: 0.62rem;
 }
 
-.curriculum-selected-actions button:first-child,
 .curriculum-mobile-relation-tabs button.active {
     background: var(--gold);
 }

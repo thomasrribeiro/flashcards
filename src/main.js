@@ -2690,13 +2690,10 @@ async function renderCurriculumGraphCanvas(root, graph, installed, {
     svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
     svg.innerHTML = `
         <defs>
-            <marker id="curriculum-arrow-required" viewBox="0 0 8 8" refX="7.5" refY="4"
-                markerWidth="7" markerHeight="7" orient="auto">
-                <path d="M 0 0.5 L 8 4 L 0 7.5 z" fill="context-stroke"></path>
-            </marker>
-            <marker id="curriculum-arrow-recommended" viewBox="0 0 8 8" refX="7.5" refY="4"
-                markerWidth="7" markerHeight="7" orient="auto">
-                <path d="M 0 0.5 L 8 4 L 0 7.5 z" fill="context-stroke"></path>
+            <marker id="curriculum-arrow-required" viewBox="0 0 12 10" refX="11.5" refY="5"
+                markerWidth="12" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+                <path class="curriculum-arrow-stem" d="M 0 5 H 7" fill="none" stroke="context-stroke" stroke-width="1.8"></path>
+                <path class="curriculum-arrow-head" d="M 5.5 1 L 11.5 5 L 5.5 9 z" fill="context-stroke"></path>
             </marker>
         </defs>
     `;
@@ -2740,7 +2737,7 @@ async function renderCurriculumGraphCanvas(root, graph, installed, {
         path.setAttribute('d', edge.sections?.length
             ? curriculumElkEdgePath(edge, source, target)
             : curriculumEdgePath(source, target, ports.sourceY, ports.targetY));
-        path.setAttribute('marker-end', `url(#curriculum-arrow-${edge.type})`);
+        path.setAttribute('marker-end', 'url(#curriculum-arrow-required)');
         svg.appendChild(path);
     }
     viewport.appendChild(svg);
@@ -3113,20 +3110,25 @@ function renderCurriculumNeighborhood(root, installed) {
             <p class="curriculum-selected-id">${escapeHtml(neighborhood.target.id)}</p>
             ${neighborhood.target.description ? `<p>${escapeHtml(neighborhood.target.description)}</p>` : ''}
             <p class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(neighborhood.target, installed))}</p>
-            <div class="curriculum-selected-actions"></div>
         </article>
     `;
-    const actions = selected.querySelector('.curriculum-selected-actions');
     const selectedCard = selected.querySelector('.curriculum-selected-item');
     if (neighborhood.hierarchy === 'subject') {
-        const descend = document.createElement('button');
-        descend.type = 'button';
-        descend.textContent = 'View decks';
-        descend.onclick = () => navigateCurriculum({
+        selectedCard.classList.add('is-openable');
+        selectedCard.tabIndex = 0;
+        selectedCard.setAttribute('role', 'button');
+        selectedCard.setAttribute('aria-label', `Open decks for ${curriculumItemName(neighborhood.target)}`);
+        const openDecks = () => navigateCurriculum({
             mode: 'subject', hierarchy: 'deck', subject: neighborhood.target.id,
             parentId: neighborhood.target.id, targetId: '', query: ''
         });
-        actions.appendChild(descend);
+        selectedCard.onclick = openDecks;
+        selectedCard.onkeydown = event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openDecks();
+            }
+        };
     } else if (neighborhood.hierarchy === 'deck') {
         selectedCard.classList.add('is-openable');
         selectedCard.tabIndex = 0;
@@ -3136,37 +3138,13 @@ function renderCurriculumNeighborhood(root, installed) {
             mode: 'chapters', hierarchy: 'chapter', subject: neighborhood.target.subject,
             parentId: neighborhood.target.id, targetId: '', query: '', layerStart: 0
         });
-        selectedCard.onclick = event => {
-            if (!event.target.closest('button')) openChapters();
-        };
+        selectedCard.onclick = openChapters;
         selectedCard.onkeydown = event => {
-            if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('button')) {
+            if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 openChapters();
             }
         };
-        const descend = document.createElement('button');
-        descend.type = 'button';
-        descend.textContent = 'View chapters';
-        descend.onclick = openChapters;
-        actions.appendChild(descend);
-        const details = document.createElement('button');
-        details.type = 'button';
-        details.textContent = 'Preparation details';
-        details.onclick = () => openDependencyModal(neighborhood.target.id);
-        actions.appendChild(details);
-    } else {
-        const details = document.createElement('button');
-        details.type = 'button';
-        details.textContent = 'Chapter details';
-        details.onclick = () => {
-            const separator = neighborhood.target.id.indexOf('#');
-            openDependencyModal(
-                neighborhood.target.id.slice(0, separator),
-                neighborhood.target.id.slice(separator + 1)
-            );
-        };
-        actions.appendChild(details);
     }
     if (neighborhood.interdependent.length) {
         const block = document.createElement('div');
@@ -3312,20 +3290,13 @@ async function renderCurriculumView(options = {}) {
         const backButton = document.createElement('button');
         backButton.type = 'button';
         backButton.className = 'curriculum-toolbar-action curriculum-focus-back';
-        backButton.textContent = '← Back';
+        backButton.textContent = '←';
+        backButton.title = 'Back';
         backButton.setAttribute('aria-label', 'Back to previous curriculum view');
         backButton.onclick = backFromCurriculumFocus;
         toolbar.appendChild(backButton);
     }
-    if (!subject) {
-        const createButton = document.createElement('button');
-        createButton.type = 'button';
-        createButton.className = 'curriculum-toolbar-action is-primary';
-        createButton.textContent = 'Create curriculum';
-        createButton.onclick = () => openCurriculumBuilder('');
-        toolbar.appendChild(createButton);
-    }
-    root.appendChild(toolbar);
+    if (toolbar.childElementCount) root.appendChild(toolbar);
 
     if (mode === 'focus') renderCurriculumNeighborhood(root, installed);
     else if (mode === 'overview') {

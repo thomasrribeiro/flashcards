@@ -8,6 +8,7 @@ test.beforeEach(async ({ page }) => {
     await expect(page.locator('.curriculum-view > .curriculum-breadcrumb')).toHaveCount(1);
     await expect(page.getByText('Recommended paths', { exact: true })).toHaveCount(0);
     await expect(page.locator('.curriculum-toolbar').getByRole('button', { name: 'Sources' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Create curriculum' })).toHaveCount(0);
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {
@@ -26,7 +27,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await firstNode.hover();
     await expect(page.locator('.curriculum-graph-edge.is-related')).not.toHaveCount(0);
     await expect(page.locator('.curriculum-graph-edge.is-dimmed')).not.toHaveCount(0);
-    await expect(page.locator('#curriculum-arrow-required path')).toHaveAttribute('fill', 'context-stroke');
+    await expect(page.locator('#curriculum-arrow-required .curriculum-arrow-head')).toHaveAttribute('fill', 'context-stroke');
+    await expect(page.locator('#curriculum-arrow-required .curriculum-arrow-stem')).toHaveAttribute('stroke', 'context-stroke');
     const viewport = page.locator('.curriculum-graph-viewport');
     const transformBeforePan = await viewport.evaluate(element => element.style.transform);
     const stageBox = await page.locator('.curriculum-graph-stage').boundingBox();
@@ -50,6 +52,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-neighborhood-edges')).toHaveCount(0);
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks > h3 span')).not.toHaveText('0');
     await expect(page.getByRole('button', { name: 'Edit subject' })).toHaveCount(0);
+    await expect(page.locator('.curriculum-toolbar button')).toHaveCount(1);
+    await expect(page.locator('.curriculum-selected-item button')).toHaveCount(0);
     if (testInfo.project.name === 'desktop-chromium') {
         const unlocks = page.locator('.curriculum-neighborhood-column.is-unlocks');
         const dimensions = await unlocks.evaluate(element => ({
@@ -107,18 +111,6 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     await expect(page.getByRole('button', { name: 'Back to previous curriculum view' })).toBeVisible();
 });
 
-test('builder validates visual prerequisite edits before queueing', async ({ page }) => {
-    await page.getByRole('button', { name: 'Create curriculum' }).click();
-    await page.getByLabel('Subject slug').fill('earth-science');
-    await page.getByLabel('Title').fill('Earth Science');
-    await page.getByRole('button', { name: 'Add deck' }).click();
-    await page.getByLabel('Deck ID').fill('climate');
-    await page.getByRole('textbox', { name: 'Prerequisites' }).fill('missing-foundations');
-    await expect(page.locator('.curriculum-builder-errors')).toContainText('missing draft deck');
-    await page.getByRole('textbox', { name: 'Prerequisites' }).fill('');
-    await expect(page.locator('.curriculum-builder-errors')).toBeEmpty();
-});
-
 test('generation settings persist provider choices and explain secure key storage', async ({ page }) => {
     await page.locator('#study-settings-btn').click();
     const form = page.locator('#study-settings-panel');
@@ -136,48 +128,7 @@ test('generation settings persist provider choices and explain secure key storag
     await expect(page.getByLabel('Reasoning effort')).toHaveValue('xhigh');
 });
 
-test('a signed-in learner can queue the selected planned deck as a pilot', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop-chromium');
-    let generationJob = null;
-    await page.route('https://flashcards-worker.ribeirothomas28.workers.dev/api/**', async route => {
-        const request = route.request();
-        const pathname = new URL(request.url()).pathname;
-        if (pathname === '/api/generation-requests' && request.method() === 'POST') {
-            generationJob = request.postDataJSON();
-            return route.fulfill({
-                contentType: 'application/json',
-                body: JSON.stringify({ request: { id: 42, status: 'queued' }, existing: false })
-            });
-        }
-        const body = pathname.includes('/reviews/') ? { reviews: [] }
-            : pathname.includes('/repos/') ? { repos: [] }
-                : pathname.includes('/chapter-progress/') ? { chapters: [] }
-                    : {};
-        return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
-    });
-    await page.evaluate(() => {
-        localStorage.setItem('github_user', JSON.stringify({ id: 'owner', username: 'owner', name: 'Owner' }));
-        localStorage.setItem('github_token', 'test-token');
-    });
-    await page.reload();
-    await page.locator('#tab-curriculum').click();
-    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
-    await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
-    await page.getByRole('button', { name: 'Preparation details' }).click();
-    const generate = page.getByRole('button', { name: 'Generate pilot chapter' });
-    await expect(generate).toBeVisible();
-    await generate.click();
-    await expect.poll(() => generationJob).toMatchObject({
-        jobType: 'deck-build',
-        providerId: 'codex',
-        payload: {
-            deckId: 'mathematics/geometry-and-measurement',
-            buildScope: 'pilot'
-        }
-    });
-});
-
-test('curriculum controls and builder fit a phone viewport', async ({ page }, testInfo) => {
+test('curriculum controls fit a phone viewport', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
@@ -191,9 +142,5 @@ test('curriculum controls and builder fit a phone viewport', async ({ page }, te
     await page.getByRole('button', { name: 'Unlocks' }).click();
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks')).toBeVisible();
     await page.getByRole('button', { name: 'subjects', exact: true }).click();
-    await page.getByRole('button', { name: 'Create curriculum' }).click();
-    const modal = page.locator('.curriculum-builder-modal');
-    const modalBox = await modal.boundingBox();
-    expect(modalBox.x).toBeGreaterThanOrEqual(0);
-    expect(modalBox.x + modalBox.width).toBeLessThanOrEqual(391);
+    await expect(page.getByRole('button', { name: 'Create curriculum' })).toHaveCount(0);
 });
