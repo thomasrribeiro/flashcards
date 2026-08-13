@@ -84,6 +84,7 @@ import {
     saveCurriculumRegistrySources
 } from './curriculum-registry.js';
 import { generationJobForDraft, validateCurriculumDraft } from './curriculum-builder.js';
+import { curriculumDeckProgressStates } from './curriculum-progress.js';
 import {
     deckGenerationScope,
     generationJobForDeck,
@@ -2642,11 +2643,14 @@ function installedCurriculumIds(decks) {
     return ids;
 }
 
-function curriculumStatus(deck, installed) {
-    if (installed.has(deck.id)) return '✓ in collection';
-    if (deck.repository?.configured) return 'available';
-    if (deck.materialized) return 'local pilot';
-    return 'planned';
+function curriculumStatus(deck, progressStates) {
+    if (deck.nodeType === 'subject') return `${deck.deck_count || 0} decks`;
+    if (progressStates.has(deck.id)) {
+        return typeof progressStates.get === 'function'
+            ? progressStates.get(deck.id)
+            : 'learning';
+    }
+    return deck.repository?.configured || deck.materialized ? 'learning' : 'unavailable';
 }
 
 function curriculumEdgePath(source, target, sourceY = null, targetY = null) {
@@ -2665,7 +2669,7 @@ function curriculumElkEdgePath(edge, source, target) {
     return points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
 }
 
-async function renderCurriculumGraphCanvas(root, graph, installed, {
+async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     ranked = false,
     focusRanks = null
 } = {}) {
@@ -2748,7 +2752,13 @@ async function renderCurriculumGraphCanvas(root, graph, installed, {
         const node = document.createElement('button');
         node.type = 'button';
         node.className = 'curriculum-graph-node';
-        if (installed.has(deck.id)) node.classList.add('is-installed');
+        const progressState = deck.nodeType === 'deck'
+            ? curriculumStatus(deck, progressStates)
+            : null;
+        if (progressState) {
+            node.classList.add(`is-${progressState}`);
+            node.dataset.progressState = progressState;
+        }
         if (curriculumViewState.targetId === deck.id) node.classList.add('is-target');
         if (highlightsMatches && graph.seedIds.includes(deck.id)) node.classList.add('is-match');
         node.dataset.deckId = deck.id;
@@ -2766,7 +2776,7 @@ async function renderCurriculumGraphCanvas(root, graph, installed, {
             ? `${deck.deck_count} decks`
             : deck.nodeType === 'chapter'
                 ? `${deck.card_count || 0} cards`
-                : curriculumStatus(deck, installed);
+                : '';
         node.innerHTML = `
             <span class="curriculum-graph-node-subject">${escapeHtml(deck.nodeType === 'subject' ? 'subject' : deck.subject)}</span>
             <span class="curriculum-graph-node-name">${escapeHtml(nodeName)}</span>
@@ -2868,6 +2878,16 @@ async function renderCurriculumGraphCanvas(root, graph, installed, {
         };
     };
     const fit = () => fitBounds(rankBounds(focusRanks));
+    const fitVisibleViewport = () => {
+        const top = stage.getBoundingClientRect().top;
+        const available = Math.floor(window.innerHeight - top - 16);
+        const pageContentStartsBelowViewport = top >= window.innerHeight - 160;
+        const height = pageContentStartsBelowViewport
+            ? Math.min(480, Math.max(320, Math.floor(window.innerHeight * 0.62)))
+            : Math.max(160, available);
+        stage.style.height = `${height}px`;
+        fit();
+    };
     const zoomAt = (factor, clientX = null, clientY = null) => {
         const rect = stage.getBoundingClientRect();
         const pointX = clientX == null ? rect.width / 2 : clientX - rect.left;
@@ -2911,7 +2931,15 @@ async function renderCurriculumGraphCanvas(root, graph, installed, {
         event.preventDefault();
         zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX, event.clientY);
     }, { passive: false });
-    requestAnimationFrame(fit);
+    const onViewportResize = () => {
+        if (!stage.isConnected) {
+            window.removeEventListener('resize', onViewportResize);
+            return;
+        }
+        fitVisibleViewport();
+    };
+    window.addEventListener('resize', onViewportResize);
+    requestAnimationFrame(fitVisibleViewport);
     return {
         fit,
         zoomIn: () => zoomAt(1.2),
@@ -3010,10 +3038,10 @@ function curriculumItemName(item) {
     return item.deck || item.id.split('/').pop();
 }
 
-function curriculumItemMeta(item, installed) {
+function curriculumItemMeta(item, progressStates) {
     if (item.nodeType === 'subject') return `${item.deck_count || 0} decks`;
     if (item.nodeType === 'chapter') return `${item.card_count || 0} cards · ${item.deckId}`;
-    return `${item.subject} · ${curriculumStatus(item, installed)}`;
+    return item.subject;
 }
 
 function curriculumFocusOptions(item) {
@@ -3026,13 +3054,18 @@ function curriculumFocusOptions(item) {
     return { mode: 'focus', hierarchy: 'deck', subject: item.subject, parentId: item.subject, targetId: item.id, query: '' };
 }
 
-function makeCurriculumItemButton(item, installed, extra = '') {
+function makeCurriculumItemButton(item, progressStates, extra = '') {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'curriculum-explorer-item';
+    if (item.nodeType === 'deck') {
+        const progressState = curriculumStatus(item, progressStates);
+        button.classList.add(`is-${progressState}`);
+        button.dataset.progressState = progressState;
+    }
     button.innerHTML = `
         <span class="curriculum-explorer-item-name">${escapeHtml(curriculumItemName(item))}</span>
-        <span class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(item, installed))}${extra ? ` · ${escapeHtml(extra)}` : ''}</span>
+        <span class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(item, progressStates))}${extra ? ` · ${escapeHtml(extra)}` : ''}</span>
     `;
     button.dataset.curriculumNodeId = item.id;
     button.title = `${item.id}${item.description ? `\n${item.description}` : ''}`;
@@ -3040,7 +3073,7 @@ function makeCurriculumItemButton(item, installed, extra = '') {
     return button;
 }
 
-function appendCurriculumRelationshipGroups(column, entries, installed, emptyText, direction) {
+function appendCurriculumRelationshipGroups(column, entries, progressStates, emptyText, direction) {
     const direct = entries.filter(entry => entry.distance === 1);
     const indirect = entries.filter(entry => entry.distance > 1);
     const appendGroup = (title, items) => {
@@ -3051,7 +3084,7 @@ function appendCurriculumRelationshipGroups(column, entries, installed, emptyTex
         for (const entry of items) {
             const button = makeCurriculumItemButton(
                 entry.item,
-                installed,
+                progressStates,
                 entry.distance === 1 ? 'direct' : `${entry.distance} steps ${direction}`
             );
             button.dataset.relationship = direction === 'earlier' ? 'prerequisite' : 'unlock';
@@ -3069,19 +3102,19 @@ function appendCurriculumRelationshipGroups(column, entries, installed, emptyTex
     }
 }
 
-function renderCurriculumDirectory(root, installed) {
+function renderCurriculumDirectory(root, progressStates) {
     const { hierarchy, parentId, query } = curriculumViewState;
     const items = curriculumDirectory(curriculumIndex, { hierarchy, parentId, query });
     const directory = document.createElement('div');
     directory.className = 'curriculum-directory';
-    for (const item of items) directory.appendChild(makeCurriculumItemButton(item, installed));
+    for (const item of items) directory.appendChild(makeCurriculumItemButton(item, progressStates));
     if (!items.length) {
         directory.innerHTML = '<p class="curriculum-explorer-empty">No curriculum items match this search.</p>';
     }
     root.appendChild(directory);
 }
 
-function renderCurriculumNeighborhood(root, installed) {
+function renderCurriculumNeighborhood(root, progressStates) {
     const neighborhood = curriculumNeighborhood(curriculumIndex, {
         hierarchy: curriculumViewState.hierarchy,
         targetId: curriculumViewState.targetId,
@@ -3098,7 +3131,7 @@ function renderCurriculumNeighborhood(root, installed) {
     prerequisites.tabIndex = 0;
     prerequisites.setAttribute('aria-label', 'Scrollable prerequisite decks');
     prerequisites.innerHTML = `<h3>Prerequisites <span>${neighborhood.prerequisites.length}</span></h3>`;
-    appendCurriculumRelationshipGroups(prerequisites, neighborhood.prerequisites, installed, 'No required prerequisites.', 'earlier');
+    appendCurriculumRelationshipGroups(prerequisites, neighborhood.prerequisites, progressStates, 'No required prerequisites.', 'earlier');
     const selected = document.createElement('section');
     selected.className = 'curriculum-neighborhood-column is-selected';
     selected.innerHTML = `
@@ -3109,7 +3142,7 @@ function renderCurriculumNeighborhood(root, installed) {
             <h2>${escapeHtml(curriculumItemName(neighborhood.target))}</h2>
             <p class="curriculum-selected-id">${escapeHtml(neighborhood.target.id)}</p>
             ${neighborhood.target.description ? `<p>${escapeHtml(neighborhood.target.description)}</p>` : ''}
-            <p class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(neighborhood.target, installed))}</p>
+            <p class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(neighborhood.target, progressStates))}</p>
         </article>
     `;
     const selectedCard = selected.querySelector('.curriculum-selected-item');
@@ -3150,14 +3183,14 @@ function renderCurriculumNeighborhood(root, installed) {
         const block = document.createElement('div');
         block.className = 'curriculum-interdependent';
         block.innerHTML = '<h4>Interdependent at the deck level</h4><p>These subjects feed one another in different advanced paths. Open their decks to see the actual ordering.</p>';
-        neighborhood.interdependent.forEach(item => block.appendChild(makeCurriculumItemButton(item, installed)));
+        neighborhood.interdependent.forEach(item => block.appendChild(makeCurriculumItemButton(item, progressStates)));
         selected.appendChild(block);
     }
     if (neighborhood.cycle.length) {
         const block = document.createElement('div');
         block.className = 'curriculum-cycle-warning';
         block.innerHTML = '<h4>Invalid required cycle</h4><p>This strict prerequisite loop must be resolved in the curriculum source before it can define a learning order.</p>';
-        neighborhood.cycle.forEach(item => block.appendChild(makeCurriculumItemButton(item, installed)));
+        neighborhood.cycle.forEach(item => block.appendChild(makeCurriculumItemButton(item, progressStates)));
         selected.appendChild(block);
     }
 
@@ -3166,7 +3199,7 @@ function renderCurriculumNeighborhood(root, installed) {
     unlocks.tabIndex = 0;
     unlocks.setAttribute('aria-label', 'Scrollable unlocked decks');
     unlocks.innerHTML = `<h3>Unlocks <span>${neighborhood.unlocks.length}</span></h3>`;
-    appendCurriculumRelationshipGroups(unlocks, neighborhood.unlocks, installed, 'Nothing currently declares this as a prerequisite.', 'later');
+    appendCurriculumRelationshipGroups(unlocks, neighborhood.unlocks, progressStates, 'Nothing currently declares this as a prerequisite.', 'later');
     const mobileTabs = document.createElement('div');
     mobileTabs.className = 'curriculum-mobile-relation-tabs';
     mobileTabs.innerHTML = '<button type="button" class="active" data-relation="prerequisites">Prerequisites</button><button type="button" data-relation="unlocks">Unlocks</button>';
@@ -3193,9 +3226,6 @@ function curriculumGraphControls({ windowState = null } = {}) {
             <button type="button" data-action="next-layer" aria-label="Show next three dependency layers"${windowState.end >= windowState.layerCount ? ' disabled' : ''}>→</button>
         </span>` : '';
     controls.innerHTML = `
-        <span class="curriculum-graph-legend">
-            <span><i class="required"></i>Required</span>
-        </span>
         ${layerNavigation}
         <span class="curriculum-graph-zoom">
             <button type="button" data-action="out" aria-label="Zoom out">−</button>
@@ -3211,7 +3241,7 @@ function connectCurriculumGraphControls(controls, controller) {
     controls.querySelector('[data-action="fit"]').onclick = controller.fit;
 }
 
-async function renderCurriculumGraph(root, installed, graph, { layered = false, emptyMessage = 'No curriculum items are available.' } = {}) {
+async function renderCurriculumGraph(root, progressStates, graph, { layered = false, emptyMessage = 'No curriculum items are available.' } = {}) {
     if (!graph.nodes.length) {
         const empty = document.createElement('p');
         empty.className = 'curriculum-explorer-empty curriculum-graph-empty';
@@ -3225,7 +3255,7 @@ async function renderCurriculumGraph(root, installed, graph, { layered = false, 
     if (windowState) curriculumViewState.layerStart = windowState.start;
     const controls = curriculumGraphControls({ windowState });
     root.appendChild(controls);
-    const controller = await renderCurriculumGraphCanvas(root, graph, installed, {
+    const controller = await renderCurriculumGraphCanvas(root, graph, progressStates, {
         ranked: layered,
         focusRanks: windowState ? { start: windowState.start, end: windowState.end } : null
     });
@@ -3251,7 +3281,12 @@ async function renderCurriculumView(options = {}) {
             ? 'overview'
             : curriculumViewState.hierarchy === 'chapter' ? 'chapters' : 'subject';
     }
-    const installed = installedCurriculumIds(await getAllDecks());
+    const [decks, cards, reviews, chapterProgress] = await Promise.all([
+        getAllDecks(), getAllCards(), getAllReviews(), getAllChapterProgress()
+    ]);
+    const progressStates = curriculumDeckProgressStates(
+        decks, cards, reviews, chapterProgress, new Date()
+    );
     const { mode, hierarchy, subject, parentId } = curriculumViewState;
     root.innerHTML = '';
 
@@ -3286,7 +3321,7 @@ async function renderCurriculumView(options = {}) {
 
     const toolbar = document.createElement('div');
     toolbar.className = 'curriculum-toolbar';
-    if (mode !== 'overview') {
+    if (mode === 'focus') {
         const backButton = document.createElement('button');
         backButton.type = 'button';
         backButton.className = 'curriculum-toolbar-action curriculum-focus-back';
@@ -3298,13 +3333,13 @@ async function renderCurriculumView(options = {}) {
     }
     if (toolbar.childElementCount) root.appendChild(toolbar);
 
-    if (mode === 'focus') renderCurriculumNeighborhood(root, installed);
+    if (mode === 'focus') renderCurriculumNeighborhood(root, progressStates);
     else if (mode === 'overview') {
-        await renderCurriculumGraph(root, installed, subjectOverviewGraph(curriculumIndex));
+        await renderCurriculumGraph(root, progressStates, subjectOverviewGraph(curriculumIndex));
     } else if (mode === 'subject') {
-        await renderCurriculumGraph(root, installed, subjectDeckGraph(curriculumIndex, subject), { layered: true });
+        await renderCurriculumGraph(root, progressStates, subjectDeckGraph(curriculumIndex, subject), { layered: true });
     } else {
-        await renderCurriculumGraph(root, installed, chapterGraph(curriculumIndex, parentId), {
+        await renderCurriculumGraph(root, progressStates, chapterGraph(curriculumIndex, parentId), {
             layered: true,
             emptyMessage: 'This deck does not have a published chapter plan yet.'
         });
@@ -3718,12 +3753,12 @@ async function renderDependencyModal() {
     )).join('');
     const whole = plan.wholeDecks.map(deck => dependencyItemMarkup(
         deck.id,
-        curriculumStatus(deck, installed),
+        installed.has(deck.id) ? 'in collection' : 'not in collection',
         !deck.repository?.configured ? deck.generation_command : null
     )).join('');
     const recommended = plan.recommendedDecks.map(deck => dependencyItemMarkup(
         deck.id,
-        `${curriculumStatus(deck, installed)} · optional preparation`
+        `${installed.has(deck.id) ? 'in collection' : 'not in collection'} · optional preparation`
     )).join('');
     const generationScope = deckGenerationScope(plan.target);
     const generationNote = generationScope

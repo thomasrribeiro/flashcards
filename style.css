@@ -3843,7 +3843,7 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-graph-controls {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 16px;
     min-height: 42px;
     padding: 5px 8px;
@@ -3887,6 +3887,8 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-graph-navigation {
+    flex: 1;
+    justify-content: center;
     gap: 5px;
 }
 
@@ -4015,17 +4017,21 @@ body.standalone-phone .mobile-sidebar-close {
     transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
 }
 
-.curriculum-graph-node.is-installed {
+.curriculum-graph-node.is-learning,
+.curriculum-explorer-item.is-learning {
+    border-left-color: var(--gold);
+}
+
+.curriculum-graph-node.is-complete,
+.curriculum-explorer-item.is-complete {
     border-left-color: #30964b;
 }
 
 .curriculum-graph-node.is-match {
-    border-left-color: var(--gold);
     background: color-mix(in srgb, var(--gold) 10%, var(--white));
 }
 
 .curriculum-graph-node.is-target {
-    border-left-color: var(--gold);
     border-width: 2px 2px 2px 5px;
     background: color-mix(in srgb, var(--gold) 20%, var(--white));
 }
@@ -4366,7 +4372,7 @@ body.standalone-phone .mobile-sidebar-close {
 
     .curriculum-graph-stage {
         height: 62dvh;
-        min-height: 430px;
+        min-height: 96px;
     }
 
     .curriculum-graph-controls {

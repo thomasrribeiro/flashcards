@@ -23,6 +23,14 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(completeDeckGraphCount).toBeGreaterThan(3);
     await expect(page.locator('.curriculum-graph-stage')).toHaveClass(/is-dense/);
     await expect(page.locator('.curriculum-graph-node[data-deck-id="physics/advanced-quantum-mechanics"]')).toHaveCount(1);
+    await expect(page.locator('.curriculum-graph-node-status')).not.toContainText(['in collection', 'available', 'planned']);
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]')).toHaveClass(/is-learning/);
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="physics/advanced-quantum-mechanics"]')).not.toHaveClass(/is-learning|is-complete/);
+    if (testInfo.project.name === 'desktop-chromium') {
+        const viewportHeight = page.viewportSize().height;
+        const initialGraphBox = await page.locator('.curriculum-graph-stage').boundingBox();
+        expect(initialGraphBox.y + initialGraphBox.height).toBeLessThanOrEqual(viewportHeight);
+    }
     const firstNode = page.locator('.curriculum-graph-node').first();
     await firstNode.hover();
     await expect(page.locator('.curriculum-graph-edge.is-related')).not.toHaveCount(0);
@@ -80,7 +88,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
 
     await page.locator('.curriculum-selected-item').click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Back to previous curriculum view' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Back to previous curriculum view' })).toHaveCount(0);
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–3');
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(10);
@@ -108,7 +116,7 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     await page.locator('.curriculum-selected-item').click();
     await expect(page.getByText('This deck does not have a published chapter plan yet.')).toBeVisible();
     await expect(page.locator('.curriculum-layer-label')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Back to previous curriculum view' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Back to previous curriculum view' })).toHaveCount(0);
 });
 
 test('generation settings persist provider choices and explain secure key storage', async ({ page }) => {
