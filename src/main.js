@@ -2688,15 +2688,15 @@ function curriculumEdgeGeometry(source, target, sourceY = null, targetY = null) 
 }
 
 function curriculumCableEdgeGeometry(source, target, sourceY, targetY, route) {
-    const { steps, departureGutter, arrivalGutter } = route;
+    const { steps } = route;
     const x1 = source.x + source.width;
     const x2 = target.x;
     const baseX = x2 - 10;
-    const departureX = x1 + departureGutter;
-    const arrivalX = baseX - arrivalGutter;
-    const routeCommands = [`M ${x1} ${sourceY}`, `H ${departureX}`];
+    // Descend flush with the source column's right edge and rise flush with
+    // the destination column's left edge. The inter-column gap stays clear.
+    const routeCommands = [`M ${x1} ${sourceY}`];
     for (const step of steps) routeCommands.push(`V ${step.y}`, `H ${step.x}`);
-    routeCommands.push(`H ${arrivalX}`, `V ${targetY}`, `H ${baseX}`);
+    routeCommands.push(`H ${baseX}`, `V ${targetY}`, `H ${baseX}`);
     return {
         line: routeCommands.join(' '),
         head: `M ${baseX} ${targetY - 4.25} L ${x2} ${targetY} L ${baseX} ${targetY + 4.25} Z`
@@ -2728,34 +2728,12 @@ function curriculumCableRouting(layout) {
         laneAssignments.set(route.edge, lane);
     }
     const rankBottom = new Map();
-    const rankRight = new Map();
+    const rankLeft = new Map();
     for (const node of layout.nodes) {
         if (!Number.isInteger(node.rank)) continue;
         rankBottom.set(node.rank, Math.max(rankBottom.get(node.rank) || 0, node.y + node.height));
-        rankRight.set(node.rank, Math.max(rankRight.get(node.rank) || 0, node.x + node.width));
+        rankLeft.set(node.rank, Math.min(rankLeft.get(node.rank) ?? Infinity, node.x));
     }
-    const departureChannels = new Map();
-    const arrivalChannels = new Map();
-    const assignChannels = (rankSelector, targetMap, sorter) => {
-        const groups = new Map();
-        for (const route of longEdges) {
-            const rank = rankSelector(route);
-            if (!groups.has(rank)) groups.set(rank, []);
-            groups.get(rank).push(route);
-        }
-        for (const routesAtRank of groups.values()) {
-            routesAtRank.sort(sorter);
-            routesAtRank.forEach((route, index) => {
-                // Keep every vertical run in its own channel inside the
-                // inter-column gap instead of collapsing a bundle onto one x.
-                targetMap.set(route.edge, 12 + 68 * (index + 1) / (routesAtRank.length + 1));
-            });
-        }
-    };
-    assignChannels(route => route.source.rank, departureChannels,
-        (a, b) => a.source.y - b.source.y || a.target.rank - b.target.rank || a.target.y - b.target.y);
-    assignChannels(route => route.target.rank, arrivalChannels,
-        (a, b) => a.target.y - b.target.y || a.source.rank - b.source.rank || a.source.y - b.source.y);
     let routedHeight = layout.height;
     const routes = new Map(longEdges.map(route => {
         const lane = laneAssignments.get(route.edge) || 0;
@@ -2764,15 +2742,11 @@ function curriculumCableRouting(layout) {
         // Vertical changes happen in the gaps, so no cable runs through a node.
         for (let rank = route.source.rank + 1; rank < route.target.rank; rank += 1) {
             const y = (rankBottom.get(rank) || layout.height) + 26 + lane * 14;
-            const x = (rankRight.get(rank) || route.target.x) + 10;
+            const x = rankLeft.get(rank) ?? route.target.x;
             steps.push({ x, y });
             routedHeight = Math.max(routedHeight, y + 24);
         }
-        return [route.edge, {
-            steps,
-            departureGutter: departureChannels.get(route.edge) || 34,
-            arrivalGutter: arrivalChannels.get(route.edge) || 34
-        }];
+        return [route.edge, { steps }];
     }));
     return {
         routes,
@@ -2829,6 +2803,18 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         : { routes: new Map(), height: layout.height };
     const positioned = new Map(layout.nodes.map(node => [node.id, node]));
     const canvasHeight = Math.max(layout.height, cableRouting.height);
+    const scrollExtentNodes = ranked && focusRanks
+        ? layout.nodes.filter(node => node.rank === focusRanks.layer)
+        : layout.nodes;
+    const scrollExtentHeight = ranked && focusRanks && scrollExtentNodes.length
+        ? Math.max(...scrollExtentNodes.map(node => node.y + node.height)) + 36
+        : canvasHeight;
+    if (ranked && focusRanks) {
+        stage.dataset.scrollRankStart = String(focusRanks.start);
+        stage.dataset.scrollRankEnd = String(focusRanks.end);
+        stage.dataset.scrollLayer = String(focusRanks.layer);
+        stage.dataset.scrollExtent = String(scrollExtentHeight);
+    }
     const scrollCanvas = document.createElement('div');
     scrollCanvas.className = 'curriculum-graph-scroll-canvas';
     const viewport = document.createElement('div');
@@ -2884,8 +2870,6 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const cableRoute = cableRouting.routes.get(edge);
         if (cableRoute) {
             connection.dataset.cableYs = cableRoute.steps.map(step => step.y).join(',');
-            connection.dataset.departureGutter = String(cableRoute.departureGutter);
-            connection.dataset.arrivalGutter = String(cableRoute.arrivalGutter);
         }
         const geometry = cableRoute
             ? curriculumCableEdgeGeometry(
@@ -3043,7 +3027,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const applyScale = () => {
         viewport.style.transform = `scale(${scale})`;
         scrollCanvas.style.width = `${layout.width * scale}px`;
-        scrollCanvas.style.height = `${canvasHeight * scale}px`;
+        scrollCanvas.style.height = `${scrollExtentHeight * scale}px`;
     };
     const fitBounds = (bounds, { horizontal = false } = {}) => {
         const padding = 48;

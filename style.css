@@ -4074,6 +4074,10 @@ body.standalone-phone .mobile-sidebar-close {
     min-height: 100%;
 }
 
+.curriculum-graph-stage.is-layered .curriculum-graph-scroll-canvas {
+    overflow: hidden;
+}
+
 .curriculum-graph-viewport {
     position: absolute;
     top: 0;
