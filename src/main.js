@@ -2819,6 +2819,8 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     scrollCanvas.className = 'curriculum-graph-scroll-canvas';
     const viewport = document.createElement('div');
     viewport.className = 'curriculum-graph-viewport';
+    const horizontalGutter = ranked && focusRanks ? 48 : 0;
+    viewport.style.left = `${horizontalGutter}px`;
     viewport.style.width = `${layout.width}px`;
     viewport.style.height = `${canvasHeight}px`;
 
@@ -3026,7 +3028,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     let scale = 1;
     const applyScale = () => {
         viewport.style.transform = `scale(${scale})`;
-        scrollCanvas.style.width = `${layout.width * scale}px`;
+        scrollCanvas.style.width = `${layout.width * scale + horizontalGutter * 2}px`;
         scrollCanvas.style.height = `${scrollExtentHeight * scale}px`;
     };
     const fitBounds = (bounds, { horizontal = false } = {}) => {
@@ -3037,7 +3039,8 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             ? Math.min(3, width / bounds.width)
             : Math.min(1, width / bounds.width, height / bounds.height);
         applyScale();
-        const left = bounds.x * scale - (stage.clientWidth - bounds.width * scale) / 2;
+        const left = bounds.x * scale + horizontalGutter
+            - (stage.clientWidth - bounds.width * scale) / 2;
         const top = horizontal
             ? bounds.y * scale - padding
             : bounds.y * scale - (stage.clientHeight - bounds.height * scale) / 2;

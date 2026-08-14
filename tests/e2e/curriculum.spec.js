@@ -62,7 +62,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             const viewportCenter = stageRect.left + stage.clientLeft + stage.clientWidth / 2;
             return Math.abs((focal.left + focal.width / 2) - viewportCenter);
         });
-        expect(firstLayerOffset).toBeLessThan(20);
+        expect(firstLayerOffset).toBeLessThan(2);
         const stage = page.locator('.curriculum-graph-stage');
         const scrolling = await stage.evaluate(element => ({
             top: element.scrollTop,
@@ -231,7 +231,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             const viewportCenter = stageRect.left + stage.clientLeft + stage.clientWidth / 2;
             return Math.abs((focal.left + focal.width / 2) - viewportCenter);
         }, layerCount - 1);
-        expect(lastLayerOffset).toBeLessThan(20);
+        expect(lastLayerOffset).toBeLessThan(2);
     }
     for (let layer = layerCount; layer > 1; layer -= 1) {
         await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
