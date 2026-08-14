@@ -2712,21 +2712,40 @@ function curriculumCableEdgeGeometry(source, target, sourceY, targetY, route) {
 }
 
 function curriculumCableTrunkGeometry(trunk) {
+    const firstPoint = trunk.rankPoints[0];
     const horizontalRun = Math.max(1, trunk.descentX - trunk.x1);
-    const verticalRun = Math.max(1, trunk.y - trunk.sourceY);
+    const verticalRun = Math.max(1, firstPoint.y - trunk.sourceY);
     const lowerRun = Math.max(1, trunk.x2 - trunk.descentX);
     const radius = Math.max(4, Math.min(12, horizontalRun * 0.55, verticalRun / 3, lowerRun / 3));
-    return [
+    const commands = [
         `M ${trunk.x1} ${trunk.sourceY}`,
         `C ${trunk.x1 + radius * 0.55} ${trunk.sourceY},`,
         `${trunk.descentX} ${trunk.sourceY + radius * 0.4},`,
         `${trunk.descentX} ${trunk.sourceY + radius}`,
-        `V ${trunk.y - radius}`,
-        `C ${trunk.descentX} ${trunk.y - radius * 0.4},`,
-        `${trunk.descentX + radius * 0.4} ${trunk.y},`,
-        `${trunk.descentX + radius} ${trunk.y}`,
-        `H ${trunk.x2}`
-    ].join(' ');
+        `V ${firstPoint.y - radius}`,
+        `C ${trunk.descentX} ${firstPoint.y - radius * 0.4},`,
+        `${trunk.descentX + radius * 0.4} ${firstPoint.y},`,
+        `${trunk.descentX + radius} ${firstPoint.y}`
+    ];
+    let currentX = trunk.descentX + radius;
+    let currentY = firstPoint.y;
+    for (const transition of trunk.transitions) {
+        const direction = Math.sign(transition.y - currentY);
+        if (!direction) continue;
+        const transitionRun = Math.max(1, transition.x - currentX);
+        const transitionHeight = Math.abs(transition.y - currentY);
+        const transitionRadius = Math.max(2, Math.min(10, transitionRun / 3, transitionHeight / 3));
+        commands.push(
+            `H ${transition.x - transitionRadius}`,
+            `Q ${transition.x} ${currentY}, ${transition.x} ${currentY + direction * transitionRadius}`,
+            `V ${transition.y - direction * transitionRadius}`,
+            `Q ${transition.x} ${transition.y}, ${transition.x + transitionRadius} ${transition.y}`
+        );
+        currentX = transition.x + transitionRadius;
+        currentY = transition.y;
+    }
+    commands.push(`H ${trunk.x2}`);
+    return commands.join(' ');
 }
 
 function curriculumCableRouting(layout) {
@@ -2760,6 +2779,11 @@ function curriculumCableRouting(layout) {
         .sort((a, b) => (b.maxTargetRank - b.source.rank) - (a.maxTargetRank - a.source.rank)
             || a.start - b.start
             || a.end - b.end);
+    const trackOrder = new Map([...groups]
+        .sort((a, b) => a.source.rank - b.source.rank
+            || a.source.y - b.source.y
+            || a.source.id.localeCompare(b.source.id))
+        .map((group, index) => [group.source.id, index]));
     const rankBottom = new Map();
     const rankLeft = new Map();
     const rankRight = new Map();
@@ -2789,6 +2813,31 @@ function curriculumCableRouting(layout) {
             group.descentX = sourceRight + firstOffset + step * index;
         });
     }
+    const rankYsBySource = new Map(groups.map(group => [group.source.id, new Map()]));
+    const transitionXBySourceAndRank = new Map(groups.map(group => [group.source.id, new Map()]));
+    const maximumRank = Math.max(0, ...layout.nodes.map(node => node.rank || 0));
+    for (let rank = 1; rank <= maximumRank; rank += 1) {
+        const active = groups
+            .filter(group => group.source.rank < rank && group.maxTargetRank >= rank)
+            .sort((a, b) => trackOrder.get(a.source.id) - trackOrder.get(b.source.id));
+        active.forEach((group, index) => {
+            rankYsBySource.get(group.source.id).set(rank, (rankBottom.get(rank) || 0) + 18 + index * 14);
+        });
+        const continuing = active.filter(group => group.maxTargetRank > rank);
+        if (!continuing.length) continue;
+        const currentRight = rankRight.get(rank) || 0;
+        const nextLeft = rankLeft.get(rank + 1) ?? currentRight + 96;
+        const gap = Math.max(24, nextLeft - currentRight);
+        const firstOffset = Math.min(18, gap * 0.24);
+        const available = Math.max(0, gap - firstOffset - 12);
+        const step = continuing.length > 1
+            ? Math.min(8, available / (continuing.length - 1))
+            : 0;
+        continuing.forEach((group, index) => {
+            transitionXBySourceAndRank.get(group.source.id)
+                .set(rank, currentRight + firstOffset + step * index);
+        });
+    }
     const entriesByTargetRank = new Map();
     for (const group of groups) {
         for (const entry of group.entries) {
@@ -2812,25 +2861,30 @@ function curriculumCableRouting(layout) {
             entry.riseX = entry.target.x - 10 - firstOffset - step * index;
         });
     }
-    const gutterBase = Math.max(layout.height, ...rankBottom.values()) + 26;
-    const trackBySource = new Map([...groups]
-        .sort((a, b) => a.source.rank - b.source.rank
-            || a.source.y - b.source.y
-            || a.source.id.localeCompare(b.source.id))
-        .map((group, index) => [group.source.id, index]));
     let routedHeight = layout.height;
     const routes = new Map();
     const trunks = [];
     for (const group of groups) {
-        const y = gutterBase + (trackBySource.get(group.source.id) || 0) * 14;
-        routedHeight = Math.max(routedHeight, y + 24);
+        const rankYs = rankYsBySource.get(group.source.id);
+        const rankPoints = [...rankYs].map(([rank, y]) => ({ rank, y }));
+        routedHeight = Math.max(routedHeight, ...rankPoints.map(point => point.y + 24));
+        const transitions = rankPoints.slice(0, -1).flatMap((point, index) => {
+            const nextPoint = rankPoints[index + 1];
+            if (Math.abs(nextPoint.y - point.y) < 0.5) return [];
+            return [{
+                rank: point.rank,
+                x: transitionXBySourceAndRank.get(group.source.id).get(point.rank),
+                y: nextPoint.y
+            }];
+        });
         trunks.push({
             source: group.source.id,
             targets: group.entries.map(({ target }) => target.id),
             x1: group.start,
             descentX: group.descentX,
             x2: group.end - 10,
-            y,
+            rankPoints,
+            transitions,
             // A bus is centered when it is the source's only visible outgoing
             // wire. When direct edges coexist, reserve the lowest port for the
             // bus so those shorter connections can remain ordered above it.
@@ -2842,16 +2896,18 @@ function curriculumCableRouting(layout) {
         for (const entry of group.entries) {
             const edgeCrossedRanks = [];
             for (let rank = group.source.rank + 1; rank < entry.target.rank; rank += 1) edgeCrossedRanks.push(rank);
-            const rankYs = new Map();
-            for (let rank = group.source.rank; rank <= entry.target.rank; rank += 1) rankYs.set(rank, y);
+            const edgeRankYs = new Map([[group.source.rank, rankYs.get(group.source.rank + 1)]]);
+            for (let rank = group.source.rank + 1; rank <= entry.target.rank; rank += 1) {
+                edgeRankYs.set(rank, rankYs.get(rank));
+            }
             routes.set(entry.edge, {
-                y,
+                y: rankYs.get(entry.target.rank),
                 steps: edgeCrossedRanks.map(rank => ({
                     x: rankLeft.get(rank) ?? entry.target.x,
-                    y,
+                    y: rankYs.get(rank),
                     rank
                 })),
-                rankYs,
+                rankYs: edgeRankYs,
                 trunkSource: group.source.id,
                 riseX: entry.riseX
             });
@@ -2979,7 +3035,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         connection.classList.add('curriculum-graph-connection', 'is-cable-trunk');
         connection.dataset.source = trunk.source;
         connection.dataset.targets = trunk.targets.join('|');
-        connection.dataset.cableY = String(trunk.y);
+        connection.dataset.rankYs = trunk.rankPoints.map(point => `${point.rank}:${point.y}`).join(',');
         connection.dataset.descentX = String(trunk.descentX);
         const source = positioned.get(trunk.source);
         if (Number.isInteger(source?.rank)) connection.dataset.sourceRank = String(source.rank);
@@ -3008,7 +3064,10 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const ports = portAssignments.get(edge) || {};
         const cableRoute = cableRouting.routes.get(edge);
         if (cableRoute) {
-            connection.dataset.cableYs = cableRoute.steps.map(step => step.y).join(',');
+            connection.dataset.cableYs = [...cableRoute.rankYs]
+                .filter(([rank]) => rank > source.rank)
+                .map(([, y]) => y)
+                .join(',');
             connection.dataset.cableTrunkSource = cableRoute.trunkSource;
             connection.dataset.riseX = String(cableRoute.riseX);
         }
