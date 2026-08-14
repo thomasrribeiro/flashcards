@@ -2814,7 +2814,7 @@ function curriculumCableRouting(layout) {
     const maximumRank = Math.max(0, ...layout.nodes.map(node => node.rank || 0));
     // A rank's y values describe the compact bus stack underneath that column.
     // New buses are inserted above every older continuing bus in their source
-    // column; transitions between two such stacks happen only in the gutter.
+    // column.
     for (let rank = 0; rank < maximumRank; rank += 1) {
         const active = groups
             .filter(group => group.source.rank <= rank && group.maxTargetRank > rank)
@@ -2860,6 +2860,19 @@ function curriculumCableRouting(layout) {
             const rankYs = rankYsBySource.get(group.source.id);
             return rankYs.get(rank + 1) < rankYs.get(rank) - 0.5;
         });
+        // Keep rising stack changes out of the direct-connection gutter. The
+        // newest/top bus waits until the receiving column's left edge; older
+        // buses follow to its right. Falling changes retain the age-ordered
+        // gutter event sequence below so they clear terminating buses without
+        // intersecting them, beginning at the current column's right edge.
+        rising
+            .sort((a, b) => trackOrder.get(b.source.id) - trackOrder.get(a.source.id))
+            .forEach((group, index) => {
+                transitionXBySourceAndRank.get(group.source.id).set(
+                    rank,
+                    nextLeft + index * CURRICULUM_CABLE_LANE_SPACING
+                );
+            });
         const incomingEntries = entriesByTargetRank.get(rank + 1) || [];
         const terminalEntriesBySource = new Map();
         for (const entry of incomingEntries) {
@@ -2868,7 +2881,7 @@ function curriculumCableRouting(layout) {
             terminalEntries.push(entry);
             terminalEntriesBySource.set(entry.source.id, terminalEntries);
         }
-        const changing = new Set([...descending, ...rising]);
+        const changing = new Set(descending);
         const eventGroups = [...new Set([
             ...changing,
             ...[...terminalEntriesBySource].map(([sourceId]) => groupBySource.get(sourceId))
@@ -2895,8 +2908,9 @@ function curriculumCableRouting(layout) {
         const eventStep = events.length > 1
             ? Math.min(CURRICULUM_CABLE_LANE_SPACING, available / (events.length - 1))
             : 0;
+        const eventOrigin = descending.length ? currentRight : currentRight + firstOffset;
         events.forEach((event, index) => {
-            const x = currentRight + firstOffset + eventStep * index;
+            const x = eventOrigin + eventStep * index;
             if (event.type === 'transition') {
                 transitionXBySourceAndRank.get(event.group.source.id).set(rank, x);
             } else {
@@ -2939,13 +2953,18 @@ function curriculumCableRouting(layout) {
             for (let rank = group.source.rank + 1; rank < entry.target.rank; rank += 1) {
                 edgeRankYs.set(rank, rankYs.get(rank));
             }
-            // Nonterminal branches are placed after this gutter's transition
-            // events. Join them to the lane under the receiving column, where
-            // the trunk has already settled. Terminal branches have no next
-            // lane and leave the final lane under the preceding column.
+            // A falling transition occurs at the current column's right edge,
+            // before the gutter branch; a rising transition waits until the
+            // next column's left edge, after it. Join the branch to whichever
+            // horizontal lane actually crosses its gutter x coordinate.
             const continuesPastTarget = group.maxTargetRank > entry.target.rank;
-            const joinRank = continuesPastTarget ? entry.target.rank : entry.target.rank - 1;
-            if (continuesPastTarget) edgeRankYs.set(joinRank, rankYs.get(joinRank));
+            const previousRank = entry.target.rank - 1;
+            const risesAfterBranch = continuesPastTarget
+                && rankYs.get(entry.target.rank) < rankYs.get(previousRank) - 0.5;
+            const joinRank = continuesPastTarget && !risesAfterBranch
+                ? entry.target.rank
+                : previousRank;
+            if (joinRank === entry.target.rank) edgeRankYs.set(joinRank, rankYs.get(joinRank));
             routes.set(entry.edge, {
                 y: rankYs.get(joinRank),
                 steps: edgeCrossedRanks.map(rank => ({

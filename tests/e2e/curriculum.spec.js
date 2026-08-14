@@ -365,7 +365,9 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     return new Set(ordered.map(value => value.toFixed(3))).size === ordered.length;
                 });
             })(),
-            transitionsStayInGutters: trunks.every(trunk => {
+            transitionsUseDirectionalColumnEdges: trunks.every(trunk => {
+                const rankYs = new Map(trunk.dataset.rankYs.split(',').filter(Boolean)
+                    .map(pair => pair.split(':').map(Number)));
                 return trunk.dataset.transitionXs.split(',').filter(Boolean).every(pair => {
                     const [rank, x] = pair.split(':').map(Number);
                     const currentNodes = [...stage.querySelectorAll(`.curriculum-graph-node[data-rank="${rank}"]`)];
@@ -373,7 +375,10 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     const currentRight = Math.max(...currentNodes.map(node =>
                         Number.parseFloat(node.style.left) + Number.parseFloat(node.style.width)));
                     const nextLeft = Math.min(...nextNodes.map(node => Number.parseFloat(node.style.left)));
-                    return x > currentRight && x < nextLeft;
+                    const rises = rankYs.get(rank + 1) < rankYs.get(rank);
+                    return rises
+                        ? x >= nextLeft && x < nextLeft + Number.parseFloat(nextNodes[0].style.width)
+                        : x >= currentRight && x < nextLeft;
                 });
             }),
             persistentAgeStack: (() => {
@@ -531,7 +536,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.trunksAligned).toBe(true);
     expect(cableRouting.staggeredDescents).toBe(true);
     expect(cableRouting.receivingLanesAreDistinct).toBe(true);
-    expect(cableRouting.transitionsStayInGutters).toBe(true);
+    expect(cableRouting.transitionsUseDirectionalColumnEdges).toBe(true);
     expect(cableRouting.persistentAgeStack).toBe(true);
     expect(cableRouting.oldestFallsFirst).toBe(true);
     expect(cableRouting.higherSourcesOwnOlderLanes).toBe(true);
@@ -764,11 +769,54 @@ test('keeps every mathematics bus branch joined to its trunk', async ({ page }, 
             )?.querySelector('.curriculum-graph-edge:not(.curriculum-graph-edge-highlight)');
             return !trunk?.isPointInStroke(new DOMPoint(join.x, join.y));
         });
-        return { total: branches.length, disconnected: disconnected.length };
+        const rankBounds = rank => {
+            const nodes = [...stage.querySelectorAll(`.curriculum-graph-node[data-rank="${rank}"]`)];
+            return {
+                left: Math.min(...nodes.map(node => Number.parseFloat(node.style.left))),
+                right: Math.max(...nodes.map(node =>
+                    Number.parseFloat(node.style.left) + Number.parseFloat(node.style.width)))
+            };
+        };
+        const transitions = [...stage.querySelectorAll('.curriculum-graph-connection.is-cable-trunk')]
+            .flatMap(trunk => {
+                const rankYs = new Map(trunk.dataset.rankYs.split(',').filter(Boolean)
+                    .map(pair => pair.split(':').map(Number)));
+                const source = stage.querySelector(
+                    `.curriculum-graph-node[data-deck-id="${CSS.escape(trunk.dataset.source)}"]`
+                );
+                return trunk.dataset.transitionXs.split(',').filter(Boolean).map(pair => {
+                    const [rank, x] = pair.split(':').map(Number);
+                    return {
+                        rank,
+                        x,
+                        rises: rankYs.get(rank + 1) < rankYs.get(rank),
+                        age: [Number(source.dataset.rank), Number.parseFloat(source.style.top), trunk.dataset.source]
+                    };
+                });
+            });
+        const upward = transitions.filter(transition => transition.rank === 3 && transition.rises);
+        const downward = transitions.filter(transition => transition.rank === 5 && !transition.rises);
+        const newestUpward = [...upward].sort((a, b) => b.age[0] - a.age[0]
+            || b.age[1] - a.age[1]
+            || b.age[2].localeCompare(a.age[2]))[0];
+        const upwardXs = upward.map(transition => transition.x).sort((a, b) => a - b);
+        const upwardGaps = upwardXs.slice(1).map((x, index) => x - upwardXs[index]);
+        return {
+            total: branches.length,
+            disconnected: disconnected.length,
+            newestUpwardAtNextLeft: Math.abs(newestUpward.x - rankBounds(4).left) < 0.5,
+            upwardLanesStayCompact: upwardGaps.every(gap => Math.abs(gap - 4) < 0.01),
+            downwardSequenceStartsAtCurrentRight: Math.abs(
+                Math.min(...downward.map(transition => transition.x)) - rankBounds(5).right
+            ) < 0.5
+        };
     });
 
     expect(branchJoins.total).toBeGreaterThan(0);
     expect(branchJoins.disconnected).toBe(0);
+    expect(branchJoins.newestUpwardAtNextLeft).toBe(true);
+    expect(branchJoins.upwardLanesStayCompact).toBe(true);
+    expect(branchJoins.downwardSequenceStartsAtCurrentRight).toBe(true);
 });
 
 test('aligns another focused deck and explains an unpublished chapter plan', async ({ page }, testInfo) => {
