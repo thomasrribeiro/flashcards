@@ -299,8 +299,8 @@ async function init() {
 
         const initialCurriculumState = curriculumStateFromUrl();
         if (initialCurriculumState) {
-            Object.assign(curriculumViewState, initialCurriculumState);
-            restoreCurriculumFocusHistory(history.state);
+            const restored = restoreCurriculumNavigationHistory(history.state, initialCurriculumState);
+            Object.assign(curriculumViewState, restored || initialCurriculumState);
             await showMainView('curriculum');
             writeCurriculumHistory({ replace: true });
         }
@@ -1537,10 +1537,12 @@ const curriculumViewState = {
     hierarchy: 'subject',
     targetId: '',
     parentId: '',
-    layerStart: 0
+    layerStart: 0,
+    anchorId: '',
+    position: null
 };
-let curriculumFocusHistory = [];
-let curriculumFocusHistoryIndex = -1;
+let curriculumNavigationHistory = [];
+let curriculumNavigationHistoryIndex = -1;
 
 function curriculumDeckForRepository(deckId, subject = null) {
     if (!curriculumIndex) return null;
@@ -2685,29 +2687,18 @@ function curriculumEdgeGeometry(source, target, sourceY = null, targetY = null) 
     };
 }
 
-function curriculumCableEdgeGeometry(source, target, sourceY, targetY, busY) {
+function curriculumCableEdgeGeometry(source, target, sourceY, targetY, route) {
+    const { steps, departureGutter, arrivalGutter } = route;
     const x1 = source.x + source.width;
     const x2 = target.x;
     const baseX = x2 - 10;
-    const gutter = Math.min(34, Math.max(18, (x2 - x1) * 0.12));
-    const departureX = x1 + gutter;
-    const arrivalX = baseX - gutter;
-    const radius = Math.min(10, gutter / 2, Math.abs(busY - sourceY) / 2, Math.abs(busY - targetY) / 2);
-    const departureDirection = Math.sign(busY - sourceY) || 1;
-    const arrivalDirection = Math.sign(targetY - busY) || 1;
+    const departureX = x1 + departureGutter;
+    const arrivalX = baseX - arrivalGutter;
+    const routeCommands = [`M ${x1} ${sourceY}`, `H ${departureX}`];
+    for (const step of steps) routeCommands.push(`V ${step.y}`, `H ${step.x}`);
+    routeCommands.push(`H ${arrivalX}`, `V ${targetY}`, `H ${baseX}`);
     return {
-        line: [
-            `M ${x1} ${sourceY}`,
-            `H ${departureX - radius}`,
-            `Q ${departureX} ${sourceY} ${departureX} ${sourceY + departureDirection * radius}`,
-            `V ${busY - departureDirection * radius}`,
-            `Q ${departureX} ${busY} ${departureX + radius} ${busY}`,
-            `H ${arrivalX - radius}`,
-            `Q ${arrivalX} ${busY} ${arrivalX} ${busY + arrivalDirection * radius}`,
-            `V ${targetY - arrivalDirection * radius}`,
-            `Q ${arrivalX} ${targetY} ${arrivalX + radius} ${targetY}`,
-            `H ${baseX}`
-        ].join(' '),
+        line: routeCommands.join(' '),
         head: `M ${baseX} ${targetY - 4.25} L ${x2} ${targetY} L ${baseX} ${targetY + 4.25} Z`
     };
 }
@@ -2736,13 +2727,56 @@ function curriculumCableRouting(layout) {
         lanes[lane].push({ start, end });
         laneAssignments.set(route.edge, lane);
     }
-    const topPadding = laneAssignments.size ? 48 + lanes.length * 14 : 0;
-    const routes = new Map([...laneAssignments]
-        .map(([edge, lane]) => [edge, 24 + lane * 14]));
+    const rankBottom = new Map();
+    const rankRight = new Map();
+    for (const node of layout.nodes) {
+        if (!Number.isInteger(node.rank)) continue;
+        rankBottom.set(node.rank, Math.max(rankBottom.get(node.rank) || 0, node.y + node.height));
+        rankRight.set(node.rank, Math.max(rankRight.get(node.rank) || 0, node.x + node.width));
+    }
+    const departureChannels = new Map();
+    const arrivalChannels = new Map();
+    const assignChannels = (rankSelector, targetMap, sorter) => {
+        const groups = new Map();
+        for (const route of longEdges) {
+            const rank = rankSelector(route);
+            if (!groups.has(rank)) groups.set(rank, []);
+            groups.get(rank).push(route);
+        }
+        for (const routesAtRank of groups.values()) {
+            routesAtRank.sort(sorter);
+            routesAtRank.forEach((route, index) => {
+                // Keep every vertical run in its own channel inside the
+                // inter-column gap instead of collapsing a bundle onto one x.
+                targetMap.set(route.edge, 12 + 68 * (index + 1) / (routesAtRank.length + 1));
+            });
+        }
+    };
+    assignChannels(route => route.source.rank, departureChannels,
+        (a, b) => a.source.y - b.source.y || a.target.rank - b.target.rank || a.target.y - b.target.y);
+    assignChannels(route => route.target.rank, arrivalChannels,
+        (a, b) => a.target.y - b.target.y || a.source.rank - b.source.rank || a.source.y - b.source.y);
+    let routedHeight = layout.height;
+    const routes = new Map(longEdges.map(route => {
+        const lane = laneAssignments.get(route.edge) || 0;
+        const steps = [];
+        // Cross each intervening column just below that column's own content.
+        // Vertical changes happen in the gaps, so no cable runs through a node.
+        for (let rank = route.source.rank + 1; rank < route.target.rank; rank += 1) {
+            const y = (rankBottom.get(rank) || layout.height) + 26 + lane * 14;
+            const x = (rankRight.get(rank) || route.target.x) + 10;
+            steps.push({ x, y });
+            routedHeight = Math.max(routedHeight, y + 24);
+        }
+        return [route.edge, {
+            steps,
+            departureGutter: departureChannels.get(route.edge) || 34,
+            arrivalGutter: arrivalChannels.get(route.edge) || 34
+        }];
+    }));
     return {
         routes,
-        topPadding,
-        height: layout.height + topPadding
+        height: routedHeight
     };
 }
 
@@ -2787,14 +2821,12 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     }
     const stage = document.createElement('div');
     stage.className = 'curriculum-graph-stage';
+    if (ranked) stage.classList.add('is-layered');
     if (graph.nodes.length > 12) stage.classList.add('is-dense');
     stage.setAttribute('aria-label', 'Interactive curriculum prerequisite graph');
     const cableRouting = ranked
         ? curriculumCableRouting(layout)
-        : { routes: new Map(), topPadding: 0, height: layout.height };
-    if (cableRouting.topPadding) {
-        layout.nodes.forEach(node => { node.y += cableRouting.topPadding; });
-    }
+        : { routes: new Map(), height: layout.height };
     const positioned = new Map(layout.nodes.map(node => [node.id, node]));
     const canvasHeight = Math.max(layout.height, cableRouting.height);
     const scrollCanvas = document.createElement('div');
@@ -2849,15 +2881,19 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         connection.dataset.source = edge.source;
         connection.dataset.target = edge.target;
         const ports = portAssignments.get(edge) || {};
-        const cableY = cableRouting.routes.get(edge);
-        if (Number.isFinite(cableY)) connection.dataset.cableY = String(cableY);
-        const geometry = Number.isFinite(cableY)
+        const cableRoute = cableRouting.routes.get(edge);
+        if (cableRoute) {
+            connection.dataset.cableYs = cableRoute.steps.map(step => step.y).join(',');
+            connection.dataset.departureGutter = String(cableRoute.departureGutter);
+            connection.dataset.arrivalGutter = String(cableRoute.arrivalGutter);
+        }
+        const geometry = cableRoute
             ? curriculumCableEdgeGeometry(
                 source,
                 target,
                 ports.sourceY ?? source.y + source.height / 2,
                 ports.targetY ?? target.y + target.height / 2,
-                cableY
+                cableRoute
             )
             : edge.sections?.length
                 ? curriculumElkEdgeGeometry(edge, source, target)
@@ -2974,9 +3010,31 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         [...nodeElements, ...edgeElements].forEach(element =>
             element.classList.remove('is-dimmed', 'is-related'));
     };
+    let hoveredNode = null;
+    let hoverTimer = null;
+    let scrollIdleTimer = null;
+    let isScrolling = false;
+    const cancelHoverTimer = () => {
+        clearTimeout(hoverTimer);
+        hoverTimer = null;
+    };
+    const scheduleRelated = node => {
+        cancelHoverTimer();
+        if (!node || isScrolling) return;
+        hoverTimer = setTimeout(() => {
+            if (node === hoveredNode && !isScrolling) setRelated(node.dataset.deckId);
+        }, 450);
+    };
     nodeElements.forEach(node => {
-        node.addEventListener('pointerenter', () => setRelated(node.dataset.deckId));
-        node.addEventListener('pointerleave', clearRelated);
+        node.addEventListener('pointerenter', () => {
+            hoveredNode = node;
+            scheduleRelated(node);
+        });
+        node.addEventListener('pointerleave', () => {
+            if (hoveredNode === node) hoveredNode = null;
+            cancelHoverTimer();
+            clearRelated();
+        });
         node.addEventListener('focus', () => setRelated(node.dataset.deckId));
         node.addEventListener('blur', clearRelated);
     });
@@ -3038,11 +3096,16 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         stage.style.height = `${height}px`;
         fit();
     };
-    stage.addEventListener('wheel', event => {
-        if (!event.deltaX) return;
-        event.preventDefault();
-        stage.scrollTop += event.deltaY || event.deltaX;
-    }, { passive: false });
+    stage.addEventListener('scroll', () => {
+        isScrolling = true;
+        cancelHoverTimer();
+        clearRelated();
+        clearTimeout(scrollIdleTimer);
+        scrollIdleTimer = setTimeout(() => {
+            isScrolling = false;
+            scheduleRelated(hoveredNode);
+        }, 180);
+    }, { passive: true });
     const onViewportResize = () => {
         if (!stage.isConnected) {
             window.removeEventListener('resize', onViewportResize);
@@ -3056,72 +3119,137 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
 }
 
 function curriculumStateSnapshot() {
-    const { mode, hierarchy, targetId, parentId, subject, includeRecommended, layerStart } = curriculumViewState;
-    return { mode, hierarchy, targetId, parentId, subject, includeRecommended, layerStart };
-}
-
-function curriculumFocusHistoryKey(state) {
-    if (state?.mode !== 'focus' || !state.targetId) return '';
-    return `${state.hierarchy || ''}:${state.targetId}`;
-}
-
-function curriculumFocusSnapshot(state) {
+    const {
+        mode, hierarchy, targetId, parentId, subject, includeRecommended,
+        layerStart, anchorId, position
+    } = curriculumViewState;
     return {
-        ...state,
-        mode: 'focus',
-        query: '',
-        layerStart: 0
+        mode, hierarchy, targetId, parentId, subject, includeRecommended,
+        layerStart, anchorId, position: position ? structuredClone(position) : null
     };
 }
 
-function ensureCurriculumFocusHistory() {
-    const current = curriculumFocusSnapshot(curriculumStateSnapshot());
-    const currentKey = curriculumFocusHistoryKey(current);
-    if (!currentKey) return;
-    const activeKey = curriculumFocusHistoryKey(curriculumFocusHistory[curriculumFocusHistoryIndex]);
+function curriculumNavigationKey(state) {
+    if (!state) return '';
+    return [state.mode, state.hierarchy, state.subject, state.parentId,
+        state.targetId, state.layerStart || 0].join(':');
+}
+
+function captureCurriculumPosition() {
+    const stage = document.querySelector('#curriculum-view .curriculum-graph-stage');
+    if (stage) return { type: 'graph', left: stage.scrollLeft, top: stage.scrollTop };
+    const neighborhood = document.querySelector('#curriculum-view .curriculum-neighborhood');
+    if (!neighborhood) return null;
+    return {
+        type: 'neighborhood',
+        columns: [...neighborhood.querySelectorAll('.curriculum-neighborhood-column')]
+            .map(column => column.scrollTop)
+    };
+}
+
+function curriculumNavigationSnapshot(state, position = state?.position || null) {
+    return {
+        ...state,
+        query: '',
+        position: position ? structuredClone(position) : null
+    };
+}
+
+function ensureCurriculumNavigationHistory() {
+    const current = curriculumNavigationSnapshot(curriculumStateSnapshot(), captureCurriculumPosition());
+    const currentKey = curriculumNavigationKey(current);
+    const activeKey = curriculumNavigationKey(curriculumNavigationHistory[curriculumNavigationHistoryIndex]);
     if (activeKey === currentKey) return;
-    const existingIndex = curriculumFocusHistory.findIndex(item => curriculumFocusHistoryKey(item) === currentKey);
+    const existingIndex = curriculumNavigationHistory.findLastIndex(item =>
+        curriculumNavigationKey(item) === currentKey);
     if (existingIndex >= 0) {
-        curriculumFocusHistoryIndex = existingIndex;
-        return;
-    }
-    curriculumFocusHistory = [current];
-    curriculumFocusHistoryIndex = 0;
-}
-
-function recordCurriculumFocusNavigation(previous, next) {
-    const nextKey = curriculumFocusHistoryKey(next);
-    if (!nextKey) return;
-    const nextSnapshot = curriculumFocusSnapshot(next);
-    const activeKey = curriculumFocusHistoryKey(curriculumFocusHistory[curriculumFocusHistoryIndex]);
-    if (activeKey === nextKey) return;
-
-    if (previous.mode !== 'focus') {
-        curriculumFocusHistory = [nextSnapshot];
-        curriculumFocusHistoryIndex = 0;
-        return;
-    }
-
-    const previousSnapshot = curriculumFocusSnapshot(previous);
-    const previousKey = curriculumFocusHistoryKey(previousSnapshot);
-    if (curriculumFocusHistoryIndex < 0 || activeKey !== previousKey) {
-        curriculumFocusHistory = [previousSnapshot];
-        curriculumFocusHistoryIndex = 0;
+        curriculumNavigationHistoryIndex = existingIndex;
     } else {
-        curriculumFocusHistory = curriculumFocusHistory.slice(0, curriculumFocusHistoryIndex + 1);
+        curriculumNavigationHistory = [current];
+        curriculumNavigationHistoryIndex = 0;
     }
-    curriculumFocusHistory.push(nextSnapshot);
-    curriculumFocusHistoryIndex = curriculumFocusHistory.length - 1;
 }
 
-function restoreCurriculumFocusHistory(state) {
-    const items = Array.isArray(state?.curriculumFocusHistory)
-        ? state.curriculumFocusHistory.filter(item => curriculumFocusHistoryKey(item))
+function recordCurriculumNavigation(previous, next) {
+    const previousSnapshot = curriculumNavigationSnapshot(previous, captureCurriculumPosition());
+    const previousKey = curriculumNavigationKey(previousSnapshot);
+    const activeKey = curriculumNavigationKey(curriculumNavigationHistory[curriculumNavigationHistoryIndex]);
+    if (activeKey !== previousKey) ensureCurriculumNavigationHistory();
+    if (curriculumNavigationHistoryIndex >= 0) {
+        curriculumNavigationHistory[curriculumNavigationHistoryIndex] = previousSnapshot;
+    } else {
+        curriculumNavigationHistory = [previousSnapshot];
+        curriculumNavigationHistoryIndex = 0;
+    }
+    curriculumNavigationHistory = curriculumNavigationHistory.slice(0, curriculumNavigationHistoryIndex + 1);
+    curriculumNavigationHistory.push(curriculumNavigationSnapshot(next, null));
+    curriculumNavigationHistoryIndex += 1;
+}
+
+function restoreCurriculumNavigationHistory(state, currentState = null) {
+    const items = Array.isArray(state?.curriculumNavigationHistory)
+        ? state.curriculumNavigationHistory.filter(item => curriculumNavigationKey(item))
         : [];
-    const index = Number(state?.curriculumFocusHistoryIndex);
-    if (!items.length || !Number.isInteger(index) || index < 0 || index >= items.length) return;
-    curriculumFocusHistory = items.map(curriculumFocusSnapshot);
-    curriculumFocusHistoryIndex = index;
+    if (items.length) {
+        curriculumNavigationHistory = items.map(item => curriculumNavigationSnapshot(item));
+    }
+    const requestedIndex = Number(state?.curriculumNavigationHistoryIndex);
+    const key = curriculumNavigationKey(currentState || state?.curriculum);
+    if (Number.isInteger(requestedIndex)
+        && curriculumNavigationKey(curriculumNavigationHistory[requestedIndex]) === key) {
+        curriculumNavigationHistoryIndex = requestedIndex;
+        return curriculumNavigationHistory[requestedIndex];
+    }
+    const existingIndex = curriculumNavigationHistory.findLastIndex(item =>
+        curriculumNavigationKey(item) === key);
+    if (existingIndex >= 0) {
+        curriculumNavigationHistoryIndex = existingIndex;
+        return curriculumNavigationHistory[existingIndex];
+    }
+    return null;
+}
+
+function curriculumDeckLayer(subject, deckId) {
+    if (!subject || !deckId || !curriculumIndex) return 0;
+    const layout = layoutCurriculumGraph(subjectDeckGraph(curriculumIndex, subject));
+    return layout.nodes.find(node => node.id === deckId)?.rank || 0;
+}
+
+function restoreCurriculumPosition() {
+    const position = curriculumViewState.position;
+    const stage = document.querySelector('#curriculum-view .curriculum-graph-stage');
+    if (stage && position?.type === 'graph') {
+        stage.scrollLeft = position.left || 0;
+        stage.scrollTop = position.top || 0;
+        return;
+    }
+    if (stage && curriculumViewState.anchorId) {
+        const anchor = [...stage.querySelectorAll('.curriculum-graph-node')]
+            .find(node => node.dataset.deckId === curriculumViewState.anchorId);
+        if (!anchor) return;
+        const stageRect = stage.getBoundingClientRect();
+        const anchorRect = anchor.getBoundingClientRect();
+        const delta = anchorRect.top + anchorRect.height / 2
+            - (stageRect.top + stage.clientHeight / 2);
+        let desiredTop = stage.scrollTop + delta;
+        const scrollCanvas = stage.querySelector('.curriculum-graph-scroll-canvas');
+        const viewport = stage.querySelector('.curriculum-graph-viewport');
+        if (desiredTop < 0 && scrollCanvas && viewport) {
+            const inset = -desiredTop;
+            viewport.style.top = `${inset}px`;
+            scrollCanvas.style.height = `${scrollCanvas.scrollHeight + inset}px`;
+            desiredTop = 0;
+        } else if (desiredTop > stage.scrollHeight - stage.clientHeight && scrollCanvas) {
+            const inset = desiredTop - (stage.scrollHeight - stage.clientHeight);
+            scrollCanvas.style.height = `${scrollCanvas.scrollHeight + inset}px`;
+        }
+        stage.scrollTop = desiredTop;
+        return;
+    }
+    if (position?.type === 'neighborhood') {
+        document.querySelectorAll('#curriculum-view .curriculum-neighborhood-column')
+            .forEach((column, index) => { column.scrollTop = position.columns?.[index] || 0; });
+    }
 }
 
 function curriculumStateFromUrl(url = new URL(window.location.href)) {
@@ -3164,29 +3292,39 @@ function writeCurriculumHistory({ replace = false } = {}) {
     const historyState = {
         mainView: 'curriculum',
         curriculum: state,
-        curriculumFocusHistory: curriculumFocusHistory.map(item => ({ ...item })),
-        curriculumFocusHistoryIndex
+        curriculumNavigationHistory: structuredClone(curriculumNavigationHistory),
+        curriculumNavigationHistoryIndex
     };
     history[replace ? 'replaceState' : 'pushState'](historyState, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
-async function navigateCurriculum(options, { replace = false, trackFocus = true } = {}) {
+async function navigateCurriculum(options, { replace = false, trackHistory = true } = {}) {
     const previous = curriculumStateSnapshot();
-    const next = { ...previous, ...options };
-    if (trackFocus) recordCurriculumFocusNavigation(previous, next);
-    Object.assign(curriculumViewState, options);
+    const next = {
+        ...previous,
+        ...options,
+        anchorId: Object.hasOwn(options, 'anchorId') ? options.anchorId : '',
+        position: Object.hasOwn(options, 'position') ? options.position : null
+    };
+    if (trackHistory) recordCurriculumNavigation(previous, next);
+    Object.assign(curriculumViewState, next);
     writeCurriculumHistory({ replace });
     await renderCurriculumView();
 }
 
-async function moveCurriculumFocusHistory(offset) {
-    const nextIndex = curriculumFocusHistoryIndex + offset;
-    if (nextIndex < 0 || nextIndex >= curriculumFocusHistory.length) return;
-    curriculumFocusHistoryIndex = nextIndex;
-    await navigateCurriculum(curriculumFocusHistory[nextIndex], {
-        replace: true,
-        trackFocus: false
-    });
+async function moveCurriculumNavigationHistory(offset) {
+    const nextIndex = curriculumNavigationHistoryIndex + offset;
+    if (nextIndex < 0 || nextIndex >= curriculumNavigationHistory.length) return;
+    if (curriculumNavigationHistoryIndex >= 0) {
+        curriculumNavigationHistory[curriculumNavigationHistoryIndex] = curriculumNavigationSnapshot(
+            curriculumStateSnapshot(),
+            captureCurriculumPosition()
+        );
+    }
+    curriculumNavigationHistoryIndex = nextIndex;
+    Object.assign(curriculumViewState, structuredClone(curriculumNavigationHistory[nextIndex]));
+    writeCurriculumHistory({ replace: true });
+    await renderCurriculumView();
 }
 
 function curriculumItemName(item) {
@@ -3226,11 +3364,7 @@ function makeCurriculumItemButton(item, progressStates, extra = '') {
     `;
     button.dataset.curriculumNodeId = item.id;
     button.title = `${item.id}${item.description ? `\n${item.description}` : ''}`;
-    button.onclick = () => navigateCurriculum(curriculumFocusOptions(item), {
-        // Recentering inside the focused three-column browser has its own
-        // Back/Forward trail, so it should remain one browser-history entry.
-        replace: curriculumViewState.mode === 'focus'
-    });
+    button.onclick = () => navigateCurriculum(curriculumFocusOptions(item));
     return button;
 }
 
@@ -3276,7 +3410,6 @@ function renderCurriculumDirectory(root, progressStates) {
 }
 
 function renderCurriculumNeighborhood(root, progressStates) {
-    ensureCurriculumFocusHistory();
     const neighborhood = curriculumNeighborhood(curriculumIndex, {
         hierarchy: curriculumViewState.hierarchy,
         targetId: curriculumViewState.targetId,
@@ -3296,14 +3429,13 @@ function renderCurriculumNeighborhood(root, progressStates) {
     appendCurriculumRelationshipGroups(prerequisites, neighborhood.prerequisites, progressStates, 'No required prerequisites.', 'earlier');
     const selected = document.createElement('section');
     selected.className = 'curriculum-neighborhood-column is-selected';
+    const selectedProgress = neighborhood.hierarchy === 'deck'
+        ? curriculumStatus(neighborhood.target, progressStates)
+        : null;
     selected.innerHTML = `
-        <h3 class="curriculum-selected-header">
-            <button type="button" class="curriculum-selected-history" data-focus-history="back" aria-label="Back to previous selected ${escapeHtml(neighborhood.hierarchy)}" title="Back"${curriculumFocusHistoryIndex <= 0 ? ' disabled' : ''}>←</button>
-            <span>Selected ${escapeHtml(neighborhood.hierarchy)}</span>
-            <button type="button" class="curriculum-selected-history" data-focus-history="forward" aria-label="Forward to next selected ${escapeHtml(neighborhood.hierarchy)}" title="Forward"${curriculumFocusHistoryIndex >= curriculumFocusHistory.length - 1 ? ' disabled' : ''}>→</button>
-        </h3>
+        <h3 class="curriculum-selected-header"><span>Selected ${escapeHtml(neighborhood.hierarchy)}</span></h3>
         <h4 class="curriculum-selected-spacer" aria-hidden="true">Selected item</h4>
-        <article class="curriculum-selected-item" data-curriculum-node-id="${escapeHtml(neighborhood.target.id)}">
+        <article class="curriculum-selected-item${selectedProgress ? ` is-${selectedProgress}` : ''}" data-curriculum-node-id="${escapeHtml(neighborhood.target.id)}">
             <span class="curriculum-selected-kind">${escapeHtml(neighborhood.hierarchy)}</span>
             <h2>${escapeHtml(curriculumItemName(neighborhood.target))}</h2>
             <p class="curriculum-selected-id">${escapeHtml(neighborhood.target.id)}</p>
@@ -3311,8 +3443,6 @@ function renderCurriculumNeighborhood(root, progressStates) {
             <p class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(neighborhood.target, progressStates))}</p>
         </article>
     `;
-    selected.querySelector('[data-focus-history="back"]').onclick = () => moveCurriculumFocusHistory(-1);
-    selected.querySelector('[data-focus-history="forward"]').onclick = () => moveCurriculumFocusHistory(1);
     const selectedCard = selected.querySelector('.curriculum-selected-item');
     if (neighborhood.hierarchy === 'subject') {
         selectedCard.classList.add('is-openable');
@@ -3456,8 +3586,11 @@ async function renderCurriculumView(options = {}) {
         decks, cards, reviews, chapterProgress, new Date()
     );
     const { mode, hierarchy, subject, parentId } = curriculumViewState;
+    ensureCurriculumNavigationHistory();
     root.innerHTML = '';
 
+    const breadcrumbRow = document.createElement('div');
+    breadcrumbRow.className = 'curriculum-breadcrumb-row';
     const breadcrumbs = document.createElement('nav');
     breadcrumbs.className = 'curriculum-breadcrumb';
     breadcrumbs.setAttribute('aria-label', 'Curriculum hierarchy');
@@ -3479,13 +3612,30 @@ async function renderCurriculumView(options = {}) {
         crumbCount += 1;
     };
     addCrumb('subjects', { mode: 'overview', hierarchy: 'subject', subject: '', parentId: '', targetId: '', query: '', layerStart: 0 }, hierarchy === 'subject');
-    if (subject) addCrumb(subject, { mode: 'subject', hierarchy: 'deck', subject, parentId: subject, targetId: '', query: '', layerStart: 0 }, hierarchy === 'deck' && mode === 'subject');
     const deckId = hierarchy === 'chapter' ? parentId : hierarchy === 'deck' && mode === 'focus' ? curriculumViewState.targetId : '';
+    if (subject) {
+        const subjectAnchor = deckId || '';
+        addCrumb(subject, {
+            mode: 'subject', hierarchy: 'deck', subject, parentId: subject,
+            targetId: '', query: '',
+            layerStart: curriculumDeckLayer(subject, subjectAnchor),
+            anchorId: subjectAnchor
+        }, hierarchy === 'deck' && mode === 'subject');
+    }
     if (deckId) addCrumb(deckId.split('/').pop(), {
         mode: 'chapters', hierarchy: 'chapter', subject: subject || deckId.split('/')[0],
         parentId: deckId, targetId: '', query: '', layerStart: 0
     }, hierarchy === 'chapter' || (hierarchy === 'deck' && mode === 'focus'));
-    root.appendChild(breadcrumbs);
+    const historyControls = document.createElement('span');
+    historyControls.className = 'curriculum-history-controls';
+    historyControls.innerHTML = `
+        <button type="button" aria-label="Back in curriculum" title="Back"${curriculumNavigationHistoryIndex <= 0 ? ' disabled' : ''}>←</button>
+        <button type="button" aria-label="Forward in curriculum" title="Forward"${curriculumNavigationHistoryIndex >= curriculumNavigationHistory.length - 1 ? ' disabled' : ''}>→</button>
+    `;
+    historyControls.firstElementChild.onclick = () => moveCurriculumNavigationHistory(-1);
+    historyControls.lastElementChild.onclick = () => moveCurriculumNavigationHistory(1);
+    breadcrumbRow.append(breadcrumbs, historyControls);
+    root.appendChild(breadcrumbRow);
 
     if (mode === 'focus') renderCurriculumNeighborhood(root, progressStates);
     else if (mode === 'overview') {
@@ -3498,6 +3648,7 @@ async function renderCurriculumView(options = {}) {
             emptyMessage: 'This deck does not have a published chapter plan yet.'
         });
     }
+    requestAnimationFrame(() => requestAnimationFrame(restoreCurriculumPosition));
 }
 
 async function renderLegacyCurriculumView(options = {}) {
@@ -4565,8 +4716,8 @@ async function handlePopState(event) {
 
     const curriculumState = state?.curriculum || curriculumStateFromUrl();
     if (state?.mainView === 'curriculum' || curriculumState) {
-        if (curriculumState) Object.assign(curriculumViewState, curriculumState, { query: '' });
-        restoreCurriculumFocusHistory(state);
+        const restored = restoreCurriculumNavigationHistory(state, curriculumState);
+        if (curriculumState) Object.assign(curriculumViewState, restored || curriculumState, { query: '' });
         await showMainView('curriculum');
         return;
     }

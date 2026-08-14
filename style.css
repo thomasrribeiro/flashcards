@@ -3453,16 +3453,49 @@ body.standalone-phone .mobile-sidebar-close {
     margin-bottom: 16px;
 }
 
+.curriculum-breadcrumb-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 0 0 14px;
+}
+
 .curriculum-breadcrumb {
     display: flex;
+    flex: 1;
     min-width: 0;
     align-items: baseline;
     flex-wrap: wrap;
     gap: 8px;
-    margin: 0 0 14px;
+    margin: 0;
     color: var(--muted);
     font-size: 0.78rem;
     line-height: 1.5;
+}
+
+.curriculum-history-controls {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.curriculum-history-controls button {
+    display: inline-grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border: 1px solid var(--black);
+    border-radius: 0;
+    background: var(--white);
+    color: var(--black);
+    padding: 0;
+    font: inherit;
+}
+
+.curriculum-history-controls button:disabled {
+    cursor: default;
+    opacity: 0.28;
 }
 
 .curriculum-breadcrumb button {
@@ -3761,11 +3794,10 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-neighborhood-column > h3.curriculum-selected-header {
-    display: grid;
-    grid-template-columns: 30px minmax(0, 1fr) 30px;
+    display: block;
     align-items: center;
     gap: 8px;
-    padding: 5px 8px;
+    padding: 10px 12px;
 }
 
 .curriculum-selected-header > span {
@@ -3776,37 +3808,6 @@ body.standalone-phone .mobile-sidebar-close {
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.curriculum-selected-history {
-    display: inline-grid;
-    width: 30px;
-    height: 30px;
-    place-items: center;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: 0;
-    background: transparent;
-    color: var(--black);
-    font: inherit;
-    font-size: 0.9rem;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.curriculum-selected-history:last-child {
-    justify-self: end;
-}
-
-.curriculum-selected-history:hover:not(:disabled),
-.curriculum-selected-history:focus-visible {
-    border-color: var(--black);
-    background: var(--white);
-}
-
-.curriculum-selected-history:disabled {
-    opacity: 0.25;
-    cursor: default;
 }
 
 .curriculum-neighborhood-column > h4,
@@ -3841,10 +3842,19 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-selected-item {
     margin: 8px 18px 20px;
     border: 2px solid var(--black);
-    border-left: 6px solid var(--gold);
-    background: color-mix(in srgb, var(--gold) 18%, var(--white));
+    border-left: 6px solid var(--muted);
+    background: var(--white);
     box-shadow: 3px 3px 0 color-mix(in srgb, var(--black) 16%, transparent);
     padding: 20px 16px;
+}
+
+.curriculum-selected-item.is-learning {
+    border-left-color: var(--gold);
+    background: color-mix(in srgb, var(--gold) 18%, var(--white));
+}
+
+.curriculum-selected-item.is-complete {
+    border-left-color: #30964b;
 }
 
 .curriculum-selected-item.is-openable {
@@ -3853,8 +3863,8 @@ body.standalone-phone .mobile-sidebar-close {
 
 .curriculum-selected-item.is-openable:hover,
 .curriculum-selected-item.is-openable:focus-visible {
-    border-color: var(--gold);
-    outline: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+    border-color: var(--black);
+    outline: 2px solid color-mix(in srgb, var(--black) 28%, transparent);
     outline-offset: 3px;
 }
 
@@ -4048,22 +4058,14 @@ body.standalone-phone .mobile-sidebar-close {
         linear-gradient(to right, var(--subtle-border) 1px, transparent 1px),
         linear-gradient(to bottom, var(--subtle-border) 1px, transparent 1px);
     background-size: 28px 28px;
-    touch-action: pan-y;
+    touch-action: pan-x pan-y;
     user-select: none;
 }
 
-.curriculum-graph-stage::-webkit-scrollbar {
-    width: 12px;
-    height: 12px;
-}
-
-.curriculum-graph-stage::-webkit-scrollbar-thumb {
-    border: 3px solid var(--white);
-    background: var(--muted);
-}
-
-.curriculum-graph-stage::-webkit-scrollbar-track {
-    background: var(--white);
+.curriculum-graph-stage.is-layered {
+    overflow-x: hidden;
+    overflow-y: scroll;
+    touch-action: pan-y;
 }
 
 .curriculum-graph-scroll-canvas {

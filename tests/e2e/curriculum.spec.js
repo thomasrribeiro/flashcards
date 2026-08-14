@@ -5,7 +5,7 @@ test.beforeEach(async ({ page }) => {
     await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
     await page.locator('#tab-curriculum').click();
     await expect(page.locator('.curriculum-breadcrumb')).toBeVisible();
-    await expect(page.locator('.curriculum-view > .curriculum-breadcrumb')).toHaveCount(1);
+    await expect(page.locator('.curriculum-breadcrumb-row > .curriculum-breadcrumb')).toHaveCount(1);
     await expect(page.getByText('Recommended paths', { exact: true })).toHaveCount(0);
     await expect(page.locator('.curriculum-toolbar').getByRole('button', { name: 'Sources' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Create curriculum' })).toHaveCount(0);
@@ -17,6 +17,9 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     }
     const subjects = page.locator('.curriculum-graph-node');
     await expect(subjects).toHaveCount(3);
+    await expect(page.locator('.curriculum-graph-stage')).not.toHaveClass(/is-layered/);
+    expect(await page.locator('.curriculum-graph-stage').evaluate(stage => getComputedStyle(stage).overflowX))
+        .toBe('auto');
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
 
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
@@ -64,10 +67,14 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         const scrolling = await stage.evaluate(element => ({
             top: element.scrollTop,
             hasVertical: element.scrollHeight > element.clientHeight,
-            hasHorizontal: element.scrollWidth > element.clientWidth
+            hasHorizontalContent: element.scrollWidth > element.clientWidth,
+            overflowX: getComputedStyle(element).overflowX,
+            overflowY: getComputedStyle(element).overflowY
         }));
         expect(scrolling.hasVertical).toBe(true);
-        expect(scrolling.hasHorizontal).toBe(true);
+        expect(scrolling.hasHorizontalContent).toBe(true);
+        expect(scrolling.overflowX).toBe('hidden');
+        expect(scrolling.overflowY).toBe('scroll');
         await stage.hover();
         await page.mouse.wheel(0, 180);
         await expect.poll(() => stage.evaluate(element => element.scrollTop)).toBeGreaterThan(scrolling.top);
@@ -78,6 +85,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(baselineOpacity).toBeLessThan(0.4);
     const branchNode = page.locator('.curriculum-graph-node[data-deck-id="physics/advanced-quantum-mechanics"]');
     await branchNode.hover();
+    await expect(page.locator('.curriculum-graph-connection.is-related')).toHaveCount(0);
+    await page.waitForTimeout(500);
     await expect(page.locator('.curriculum-graph-connection.is-related')).not.toHaveCount(0);
     await expect(page.locator('.curriculum-graph-connection.is-dimmed')).not.toHaveCount(0);
     await expect(page.locator('.curriculum-graph-arrowhead')).not.toHaveCount(0);
@@ -90,23 +99,46 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             .evaluate(element => getComputedStyle(element).opacity));
         return dimmedOpacity < relatedOpacity && relatedOpacity === baselineOpacity;
     }).toBe(true);
+    if (testInfo.project.name === 'desktop-chromium') {
+        await page.locator('.curriculum-graph-stage').evaluate(stage => { stage.scrollTop += 12; });
+        await expect(page.locator('.curriculum-graph-connection.is-related')).toHaveCount(0);
+        await page.waitForTimeout(250);
+        await expect(page.locator('.curriculum-graph-connection.is-related')).toHaveCount(0);
+        await expect.poll(() => page.locator('.curriculum-graph-connection.is-related').count(), {
+            timeout: 1500
+        }).toBeGreaterThan(0);
+    }
     await expect(page.locator('.curriculum-graph-connection.is-long .curriculum-graph-edge').first())
         .toHaveCSS('stroke-dasharray', 'none');
     const cableRouting = await page.locator('.curriculum-graph-stage').evaluate(stage => {
-        const nodes = [...stage.querySelectorAll('.curriculum-graph-node')];
-        const nodeTop = Math.min(...nodes.map(node => Number.parseFloat(node.style.top)));
         const longConnections = [...stage.querySelectorAll('.curriculum-graph-connection.is-long')];
         return {
-            nodeTop,
-            cableYs: longConnections.map(connection => Number(connection.dataset.cableY)),
+            cableYs: longConnections.flatMap(connection =>
+                connection.dataset.cableYs.split(',').filter(Boolean).map(Number)),
+            departureGutters: longConnections.map(connection => Number(connection.dataset.departureGutter)),
             pathsContainLane: longConnections.every(connection =>
-                connection.querySelector('.curriculum-graph-edge').getAttribute('d')
-                    .includes(connection.dataset.cableY)),
-            directCableCount: stage.querySelectorAll('.curriculum-graph-connection.is-primary[data-cable-y]').length
+                connection.dataset.cableYs.split(',').filter(Boolean).every(y =>
+                    connection.querySelector('.curriculum-graph-edge').getAttribute('d').includes(y))),
+            routesBelowCrossedColumns: longConnections.every(connection => {
+                const source = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.source)}"]`);
+                const target = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.target)}"]`);
+                const sourceRank = Number(source.dataset.rank);
+                const targetRank = Number(target.dataset.rank);
+                const cableYs = connection.dataset.cableYs.split(',').filter(Boolean).map(Number);
+                return cableYs.every((y, index) => {
+                    const rank = sourceRank + index + 1;
+                    if (rank >= targetRank) return true;
+                    const bottoms = [...stage.querySelectorAll(`.curriculum-graph-node[data-rank="${rank}"]`)]
+                        .map(node => Number.parseFloat(node.style.top) + Number.parseFloat(node.style.height));
+                    return bottoms.length && y > Math.max(...bottoms);
+                });
+            }),
+            directCableCount: stage.querySelectorAll('.curriculum-graph-connection.is-primary[data-cable-ys]').length
         };
     });
     expect(cableRouting.cableYs.length).toBeGreaterThan(0);
-    expect(cableRouting.cableYs.every(y => y < cableRouting.nodeTop)).toBe(true);
+    expect(cableRouting.routesBelowCrossedColumns).toBe(true);
+    expect(new Set(cableRouting.departureGutters).size).toBeGreaterThan(1);
     expect(cableRouting.pathsContainLane).toBe(true);
     expect(cableRouting.directCableCount).toBe(0);
     const arrowGeometry = await page.locator('.curriculum-graph-connection.is-primary').first().evaluate(connection => {
@@ -131,17 +163,16 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await page.getByRole('button', { name: 'Show next dependency layer' }).click();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
     if (testInfo.project.name === 'desktop-chromium') {
-        const visibleRanks = await page.locator('.curriculum-graph-stage').evaluate(stage => {
+        await expect.poll(() => page.locator('.curriculum-graph-stage').evaluate(stage => {
             const stageRect = stage.getBoundingClientRect();
-            return [...new Set([...stage.querySelectorAll('.curriculum-graph-node[data-rank]')]
+            return new Set([...stage.querySelectorAll('.curriculum-graph-node[data-rank]')]
                 .filter(node => {
                     const rect = node.getBoundingClientRect();
                     const center = rect.left + rect.width / 2;
                     return center >= stageRect.left && center <= stageRect.right;
                 })
-                .map(node => node.dataset.rank))];
-        });
-        expect(visibleRanks).toHaveLength(3);
+                .map(node => node.dataset.rank)).size;
+        })).toBe(3);
     }
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(completeDeckGraphCount);
     await expect(page).toHaveURL(/curriculum-layer=1/);
@@ -177,10 +208,14 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.getByRole('button', { name: 'Edit subject' })).toHaveCount(0);
     await expect(page.locator('.curriculum-toolbar button')).toHaveCount(0);
     await expect(page.locator('.curriculum-selected-item button')).toHaveCount(0);
-    const focusBack = page.getByRole('button', { name: 'Back to previous selected deck' });
-    const focusForward = page.getByRole('button', { name: 'Forward to next selected deck' });
-    await expect(focusBack).toBeDisabled();
-    await expect(focusForward).toBeDisabled();
+    await expect(page.locator('.curriculum-selected-header button')).toHaveCount(0);
+    const historyBack = page.getByRole('button', { name: 'Back in curriculum' });
+    const historyForward = page.getByRole('button', { name: 'Forward in curriculum' });
+    await expect(historyBack).toBeEnabled();
+    await expect(historyForward).toBeDisabled();
+    const breadcrumbBox = await page.locator('.curriculum-breadcrumb-row').boundingBox();
+    const historyBox = await page.locator('.curriculum-history-controls').boundingBox();
+    expect(historyBox.x + historyBox.width).toBeLessThanOrEqual(breadcrumbBox.x + breadcrumbBox.width + 1);
     if (testInfo.project.name === 'desktop-chromium') {
         const unlocks = page.locator('.curriculum-neighborhood-column.is-unlocks');
         const dimensions = await unlocks.evaluate(element => ({
@@ -198,34 +233,46 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         expect(Math.abs(selectedTop - unlockTop)).toBeLessThan(2);
     }
     const firstFocusedDeck = await page.locator('.curriculum-selected-item h2').textContent();
+    const firstFocusedId = await page.locator('.curriculum-selected-item').getAttribute('data-curriculum-node-id');
+    await page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'physics', exact: true }).click();
+    await expect(page.locator('.curriculum-graph-stage.is-layered')).toBeVisible();
+    if (testInfo.project.name === 'desktop-chromium') {
+        await expect.poll(() => page.locator('.curriculum-graph-stage').evaluate((stage, deckId) => {
+            const stageRect = stage.getBoundingClientRect();
+            const anchorRect = [...stage.querySelectorAll('.curriculum-graph-node')]
+                .find(node => node.dataset.deckId === deckId).getBoundingClientRect();
+            return Math.abs(anchorRect.top + anchorRect.height / 2
+                - (stageRect.top + stage.clientHeight / 2));
+        }, firstFocusedId)).toBeLessThan(30);
+    }
+    await historyBack.click();
+    await expect(page.locator('.curriculum-selected-item h2')).toHaveText(firstFocusedDeck);
     await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().click();
     await expect(page.locator('.curriculum-selected-item h2')).not.toHaveText(firstFocusedDeck);
     const secondFocusedDeck = await page.locator('.curriculum-selected-item h2').textContent();
-    await expect(focusBack).toBeEnabled();
-    await expect(focusForward).toBeDisabled();
+    await expect(historyBack).toBeEnabled();
+    await expect(historyForward).toBeDisabled();
     await page.reload();
     await expect(page.locator('.curriculum-selected-item h2')).toHaveText(secondFocusedDeck);
-    await expect(focusBack).toBeEnabled();
-    await focusBack.click();
+    await expect(historyBack).toBeEnabled();
+    await historyBack.click();
     await expect(page.locator('.curriculum-selected-item h2')).toHaveText(firstFocusedDeck);
-    await expect(focusBack).toBeDisabled();
-    await expect(focusForward).toBeEnabled();
-    await focusForward.click();
+    await expect(historyForward).toBeEnabled();
+    await historyForward.click();
     await expect(page.locator('.curriculum-selected-item h2')).toHaveText(secondFocusedDeck);
-    await focusBack.click();
+    await historyBack.click();
     await expect(page.locator('.curriculum-selected-item h2')).toHaveText(firstFocusedDeck);
 
     await page.locator('.curriculum-selected-item').click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Back to previous selected deck' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Forward to next selected deck' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Back in curriculum' })).toBeEnabled();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(10);
 
-    await page.goBack();
+    await historyBack.click();
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
-    await page.goBack();
+    await historyBack.click();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
 });
 
@@ -243,6 +290,8 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     await page.goBack();
     await expect(page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]')).toBeVisible();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
+    await expect(page.locator('.curriculum-selected-item')).toHaveClass(/is-unavailable/);
+    await expect(page.locator('.curriculum-selected-item')).not.toHaveClass(/is-learning/);
     await page.locator('.curriculum-selected-item').click();
     await expect(page.getByText('This deck does not have a published chapter plan yet.')).toBeVisible();
     await expect(page.locator('.curriculum-layer-label')).toHaveCount(0);
