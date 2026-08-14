@@ -2904,7 +2904,7 @@ function curriculumCableRouting(layout) {
         for (const entry of group.entries) {
             const edgeCrossedRanks = [];
             for (let rank = group.source.rank + 1; rank < entry.target.rank; rank += 1) edgeCrossedRanks.push(rank);
-            const edgeRankYs = new Map([[group.source.rank, rankYs.get(group.source.rank + 1)]]);
+            const edgeRankYs = new Map();
             for (let rank = group.source.rank + 1; rank <= entry.target.rank; rank += 1) {
                 edgeRankYs.set(rank, rankYs.get(rank));
             }
@@ -2978,14 +2978,16 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const positioned = new Map(layout.nodes.map(node => [node.id, node]));
     const canvasHeight = Math.max(layout.height, cableRouting.height);
     const scrollExtentNodes = ranked && focusRanks
-        ? layout.nodes.filter(node => node.rank === focusRanks.layer)
+        ? layout.nodes.filter(node => node.rank >= focusRanks.start && node.rank < focusRanks.end)
         : layout.nodes;
     const scrollExtentNodeBottom = scrollExtentNodes.length
         ? Math.max(...scrollExtentNodes.map(node => node.y + node.height))
         : 0;
     const scrollExtentRouteBottom = ranked && focusRanks
         ? Math.max(0, ...[...cableRouting.routes.values()]
-            .map(route => route.rankYs?.get(focusRanks.layer) || 0))
+            .flatMap(route => [...(route.rankYs || [])]
+                .filter(([rank]) => rank >= focusRanks.start && rank < focusRanks.end)
+                .map(([, y]) => y)))
         : 0;
     const scrollExtentHeight = ranked && focusRanks && scrollExtentNodes.length
         ? Math.max(scrollExtentNodeBottom + 36, scrollExtentRouteBottom + 24)
@@ -3813,9 +3815,9 @@ function curriculumGraphControls({ windowState = null } = {}) {
     controls.className = `curriculum-graph-controls${windowState ? ' is-layered' : ''}`;
     const layerNavigation = windowState ? `
         <span class="curriculum-graph-navigation">
-            <button type="button" data-action="previous-layer" aria-label="Show previous dependency layer"${windowState.layer === 0 ? ' disabled' : ''}>←</button>
+            <button type="button" data-action="previous-layer" aria-label="Show previous dependency layer"${windowState.layer <= windowState.minLayer ? ' disabled' : ''}>←</button>
             <span class="curriculum-layer-label">Layer ${windowState.layer + 1} of ${windowState.layerCount}</span>
-            <button type="button" data-action="next-layer" aria-label="Show next dependency layer"${windowState.layer >= windowState.layerCount - 1 ? ' disabled' : ''}>→</button>
+            <button type="button" data-action="next-layer" aria-label="Show next dependency layer"${windowState.layer >= windowState.maxLayer ? ' disabled' : ''}>→</button>
         </span>` : '';
     controls.innerHTML = `
         ${layerNavigation}
@@ -3846,8 +3848,8 @@ async function renderCurriculumGraph(root, progressStates, graph, { layered = fa
     const controller = await renderCurriculumGraphCanvas(root, graph, progressStates, {
         ranked: layered,
         focusRanks: windowState ? {
-            start: Math.max(0, windowState.layer - 1),
-            end: Math.min(windowState.layerCount, windowState.layer + 2),
+            start: windowState.start,
+            end: windowState.end,
             layer: windowState.layer
         } : null
     });

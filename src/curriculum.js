@@ -622,8 +622,10 @@ export function curriculumLayerGraph(graph, requestedLayer = null) {
 
 /**
  * Return a horizontally sliding window around one focal dependency rank.
- * Boundary ranks remain valid focal layers: the first layer shows the first
- * `width` ranks and the last layer shows the final `width` ranks.
+ * Keep the focal rank centered whenever the graph contains a complete window.
+ * For a three-rank window this means navigation runs from layer 2 through
+ * layer n-1, so the viewer never presents an incomplete one- or two-column
+ * boundary state.
  */
 export function curriculumLayerWindow(graph, requestedLayer = 0, width = 3) {
     if (!graph?.nodes?.length) {
@@ -633,19 +635,27 @@ export function curriculumLayerWindow(graph, requestedLayer = 0, width = 3) {
             end: 0,
             layer: 0,
             layerCount: 0,
+            minLayer: 0,
+            maxLayer: 0,
             width: Math.max(1, width)
         };
     }
     const ranks = requiredGraphRanks(graph);
     const layerCount = Math.max(...ranks.values()) + 1;
     const windowWidth = Math.max(1, Math.round(width));
-    const maxStart = Math.max(0, layerCount - windowWidth);
+    const hasCompleteWindow = layerCount >= windowWidth;
+    const ranksBefore = Math.floor(windowWidth / 2);
+    const ranksAfter = windowWidth - ranksBefore - 1;
+    const minLayer = hasCompleteWindow ? ranksBefore : 0;
+    const maxLayer = hasCompleteWindow
+        ? layerCount - ranksAfter - 1
+        : layerCount - 1;
     const numericLayer = Number(requestedLayer);
-    const layer = Math.max(0, Math.min(
-        layerCount - 1,
-        Number.isFinite(numericLayer) ? Math.round(numericLayer) : 0
+    const layer = Math.max(minLayer, Math.min(
+        maxLayer,
+        Number.isFinite(numericLayer) ? Math.round(numericLayer) : minLayer
     ));
-    const start = Math.max(0, Math.min(maxStart, layer - Math.floor(windowWidth / 2)));
+    const start = hasCompleteWindow ? layer - ranksBefore : 0;
     const end = Math.min(layerCount, start + windowWidth);
     const visible = new Set(graph.nodes
         .filter(node => {
@@ -665,6 +675,8 @@ export function curriculumLayerWindow(graph, requestedLayer = 0, width = 3) {
         end,
         layer,
         layerCount,
+        minLayer,
+        maxLayer,
         width: windowWidth
     };
 }

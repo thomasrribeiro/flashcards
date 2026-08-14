@@ -22,7 +22,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         .toBe('auto');
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
 
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
+    await expect(page.getByRole('button', { name: 'Show previous dependency layer' })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Zoom in' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Zoom out' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Fit', exact: true })).toBeVisible();
@@ -55,10 +56,10 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 })
                 .map(node => node.dataset.rank))];
         });
-        expect(visibleRanks).toHaveLength(2);
+        expect(visibleRanks).toHaveLength(3);
         const firstLayerOffset = await page.locator('.curriculum-graph-stage').evaluate(stage => {
             const stageRect = stage.getBoundingClientRect();
-            const focal = stage.querySelector('.curriculum-graph-node[data-rank="0"]')?.getBoundingClientRect();
+            const focal = stage.querySelector('.curriculum-graph-node[data-rank="1"]')?.getBoundingClientRect();
             const viewportCenter = stageRect.left + stage.clientLeft + stage.clientWidth / 2;
             return Math.abs((focal.left + focal.width / 2) - viewportCenter);
         });
@@ -71,20 +72,28 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             overflowX: getComputedStyle(element).overflowX,
             overflowY: getComputedStyle(element).overflowY,
             routeExtentMatchesLayer: (() => {
-                const layer = Number(element.dataset.scrollLayer);
+                const start = Number(element.dataset.scrollRankStart);
+                const end = Number(element.dataset.scrollRankEnd);
                 const routeBottoms = [...element.querySelectorAll('.curriculum-graph-connection.is-long')]
-                    .filter(connection => {
+                    .flatMap(connection => {
                         const source = element.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.source)}"]`);
-                        const target = element.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.target)}"]`);
-                        return Number(source.dataset.rank) <= layer && Number(target.dataset.rank) >= layer;
-                    })
-                    .map(connection => {
-                        const bounds = connection.querySelector('.curriculum-graph-edge').getBBox();
-                        return bounds.y + bounds.height;
+                        const sourceRank = Number(source.dataset.rank);
+                        return connection.dataset.cableYs.split(',').filter(Boolean).map((y, index) => ({
+                            rank: sourceRank + index + 1,
+                            y: Number(y)
+                        })).filter(point => point.rank >= start && point.rank < end).map(point => point.y);
                     });
                 const actualRouteBottom = Math.max(0, ...routeBottoms);
                 return Math.abs(Number(element.dataset.scrollRouteBottom) - actualRouteBottom) < 1
                     && Number(element.dataset.scrollExtent) >= actualRouteBottom + 24;
+            })(),
+            extentUsesAllVisibleRanks: (() => {
+                const start = Number(element.dataset.scrollRankStart);
+                const end = Number(element.dataset.scrollRankEnd);
+                const visibleBottom = Math.max(...[...element.querySelectorAll('.curriculum-graph-node[data-rank]')]
+                    .filter(node => Number(node.dataset.rank) >= start && Number(node.dataset.rank) < end)
+                    .map(node => Number.parseFloat(node.style.top) + Number.parseFloat(node.style.height)));
+                return Number(element.dataset.scrollExtent) >= visibleBottom + 36;
             })(),
             extentMatchesLayer: (() => {
                 const focal = element.querySelector(`.curriculum-graph-node[data-rank="${element.dataset.scrollLayer}"]`);
@@ -93,11 +102,12 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 return Math.abs(element.scrollHeight - expected) < 3;
             })()
         }));
-        expect(scrolling.hasVertical).toBe(false);
+        expect(scrolling.hasVertical).toBe(true);
         expect(scrolling.hasHorizontalContent).toBe(true);
         expect(scrolling.overflowX).toBe('hidden');
         expect(scrolling.overflowY).toBe('scroll');
         expect(scrolling.routeExtentMatchesLayer).toBe(true);
+        expect(scrolling.extentUsesAllVisibleRanks).toBe(true);
         expect(scrolling.extentMatchesLayer).toBe(true);
         await page.getByRole('button', { name: 'Fit', exact: true }).click();
     }
@@ -443,7 +453,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(Math.abs(arrowGeometry.lineY - arrowGeometry.headCenterY)).toBeLessThan(0.5);
     expect(Math.abs(arrowGeometry.headTipX - arrowGeometry.targetX)).toBeLessThan(0.5);
     await page.getByRole('button', { name: 'Show next dependency layer' }).click();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 3 of');
     if (testInfo.project.name === 'desktop-chromium') {
         await expect.poll(() => page.locator('.curriculum-graph-stage').evaluate(stage => {
             const stageRect = stage.getBoundingClientRect();
@@ -456,16 +466,24 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 .map(node => node.dataset.rank)).size;
         })).toBe(3);
         const tallRank = await page.locator('.curriculum-graph-stage').evaluate(stage => {
+            const layerCount = Number(document.querySelector('.curriculum-layer-label').textContent.split(' of ')[1]);
             const bottoms = new Map();
             for (const node of stage.querySelectorAll('.curriculum-graph-node[data-rank]')) {
                 const rank = Number(node.dataset.rank);
+                if (rank < 1 || rank > layerCount - 2) continue;
                 const bottom = Number.parseFloat(node.style.top) + Number.parseFloat(node.style.height);
                 bottoms.set(rank, Math.max(bottoms.get(rank) || 0, bottom));
             }
             return [...bottoms.entries()].sort((a, b) => b[1] - a[1])[0][0];
         });
-        for (let rank = 1; rank < tallRank; rank += 1) {
+        let currentRank = 2;
+        while (currentRank < tallRank) {
             await page.getByRole('button', { name: 'Show next dependency layer' }).click();
+            currentRank += 1;
+        }
+        while (currentRank > tallRank) {
+            await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
+            currentRank -= 1;
         }
         const tallLayerStage = page.locator('.curriculum-graph-stage');
         await expect(tallLayerStage).toHaveAttribute('data-scroll-layer', String(tallRank));
@@ -491,17 +509,19 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         for (let rank = tallRank; rank > 1; rank -= 1) {
             await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
         }
+    } else {
+        await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
     }
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(completeDeckGraphCount);
     await expect(page).toHaveURL(/curriculum-layer=1/);
-    await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
+    await expect(page.getByRole('button', { name: 'Show previous dependency layer' })).toBeDisabled();
     await page.reload();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
     const layerCount = Number((await page.locator('.curriculum-layer-label').textContent()).split(' of ')[1]);
-    for (let layer = 1; layer < layerCount; layer += 1) {
+    for (let layer = 2; layer < layerCount - 1; layer += 1) {
         await page.getByRole('button', { name: 'Show next dependency layer' }).click();
     }
-    await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer ${layerCount} of ${layerCount}`);
+    await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer ${layerCount - 1} of ${layerCount}`);
     await expect(page.getByRole('button', { name: 'Show next dependency layer' })).toBeDisabled();
     if (testInfo.project.name === 'desktop-chromium') {
         const lastLayerOffset = await page.locator('.curriculum-graph-stage').evaluate((stage, rank) => {
@@ -509,13 +529,13 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             const focal = stage.querySelector(`.curriculum-graph-node[data-rank="${rank}"]`)?.getBoundingClientRect();
             const viewportCenter = stageRect.left + stage.clientLeft + stage.clientWidth / 2;
             return Math.abs((focal.left + focal.width / 2) - viewportCenter);
-        }, layerCount - 1);
+        }, layerCount - 2);
         expect(lastLayerOffset).toBeLessThan(2);
     }
-    for (let layer = layerCount; layer > 1; layer -= 1) {
+    for (let layer = layerCount - 1; layer > 2; layer -= 1) {
         await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
     }
-    await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer 1 of ${layerCount}`);
+    await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer 2 of ${layerCount}`);
 
     await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
@@ -602,14 +622,14 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await page.locator('.curriculum-selected-item').click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Back in curriculum' })).toBeEnabled();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(10);
 
     await historyBack.click();
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
     await historyBack.click();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
 });
 
 test('aligns another focused deck and explains an unpublished chapter plan', async ({ page }, testInfo) => {
