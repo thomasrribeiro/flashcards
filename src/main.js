@@ -2698,7 +2698,8 @@ function curriculumCableEdgeGeometry(source, target, sourceY, targetY, route) {
     // branches upward in its staggered destination lane, then bends smoothly
     // into the arrowhead at the node.
     const routeCommands = [
-        `M ${riseX} ${route.y}`,
+        `M ${riseX - 3} ${route.y}`,
+        `H ${riseX}`,
         `V ${targetY + radius}`,
         `C ${riseX} ${targetY + radius * 0.4},`,
         `${riseX + radius * 0.4} ${targetY},`,
@@ -2813,6 +2814,19 @@ function curriculumCableRouting(layout) {
             group.descentX = sourceRight + firstOffset + step * index;
         });
     }
+    const entriesByTargetRank = new Map();
+    for (const group of groups) {
+        for (const entry of group.entries) {
+            const peers = entriesByTargetRank.get(entry.target.rank) || [];
+            peers.push(entry);
+            entriesByTargetRank.set(entry.target.rank, peers);
+        }
+    }
+    for (const peers of entriesByTargetRank.values()) {
+        peers.sort((a, b) => a.target.y - b.target.y
+            || a.source.y - b.source.y
+            || a.source.id.localeCompare(b.source.id));
+    }
     const rankYsBySource = new Map(groups.map(group => [group.source.id, new Map()]));
     const transitionXBySourceAndRank = new Map(groups.map(group => [group.source.id, new Map()]));
     const maximumRank = Math.max(0, ...layout.nodes.map(node => node.rank || 0));
@@ -2824,41 +2838,22 @@ function curriculumCableRouting(layout) {
             rankYsBySource.get(group.source.id).set(rank, (rankBottom.get(rank) || 0) + 18 + index * 14);
         });
         const continuing = active.filter(group => group.maxTargetRank > rank);
-        if (!continuing.length) continue;
+        const incomingEntries = entriesByTargetRank.get(rank + 1) || [];
+        if (!continuing.length && !incomingEntries.length) continue;
         const currentRight = rankRight.get(rank) || 0;
         const nextLeft = rankLeft.get(rank + 1) ?? currentRight + 96;
-        const gap = Math.max(24, nextLeft - currentRight);
-        const firstOffset = Math.min(18, gap * 0.24);
-        const available = Math.max(0, gap - firstOffset - 12);
-        const step = continuing.length > 1
-            ? Math.min(8, available / (continuing.length - 1))
+        const firstOffset = 6;
+        const availableOffset = Math.max(firstOffset, nextLeft - currentRight - 18);
+        const laneCount = incomingEntries.length + continuing.length;
+        const step = laneCount > 1
+            ? Math.min(4, (availableOffset - firstOffset) / (laneCount - 1))
             : 0;
+        incomingEntries.forEach((entry, index) => {
+            entry.riseX = entry.target.x - 10 - firstOffset - step * index;
+        });
         continuing.forEach((group, index) => {
             transitionXBySourceAndRank.get(group.source.id)
-                .set(rank, currentRight + firstOffset + step * index);
-        });
-    }
-    const entriesByTargetRank = new Map();
-    for (const group of groups) {
-        for (const entry of group.entries) {
-            const peers = entriesByTargetRank.get(entry.target.rank) || [];
-            peers.push(entry);
-            entriesByTargetRank.set(entry.target.rank, peers);
-        }
-    }
-    for (const [targetRank, peers] of entriesByTargetRank) {
-        peers.sort((a, b) => a.target.y - b.target.y
-            || a.source.y - b.source.y
-            || a.source.id.localeCompare(b.source.id));
-        const targetLeft = rankLeft.get(targetRank) ?? peers[0].target.x;
-        const previousRight = rankRight.get(targetRank - 1) ?? targetLeft - 96;
-        const firstOffset = 6;
-        const availableOffset = Math.max(firstOffset, targetLeft - previousRight - 18);
-        const step = peers.length > 1
-            ? Math.min(6, (availableOffset - firstOffset) / (peers.length - 1))
-            : 0;
-        peers.forEach((entry, index) => {
-            entry.riseX = entry.target.x - 10 - firstOffset - step * index;
+                .set(rank, nextLeft - 10 - firstOffset - step * (incomingEntries.length + index));
         });
     }
     let routedHeight = layout.height;
@@ -3039,6 +3034,9 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         connection.dataset.source = trunk.source;
         connection.dataset.targets = trunk.targets.join('|');
         connection.dataset.rankYs = trunk.rankPoints.map(point => `${point.rank}:${point.y}`).join(',');
+        connection.dataset.transitionXs = trunk.transitions
+            .map(transition => `${transition.rank}:${transition.x}`)
+            .join(',');
         connection.dataset.descentX = String(trunk.descentX);
         const source = positioned.get(trunk.source);
         if (Number.isInteger(source?.rank)) connection.dataset.sourceRank = String(source.rank);

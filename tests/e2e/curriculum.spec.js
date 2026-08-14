@@ -186,8 +186,9 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 const branches = longConnections.filter(connection => connection.dataset.source === trunk.dataset.source);
                 const farthestTargetRise = Math.max(...branches.map(connection => Number(connection.dataset.riseX)));
                 const joinsFinalBranch = branches.some(connection => {
-                    const branchStart = connection.querySelector('.curriculum-graph-edge').getPointAtLength(0);
-                    return Math.abs(branchStart.x - end.x) < 0.5 && Math.abs(branchStart.y - end.y) < 0.5;
+                    const branch = connection.querySelector('.curriculum-graph-edge');
+                    const branchJoin = branch.getPointAtLength(Math.min(3, branch.getTotalLength()));
+                    return Math.abs(branchJoin.x - end.x) < 0.5 && Math.abs(branchJoin.y - end.y) < 0.5;
                 });
                 return Math.abs(start.x - sourceRight) < 0.5
                     && Number(trunk.dataset.descentX) > sourceRight
@@ -212,6 +213,42 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                             && gaps.every(gap => gap > 0 && gap <= 8.01);
                     });
             })(),
+            receivingLanesAreDistinct: (() => {
+                const byRank = new Map();
+                for (const connection of longConnections) {
+                    const target = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.target)}"]`);
+                    const lanes = byRank.get(Number(target.dataset.rank)) || [];
+                    lanes.push(Number(connection.dataset.riseX));
+                    byRank.set(Number(target.dataset.rank), lanes);
+                }
+                for (const trunk of trunks) {
+                    for (const pair of trunk.dataset.transitionXs.split(',').filter(Boolean)) {
+                        const [rank, x] = pair.split(':').map(Number);
+                        const lanes = byRank.get(rank + 1) || [];
+                        lanes.push(x);
+                        byRank.set(rank + 1, lanes);
+                    }
+                }
+                const sharedRanks = [...byRank.values()].filter(lanes => lanes.length > 1);
+                return sharedRanks.length > 0 && sharedRanks.every(lanes => {
+                    const ordered = lanes.sort((a, b) => a - b);
+                    const gaps = ordered.slice(1).map((value, index) => value - ordered[index]);
+                    return new Set(ordered.map(value => value.toFixed(3))).size === ordered.length
+                        && gaps.every(gap => gap > 0 && gap <= 4.01);
+                });
+            })(),
+            transitionsUseReceivingGutter: trunks.every(trunk => trunk.dataset.transitionXs
+                .split(',')
+                .filter(Boolean)
+                .every(pair => {
+                    const [rank, x] = pair.split(':').map(Number);
+                    const currentNodes = [...stage.querySelectorAll(`.curriculum-graph-node[data-rank="${rank}"]`)];
+                    const nextNodes = [...stage.querySelectorAll(`.curriculum-graph-node[data-rank="${rank + 1}"]`)];
+                    const currentRight = Math.max(...currentNodes.map(node =>
+                        Number.parseFloat(node.style.left) + Number.parseFloat(node.style.width)));
+                    const nextLeft = Math.min(...nextNodes.map(node => Number.parseFloat(node.style.left)));
+                    return x > currentRight && x < nextLeft;
+                })),
             evenlySpacedTrunks: (() => {
                 const byRank = new Map();
                 for (const trunk of trunks) {
@@ -296,6 +333,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.staggeredRises).toBe(true);
     expect(cableRouting.trunksAligned).toBe(true);
     expect(cableRouting.staggeredDescents).toBe(true);
+    expect(cableRouting.receivingLanesAreDistinct).toBe(true);
+    expect(cableRouting.transitionsUseReceivingGutter).toBe(true);
     expect(cableRouting.evenlySpacedTrunks).toBe(true);
     expect(cableRouting.trunksHugColumns).toBe(true);
     expect(cableRouting.snakingTrunkCount).toBeGreaterThan(0);
