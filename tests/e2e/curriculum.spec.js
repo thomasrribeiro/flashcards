@@ -299,7 +299,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                         const ordered = [...descents].sort((a, b) => a - b);
                         const gaps = ordered.slice(1).map((value, index) => value - ordered[index]);
                         return new Set(ordered.map(value => value.toFixed(3))).size === ordered.length
-                            && gaps.every(gap => gap > 0 && gap <= 3.01);
+                            && gaps.every(gap => Math.abs(gap - 4) < 0.01);
                     });
             })(),
             receivingLanesAreDistinct: (() => {
@@ -426,7 +426,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 return sharedRanks.length > 0 && sharedRanks.every(tracks => {
                     const ordered = tracks.sort((a, b) => a - b);
                     const gaps = ordered.slice(1).map((value, index) => value - ordered[index]);
-                    return gaps.every(gap => Math.abs(gap - 14) < 0.01);
+                    return gaps.every(gap => Math.abs(gap - 4) < 0.01);
                 });
             })(),
             trunksHugColumns: (() => {

@@ -2715,12 +2715,12 @@ function curriculumCableEdgeGeometry(source, target, sourceY, targetY, route) {
     };
 }
 
+const CURRICULUM_CABLE_LANE_SPACING = 4;
+const CURRICULUM_CABLE_TURN_RADIUS = 8;
+
 function curriculumCableTrunkGeometry(trunk) {
     const firstPoint = trunk.rankPoints[0];
-    const verticalRun = Math.max(1, firstPoint.y - trunk.sourceY);
-    const lowerRun = Math.max(1, trunk.x2 - trunk.descentX);
-    const sourceInset = Math.max(1, trunk.sourceRight - trunk.descentX);
-    const radius = Math.max(4, Math.min(12, sourceInset * 0.55, verticalRun / 3, lowerRun / 3));
+    const radius = CURRICULUM_CABLE_TURN_RADIUS;
     const commands = [
         `M ${trunk.descentX} ${trunk.sourceY}`,
         `V ${firstPoint.y - radius}`,
@@ -2815,7 +2815,10 @@ function curriculumCableRouting(layout) {
             rankBottom.get(rank) || 0
         );
         active.forEach((group, index) => {
-            rankYsBySource.get(group.source.id).set(rank, boundaryBottom + 18 + index * 14);
+            rankYsBySource.get(group.source.id).set(
+                rank,
+                boundaryBottom + 18 + index * CURRICULUM_CABLE_LANE_SPACING
+            );
         });
     }
     for (let rank = 0; rank < maximumRank; rank += 1) {
@@ -2838,7 +2841,7 @@ function curriculumCableRouting(layout) {
         // At a falling boundary, continuing buses peel downward newest first
         // immediately after the current column.
         const departureStep = descending.length > 1
-            ? Math.min(3, available / (descending.length - 1))
+            ? Math.min(CURRICULUM_CABLE_LANE_SPACING, available / (descending.length - 1))
             : 0;
         descending.forEach((group, index) => {
             const x = currentRight + firstOffset + departureStep * index;
@@ -2851,7 +2854,7 @@ function curriculumCableRouting(layout) {
         // inner lanes. Any lower cards conceal the continuing vertical run
         // through the column.
         const anchorInset = Math.min(8, Math.max(5, gap * 0.08));
-        const anchorStep = starters.length > 1 ? 3 : 0;
+        const anchorStep = starters.length > 1 ? CURRICULUM_CABLE_LANE_SPACING : 0;
         starters.forEach((group, index) => {
             group.descentX = currentRight - anchorInset - anchorStep * index;
         });
@@ -2870,7 +2873,10 @@ function curriculumCableRouting(layout) {
         const availableOffset = Math.max(receivingOffset, nextLeft - currentRight - 18);
         const laneCount = rising.length + incomingEntries.length;
         const step = laneCount > 1
-            ? Math.min(4, (availableOffset - receivingOffset) / (laneCount - 1))
+            ? Math.min(
+                CURRICULUM_CABLE_LANE_SPACING,
+                (availableOffset - receivingOffset) / (laneCount - 1)
+            )
             : 0;
         rising.forEach((group, index) => {
             transitionXBySourceAndRank.get(group.source.id)
@@ -2899,7 +2905,6 @@ function curriculumCableRouting(layout) {
         trunks.push({
             source: group.source.id,
             targets: group.entries.map(({ target }) => target.id),
-            sourceRight: group.start,
             descentX: group.descentX,
             // Stop at the farthest actual rising lane. Extending to the
             // arrowhead base would leave a visible dead-end tail beyond the
