@@ -2680,7 +2680,11 @@ function curriculumEdgeGeometry(source, target, sourceY = null, targetY = null) 
     const headLength = 10;
     const headHalfHeight = 4.25;
     const baseX = x2 - headLength;
-    const bend = Math.max(44, (x2 - x1) * 0.44);
+    const available = Math.max(1, baseX - x1);
+    // Keep the two control handles on their own sides of the inter-column
+    // gap. A fixed 44 px minimum made them cross in narrow gaps, producing an
+    // abrupt hook on edges with a large vertical displacement.
+    const bend = Math.max(12, Math.min(72, available * 0.42));
     return {
         line: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${baseX - bend} ${y2}, ${baseX} ${y2}`,
         head: `M ${baseX} ${y2 - headHalfHeight} L ${x2} ${y2} L ${baseX} ${y2 + headHalfHeight} Z`
@@ -2698,8 +2702,7 @@ function curriculumCableEdgeGeometry(source, target, sourceY, targetY, route) {
     // branches upward in its staggered destination lane, then bends smoothly
     // into the arrowhead at the node.
     const routeCommands = [
-        `M ${riseX - 3} ${route.y}`,
-        `H ${riseX}`,
+        `M ${riseX} ${route.y}`,
         `V ${targetY + radius}`,
         `C ${riseX} ${targetY + radius * 0.4},`,
         `${riseX + radius * 0.4} ${targetY},`,
@@ -2805,10 +2808,13 @@ function curriculumCableRouting(layout) {
         const sourceRight = peers[0].source.x + peers[0].source.width;
         const nextColumnLeft = rankLeft.get(peers[0].source.rank + 1) ?? sourceRight + 96;
         const gap = Math.max(24, nextColumnLeft - sourceRight);
-        const firstOffset = Math.min(18, gap * 0.24);
+        // Descend as soon as the bus clears its source column. Keep distinct
+        // sources in tightly packed lanes instead of spreading them across
+        // the gutter, where they interfere with incoming branches.
+        const firstOffset = Math.min(4, gap * 0.08);
         const available = Math.max(0, gap - firstOffset - 12);
         const step = peers.length > 1
-            ? Math.min(8, available / (peers.length - 1))
+            ? Math.min(3, available / (peers.length - 1))
             : 0;
         peers.forEach((group, index) => {
             group.descentX = sourceRight + firstOffset + step * index;
@@ -2834,8 +2840,12 @@ function curriculumCableRouting(layout) {
         const active = groups
             .filter(group => group.source.rank < rank && group.maxTargetRank >= rank)
             .sort((a, b) => trackOrder.get(a.source.id) - trackOrder.get(b.source.id));
+        const boundaryBottom = Math.max(
+            rankBottom.get(rank - 1) || 0,
+            rankBottom.get(rank) || 0
+        );
         active.forEach((group, index) => {
-            rankYsBySource.get(group.source.id).set(rank, (rankBottom.get(rank) || 0) + 18 + index * 14);
+            rankYsBySource.get(group.source.id).set(rank, boundaryBottom + 18 + index * 14);
         });
         const continuing = active.filter(group => group.maxTargetRank > rank);
         const incomingEntries = entriesByTargetRank.get(rank + 1) || [];

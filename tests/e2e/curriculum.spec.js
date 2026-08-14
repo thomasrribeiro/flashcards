@@ -210,6 +210,18 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     return bottoms.length && y > Math.max(...bottoms);
                 });
             }),
+            busesClearBothAdjacentColumns: trunks.every(trunk => {
+                const rankYs = new Map(trunk.dataset.rankYs.split(',').filter(Boolean)
+                    .map(pair => pair.split(':').map(Number)));
+                return [...rankYs].every(([rank, y]) => {
+                    const adjacentNodes = [...stage.querySelectorAll(
+                        `.curriculum-graph-node[data-rank="${rank - 1}"], .curriculum-graph-node[data-rank="${rank}"]`
+                    )];
+                    const adjacentBottom = Math.max(0, ...adjacentNodes.map(node =>
+                        Number.parseFloat(node.style.top) + Number.parseFloat(node.style.height)));
+                    return y >= adjacentBottom + 18;
+                });
+            }),
             edgeAligned: longConnections.every(connection => {
                 const target = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.target)}"]`);
                 const path = connection.querySelector('.curriculum-graph-edge');
@@ -248,7 +260,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 const farthestTargetRise = Math.max(...branches.map(connection => Number(connection.dataset.riseX)));
                 const joinsFinalBranch = branches.some(connection => {
                     const branch = connection.querySelector('.curriculum-graph-edge');
-                    const branchJoin = branch.getPointAtLength(Math.min(3, branch.getTotalLength()));
+                    const branchJoin = branch.getPointAtLength(0);
                     return Math.abs(branchJoin.x - end.x) < 0.5 && Math.abs(branchJoin.y - end.y) < 0.5;
                 });
                 return Math.abs(start.x - sourceRight) < 0.5
@@ -271,7 +283,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                         const ordered = [...descents].sort((a, b) => a - b);
                         const gaps = ordered.slice(1).map((value, index) => value - ordered[index]);
                         return new Set(ordered.map(value => value.toFixed(3))).size === ordered.length
-                            && gaps.every(gap => gap > 0 && gap <= 8.01);
+                            && gaps.every(gap => gap > 0 && gap <= 3.01);
                     });
             })(),
             receivingLanesAreDistinct: (() => {
@@ -338,7 +350,9 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     }
                 }
                 return [...byRank].every(([rank, tracks]) => {
-                    const bottoms = [...stage.querySelectorAll(`.curriculum-graph-node[data-rank="${rank}"]`)]
+                    const bottoms = [...stage.querySelectorAll(
+                        `.curriculum-graph-node[data-rank="${rank - 1}"], .curriculum-graph-node[data-rank="${rank}"]`
+                    )]
                         .map(node => Number.parseFloat(node.style.top) + Number.parseFloat(node.style.height));
                     return bottoms.length && Math.abs(Math.min(...tracks) - Math.max(...bottoms) - 18) < 0.01;
                 });
@@ -390,6 +404,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     });
     expect(cableRouting.cableYs.length).toBeGreaterThan(0);
     expect(cableRouting.routesBelowCrossedColumns).toBe(true);
+    expect(cableRouting.busesClearBothAdjacentColumns).toBe(true);
     expect(cableRouting.edgeAligned).toBe(true);
     expect(cableRouting.staggeredRises).toBe(true);
     expect(cableRouting.trunksAligned).toBe(true);
