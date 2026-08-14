@@ -2744,6 +2744,24 @@ function curriculumCableRouting(layout) {
         rankBottom.set(node.rank, Math.max(rankBottom.get(node.rank) || 0, node.y + node.height));
         rankLeft.set(node.rank, Math.min(rankLeft.get(node.rank) ?? Infinity, node.x));
     }
+    const groupsBySourceRank = new Map();
+    for (const group of groups) {
+        const peers = groupsBySourceRank.get(group.source.rank) || [];
+        peers.push(group);
+        groupsBySourceRank.set(group.source.rank, peers);
+    }
+    for (const peers of groupsBySourceRank.values()) {
+        peers.sort((a, b) => a.source.y - b.source.y || a.source.id.localeCompare(b.source.id));
+        const sourceRight = peers[0].source.x + peers[0].source.width;
+        const nextColumnLeft = rankLeft.get(peers[0].source.rank + 1) ?? sourceRight + 96;
+        const gap = Math.max(24, nextColumnLeft - sourceRight);
+        const firstOffset = Math.min(18, gap * 0.24);
+        const lastOffset = Math.max(firstOffset, gap - Math.min(18, gap * 0.24));
+        peers.forEach((group, index) => {
+            const ratio = peers.length === 1 ? 0 : index / (peers.length - 1);
+            group.descentX = sourceRight + firstOffset + (lastOffset - firstOffset) * ratio;
+        });
+    }
     let routedHeight = layout.height;
     const routes = new Map();
     const trunks = [];
@@ -2760,6 +2778,7 @@ function curriculumCableRouting(layout) {
             source: group.source.id,
             targets: group.entries.map(({ target }) => target.id),
             x1: group.start,
+            descentX: group.descentX,
             x2: group.end - 10,
             y,
             sourceY: group.source.y + group.source.height / 2
@@ -2900,9 +2919,12 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         connection.dataset.source = trunk.source;
         connection.dataset.targets = trunk.targets.join('|');
         connection.dataset.cableY = String(trunk.y);
+        connection.dataset.descentX = String(trunk.descentX);
+        const source = positioned.get(trunk.source);
+        if (Number.isInteger(source?.rank)) connection.dataset.sourceRank = String(source.rank);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         line.classList.add('curriculum-graph-edge');
-        line.setAttribute('d', `M ${trunk.x1} ${trunk.sourceY} V ${trunk.y} H ${trunk.x2}`);
+        line.setAttribute('d', `M ${trunk.x1} ${trunk.sourceY} H ${trunk.descentX} V ${trunk.y} H ${trunk.x2}`);
         connection.appendChild(line);
         svg.appendChild(connection);
     }

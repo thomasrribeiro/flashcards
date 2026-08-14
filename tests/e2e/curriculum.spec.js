@@ -168,8 +168,21 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 const sourceRight = Number.parseFloat(source.style.left) + Number.parseFloat(source.style.width);
                 const farthestTargetRise = Math.max(...targets.map(target => Number.parseFloat(target.style.left) - 10));
                 return Math.abs(start.x - sourceRight) < 0.5
+                    && Number(trunk.dataset.descentX) > sourceRight
+                    && path.getAttribute('d').includes(`H ${trunk.dataset.descentX} V`)
                     && Math.abs(end.x - farthestTargetRise) < 0.5;
             }),
+            staggeredDescents: (() => {
+                const byRank = new Map();
+                for (const trunk of trunks) {
+                    const descents = byRank.get(trunk.dataset.sourceRank) || [];
+                    descents.push(Number(trunk.dataset.descentX));
+                    byRank.set(trunk.dataset.sourceRank, descents);
+                }
+                const sharedRanks = [...byRank.values()].filter(descents => descents.length > 1);
+                return sharedRanks.length > 0
+                    && sharedRanks.every(descents => new Set(descents.map(value => value.toFixed(3))).size === descents.length);
+            })(),
             oneTrunkPerSource: trunks.length === new Set(trunks.map(trunk => trunk.dataset.source)).size
                 && trunks.every(trunk => longEdgesBySource.has(trunk.dataset.source)),
             sharedSourceCount: [...longEdgesBySource.values()].filter(edges => edges.length > 1).length,
@@ -185,6 +198,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.routesBelowCrossedColumns).toBe(true);
     expect(cableRouting.edgeAligned).toBe(true);
     expect(cableRouting.trunksAligned).toBe(true);
+    expect(cableRouting.staggeredDescents).toBe(true);
     expect(cableRouting.oneTrunkPerSource).toBe(true);
     expect(cableRouting.sharedSourceCount).toBeGreaterThan(0);
     expect(cableRouting.sharedEdgesUseTrunkLane).toBe(true);
