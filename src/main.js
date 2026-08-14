@@ -2882,7 +2882,10 @@ function curriculumCableRouting(layout) {
             targets: group.entries.map(({ target }) => target.id),
             x1: group.start,
             descentX: group.descentX,
-            x2: group.end - 10,
+            // Stop at the farthest actual rising lane. Extending to the
+            // arrowhead base would leave a visible dead-end tail beyond the
+            // final branch because rising lanes are intentionally staggered.
+            x2: Math.max(...group.entries.map(entry => entry.riseX)),
             rankPoints,
             transitions,
             // A bus is centered when it is the source's only visible outgoing

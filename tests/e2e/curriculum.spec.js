@@ -179,18 +179,22 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             })(),
             trunksAligned: trunks.every(trunk => {
                 const source = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(trunk.dataset.source)}"]`);
-                const targets = trunk.dataset.targets.split('|').map(target =>
-                    stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(target)}"]`));
                 const path = trunk.querySelector('.curriculum-graph-edge');
                 const start = path.getPointAtLength(0);
                 const end = path.getPointAtLength(path.getTotalLength());
                 const sourceRight = Number.parseFloat(source.style.left) + Number.parseFloat(source.style.width);
-                const farthestTargetRise = Math.max(...targets.map(target => Number.parseFloat(target.style.left) - 10));
+                const branches = longConnections.filter(connection => connection.dataset.source === trunk.dataset.source);
+                const farthestTargetRise = Math.max(...branches.map(connection => Number(connection.dataset.riseX)));
+                const joinsFinalBranch = branches.some(connection => {
+                    const branchStart = connection.querySelector('.curriculum-graph-edge').getPointAtLength(0);
+                    return Math.abs(branchStart.x - end.x) < 0.5 && Math.abs(branchStart.y - end.y) < 0.5;
+                });
                 return Math.abs(start.x - sourceRight) < 0.5
                     && Number(trunk.dataset.descentX) > sourceRight
                     && path.getAttribute('d').split(' C ').length === 3
                     && path.getAttribute('d').includes(' V ')
-                    && Math.abs(end.x - farthestTargetRise) < 0.5;
+                    && Math.abs(end.x - farthestTargetRise) < 0.5
+                    && joinsFinalBranch;
             }),
             staggeredDescents: (() => {
                 const byRank = new Map();
