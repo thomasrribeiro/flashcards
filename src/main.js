@@ -2785,7 +2785,10 @@ function curriculumCableRouting(layout) {
             || a.end - b.end);
     const trackOrder = new Map([...groups]
         .sort((a, b) => a.source.rank - b.source.rank
-            || a.source.y - b.source.y
+            // Within one column, lower sources are older. Their buses settle
+            // into lower tracks and descend farther to the right, allowing
+            // buses from higher nodes to nest above without crossing them.
+            || b.source.y - a.source.y
             || a.source.id.localeCompare(b.source.id))
         .map((group, index) => [group.source.id, index]));
     const rankBottom = new Map();

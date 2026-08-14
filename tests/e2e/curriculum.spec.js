@@ -346,7 +346,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     return [Number(source.dataset.rank), Number.parseFloat(source.style.top), trunk.dataset.source];
                 };
                 const compareAge = (first, second) => first[0] - second[0]
-                    || first[1] - second[1]
+                    || second[1] - first[1]
                     || first[2].localeCompare(second[2]);
                 const ranks = new Set(trunks.flatMap(trunk => trunk.dataset.rankYs.split(',')
                     .filter(Boolean).map(pair => Number(pair.split(':')[0]))));
@@ -380,9 +380,30 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 const fallingBoundaries = [...byRank.values()].filter(entries => entries.length > 1);
                 return fallingBoundaries.length > 0 && fallingBoundaries.every(entries => {
                     const newestFirst = [...entries].sort((a, b) => b.age[0] - a.age[0]
-                        || b.age[1] - a.age[1]
+                        || a.age[1] - b.age[1]
                         || b.age[2].localeCompare(a.age[2]));
                     return newestFirst.every((entry, index) => !index || entry.x > newestFirst[index - 1].x);
+                });
+            })(),
+            lowerSourcesOwnOlderLanes: (() => {
+                const byRank = new Map();
+                for (const trunk of trunks) {
+                    const source = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(trunk.dataset.source)}"]`);
+                    const peers = byRank.get(Number(source.dataset.rank)) || [];
+                    const firstTrack = Number(trunk.dataset.rankYs.split(',').filter(Boolean)[0].split(':')[1]);
+                    peers.push({
+                        sourceTop: Number.parseFloat(source.style.top),
+                        descentX: Number(trunk.dataset.descentX),
+                        firstTrack
+                    });
+                    byRank.set(Number(source.dataset.rank), peers);
+                }
+                const sharedRanks = [...byRank.values()].filter(peers => peers.length > 1);
+                return sharedRanks.length > 0 && sharedRanks.every(peers => {
+                    const topToBottom = [...peers].sort((a, b) => a.sourceTop - b.sourceTop);
+                    return topToBottom.every((entry, index) => !index
+                        || (entry.descentX > topToBottom[index - 1].descentX
+                            && entry.firstTrack > topToBottom[index - 1].firstTrack));
                 });
             })(),
             evenlySpacedTrunks: (() => {
@@ -476,6 +497,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.transitionsUseDirectionalGutters).toBe(true);
     expect(cableRouting.persistentAgeStack).toBe(true);
     expect(cableRouting.newestFallsFirst).toBe(true);
+    expect(cableRouting.lowerSourcesOwnOlderLanes).toBe(true);
     expect(cableRouting.evenlySpacedTrunks).toBe(true);
     expect(cableRouting.trunksHugColumns).toBe(true);
     expect(cableRouting.snakingTrunkCount).toBeGreaterThan(0);
