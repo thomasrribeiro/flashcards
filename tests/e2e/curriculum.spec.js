@@ -372,13 +372,14 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     const [rank, x] = pair.split(':').map(Number);
                     const currentNodes = [...stage.querySelectorAll(`.curriculum-graph-node[data-rank="${rank}"]`)];
                     const nextNodes = [...stage.querySelectorAll(`.curriculum-graph-node[data-rank="${rank + 1}"]`)];
+                    const currentLeft = Math.min(...currentNodes.map(node => Number.parseFloat(node.style.left)));
                     const currentRight = Math.max(...currentNodes.map(node =>
                         Number.parseFloat(node.style.left) + Number.parseFloat(node.style.width)));
                     const nextLeft = Math.min(...nextNodes.map(node => Number.parseFloat(node.style.left)));
                     const rises = rankYs.get(rank + 1) < rankYs.get(rank);
                     return rises
                         ? x >= nextLeft && x < nextLeft + Number.parseFloat(nextNodes[0].style.width)
-                        : x >= currentRight && x < nextLeft;
+                        : x > currentLeft && x <= currentRight;
                 });
             }),
             persistentAgeStack: (() => {
@@ -799,6 +800,9 @@ test('keeps every mathematics bus branch joined to its trunk', async ({ page }, 
         const newestUpward = [...upward].sort((a, b) => b.age[0] - a.age[0]
             || b.age[1] - a.age[1]
             || b.age[2].localeCompare(a.age[2]))[0];
+        const newestDownward = [...downward].sort((a, b) => b.age[0] - a.age[0]
+            || b.age[1] - a.age[1]
+            || b.age[2].localeCompare(a.age[2]))[0];
         const upwardXs = upward.map(transition => transition.x).sort((a, b) => a - b);
         const upwardGaps = upwardXs.slice(1).map((x, index) => x - upwardXs[index]);
         return {
@@ -806,9 +810,7 @@ test('keeps every mathematics bus branch joined to its trunk', async ({ page }, 
             disconnected: disconnected.length,
             newestUpwardAtNextLeft: Math.abs(newestUpward.x - rankBounds(4).left) < 0.5,
             upwardLanesStayCompact: upwardGaps.every(gap => Math.abs(gap - 4) < 0.01),
-            downwardSequenceStartsAtCurrentRight: Math.abs(
-                Math.min(...downward.map(transition => transition.x)) - rankBounds(5).right
-            ) < 0.5
+            newestDownwardAtCurrentRight: Math.abs(newestDownward.x - rankBounds(5).right) < 0.5
         };
     });
 
@@ -816,7 +818,7 @@ test('keeps every mathematics bus branch joined to its trunk', async ({ page }, 
     expect(branchJoins.disconnected).toBe(0);
     expect(branchJoins.newestUpwardAtNextLeft).toBe(true);
     expect(branchJoins.upwardLanesStayCompact).toBe(true);
-    expect(branchJoins.downwardSequenceStartsAtCurrentRight).toBe(true);
+    expect(branchJoins.newestDownwardAtCurrentRight).toBe(true);
 });
 
 test('aligns another focused deck and explains an unpublished chapter plan', async ({ page }, testInfo) => {

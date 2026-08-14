@@ -2864,7 +2864,8 @@ function curriculumCableRouting(layout) {
         // newest/top bus waits until the receiving column's left edge; older
         // buses follow to its right. Falling changes retain the age-ordered
         // gutter event sequence below so they clear terminating buses without
-        // intersecting them, beginning at the current column's right edge.
+        // intersecting them, with the newest fall anchored to the current
+        // column's right edge.
         rising
             .sort((a, b) => trackOrder.get(b.source.id) - trackOrder.get(a.source.id))
             .forEach((group, index) => {
@@ -2908,7 +2909,21 @@ function curriculumCableRouting(layout) {
         const eventStep = events.length > 1
             ? Math.min(CURRICULUM_CABLE_LANE_SPACING, available / (events.length - 1))
             : 0;
-        const eventOrigin = descending.length ? currentRight : currentRight + firstOffset;
+        const newestDescending = descending.reduce((newest, group) => (
+            !newest || trackOrder.get(group.source.id) > trackOrder.get(newest.source.id)
+                ? group
+                : newest
+        ), null);
+        const newestDescendingEventIndex = newestDescending
+            ? events.findIndex(event => event.type === 'transition' && event.group === newestDescending)
+            : -1;
+        // Keep the event sequence's collision-safe age order, but translate
+        // the whole sequence so the newest incoming bus falls exactly at the
+        // current column's right edge. Any older transitions or terminating
+        // branches that must clear first move left with it as one unit.
+        const eventOrigin = newestDescendingEventIndex >= 0
+            ? currentRight - eventStep * newestDescendingEventIndex
+            : currentRight + firstOffset;
         events.forEach((event, index) => {
             const x = eventOrigin + eventStep * index;
             if (event.type === 'transition') {
