@@ -4111,6 +4111,19 @@ body.standalone-phone .mobile-sidebar-close {
     transition: stroke-width 120ms ease;
 }
 
+.curriculum-graph-connection.is-cable-trunk .curriculum-graph-edge-highlight {
+    opacity: 0;
+}
+
+.curriculum-graph-connection.is-cable-trunk.is-related
+    .curriculum-graph-edge:not(.curriculum-graph-edge-highlight) {
+    opacity: 0.25;
+}
+
+.curriculum-graph-connection.is-cable-trunk.is-related .curriculum-graph-edge-highlight {
+    opacity: 1;
+}
+
 .curriculum-graph-arrowhead {
     fill: currentColor;
 }

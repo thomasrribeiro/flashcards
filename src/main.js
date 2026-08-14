@@ -2735,7 +2735,14 @@ function curriculumCableTrunkGeometry(trunk) {
         if (!direction) continue;
         const transitionRun = Math.max(1, transition.x - currentX);
         const transitionHeight = Math.abs(transition.y - currentY);
-        const transitionRadius = Math.max(2, Math.min(10, transitionRun / 3, transitionHeight / 3));
+        // Gutter events are spaced one compact lane apart. Keep each turn
+        // inside half that spacing so a branch assigned to the following
+        // event can join the settled horizontal lane, not the turn itself.
+        const transitionRadius = Math.max(1, Math.min(
+            CURRICULUM_CABLE_LANE_SPACING / 2,
+            transitionRun / 3,
+            transitionHeight / 3
+        ));
         commands.push(
             `H ${transition.x - transitionRadius}`,
             `Q ${transition.x} ${currentY}, ${transition.x} ${currentY + direction * transitionRadius}`,
@@ -2932,8 +2939,15 @@ function curriculumCableRouting(layout) {
             for (let rank = group.source.rank + 1; rank < entry.target.rank; rank += 1) {
                 edgeRankYs.set(rank, rankYs.get(rank));
             }
+            // Nonterminal branches are placed after this gutter's transition
+            // events. Join them to the lane under the receiving column, where
+            // the trunk has already settled. Terminal branches have no next
+            // lane and leave the final lane under the preceding column.
+            const continuesPastTarget = group.maxTargetRank > entry.target.rank;
+            const joinRank = continuesPastTarget ? entry.target.rank : entry.target.rank - 1;
+            if (continuesPastTarget) edgeRankYs.set(joinRank, rankYs.get(joinRank));
             routes.set(entry.edge, {
-                y: rankYs.get(entry.target.rank - 1),
+                y: rankYs.get(joinRank),
                 steps: edgeCrossedRanks.map(rank => ({
                     x: rankLeft.get(rank) ?? entry.target.x,
                     y: rankYs.get(rank),
@@ -3079,7 +3093,9 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         line.classList.add('curriculum-graph-edge');
         line.setAttribute('d', curriculumCableTrunkGeometry(trunk));
-        connection.appendChild(line);
+        const highlightLine = line.cloneNode();
+        highlightLine.classList.add('curriculum-graph-edge-highlight');
+        connection.append(line, highlightLine);
         svg.appendChild(connection);
     }
     for (const edge of layout.edges) {
@@ -3202,7 +3218,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const edgeElements = [...svg.querySelectorAll('.curriculum-graph-connection')];
     const clipCableTrunk = (trunk, related) => {
         if (!trunk.classList.contains('is-cable-trunk')) return;
-        const line = trunk.querySelector('.curriculum-graph-edge');
+        const line = trunk.querySelector('.curriculum-graph-edge-highlight');
         if (!line) return;
         const relatedBranches = edgeElements.filter(edge =>
             !edge.classList.contains('is-cable-trunk')
@@ -3218,8 +3234,9 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         }
 
         // A shared bus may continue toward branches that are unrelated to the
-        // hovered node. Clip its emphasized stroke at the last related branch
-        // so hover tracing never leaves a visually active, disconnected tail.
+        // hovered node. Clip only its emphasized overlay at the last related
+        // branch. The complete base stroke remains faintly visible, keeping
+        // every unhighlighted branch joined to its trunk during hover tracing.
         // Cable paths advance monotonically from left to right, including
         // their vertical floor transitions, so a length binary search finds
         // the precise join without rebuilding the route.
@@ -3270,7 +3287,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         [...nodeElements, ...edgeElements].forEach(element => {
             element.classList.remove('is-dimmed', 'is-related');
             if (!element.classList.contains('is-cable-trunk')) return;
-            element.querySelector('.curriculum-graph-edge')?.style.removeProperty('stroke-dasharray');
+            element.querySelector('.curriculum-graph-edge-highlight')?.style.removeProperty('stroke-dasharray');
             element.dataset.highlightCutoffX = '';
         });
     };

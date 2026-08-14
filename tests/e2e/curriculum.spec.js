@@ -172,7 +172,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await page.waitForTimeout(500);
     const highlightedCableTrunks = await page.locator('.curriculum-graph-connection.is-cable-trunk.is-related')
         .evaluateAll(trunks => trunks.map(trunk => {
-            const path = trunk.querySelector('.curriculum-graph-edge');
+            const path = trunk.querySelector('.curriculum-graph-edge-highlight');
+            const basePath = trunk.querySelector('.curriculum-graph-edge:not(.curriculum-graph-edge-highlight)');
             const cutoffX = Number(trunk.dataset.highlightCutoffX);
             const relatedBranches = [...trunk.ownerSVGElement.querySelectorAll(
                 `.curriculum-graph-connection.is-long.is-related[data-cable-trunk-source="${CSS.escape(trunk.dataset.source)}"]`
@@ -183,13 +184,15 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             return {
                 hasUnrelatedTail: expectedCutoffX < fullEndX - 0.5,
                 cutoffMatches: Math.abs(cutoffX - expectedCutoffX) < 0.5,
-                clipped: Boolean(dashArray)
+                clipped: Boolean(dashArray),
+                baseRemainsComplete: basePath.getAttribute('d') === path.getAttribute('d')
+                    && !basePath.style.strokeDasharray
             };
         }));
     expect(highlightedCableTrunks.some(trunk => trunk.hasUnrelatedTail)).toBe(true);
     expect(highlightedCableTrunks
         .filter(trunk => trunk.hasUnrelatedTail)
-        .every(trunk => trunk.cutoffMatches && trunk.clipped)).toBe(true);
+        .every(trunk => trunk.cutoffMatches && trunk.clipped && trunk.baseRemainsComplete)).toBe(true);
     await clippingNode.dispatchEvent('pointerleave');
     await expect(page.locator('.curriculum-graph-connection.is-long .curriculum-graph-edge').first())
         .toHaveCSS('stroke-dasharray', 'none');
@@ -242,6 +245,14 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             pathsContainLane: longConnections.every(connection => {
                 const cableYs = connection.dataset.cableYs.split(',').filter(Boolean);
                 return connection.querySelector('.curriculum-graph-edge').getAttribute('d').includes(cableYs.at(-1));
+            }),
+            branchesJoinTrunks: longConnections.every(connection => {
+                const branch = connection.querySelector('.curriculum-graph-edge');
+                const join = branch.getPointAtLength(0);
+                const trunk = stage.querySelector(
+                    `.curriculum-graph-connection.is-cable-trunk[data-source="${CSS.escape(connection.dataset.cableTrunkSource)}"]`
+                )?.querySelector('.curriculum-graph-edge:not(.curriculum-graph-edge-highlight)');
+                return trunk?.isPointInStroke(new DOMPoint(join.x, join.y));
             }),
             routesBelowCrossedColumns: longConnections.every(connection => {
                 const source = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.source)}"]`);
@@ -535,6 +546,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.sharedSourceCount).toBeGreaterThan(0);
     expect(cableRouting.sharedEdgesUseTrunkLane).toBe(true);
     expect(cableRouting.pathsContainLane).toBe(true);
+    expect(cableRouting.branchesJoinTrunks).toBe(true);
     expect(cableRouting.directCableCount).toBe(0);
     const arrowGeometry = await page.locator('.curriculum-graph-connection.is-primary').first().evaluate(connection => {
         const line = connection.querySelector('.curriculum-graph-edge');
@@ -733,6 +745,30 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
     await historyBack.click();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
+});
+
+test('keeps every mathematics bus branch joined to its trunk', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop-chromium');
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of 10');
+
+    const branchJoins = await page.locator('.curriculum-graph-stage').evaluate(stage => {
+        const branches = [...stage.querySelectorAll(
+            '.curriculum-graph-connection.is-long[data-cable-trunk-source]'
+        )];
+        const disconnected = branches.filter(connection => {
+            const branch = connection.querySelector('.curriculum-graph-edge');
+            const join = branch.getPointAtLength(0);
+            const trunk = stage.querySelector(
+                `.curriculum-graph-connection.is-cable-trunk[data-source="${CSS.escape(connection.dataset.cableTrunkSource)}"]`
+            )?.querySelector('.curriculum-graph-edge:not(.curriculum-graph-edge-highlight)');
+            return !trunk?.isPointInStroke(new DOMPoint(join.x, join.y));
+        });
+        return { total: branches.length, disconnected: disconnected.length };
+    });
+
+    expect(branchJoins.total).toBeGreaterThan(0);
+    expect(branchJoins.disconnected).toBe(0);
 });
 
 test('aligns another focused deck and explains an unpublished chapter plan', async ({ page }, testInfo) => {
