@@ -274,7 +274,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     return Math.abs(branchJoin.x - end.x) < 0.5 && Math.abs(branchJoin.y - end.y) < 0.5;
                 });
                 return Math.abs(start.x - sourceRight) < 0.5
-                    && Number(trunk.dataset.descentX) > sourceRight
+                    && Number(trunk.dataset.descentX) < sourceRight
+                    && sourceRight - Number(trunk.dataset.descentX) <= 32
                     && path.getAttribute('d').split(' C ').length === 3
                     && path.getAttribute('d').includes(' V ')
                     && Math.abs(end.x - farthestTargetRise) < 0.5
@@ -402,7 +403,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 return sharedRanks.length > 0 && sharedRanks.every(peers => {
                     const topToBottom = [...peers].sort((a, b) => a.sourceTop - b.sourceTop);
                     return topToBottom.every((entry, index) => !index
-                        || (entry.descentX > topToBottom[index - 1].descentX
+                        || (entry.descentX < topToBottom[index - 1].descentX
                             && entry.firstTrack > topToBottom[index - 1].firstTrack));
                 });
             })(),

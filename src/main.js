@@ -2717,13 +2717,14 @@ function curriculumCableEdgeGeometry(source, target, sourceY, targetY, route) {
 
 function curriculumCableTrunkGeometry(trunk) {
     const firstPoint = trunk.rankPoints[0];
-    const horizontalRun = Math.max(1, trunk.descentX - trunk.x1);
+    const descentDirection = Math.sign(trunk.descentX - trunk.x1) || 1;
+    const horizontalRun = Math.max(1, Math.abs(trunk.descentX - trunk.x1));
     const verticalRun = Math.max(1, firstPoint.y - trunk.sourceY);
     const lowerRun = Math.max(1, trunk.x2 - trunk.descentX);
     const radius = Math.max(4, Math.min(12, horizontalRun * 0.55, verticalRun / 3, lowerRun / 3));
     const commands = [
         `M ${trunk.x1} ${trunk.sourceY}`,
-        `C ${trunk.x1 + radius * 0.55} ${trunk.sourceY},`,
+        `C ${trunk.x1 + descentDirection * radius * 0.55} ${trunk.sourceY},`,
         `${trunk.descentX} ${trunk.sourceY + radius * 0.4},`,
         `${trunk.descentX} ${trunk.sourceY + radius}`,
         `V ${firstPoint.y - radius}`,
@@ -2848,20 +2849,25 @@ function curriculumCableRouting(layout) {
         });
 
         // At a falling boundary, continuing buses peel downward newest first
-        // immediately after the current column. New buses originating in the
-        // current column are introduced after that continuing stack, tightly
-        // nested in the same sending gutter.
-        const departures = [...descending, ...starters];
-        const departureStep = departures.length > 1
-            ? Math.min(3, available / (departures.length - 1))
+        // immediately after the current column.
+        const departureStep = descending.length > 1
+            ? Math.min(3, available / (descending.length - 1))
             : 0;
-        departures.forEach((group, index) => {
+        descending.forEach((group, index) => {
             const x = currentRight + firstOffset + departureStep * index;
-            if (group.source.rank === rank) {
-                group.descentX = x;
-            } else {
-                transitionXBySourceAndRank.get(group.source.id).set(rank, x);
-            }
+            transitionXBySourceAndRank.get(group.source.id).set(rank, x);
+        });
+
+        // A bus born above another node cannot descend in the outside gutter
+        // without crossing that lower node's direct outgoing edges. Route new
+        // buses through a narrow channel just inside the source column, where
+        // the cards conceal the vertical run, and expose them below the
+        // column. Newest/highest sources stay closest to the right edge;
+        // lower, older sources occupy progressively deeper inner channels.
+        const hiddenInset = Math.min(8, Math.max(5, gap * 0.08));
+        const hiddenStep = starters.length > 1 ? 3 : 0;
+        starters.forEach((group, index) => {
+            group.descentX = currentRight - hiddenInset - hiddenStep * index;
         });
 
         // A boundary that becomes shallower rises at the receiving column.
