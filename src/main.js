@@ -2771,6 +2771,7 @@ function curriculumCableRouting(layout) {
         .sort((a, b) => (b.maxTargetRank - b.source.rank) - (a.maxTargetRank - a.source.rank)
             || a.start - b.start
             || a.end - b.end);
+    const groupBySource = new Map(groups.map(group => [group.source.id, group]));
     const trackOrder = new Map([...groups]
         .sort((a, b) => a.source.rank - b.source.rank
             // Within one column, higher sources are older. Their buses settle
@@ -2804,16 +2805,16 @@ function curriculumCableRouting(layout) {
     const rankYsBySource = new Map(groups.map(group => [group.source.id, new Map()]));
     const transitionXBySourceAndRank = new Map(groups.map(group => [group.source.id, new Map()]));
     const maximumRank = Math.max(0, ...layout.nodes.map(node => node.rank || 0));
-    for (let rank = 1; rank <= maximumRank; rank += 1) {
+    // A rank's y values describe the compact bus stack underneath that column.
+    // New buses are inserted above every older continuing bus in their source
+    // column; transitions between two such stacks happen only in the gutter.
+    for (let rank = 0; rank < maximumRank; rank += 1) {
         const active = groups
-            .filter(group => group.source.rank < rank && group.maxTargetRank >= rank)
+            .filter(group => group.source.rank <= rank && group.maxTargetRank > rank)
             // Buses form a persistent stack: the first/oldest bus stays at
             // the bottom, and each bus introduced later is inserted above it.
             .sort((a, b) => trackOrder.get(b.source.id) - trackOrder.get(a.source.id));
-        const boundaryBottom = Math.max(
-            rankBottom.get(rank - 1) || 0,
-            rankBottom.get(rank) || 0
-        );
+        const boundaryBottom = rankBottom.get(rank) || 0;
         active.forEach((group, index) => {
             rankYsBySource.get(group.source.id).set(
                 rank,
@@ -2831,23 +2832,8 @@ function curriculumCableRouting(layout) {
             .filter(group => group.source.rank === rank)
             .sort((a, b) => trackOrder.get(b.source.id) - trackOrder.get(a.source.id));
         const continuing = groups
-            .filter(group => group.source.rank < rank && group.maxTargetRank > rank)
+            .filter(group => group.source.rank <= rank && group.maxTargetRank > rank + 1)
             .sort((a, b) => trackOrder.get(b.source.id) - trackOrder.get(a.source.id));
-        const descending = continuing.filter(group => {
-            const rankYs = rankYsBySource.get(group.source.id);
-            return rankYs.get(rank + 1) > rankYs.get(rank) + 0.5;
-        });
-
-        // At a falling boundary, continuing buses peel downward newest first
-        // immediately after the current column.
-        const departureStep = descending.length > 1
-            ? Math.min(CURRICULUM_CABLE_LANE_SPACING, available / (descending.length - 1))
-            : 0;
-        descending.forEach((group, index) => {
-            const x = currentRight + firstOffset + departureStep * index;
-            transitionXBySourceAndRank.get(group.source.id).set(rank, x);
-        });
-
         // Start new buses on the bottom edge in narrow, staggered lanes near
         // the right side of the source nodes. Newest/lower sources stay closest
         // to the right edge; higher, older sources occupy progressively deeper
@@ -2859,31 +2845,56 @@ function curriculumCableRouting(layout) {
             group.descentX = currentRight - anchorInset - anchorStep * index;
         });
 
-        // A boundary that becomes shallower rises at the receiving column.
-        // Again the newest continuing bus moves first, preserving the stack
-        // without crossings. Target branches occupy the remaining staggered
-        // receiving lanes.
+        const descending = continuing.filter(group => {
+            const rankYs = rankYsBySource.get(group.source.id);
+            return rankYs.get(rank + 1) > rankYs.get(rank) + 0.5;
+        });
         const rising = continuing.filter(group => {
             const rankYs = rankYsBySource.get(group.source.id);
             return rankYs.get(rank + 1) < rankYs.get(rank) - 0.5;
         });
         const incomingEntries = entriesByTargetRank.get(rank + 1) || [];
-        if (!rising.length && !incomingEntries.length) continue;
-        const receivingOffset = 6;
-        const availableOffset = Math.max(receivingOffset, nextLeft - currentRight - 18);
-        const laneCount = rising.length + incomingEntries.length;
-        const step = laneCount > 1
-            ? Math.min(
-                CURRICULUM_CABLE_LANE_SPACING,
-                (availableOffset - receivingOffset) / (laneCount - 1)
-            )
-            : 0;
-        rising.forEach((group, index) => {
-            transitionXBySourceAndRank.get(group.source.id)
-                .set(rank, nextLeft - 10 - receivingOffset - step * index);
+        const terminalEntriesBySource = new Map();
+        for (const entry of incomingEntries) {
+            if (groupBySource.get(entry.source.id)?.maxTargetRank !== rank + 1) continue;
+            const terminalEntries = terminalEntriesBySource.get(entry.source.id) || [];
+            terminalEntries.push(entry);
+            terminalEntriesBySource.set(entry.source.id, terminalEntries);
+        }
+        const changing = new Set([...descending, ...rising]);
+        const eventGroups = [...new Set([
+            ...changing,
+            ...[...terminalEntriesBySource].map(([sourceId]) => groupBySource.get(sourceId))
+        ])].sort((a, b) => {
+            const ageDifference = trackOrder.get(a.source.id) - trackOrder.get(b.source.id);
+            // Downward moves must vacate bottom-to-top; upward moves must
+            // vacate top-to-bottom. Terminal trunks participate in that same
+            // order so a moving bus never cuts through a lane that has not
+            // ended yet.
+            return descending.length ? ageDifference : -ageDifference;
         });
-        incomingEntries.forEach((entry, index) => {
-            entry.riseX = entry.target.x - 10 - receivingOffset - step * (rising.length + index);
+        const events = [];
+        for (const group of eventGroups) {
+            if (changing.has(group)) events.push({ type: 'transition', group });
+            for (const entry of terminalEntriesBySource.get(group.source.id) || []) {
+                events.push({ type: 'branch', entry });
+            }
+        }
+        const terminalEntries = new Set([...terminalEntriesBySource.values()].flat());
+        for (const entry of incomingEntries) {
+            if (!terminalEntries.has(entry)) events.push({ type: 'branch', entry });
+        }
+        if (!events.length) continue;
+        const eventStep = events.length > 1
+            ? Math.min(CURRICULUM_CABLE_LANE_SPACING, available / (events.length - 1))
+            : 0;
+        events.forEach((event, index) => {
+            const x = currentRight + firstOffset + eventStep * index;
+            if (event.type === 'transition') {
+                transitionXBySourceAndRank.get(event.group.source.id).set(rank, x);
+            } else {
+                event.entry.riseX = x;
+            }
         });
     }
     let routedHeight = layout.height;
@@ -2918,11 +2929,11 @@ function curriculumCableRouting(layout) {
             const edgeCrossedRanks = [];
             for (let rank = group.source.rank + 1; rank < entry.target.rank; rank += 1) edgeCrossedRanks.push(rank);
             const edgeRankYs = new Map();
-            for (let rank = group.source.rank + 1; rank <= entry.target.rank; rank += 1) {
+            for (let rank = group.source.rank + 1; rank < entry.target.rank; rank += 1) {
                 edgeRankYs.set(rank, rankYs.get(rank));
             }
             routes.set(entry.edge, {
-                y: rankYs.get(entry.target.rank),
+                y: rankYs.get(entry.target.rank - 1),
                 steps: edgeCrossedRanks.map(rank => ({
                     x: rankLeft.get(rank) ?? entry.target.x,
                     y: rankYs.get(rank),

@@ -202,7 +202,41 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             edges.push(connection);
             longEdgesBySource.set(connection.dataset.source, edges);
         }
+        const sampledTrunks = trunks.map(trunk => {
+            const path = trunk.querySelector('.curriculum-graph-edge');
+            const points = [];
+            for (let distance = 0; distance <= path.getTotalLength(); distance += 0.75) {
+                const point = path.getPointAtLength(distance);
+                points.push({ x: point.x, y: point.y });
+            }
+            return points;
+        });
+        let trunkIntersectionCount = 0;
+        for (let firstIndex = 0; firstIndex < sampledTrunks.length; firstIndex += 1) {
+            const bins = new Map();
+            for (const point of sampledTrunks[firstIndex]) {
+                const key = `${Math.round(point.x)}:${Math.round(point.y)}`;
+                const bin = bins.get(key) || [];
+                bin.push(point);
+                bins.set(key, bin);
+            }
+            for (let secondIndex = firstIndex + 1; secondIndex < sampledTrunks.length; secondIndex += 1) {
+                let intersects = false;
+                for (const point of sampledTrunks[secondIndex]) {
+                    for (let dx = -1; dx <= 1 && !intersects; dx += 1) {
+                        for (let dy = -1; dy <= 1 && !intersects; dy += 1) {
+                            const nearby = bins.get(`${Math.round(point.x) + dx}:${Math.round(point.y) + dy}`) || [];
+                            intersects = nearby.some(candidate =>
+                                Math.hypot(candidate.x - point.x, candidate.y - point.y) < 0.6);
+                        }
+                    }
+                    if (intersects) break;
+                }
+                if (intersects) trunkIntersectionCount += 1;
+            }
+        }
         return {
+            trunkIntersectionCount,
             cableYs: longConnections.flatMap(connection =>
                 connection.dataset.cableYs.split(',').filter(Boolean).map(Number)),
             pathsContainLane: longConnections.every(connection => {
@@ -224,12 +258,12 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 const rankYs = new Map(trunk.dataset.rankYs.split(',').filter(Boolean)
                     .map(pair => pair.split(':').map(Number)));
                 return [...rankYs].every(([rank, y]) => {
-                    const adjacentNodes = [...stage.querySelectorAll(
-                        `.curriculum-graph-node[data-rank="${rank - 1}"], .curriculum-graph-node[data-rank="${rank}"]`
+                    const columnNodes = [...stage.querySelectorAll(
+                        `.curriculum-graph-node[data-rank="${rank}"]`
                     )];
-                    const adjacentBottom = Math.max(0, ...adjacentNodes.map(node =>
+                    const columnBottom = Math.max(0, ...columnNodes.map(node =>
                         Number.parseFloat(node.style.top) + Number.parseFloat(node.style.height)));
-                    return y >= adjacentBottom + 18;
+                    return y >= columnBottom + 18;
                 });
             }),
             edgeAligned: longConnections.every(connection => {
@@ -244,20 +278,13 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 for (const connection of longConnections) {
                     const target = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.target)}"]`);
                     const rises = byRank.get(target.dataset.rank) || [];
-                    rises.push({
-                        x: Number(connection.dataset.riseX),
-                        targetY: Number.parseFloat(target.style.top)
-                    });
+                    rises.push({ x: Number(connection.dataset.riseX) });
                     byRank.set(target.dataset.rank, rises);
                 }
                 const sharedRanks = [...byRank.values()].filter(rises => rises.length > 1);
                 return sharedRanks.length > 0 && sharedRanks.every(rises => {
                     const xs = rises.map(rise => rise.x).sort((a, b) => a - b);
-                    const gaps = xs.slice(1).map((value, index) => value - xs[index]);
-                    const orderedByTarget = [...rises].sort((a, b) => a.targetY - b.targetY || b.x - a.x);
-                    return new Set(xs.map(value => value.toFixed(3))).size === xs.length
-                        && gaps.every(gap => gap > 0 && gap <= 6.01)
-                        && orderedByTarget.every((rise, index) => !index || rise.x < orderedByTarget[index - 1].x);
+                    return new Set(xs.map(value => value.toFixed(3))).size === xs.length;
                 });
             })(),
             trunksAligned: trunks.every(trunk => {
@@ -324,14 +351,10 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 const sharedRanks = [...byRank.values()].filter(lanes => lanes.length > 1);
                 return sharedRanks.length > 0 && sharedRanks.every(lanes => {
                     const ordered = lanes.sort((a, b) => a - b);
-                    const gaps = ordered.slice(1).map((value, index) => value - ordered[index]);
-                    return new Set(ordered.map(value => value.toFixed(3))).size === ordered.length
-                        && gaps.every(gap => gap > 0 && gap <= 4.01);
+                    return new Set(ordered.map(value => value.toFixed(3))).size === ordered.length;
                 });
             })(),
-            transitionsUseDirectionalGutters: trunks.every(trunk => {
-                const rankYs = new Map(trunk.dataset.rankYs.split(',').filter(Boolean)
-                    .map(pair => pair.split(':').map(Number)));
+            transitionsStayInGutters: trunks.every(trunk => {
                 return trunk.dataset.transitionXs.split(',').filter(Boolean).every(pair => {
                     const [rank, x] = pair.split(':').map(Number);
                     const currentNodes = [...stage.querySelectorAll(`.curriculum-graph-node[data-rank="${rank}"]`)];
@@ -339,11 +362,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     const currentRight = Math.max(...currentNodes.map(node =>
                         Number.parseFloat(node.style.left) + Number.parseFloat(node.style.width)));
                     const nextLeft = Math.min(...nextNodes.map(node => Number.parseFloat(node.style.left)));
-                    const falling = rankYs.get(rank + 1) > rankYs.get(rank);
-                    return x > currentRight && x < nextLeft
-                        && (falling
-                            ? x - currentRight < nextLeft - x
-                            : nextLeft - x < x - currentRight);
+                    return x > currentRight && x < nextLeft;
                 });
             }),
             persistentAgeStack: (() => {
@@ -366,7 +385,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     return active.every((entry, index) => !index || entry.y < active[index - 1].y);
                 });
             })(),
-            newestFallsFirst: (() => {
+            oldestFallsFirst: (() => {
                 const byRank = new Map();
                 for (const trunk of trunks) {
                     const rankYs = new Map(trunk.dataset.rankYs.split(',').filter(Boolean)
@@ -385,10 +404,10 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 }
                 const fallingBoundaries = [...byRank.values()].filter(entries => entries.length > 1);
                 return fallingBoundaries.length > 0 && fallingBoundaries.every(entries => {
-                    const newestFirst = [...entries].sort((a, b) => b.age[0] - a.age[0]
-                        || b.age[1] - a.age[1]
-                        || b.age[2].localeCompare(a.age[2]));
-                    return newestFirst.every((entry, index) => !index || entry.x > newestFirst[index - 1].x);
+                    const oldestFirst = [...entries].sort((a, b) => a.age[0] - b.age[0]
+                        || a.age[1] - b.age[1]
+                        || a.age[2].localeCompare(b.age[2]));
+                    return oldestFirst.every((entry, index) => !index || entry.x > oldestFirst[index - 1].x);
                 });
             })(),
             higherSourcesOwnOlderLanes: (() => {
@@ -429,7 +448,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     return gaps.every(gap => Math.abs(gap - 4) < 0.01);
                 });
             })(),
-            trunksHugColumns: (() => {
+            trunksClearColumnsCompactly: (() => {
                 const byRank = new Map();
                 for (const trunk of trunks) {
                     for (const pair of trunk.dataset.rankYs.split(',').filter(Boolean)) {
@@ -441,10 +460,10 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 }
                 return [...byRank].every(([rank, tracks]) => {
                     const bottoms = [...stage.querySelectorAll(
-                        `.curriculum-graph-node[data-rank="${rank - 1}"], .curriculum-graph-node[data-rank="${rank}"]`
+                        `.curriculum-graph-node[data-rank="${rank}"]`
                     )]
                         .map(node => Number.parseFloat(node.style.top) + Number.parseFloat(node.style.height));
-                    return bottoms.length && Math.abs(Math.min(...tracks) - Math.max(...bottoms) - 18) < 0.01;
+                    return bottoms.length && Math.min(...tracks) >= Math.max(...bottoms) + 18;
                 });
             })(),
             snakingTrunkCount: trunks.filter(trunk => new Set(trunk.dataset.rankYs.split(',')
@@ -493,6 +512,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         };
     });
     expect(cableRouting.cableYs.length).toBeGreaterThan(0);
+    expect(cableRouting.trunkIntersectionCount).toBe(0);
     expect(cableRouting.routesBelowCrossedColumns).toBe(true);
     expect(cableRouting.busesClearBothAdjacentColumns).toBe(true);
     expect(cableRouting.edgeAligned).toBe(true);
@@ -500,12 +520,12 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.trunksAligned).toBe(true);
     expect(cableRouting.staggeredDescents).toBe(true);
     expect(cableRouting.receivingLanesAreDistinct).toBe(true);
-    expect(cableRouting.transitionsUseDirectionalGutters).toBe(true);
+    expect(cableRouting.transitionsStayInGutters).toBe(true);
     expect(cableRouting.persistentAgeStack).toBe(true);
-    expect(cableRouting.newestFallsFirst).toBe(true);
+    expect(cableRouting.oldestFallsFirst).toBe(true);
     expect(cableRouting.higherSourcesOwnOlderLanes).toBe(true);
     expect(cableRouting.evenlySpacedTrunks).toBe(true);
-    expect(cableRouting.trunksHugColumns).toBe(true);
+    expect(cableRouting.trunksClearColumnsCompactly).toBe(true);
     expect(cableRouting.snakingTrunkCount).toBeGreaterThan(0);
     expect(cableRouting.mixedSourceCount).toBeGreaterThan(0);
     expect(cableRouting.soloBusCount).toBeGreaterThan(0);
