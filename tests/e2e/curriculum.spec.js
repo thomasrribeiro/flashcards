@@ -169,7 +169,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 const farthestTargetRise = Math.max(...targets.map(target => Number.parseFloat(target.style.left) - 10));
                 return Math.abs(start.x - sourceRight) < 0.5
                     && Number(trunk.dataset.descentX) > sourceRight
-                    && path.getAttribute('d').includes(`H ${trunk.dataset.descentX} V`)
+                    && path.getAttribute('d').split(' C ').length === 3
+                    && path.getAttribute('d').includes(' V ')
                     && Math.abs(end.x - farthestTargetRise) < 0.5;
             }),
             staggeredDescents: (() => {
@@ -196,6 +197,18 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             mixedSourceCount: trunks.filter(trunk =>
                 [...stage.querySelectorAll('.curriculum-graph-connection.is-primary')]
                     .some(connection => connection.dataset.source === trunk.dataset.source)).length,
+            soloBusCount: trunks.filter(trunk =>
+                ![...stage.querySelectorAll('.curriculum-graph-connection.is-primary')]
+                    .some(connection => connection.dataset.source === trunk.dataset.source)).length,
+            soloBusesCentered: trunks.every(trunk => {
+                const hasDirectConnection = [...stage.querySelectorAll('.curriculum-graph-connection.is-primary')]
+                    .some(connection => connection.dataset.source === trunk.dataset.source);
+                if (hasDirectConnection) return true;
+                const source = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(trunk.dataset.source)}"]`);
+                const sourceCenter = Number.parseFloat(source.style.top) + Number.parseFloat(source.style.height) / 2;
+                const trunkStart = trunk.querySelector('.curriculum-graph-edge').getPointAtLength(0);
+                return Math.abs(trunkStart.y - sourceCenter) < 0.5;
+            }),
             busLeavesLast: trunks.every(trunk => {
                 const directConnections = [...stage.querySelectorAll('.curriculum-graph-connection.is-primary')]
                     .filter(connection => connection.dataset.source === trunk.dataset.source);
@@ -224,6 +237,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.staggeredDescents).toBe(true);
     expect(cableRouting.evenlySpacedTrunks).toBe(true);
     expect(cableRouting.mixedSourceCount).toBeGreaterThan(0);
+    expect(cableRouting.soloBusCount).toBeGreaterThan(0);
+    expect(cableRouting.soloBusesCentered).toBe(true);
     expect(cableRouting.busLeavesLast).toBe(true);
     expect(cableRouting.oneTrunkPerSource).toBe(true);
     expect(cableRouting.sharedSourceCount).toBeGreaterThan(0);

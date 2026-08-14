@@ -2703,8 +2703,35 @@ function curriculumCableEdgeGeometry(source, target, sourceY, targetY, route) {
     };
 }
 
+function curriculumCableTrunkGeometry(trunk) {
+    const horizontalRun = Math.max(1, trunk.descentX - trunk.x1);
+    const verticalRun = Math.max(1, trunk.y - trunk.sourceY);
+    const lowerRun = Math.max(1, trunk.x2 - trunk.descentX);
+    const radius = Math.max(4, Math.min(12, horizontalRun * 0.55, verticalRun / 3, lowerRun / 3));
+    return [
+        `M ${trunk.x1} ${trunk.sourceY}`,
+        `C ${trunk.x1 + radius * 0.55} ${trunk.sourceY},`,
+        `${trunk.descentX} ${trunk.sourceY + radius * 0.4},`,
+        `${trunk.descentX} ${trunk.sourceY + radius}`,
+        `V ${trunk.y - radius}`,
+        `C ${trunk.descentX} ${trunk.y - radius * 0.4},`,
+        `${trunk.descentX + radius * 0.4} ${trunk.y},`,
+        `${trunk.descentX + radius} ${trunk.y}`,
+        `H ${trunk.x2}`
+    ].join(' ');
+}
+
 function curriculumCableRouting(layout) {
     const positioned = new Map(layout.nodes.map(node => [node.id, node]));
+    const sourcesWithDirectEdges = new Set(layout.edges
+        .filter(edge => {
+            const source = positioned.get(edge.source);
+            const target = positioned.get(edge.target);
+            return Number.isInteger(source?.rank)
+                && Number.isInteger(target?.rank)
+                && target.rank - source.rank === 1;
+        })
+        .map(edge => edge.source));
     const sourceGroups = new Map();
     for (const entry of layout.edges
         .map(edge => ({ edge, source: positioned.get(edge.source), target: positioned.get(edge.target) }))
@@ -2771,11 +2798,13 @@ function curriculumCableRouting(layout) {
             descentX: group.descentX,
             x2: group.end - 10,
             y,
-            // A shared bus drops below the graph, so reserve the lowest
-            // outgoing port for it. Direct next-layer edges are assigned
-            // above this point, which avoids crossing the bus at its source.
-            sourceY: group.source.y + group.source.height
-                - Math.min(18, group.source.height * 0.22)
+            // A bus is centered when it is the source's only visible outgoing
+            // wire. When direct edges coexist, reserve the lowest port for the
+            // bus so those shorter connections can remain ordered above it.
+            sourceY: sourcesWithDirectEdges.has(group.source.id)
+                ? group.source.y + group.source.height
+                    - Math.min(18, group.source.height * 0.22)
+                : group.source.y + group.source.height / 2
         });
         for (const entry of group.entries) {
             const edgeCrossedRanks = [];
@@ -2922,7 +2951,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         if (Number.isInteger(source?.rank)) connection.dataset.sourceRank = String(source.rank);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         line.classList.add('curriculum-graph-edge');
-        line.setAttribute('d', `M ${trunk.x1} ${trunk.sourceY} H ${trunk.descentX} V ${trunk.y} H ${trunk.x2}`);
+        line.setAttribute('d', curriculumCableTrunkGeometry(trunk));
         connection.appendChild(line);
         svg.appendChild(connection);
     }
