@@ -2725,18 +2725,6 @@ function curriculumCableRouting(layout) {
         .sort((a, b) => (b.maxTargetRank - b.source.rank) - (a.maxTargetRank - a.source.rank)
             || a.start - b.start
             || a.end - b.end);
-    const laneAssignments = new Map();
-    const lanes = [];
-    for (const group of groups) {
-        let lane = lanes.findIndex(intervals => intervals.every(interval =>
-            group.end + 18 < interval.start || group.start - 18 > interval.end));
-        if (lane < 0) {
-            lane = lanes.length;
-            lanes.push([]);
-        }
-        lanes[lane].push({ start: group.start, end: group.end });
-        laneAssignments.set(group.source.id, lane);
-    }
     const rankBottom = new Map();
     const rankLeft = new Map();
     for (const node of layout.nodes) {
@@ -2756,23 +2744,25 @@ function curriculumCableRouting(layout) {
         const nextColumnLeft = rankLeft.get(peers[0].source.rank + 1) ?? sourceRight + 96;
         const gap = Math.max(24, nextColumnLeft - sourceRight);
         const firstOffset = Math.min(18, gap * 0.24);
-        const lastOffset = Math.max(firstOffset, gap - Math.min(18, gap * 0.24));
+        const available = Math.max(0, gap - firstOffset - 12);
+        const step = peers.length > 1
+            ? Math.min(8, available / (peers.length - 1))
+            : 0;
         peers.forEach((group, index) => {
-            const ratio = peers.length === 1 ? 0 : index / (peers.length - 1);
-            group.descentX = sourceRight + firstOffset + (lastOffset - firstOffset) * ratio;
+            group.descentX = sourceRight + firstOffset + step * index;
         });
     }
+    const gutterBase = Math.max(layout.height, ...rankBottom.values()) + 26;
+    const trackBySource = new Map([...groups]
+        .sort((a, b) => a.source.rank - b.source.rank
+            || a.source.y - b.source.y
+            || a.source.id.localeCompare(b.source.id))
+        .map((group, index) => [group.source.id, index]));
     let routedHeight = layout.height;
     const routes = new Map();
     const trunks = [];
     for (const group of groups) {
-        const lane = laneAssignments.get(group.source.id) || 0;
-        const crossedRanks = [];
-        for (let rank = group.source.rank + 1; rank < group.maxTargetRank; rank += 1) crossedRanks.push(rank);
-        const crossedBottom = Math.max(
-            ...crossedRanks.map(rank => rankBottom.get(rank) || layout.height)
-        );
-        const y = crossedBottom + 26 + lane * 14;
+        const y = gutterBase + (trackBySource.get(group.source.id) || 0) * 14;
         routedHeight = Math.max(routedHeight, y + 24);
         trunks.push({
             source: group.source.id,
@@ -2781,7 +2771,11 @@ function curriculumCableRouting(layout) {
             descentX: group.descentX,
             x2: group.end - 10,
             y,
-            sourceY: group.source.y + group.source.height / 2
+            // A shared bus drops below the graph, so reserve the lowest
+            // outgoing port for it. Direct next-layer edges are assigned
+            // above this point, which avoids crossing the bus at its source.
+            sourceY: group.source.y + group.source.height
+                - Math.min(18, group.source.height * 0.22)
         });
         for (const entry of group.entries) {
             const edgeCrossedRanks = [];
@@ -2910,7 +2904,11 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             });
     };
     for (const node of layout.nodes) {
-        assignPorts('sourceY', node.id, layout.edges.filter(edge => edge.source === node.id), edge => edge.target);
+        // Long edges leave through the source's single shared bus trunk. Do
+        // not include them in ordinary source-port spacing: the bus owns the
+        // bottommost port and direct outgoing edges remain ordered above it.
+        assignPorts('sourceY', node.id, layout.edges.filter(edge =>
+            edge.source === node.id && !cableRouting.routes.has(edge)), edge => edge.target);
         assignPorts('targetY', node.id, layout.edges.filter(edge => edge.target === node.id), edge => edge.source);
     }
     for (const trunk of cableRouting.trunks || []) {

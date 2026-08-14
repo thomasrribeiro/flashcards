@@ -181,8 +181,31 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 }
                 const sharedRanks = [...byRank.values()].filter(descents => descents.length > 1);
                 return sharedRanks.length > 0
-                    && sharedRanks.every(descents => new Set(descents.map(value => value.toFixed(3))).size === descents.length);
+                    && sharedRanks.every(descents => {
+                        const ordered = [...descents].sort((a, b) => a - b);
+                        const gaps = ordered.slice(1).map((value, index) => value - ordered[index]);
+                        return new Set(ordered.map(value => value.toFixed(3))).size === ordered.length
+                            && gaps.every(gap => gap > 0 && gap <= 8.01);
+                    });
             })(),
+            evenlySpacedTrunks: (() => {
+                const tracks = trunks.map(trunk => Number(trunk.dataset.cableY)).sort((a, b) => a - b);
+                const gaps = tracks.slice(1).map((value, index) => value - tracks[index]);
+                return gaps.length > 0 && gaps.every(gap => Math.abs(gap - 14) < 0.01);
+            })(),
+            mixedSourceCount: trunks.filter(trunk =>
+                [...stage.querySelectorAll('.curriculum-graph-connection.is-primary')]
+                    .some(connection => connection.dataset.source === trunk.dataset.source)).length,
+            busLeavesLast: trunks.every(trunk => {
+                const directConnections = [...stage.querySelectorAll('.curriculum-graph-connection.is-primary')]
+                    .filter(connection => connection.dataset.source === trunk.dataset.source);
+                if (!directConnections.length) return true;
+                const trunkStart = trunk.querySelector('.curriculum-graph-edge').getPointAtLength(0);
+                return directConnections.every(connection => {
+                    const directStart = connection.querySelector('.curriculum-graph-edge').getPointAtLength(0);
+                    return directStart.y < trunkStart.y;
+                });
+            }),
             oneTrunkPerSource: trunks.length === new Set(trunks.map(trunk => trunk.dataset.source)).size
                 && trunks.every(trunk => longEdgesBySource.has(trunk.dataset.source)),
             sharedSourceCount: [...longEdgesBySource.values()].filter(edges => edges.length > 1).length,
@@ -199,6 +222,9 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.edgeAligned).toBe(true);
     expect(cableRouting.trunksAligned).toBe(true);
     expect(cableRouting.staggeredDescents).toBe(true);
+    expect(cableRouting.evenlySpacedTrunks).toBe(true);
+    expect(cableRouting.mixedSourceCount).toBeGreaterThan(0);
+    expect(cableRouting.busLeavesLast).toBe(true);
     expect(cableRouting.oneTrunkPerSource).toBe(true);
     expect(cableRouting.sharedSourceCount).toBeGreaterThan(0);
     expect(cableRouting.sharedEdgesUseTrunkLane).toBe(true);
