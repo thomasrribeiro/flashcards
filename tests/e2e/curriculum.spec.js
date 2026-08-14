@@ -70,6 +70,22 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             hasHorizontalContent: element.scrollWidth > element.clientWidth,
             overflowX: getComputedStyle(element).overflowX,
             overflowY: getComputedStyle(element).overflowY,
+            routeExtentMatchesLayer: (() => {
+                const layer = Number(element.dataset.scrollLayer);
+                const routeBottoms = [...element.querySelectorAll('.curriculum-graph-connection.is-long')]
+                    .filter(connection => {
+                        const source = element.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.source)}"]`);
+                        const target = element.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.target)}"]`);
+                        return Number(source.dataset.rank) <= layer && Number(target.dataset.rank) >= layer;
+                    })
+                    .map(connection => {
+                        const bounds = connection.querySelector('.curriculum-graph-edge').getBBox();
+                        return bounds.y + bounds.height;
+                    });
+                const actualRouteBottom = Math.max(0, ...routeBottoms);
+                return Math.abs(Number(element.dataset.scrollRouteBottom) - actualRouteBottom) < 1
+                    && Number(element.dataset.scrollExtent) >= actualRouteBottom + 24;
+            })(),
             extentMatchesLayer: (() => {
                 const focal = element.querySelector(`.curriculum-graph-node[data-rank="${element.dataset.scrollLayer}"]`);
                 const scale = focal.getBoundingClientRect().width / Number.parseFloat(focal.style.width);
@@ -81,6 +97,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         expect(scrolling.hasHorizontalContent).toBe(true);
         expect(scrolling.overflowX).toBe('hidden');
         expect(scrolling.overflowY).toBe('scroll');
+        expect(scrolling.routeExtentMatchesLayer).toBe(true);
         expect(scrolling.extentMatchesLayer).toBe(true);
         await page.getByRole('button', { name: 'Fit', exact: true }).click();
     }
@@ -107,6 +124,13 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         .toHaveCSS('stroke-dasharray', 'none');
     const cableRouting = await page.locator('.curriculum-graph-stage').evaluate(stage => {
         const longConnections = [...stage.querySelectorAll('.curriculum-graph-connection.is-long')];
+        const trunks = [...stage.querySelectorAll('.curriculum-graph-connection.is-cable-trunk')];
+        const longEdgesBySource = new Map();
+        for (const connection of longConnections) {
+            const edges = longEdgesBySource.get(connection.dataset.source) || [];
+            edges.push(connection);
+            longEdgesBySource.set(connection.dataset.source, edges);
+        }
         return {
             cableYs: longConnections.flatMap(connection =>
                 connection.dataset.cableYs.split(',').filter(Boolean).map(Number)),
@@ -128,13 +152,31 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 });
             }),
             edgeAligned: longConnections.every(connection => {
-                const source = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.source)}"]`);
                 const target = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.target)}"]`);
                 const path = connection.querySelector('.curriculum-graph-edge');
-                const sourceRight = Number.parseFloat(source.style.left) + Number.parseFloat(source.style.width);
                 const targetRise = Number.parseFloat(target.style.left) - 10;
-                return Math.abs(path.getPointAtLength(5).x - sourceRight) < 0.5
+                return Math.abs(path.getPointAtLength(0).x - targetRise) < 0.5
                     && Math.abs(path.getPointAtLength(path.getTotalLength() - 5).x - targetRise) < 0.5;
+            }),
+            trunksAligned: trunks.every(trunk => {
+                const source = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(trunk.dataset.source)}"]`);
+                const targets = trunk.dataset.targets.split('|').map(target =>
+                    stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(target)}"]`));
+                const path = trunk.querySelector('.curriculum-graph-edge');
+                const start = path.getPointAtLength(0);
+                const end = path.getPointAtLength(path.getTotalLength());
+                const sourceRight = Number.parseFloat(source.style.left) + Number.parseFloat(source.style.width);
+                const farthestTargetRise = Math.max(...targets.map(target => Number.parseFloat(target.style.left) - 10));
+                return Math.abs(start.x - sourceRight) < 0.5
+                    && Math.abs(end.x - farthestTargetRise) < 0.5;
+            }),
+            oneTrunkPerSource: trunks.length === new Set(trunks.map(trunk => trunk.dataset.source)).size
+                && trunks.every(trunk => longEdgesBySource.has(trunk.dataset.source)),
+            sharedSourceCount: [...longEdgesBySource.values()].filter(edges => edges.length > 1).length,
+            sharedEdgesUseTrunkLane: [...longEdgesBySource.entries()].every(([source, edges]) => {
+                const trunk = trunks.find(item => item.dataset.source === source);
+                return trunk && edges.every(edge => edge.dataset.cableYs.split(',').filter(Boolean)
+                    .every(y => Math.abs(Number(y) - Number(trunk.dataset.cableY)) < 0.5));
             }),
             directCableCount: stage.querySelectorAll('.curriculum-graph-connection.is-primary[data-cable-ys]').length
         };
@@ -142,6 +184,10 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.cableYs.length).toBeGreaterThan(0);
     expect(cableRouting.routesBelowCrossedColumns).toBe(true);
     expect(cableRouting.edgeAligned).toBe(true);
+    expect(cableRouting.trunksAligned).toBe(true);
+    expect(cableRouting.oneTrunkPerSource).toBe(true);
+    expect(cableRouting.sharedSourceCount).toBeGreaterThan(0);
+    expect(cableRouting.sharedEdgesUseTrunkLane).toBe(true);
     expect(cableRouting.pathsContainLane).toBe(true);
     expect(cableRouting.directCableCount).toBe(0);
     const arrowGeometry = await page.locator('.curriculum-graph-connection.is-primary').first().evaluate(connection => {

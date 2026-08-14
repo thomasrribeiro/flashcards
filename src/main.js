@@ -2688,15 +2688,15 @@ function curriculumEdgeGeometry(source, target, sourceY = null, targetY = null) 
 }
 
 function curriculumCableEdgeGeometry(source, target, sourceY, targetY, route) {
-    const { steps } = route;
-    const x1 = source.x + source.width;
     const x2 = target.x;
     const baseX = x2 - 10;
-    // Descend flush with the source column's right edge and rise flush with
-    // the destination column's left edge. The inter-column gap stays clear.
-    const routeCommands = [`M ${x1} ${sourceY}`];
-    for (const step of steps) routeCommands.push(`V ${step.y}`, `H ${step.x}`);
-    routeCommands.push(`H ${baseX}`, `V ${targetY}`, `H ${baseX}`);
+    // The shared source trunk is rendered separately. Each dependency only
+    // branches upward when its own destination column is reached.
+    const routeCommands = [
+        `M ${baseX} ${route.y}`,
+        `V ${targetY}`,
+        `H ${baseX}`
+    ];
     return {
         line: routeCommands.join(' '),
         head: `M ${baseX} ${targetY - 4.25} L ${x2} ${targetY} L ${baseX} ${targetY + 4.25} Z`
@@ -2705,27 +2705,37 @@ function curriculumCableEdgeGeometry(source, target, sourceY, targetY, route) {
 
 function curriculumCableRouting(layout) {
     const positioned = new Map(layout.nodes.map(node => [node.id, node]));
-    const laneAssignments = new Map();
-    const lanes = [];
-    const longEdges = layout.edges
+    const sourceGroups = new Map();
+    for (const entry of layout.edges
         .map(edge => ({ edge, source: positioned.get(edge.source), target: positioned.get(edge.target) }))
         .filter(({ source, target }) => Number.isInteger(source?.rank)
             && Number.isInteger(target?.rank)
-            && target.rank - source.rank > 1)
-        .sort((a, b) => (b.target.rank - b.source.rank) - (a.target.rank - a.source.rank)
-            || a.source.x - b.source.x
-            || a.target.x - b.target.x);
-    for (const route of longEdges) {
-        const start = route.source.x + route.source.width;
-        const end = route.target.x;
+            && target.rank - source.rank > 1)) {
+        const group = sourceGroups.get(entry.source.id) || { source: entry.source, entries: [] };
+        group.entries.push(entry);
+        sourceGroups.set(entry.source.id, group);
+    }
+    const groups = [...sourceGroups.values()]
+        .map(group => ({
+            ...group,
+            start: group.source.x + group.source.width,
+            end: Math.max(...group.entries.map(({ target }) => target.x)),
+            maxTargetRank: Math.max(...group.entries.map(({ target }) => target.rank))
+        }))
+        .sort((a, b) => (b.maxTargetRank - b.source.rank) - (a.maxTargetRank - a.source.rank)
+            || a.start - b.start
+            || a.end - b.end);
+    const laneAssignments = new Map();
+    const lanes = [];
+    for (const group of groups) {
         let lane = lanes.findIndex(intervals => intervals.every(interval =>
-            end + 18 < interval.start || start - 18 > interval.end));
+            group.end + 18 < interval.start || group.start - 18 > interval.end));
         if (lane < 0) {
             lane = lanes.length;
             lanes.push([]);
         }
-        lanes[lane].push({ start, end });
-        laneAssignments.set(route.edge, lane);
+        lanes[lane].push({ start: group.start, end: group.end });
+        laneAssignments.set(group.source.id, lane);
     }
     const rankBottom = new Map();
     const rankLeft = new Map();
@@ -2735,21 +2745,45 @@ function curriculumCableRouting(layout) {
         rankLeft.set(node.rank, Math.min(rankLeft.get(node.rank) ?? Infinity, node.x));
     }
     let routedHeight = layout.height;
-    const routes = new Map(longEdges.map(route => {
-        const lane = laneAssignments.get(route.edge) || 0;
-        const steps = [];
-        // Cross each intervening column just below that column's own content.
-        // Vertical changes happen in the gaps, so no cable runs through a node.
-        for (let rank = route.source.rank + 1; rank < route.target.rank; rank += 1) {
-            const y = (rankBottom.get(rank) || layout.height) + 26 + lane * 14;
-            const x = rankLeft.get(rank) ?? route.target.x;
-            steps.push({ x, y });
-            routedHeight = Math.max(routedHeight, y + 24);
+    const routes = new Map();
+    const trunks = [];
+    for (const group of groups) {
+        const lane = laneAssignments.get(group.source.id) || 0;
+        const crossedRanks = [];
+        for (let rank = group.source.rank + 1; rank < group.maxTargetRank; rank += 1) crossedRanks.push(rank);
+        const crossedBottom = Math.max(
+            ...crossedRanks.map(rank => rankBottom.get(rank) || layout.height)
+        );
+        const y = crossedBottom + 26 + lane * 14;
+        routedHeight = Math.max(routedHeight, y + 24);
+        trunks.push({
+            source: group.source.id,
+            targets: group.entries.map(({ target }) => target.id),
+            x1: group.start,
+            x2: group.end - 10,
+            y,
+            sourceY: group.source.y + group.source.height / 2
+        });
+        for (const entry of group.entries) {
+            const edgeCrossedRanks = [];
+            for (let rank = group.source.rank + 1; rank < entry.target.rank; rank += 1) edgeCrossedRanks.push(rank);
+            const rankYs = new Map();
+            for (let rank = group.source.rank; rank <= entry.target.rank; rank += 1) rankYs.set(rank, y);
+            routes.set(entry.edge, {
+                y,
+                steps: edgeCrossedRanks.map(rank => ({
+                    x: rankLeft.get(rank) ?? entry.target.x,
+                    y,
+                    rank
+                })),
+                rankYs,
+                trunkSource: group.source.id
+            });
         }
-        return [route.edge, { steps }];
-    }));
+    }
     return {
         routes,
+        trunks,
         height: routedHeight
     };
 }
@@ -2806,14 +2840,22 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const scrollExtentNodes = ranked && focusRanks
         ? layout.nodes.filter(node => node.rank === focusRanks.layer)
         : layout.nodes;
+    const scrollExtentNodeBottom = scrollExtentNodes.length
+        ? Math.max(...scrollExtentNodes.map(node => node.y + node.height))
+        : 0;
+    const scrollExtentRouteBottom = ranked && focusRanks
+        ? Math.max(0, ...[...cableRouting.routes.values()]
+            .map(route => route.rankYs?.get(focusRanks.layer) || 0))
+        : 0;
     const scrollExtentHeight = ranked && focusRanks && scrollExtentNodes.length
-        ? Math.max(...scrollExtentNodes.map(node => node.y + node.height)) + 36
+        ? Math.max(scrollExtentNodeBottom + 36, scrollExtentRouteBottom + 24)
         : canvasHeight;
     if (ranked && focusRanks) {
         stage.dataset.scrollRankStart = String(focusRanks.start);
         stage.dataset.scrollRankEnd = String(focusRanks.end);
         stage.dataset.scrollLayer = String(focusRanks.layer);
         stage.dataset.scrollExtent = String(scrollExtentHeight);
+        stage.dataset.scrollRouteBottom = String(scrollExtentRouteBottom);
     }
     const scrollCanvas = document.createElement('div');
     scrollCanvas.className = 'curriculum-graph-scroll-canvas';
@@ -2852,6 +2894,18 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         assignPorts('sourceY', node.id, layout.edges.filter(edge => edge.source === node.id), edge => edge.target);
         assignPorts('targetY', node.id, layout.edges.filter(edge => edge.target === node.id), edge => edge.source);
     }
+    for (const trunk of cableRouting.trunks || []) {
+        const connection = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        connection.classList.add('curriculum-graph-connection', 'is-cable-trunk');
+        connection.dataset.source = trunk.source;
+        connection.dataset.targets = trunk.targets.join('|');
+        connection.dataset.cableY = String(trunk.y);
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        line.classList.add('curriculum-graph-edge');
+        line.setAttribute('d', `M ${trunk.x1} ${trunk.sourceY} V ${trunk.y} H ${trunk.x2}`);
+        connection.appendChild(line);
+        svg.appendChild(connection);
+    }
     for (const edge of layout.edges) {
         const source = positioned.get(edge.source);
         const target = positioned.get(edge.target);
@@ -2872,6 +2926,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const cableRoute = cableRouting.routes.get(edge);
         if (cableRoute) {
             connection.dataset.cableYs = cableRoute.steps.map(step => step.y).join(',');
+            connection.dataset.cableTrunkSource = cableRoute.trunkSource;
         }
         const geometry = cableRoute
             ? curriculumCableEdgeGeometry(
@@ -2987,7 +3042,10 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             node.classList.toggle('is-related', related.has(node.dataset.deckId));
         });
         edgeElements.forEach(edge => {
-            const active = related.has(edge.dataset.source) && related.has(edge.dataset.target);
+            const trunkTargets = edge.dataset.targets?.split('|').filter(Boolean) || [];
+            const active = edge.classList.contains('is-cable-trunk')
+                ? related.has(edge.dataset.source) && trunkTargets.some(target => related.has(target))
+                : related.has(edge.dataset.source) && related.has(edge.dataset.target);
             edge.classList.toggle('is-dimmed', !active);
             edge.classList.toggle('is-related', active);
         });
