@@ -2408,11 +2408,6 @@ kbd {
     overscroll-behavior: contain;
 }
 
-.curriculum-neighborhood-column.is-prerequisites,
-.curriculum-neighborhood-column.is-unlocks {
-    overflow-y: scroll;
-}
-
 .review-schedule-list::-webkit-scrollbar {
     width: 10px;
 }
@@ -3743,29 +3738,37 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-neighborhood-column {
     position: relative;
     z-index: 1;
+    display: flex;
+    flex-direction: column;
     min-width: 0;
-    overflow-y: auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.curriculum-neighborhood-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
     overscroll-behavior: contain;
     scrollbar-color: var(--muted) var(--light-gray);
-    scrollbar-gutter: stable;
     scrollbar-width: auto;
 }
 
-.curriculum-neighborhood-column.is-prerequisites,
-.curriculum-neighborhood-column.is-unlocks {
-    overflow-y: scroll;
+.curriculum-neighborhood-scroll.is-scrollable {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
 }
 
-.curriculum-neighborhood-column::-webkit-scrollbar {
+.curriculum-neighborhood-scroll::-webkit-scrollbar {
     width: 11px;
 }
 
-.curriculum-neighborhood-column::-webkit-scrollbar-track {
+.curriculum-neighborhood-scroll::-webkit-scrollbar-track {
     background: var(--light-gray);
     border-left: 1px solid var(--subtle-border);
 }
 
-.curriculum-neighborhood-column::-webkit-scrollbar-thumb {
+.curriculum-neighborhood-scroll::-webkit-scrollbar-thumb {
     border: 2px solid var(--light-gray);
     background: var(--muted);
 }
@@ -3776,9 +3779,9 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-neighborhood-column > h3 {
-    position: sticky;
-    top: 0;
+    position: relative;
     z-index: 2;
+    flex: 0 0 auto;
     margin: 0;
     border-bottom: 1px solid var(--black);
     background: var(--light-gray);
@@ -3810,7 +3813,7 @@ body.standalone-phone .mobile-sidebar-close {
     white-space: nowrap;
 }
 
-.curriculum-neighborhood-column > h4,
+.curriculum-neighborhood-scroll > h4,
 .curriculum-interdependent h4,
 .curriculum-cycle-warning h4 {
     margin: 0;
@@ -4458,6 +4461,7 @@ body.standalone-phone .mobile-sidebar-close {
     }
 
     .curriculum-neighborhood-column {
+        display: flex;
         max-height: 58dvh;
     }
 
@@ -4506,7 +4510,7 @@ body.standalone-phone .mobile-sidebar-close {
     }
 
     .curriculum-neighborhood-column.is-mobile-active {
-        display: block;
+        display: flex;
     }
 
     .curriculum-recommended-toggle {

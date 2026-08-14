@@ -3126,7 +3126,7 @@ function captureCurriculumPosition() {
     if (!neighborhood) return null;
     return {
         type: 'neighborhood',
-        columns: [...neighborhood.querySelectorAll('.curriculum-neighborhood-column')]
+        columns: [...neighborhood.querySelectorAll('.curriculum-neighborhood-scroll')]
             .map(column => column.scrollTop)
     };
 }
@@ -3231,7 +3231,7 @@ function restoreCurriculumPosition() {
         return;
     }
     if (position?.type === 'neighborhood') {
-        document.querySelectorAll('#curriculum-view .curriculum-neighborhood-column')
+        document.querySelectorAll('#curriculum-view .curriculum-neighborhood-scroll')
             .forEach((column, index) => { column.scrollTop = position.columns?.[index] || 0; });
     }
 }
@@ -3381,6 +3381,58 @@ function appendCurriculumRelationshipGroups(column, entries, progressStates, emp
     }
 }
 
+function makeCurriculumNeighborhoodScroll(label) {
+    const scroll = document.createElement('div');
+    scroll.className = 'curriculum-neighborhood-scroll';
+    scroll.dataset.scrollLabel = label;
+    return scroll;
+}
+
+function fitCurriculumNeighborhoodViewport(explorer) {
+    const scrollAreas = [...explorer.querySelectorAll('.curriculum-neighborhood-scroll')];
+    const updateOverflow = () => {
+        for (const scroll of scrollAreas) {
+            const canScroll = scroll.scrollHeight > scroll.clientHeight + 1;
+            scroll.classList.toggle('is-scrollable', canScroll);
+            scroll.tabIndex = canScroll ? 0 : -1;
+            if (canScroll) {
+                scroll.setAttribute('aria-label', scroll.dataset.scrollLabel);
+            } else {
+                scroll.removeAttribute('aria-label');
+                scroll.scrollTop = 0;
+            }
+        }
+    };
+    const fit = () => {
+        if (window.matchMedia('(max-width: 760px)').matches) {
+            explorer.style.removeProperty('height');
+        } else {
+            const top = explorer.getBoundingClientRect().top;
+            const available = Math.floor(window.innerHeight - top - 16);
+            const pageContentStartsBelowViewport = top >= window.innerHeight - 160;
+            const height = pageContentStartsBelowViewport
+                ? Math.min(680, Math.max(420, Math.floor(window.innerHeight * 0.68)))
+                : Math.max(320, available);
+            explorer.style.height = `${height}px`;
+        }
+        requestAnimationFrame(updateOverflow);
+    };
+    const resizeObserver = typeof ResizeObserver === 'function'
+        ? new ResizeObserver(updateOverflow)
+        : null;
+    scrollAreas.forEach(scroll => resizeObserver?.observe(scroll));
+    const onViewportResize = () => {
+        if (!explorer.isConnected) {
+            window.removeEventListener('resize', onViewportResize);
+            resizeObserver?.disconnect();
+            return;
+        }
+        fit();
+    };
+    window.addEventListener('resize', onViewportResize);
+    requestAnimationFrame(fit);
+}
+
 function renderCurriculumDirectory(root, progressStates) {
     const { hierarchy, parentId, query } = curriculumViewState;
     const items = curriculumDirectory(curriculumIndex, { hierarchy, parentId, query });
@@ -3407,17 +3459,18 @@ function renderCurriculumNeighborhood(root, progressStates) {
     explorer.className = 'curriculum-neighborhood';
     const prerequisites = document.createElement('section');
     prerequisites.className = 'curriculum-neighborhood-column is-prerequisites';
-    prerequisites.tabIndex = 0;
-    prerequisites.setAttribute('aria-label', 'Scrollable prerequisite decks');
     prerequisites.innerHTML = `<h3>Prerequisites <span>${neighborhood.prerequisites.length}</span></h3>`;
-    appendCurriculumRelationshipGroups(prerequisites, neighborhood.prerequisites, progressStates, 'No required prerequisites.', 'earlier');
+    const prerequisiteScroll = makeCurriculumNeighborhoodScroll('Scrollable prerequisite decks');
+    appendCurriculumRelationshipGroups(prerequisiteScroll, neighborhood.prerequisites, progressStates, 'No required prerequisites.', 'earlier');
+    prerequisites.appendChild(prerequisiteScroll);
     const selected = document.createElement('section');
     selected.className = 'curriculum-neighborhood-column is-selected';
     const selectedProgress = neighborhood.hierarchy === 'deck'
         ? curriculumStatus(neighborhood.target, progressStates)
         : null;
-    selected.innerHTML = `
-        <h3 class="curriculum-selected-header"><span>Selected ${escapeHtml(neighborhood.hierarchy)}</span></h3>
+    selected.innerHTML = `<h3 class="curriculum-selected-header"><span>Selected ${escapeHtml(neighborhood.hierarchy)}</span></h3>`;
+    const selectedScroll = makeCurriculumNeighborhoodScroll(`Scrollable selected ${neighborhood.hierarchy}`);
+    selectedScroll.innerHTML = `
         <h4 class="curriculum-selected-spacer" aria-hidden="true">Selected item</h4>
         <article class="curriculum-selected-item${selectedProgress ? ` is-${selectedProgress}` : ''}" data-curriculum-node-id="${escapeHtml(neighborhood.target.id)}">
             <span class="curriculum-selected-kind">${escapeHtml(neighborhood.hierarchy)}</span>
@@ -3427,7 +3480,8 @@ function renderCurriculumNeighborhood(root, progressStates) {
             <p class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(neighborhood.target, progressStates))}</p>
         </article>
     `;
-    const selectedCard = selected.querySelector('.curriculum-selected-item');
+    selected.appendChild(selectedScroll);
+    const selectedCard = selectedScroll.querySelector('.curriculum-selected-item');
     if (neighborhood.hierarchy === 'subject') {
         selectedCard.classList.add('is-openable');
         selectedCard.tabIndex = 0;
@@ -3466,22 +3520,22 @@ function renderCurriculumNeighborhood(root, progressStates) {
         block.className = 'curriculum-interdependent';
         block.innerHTML = '<h4>Interdependent at the deck level</h4><p>These subjects feed one another in different advanced paths. Open their decks to see the actual ordering.</p>';
         neighborhood.interdependent.forEach(item => block.appendChild(makeCurriculumItemButton(item, progressStates)));
-        selected.appendChild(block);
+        selectedScroll.appendChild(block);
     }
     if (neighborhood.cycle.length) {
         const block = document.createElement('div');
         block.className = 'curriculum-cycle-warning';
         block.innerHTML = '<h4>Invalid required cycle</h4><p>This strict prerequisite loop must be resolved in the curriculum source before it can define a learning order.</p>';
         neighborhood.cycle.forEach(item => block.appendChild(makeCurriculumItemButton(item, progressStates)));
-        selected.appendChild(block);
+        selectedScroll.appendChild(block);
     }
 
     const unlocks = document.createElement('section');
     unlocks.className = 'curriculum-neighborhood-column is-unlocks';
-    unlocks.tabIndex = 0;
-    unlocks.setAttribute('aria-label', 'Scrollable unlocked decks');
     unlocks.innerHTML = `<h3>Unlocks <span>${neighborhood.unlocks.length}</span></h3>`;
-    appendCurriculumRelationshipGroups(unlocks, neighborhood.unlocks, progressStates, 'Nothing currently declares this as a prerequisite.', 'later');
+    const unlockScroll = makeCurriculumNeighborhoodScroll('Scrollable unlocked decks');
+    appendCurriculumRelationshipGroups(unlockScroll, neighborhood.unlocks, progressStates, 'Nothing currently declares this as a prerequisite.', 'later');
+    unlocks.appendChild(unlockScroll);
     const mobileTabs = document.createElement('div');
     mobileTabs.className = 'curriculum-mobile-relation-tabs';
     mobileTabs.innerHTML = '<button type="button" class="active" data-relation="prerequisites">Prerequisites</button><button type="button" data-relation="unlocks">Unlocks</button>';
@@ -3496,6 +3550,7 @@ function renderCurriculumNeighborhood(root, progressStates) {
     });
     explorer.append(prerequisites, selected, mobileTabs, unlocks);
     root.appendChild(explorer);
+    fitCurriculumNeighborhoodViewport(explorer);
 }
 
 function curriculumGraphControls({ windowState = null } = {}) {

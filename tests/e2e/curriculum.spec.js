@@ -256,14 +256,32 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     const historyBox = await page.locator('.curriculum-history-controls').boundingBox();
     expect(historyBox.x + historyBox.width).toBeLessThanOrEqual(breadcrumbBox.x + breadcrumbBox.width + 1);
     if (testInfo.project.name === 'desktop-chromium') {
-        const unlocks = page.locator('.curriculum-neighborhood-column.is-unlocks');
+        const neighborhoodBox = await page.locator('.curriculum-neighborhood').boundingBox();
+        expect(neighborhoodBox.y + neighborhoodBox.height).toBeLessThanOrEqual(page.viewportSize().height);
+        const prerequisitesColumn = page.locator('.curriculum-neighborhood-column.is-prerequisites');
+        const prerequisites = prerequisitesColumn.locator('.curriculum-neighborhood-scroll');
+        const unlocksColumn = page.locator('.curriculum-neighborhood-column.is-unlocks');
+        const unlocks = unlocksColumn.locator('.curriculum-neighborhood-scroll');
+        const shortDimensions = await prerequisites.evaluate(element => ({
+            clientHeight: element.clientHeight,
+            scrollHeight: element.scrollHeight,
+            overflowY: getComputedStyle(element).overflowY
+        }));
+        expect(shortDimensions.scrollHeight).toBeLessThanOrEqual(shortDimensions.clientHeight + 1);
+        expect(shortDimensions.overflowY).toBe('hidden');
+        await prerequisites.evaluate(element => { element.scrollTop = 100; });
+        expect(await prerequisites.evaluate(element => element.scrollTop)).toBe(0);
         const dimensions = await unlocks.evaluate(element => ({
             clientHeight: element.clientHeight,
-            scrollHeight: element.scrollHeight
+            scrollHeight: element.scrollHeight,
+            overflowY: getComputedStyle(element).overflowY
         }));
         expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.clientHeight);
+        expect(dimensions.overflowY).toBe('auto');
+        const unlocksHeaderTop = (await unlocksColumn.locator(':scope > h3').boundingBox()).y;
         await unlocks.evaluate(element => { element.scrollTop = element.scrollHeight; });
         await expect.poll(() => unlocks.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+        expect((await unlocksColumn.locator(':scope > h3').boundingBox()).y).toBe(unlocksHeaderTop);
         await unlocks.evaluate(element => { element.scrollTop = 0; });
         const selectedTop = (await page.locator('.curriculum-selected-item').boundingBox()).y;
         const prerequisiteTop = (await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().boundingBox()).y;
