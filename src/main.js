@@ -2797,29 +2797,6 @@ function curriculumCableRouting(layout) {
         rankLeft.set(node.rank, Math.min(rankLeft.get(node.rank) ?? Infinity, node.x));
         rankRight.set(node.rank, Math.max(rankRight.get(node.rank) || 0, node.x + node.width));
     }
-    const groupsBySourceRank = new Map();
-    for (const group of groups) {
-        const peers = groupsBySourceRank.get(group.source.rank) || [];
-        peers.push(group);
-        groupsBySourceRank.set(group.source.rank, peers);
-    }
-    for (const peers of groupsBySourceRank.values()) {
-        peers.sort((a, b) => a.source.y - b.source.y || a.source.id.localeCompare(b.source.id));
-        const sourceRight = peers[0].source.x + peers[0].source.width;
-        const nextColumnLeft = rankLeft.get(peers[0].source.rank + 1) ?? sourceRight + 96;
-        const gap = Math.max(24, nextColumnLeft - sourceRight);
-        // Descend as soon as the bus clears its source column. Keep distinct
-        // sources in tightly packed lanes instead of spreading them across
-        // the gutter, where they interfere with incoming branches.
-        const firstOffset = Math.min(4, gap * 0.08);
-        const available = Math.max(0, gap - firstOffset - 12);
-        const step = peers.length > 1
-            ? Math.min(3, available / (peers.length - 1))
-            : 0;
-        peers.forEach((group, index) => {
-            group.descentX = sourceRight + firstOffset + step * index;
-        });
-    }
     const entriesByTargetRank = new Map();
     for (const group of groups) {
         for (const entry of group.entries) {
@@ -2839,7 +2816,9 @@ function curriculumCableRouting(layout) {
     for (let rank = 1; rank <= maximumRank; rank += 1) {
         const active = groups
             .filter(group => group.source.rank < rank && group.maxTargetRank >= rank)
-            .sort((a, b) => trackOrder.get(a.source.id) - trackOrder.get(b.source.id));
+            // Buses form a persistent stack: the first/oldest bus stays at
+            // the bottom, and each bus introduced later is inserted above it.
+            .sort((a, b) => trackOrder.get(b.source.id) - trackOrder.get(a.source.id));
         const boundaryBottom = Math.max(
             rankBottom.get(rank - 1) || 0,
             rankBottom.get(rank) || 0
@@ -2847,23 +2826,63 @@ function curriculumCableRouting(layout) {
         active.forEach((group, index) => {
             rankYsBySource.get(group.source.id).set(rank, boundaryBottom + 18 + index * 14);
         });
-        const continuing = active.filter(group => group.maxTargetRank > rank);
-        const incomingEntries = entriesByTargetRank.get(rank + 1) || [];
-        if (!continuing.length && !incomingEntries.length) continue;
+    }
+    for (let rank = 0; rank < maximumRank; rank += 1) {
         const currentRight = rankRight.get(rank) || 0;
         const nextLeft = rankLeft.get(rank + 1) ?? currentRight + 96;
-        const firstOffset = 6;
-        const availableOffset = Math.max(firstOffset, nextLeft - currentRight - 18);
-        const laneCount = incomingEntries.length + continuing.length;
-        const step = laneCount > 1
-            ? Math.min(4, (availableOffset - firstOffset) / (laneCount - 1))
-            : 0;
-        incomingEntries.forEach((entry, index) => {
-            entry.riseX = entry.target.x - 10 - firstOffset - step * index;
+        const gap = Math.max(24, nextLeft - currentRight);
+        const firstOffset = Math.min(4, gap * 0.08);
+        const available = Math.max(0, gap - firstOffset - 12);
+        const starters = groups
+            .filter(group => group.source.rank === rank)
+            .sort((a, b) => trackOrder.get(b.source.id) - trackOrder.get(a.source.id));
+        const continuing = groups
+            .filter(group => group.source.rank < rank && group.maxTargetRank > rank)
+            .sort((a, b) => trackOrder.get(b.source.id) - trackOrder.get(a.source.id));
+        const descending = continuing.filter(group => {
+            const rankYs = rankYsBySource.get(group.source.id);
+            return rankYs.get(rank + 1) > rankYs.get(rank) + 0.5;
         });
-        continuing.forEach((group, index) => {
+
+        // At a falling boundary, continuing buses peel downward newest first
+        // immediately after the current column. New buses originating in the
+        // current column are introduced after that continuing stack, tightly
+        // nested in the same sending gutter.
+        const departures = [...descending, ...starters];
+        const departureStep = departures.length > 1
+            ? Math.min(3, available / (departures.length - 1))
+            : 0;
+        departures.forEach((group, index) => {
+            const x = currentRight + firstOffset + departureStep * index;
+            if (group.source.rank === rank) {
+                group.descentX = x;
+            } else {
+                transitionXBySourceAndRank.get(group.source.id).set(rank, x);
+            }
+        });
+
+        // A boundary that becomes shallower rises at the receiving column.
+        // Again the newest continuing bus moves first, preserving the stack
+        // without crossings. Target branches occupy the remaining staggered
+        // receiving lanes.
+        const rising = continuing.filter(group => {
+            const rankYs = rankYsBySource.get(group.source.id);
+            return rankYs.get(rank + 1) < rankYs.get(rank) - 0.5;
+        });
+        const incomingEntries = entriesByTargetRank.get(rank + 1) || [];
+        if (!rising.length && !incomingEntries.length) continue;
+        const receivingOffset = 6;
+        const availableOffset = Math.max(receivingOffset, nextLeft - currentRight - 18);
+        const laneCount = rising.length + incomingEntries.length;
+        const step = laneCount > 1
+            ? Math.min(4, (availableOffset - receivingOffset) / (laneCount - 1))
+            : 0;
+        rising.forEach((group, index) => {
             transitionXBySourceAndRank.get(group.source.id)
-                .set(rank, nextLeft - 10 - firstOffset - step * (incomingEntries.length + index));
+                .set(rank, nextLeft - 10 - receivingOffset - step * index);
+        });
+        incomingEntries.forEach((entry, index) => {
+            entry.riseX = entry.target.x - 10 - receivingOffset - step * (rising.length + index);
         });
     }
     let routedHeight = layout.height;
