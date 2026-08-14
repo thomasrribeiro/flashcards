@@ -265,7 +265,9 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 const path = trunk.querySelector('.curriculum-graph-edge');
                 const start = path.getPointAtLength(0);
                 const end = path.getPointAtLength(path.getTotalLength());
+                const sourceLeft = Number.parseFloat(source.style.left);
                 const sourceRight = Number.parseFloat(source.style.left) + Number.parseFloat(source.style.width);
+                const sourceBottom = Number.parseFloat(source.style.top) + Number.parseFloat(source.style.height);
                 const branches = longConnections.filter(connection => connection.dataset.source === trunk.dataset.source);
                 const farthestTargetRise = Math.max(...branches.map(connection => Number(connection.dataset.riseX)));
                 const joinsFinalBranch = branches.some(connection => {
@@ -273,10 +275,13 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     const branchJoin = branch.getPointAtLength(0);
                     return Math.abs(branchJoin.x - end.x) < 0.5 && Math.abs(branchJoin.y - end.y) < 0.5;
                 });
-                return Math.abs(start.x - sourceRight) < 0.5
+                return Math.abs(start.x - Number(trunk.dataset.descentX)) < 0.5
+                    && Math.abs(start.y - sourceBottom) < 0.5
+                    && start.x > sourceLeft
+                    && start.x < sourceRight
                     && Number(trunk.dataset.descentX) < sourceRight
                     && sourceRight - Number(trunk.dataset.descentX) <= 32
-                    && path.getAttribute('d').split(' C ').length === 3
+                    && path.getAttribute('d').split(' C ').length === 2
                     && path.getAttribute('d').includes(' V ')
                     && Math.abs(end.x - farthestTargetRise) < 0.5
                     && joinsFinalBranch;
@@ -347,7 +352,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     return [Number(source.dataset.rank), Number.parseFloat(source.style.top), trunk.dataset.source];
                 };
                 const compareAge = (first, second) => first[0] - second[0]
-                    || second[1] - first[1]
+                    || first[1] - second[1]
                     || first[2].localeCompare(second[2]);
                 const ranks = new Set(trunks.flatMap(trunk => trunk.dataset.rankYs.split(',')
                     .filter(Boolean).map(pair => Number(pair.split(':')[0]))));
@@ -381,12 +386,12 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 const fallingBoundaries = [...byRank.values()].filter(entries => entries.length > 1);
                 return fallingBoundaries.length > 0 && fallingBoundaries.every(entries => {
                     const newestFirst = [...entries].sort((a, b) => b.age[0] - a.age[0]
-                        || a.age[1] - b.age[1]
+                        || b.age[1] - a.age[1]
                         || b.age[2].localeCompare(a.age[2]));
                     return newestFirst.every((entry, index) => !index || entry.x > newestFirst[index - 1].x);
                 });
             })(),
-            lowerSourcesOwnOlderLanes: (() => {
+            higherSourcesOwnOlderLanes: (() => {
                 const byRank = new Map();
                 for (const trunk of trunks) {
                     const source = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(trunk.dataset.source)}"]`);
@@ -403,8 +408,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 return sharedRanks.length > 0 && sharedRanks.every(peers => {
                     const topToBottom = [...peers].sort((a, b) => a.sourceTop - b.sourceTop);
                     return topToBottom.every((entry, index) => !index
-                        || (entry.descentX < topToBottom[index - 1].descentX
-                            && entry.firstTrack > topToBottom[index - 1].firstTrack));
+                        || (entry.descentX > topToBottom[index - 1].descentX
+                            && entry.firstTrack < topToBottom[index - 1].firstTrack));
                 });
             })(),
             evenlySpacedTrunks: (() => {
@@ -451,14 +456,14 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             soloBusCount: trunks.filter(trunk =>
                 ![...stage.querySelectorAll('.curriculum-graph-connection.is-primary')]
                     .some(connection => connection.dataset.source === trunk.dataset.source)).length,
-            soloBusesCentered: trunks.every(trunk => {
+            soloBusesStartAtBottom: trunks.every(trunk => {
                 const hasDirectConnection = [...stage.querySelectorAll('.curriculum-graph-connection.is-primary')]
                     .some(connection => connection.dataset.source === trunk.dataset.source);
                 if (hasDirectConnection) return true;
                 const source = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(trunk.dataset.source)}"]`);
-                const sourceCenter = Number.parseFloat(source.style.top) + Number.parseFloat(source.style.height) / 2;
+                const sourceBottom = Number.parseFloat(source.style.top) + Number.parseFloat(source.style.height);
                 const trunkStart = trunk.querySelector('.curriculum-graph-edge').getPointAtLength(0);
-                return Math.abs(trunkStart.y - sourceCenter) < 0.5;
+                return Math.abs(trunkStart.y - sourceBottom) < 0.5;
             }),
             busLeavesLast: trunks.every(trunk => {
                 const directConnections = [...stage.querySelectorAll('.curriculum-graph-connection.is-primary')]
@@ -498,13 +503,13 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.transitionsUseDirectionalGutters).toBe(true);
     expect(cableRouting.persistentAgeStack).toBe(true);
     expect(cableRouting.newestFallsFirst).toBe(true);
-    expect(cableRouting.lowerSourcesOwnOlderLanes).toBe(true);
+    expect(cableRouting.higherSourcesOwnOlderLanes).toBe(true);
     expect(cableRouting.evenlySpacedTrunks).toBe(true);
     expect(cableRouting.trunksHugColumns).toBe(true);
     expect(cableRouting.snakingTrunkCount).toBeGreaterThan(0);
     expect(cableRouting.mixedSourceCount).toBeGreaterThan(0);
     expect(cableRouting.soloBusCount).toBeGreaterThan(0);
-    expect(cableRouting.soloBusesCentered).toBe(true);
+    expect(cableRouting.soloBusesStartAtBottom).toBe(true);
     expect(cableRouting.busLeavesLast).toBe(true);
     expect(cableRouting.oneTrunkPerSource).toBe(true);
     expect(cableRouting.sharedSourceCount).toBeGreaterThan(0);

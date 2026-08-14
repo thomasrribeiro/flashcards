@@ -2717,16 +2717,12 @@ function curriculumCableEdgeGeometry(source, target, sourceY, targetY, route) {
 
 function curriculumCableTrunkGeometry(trunk) {
     const firstPoint = trunk.rankPoints[0];
-    const descentDirection = Math.sign(trunk.descentX - trunk.x1) || 1;
-    const horizontalRun = Math.max(1, Math.abs(trunk.descentX - trunk.x1));
     const verticalRun = Math.max(1, firstPoint.y - trunk.sourceY);
     const lowerRun = Math.max(1, trunk.x2 - trunk.descentX);
-    const radius = Math.max(4, Math.min(12, horizontalRun * 0.55, verticalRun / 3, lowerRun / 3));
+    const sourceInset = Math.max(1, trunk.sourceRight - trunk.descentX);
+    const radius = Math.max(4, Math.min(12, sourceInset * 0.55, verticalRun / 3, lowerRun / 3));
     const commands = [
-        `M ${trunk.x1} ${trunk.sourceY}`,
-        `C ${trunk.x1 + descentDirection * radius * 0.55} ${trunk.sourceY},`,
-        `${trunk.descentX} ${trunk.sourceY + radius * 0.4},`,
-        `${trunk.descentX} ${trunk.sourceY + radius}`,
+        `M ${trunk.descentX} ${trunk.sourceY}`,
         `V ${firstPoint.y - radius}`,
         `C ${trunk.descentX} ${firstPoint.y - radius * 0.4},`,
         `${trunk.descentX + radius * 0.4} ${firstPoint.y},`,
@@ -2755,15 +2751,6 @@ function curriculumCableTrunkGeometry(trunk) {
 
 function curriculumCableRouting(layout) {
     const positioned = new Map(layout.nodes.map(node => [node.id, node]));
-    const sourcesWithDirectEdges = new Set(layout.edges
-        .filter(edge => {
-            const source = positioned.get(edge.source);
-            const target = positioned.get(edge.target);
-            return Number.isInteger(source?.rank)
-                && Number.isInteger(target?.rank)
-                && target.rank - source.rank === 1;
-        })
-        .map(edge => edge.source));
     const sourceGroups = new Map();
     for (const entry of layout.edges
         .map(edge => ({ edge, source: positioned.get(edge.source), target: positioned.get(edge.target) }))
@@ -2786,10 +2773,10 @@ function curriculumCableRouting(layout) {
             || a.end - b.end);
     const trackOrder = new Map([...groups]
         .sort((a, b) => a.source.rank - b.source.rank
-            // Within one column, lower sources are older. Their buses settle
-            // into lower tracks and descend farther to the right, allowing
-            // buses from higher nodes to nest above without crossing them.
-            || b.source.y - a.source.y
+            // Within one column, higher sources are older. Their buses settle
+            // into lower tracks and use anchors farther to the left, preserving
+            // the convention that the bottommost horizontal lane is oldest.
+            || a.source.y - b.source.y
             || a.source.id.localeCompare(b.source.id))
         .map((group, index) => [group.source.id, index]));
     const rankBottom = new Map();
@@ -2858,16 +2845,15 @@ function curriculumCableRouting(layout) {
             transitionXBySourceAndRank.get(group.source.id).set(rank, x);
         });
 
-        // A bus born above another node cannot descend in the outside gutter
-        // without crossing that lower node's direct outgoing edges. Route new
-        // buses through a narrow channel just inside the source column, where
-        // the cards conceal the vertical run, and expose them below the
-        // column. Newest/highest sources stay closest to the right edge;
-        // lower, older sources occupy progressively deeper inner channels.
-        const hiddenInset = Math.min(8, Math.max(5, gap * 0.08));
-        const hiddenStep = starters.length > 1 ? 3 : 0;
+        // Start new buses on the bottom edge in narrow, staggered lanes near
+        // the right side of the source nodes. Newest/lower sources stay closest
+        // to the right edge; higher, older sources occupy progressively deeper
+        // inner lanes. Any lower cards conceal the continuing vertical run
+        // through the column.
+        const anchorInset = Math.min(8, Math.max(5, gap * 0.08));
+        const anchorStep = starters.length > 1 ? 3 : 0;
         starters.forEach((group, index) => {
-            group.descentX = currentRight - hiddenInset - hiddenStep * index;
+            group.descentX = currentRight - anchorInset - anchorStep * index;
         });
 
         // A boundary that becomes shallower rises at the receiving column.
@@ -2913,7 +2899,7 @@ function curriculumCableRouting(layout) {
         trunks.push({
             source: group.source.id,
             targets: group.entries.map(({ target }) => target.id),
-            x1: group.start,
+            sourceRight: group.start,
             descentX: group.descentX,
             // Stop at the farthest actual rising lane. Extending to the
             // arrowhead base would leave a visible dead-end tail beyond the
@@ -2921,13 +2907,7 @@ function curriculumCableRouting(layout) {
             x2: Math.max(...group.entries.map(entry => entry.riseX)),
             rankPoints,
             transitions,
-            // A bus is centered when it is the source's only visible outgoing
-            // wire. When direct edges coexist, reserve the lowest port for the
-            // bus so those shorter connections can remain ordered above it.
-            sourceY: sourcesWithDirectEdges.has(group.source.id)
-                ? group.source.y + group.source.height
-                    - Math.min(18, group.source.height * 0.22)
-                : group.source.y + group.source.height / 2
+            sourceY: group.source.y + group.source.height
         });
         for (const entry of group.entries) {
             const edgeCrossedRanks = [];
@@ -3062,8 +3042,8 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     };
     for (const node of layout.nodes) {
         // Long edges leave through the source's single shared bus trunk. Do
-        // not include them in ordinary source-port spacing: the bus owns the
-        // bottommost port and direct outgoing edges remain ordered above it.
+        // not include them in ordinary source-port spacing: the bus starts on
+        // the bottom edge and direct outgoing edges use the right edge.
         assignPorts('sourceY', node.id, layout.edges.filter(edge =>
             edge.source === node.id && !cableRouting.routes.has(edge)), edge => edge.target);
         assignPorts('targetY', node.id, layout.edges.filter(edge => edge.target === node.id), edge => edge.source);
