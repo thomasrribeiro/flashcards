@@ -621,16 +621,17 @@ export function curriculumLayerGraph(graph, requestedLayer = null) {
 }
 
 /**
- * Return a horizontally sliding window of dependency ranks. Unlike the older
- * neighborhood layer view, this always retains up to `width` complete ranks,
- * so every visible column has one unambiguous prerequisite order.
+ * Return a horizontally sliding window around one focal dependency rank.
+ * Boundary ranks remain valid focal layers: the first layer shows the first
+ * `width` ranks and the last layer shows the final `width` ranks.
  */
-export function curriculumLayerWindow(graph, requestedStart = 0, width = 3) {
+export function curriculumLayerWindow(graph, requestedLayer = 0, width = 3) {
     if (!graph?.nodes?.length) {
         return {
             graph: { nodes: [], edges: [], seedIds: [] },
             start: 0,
             end: 0,
+            layer: 0,
             layerCount: 0,
             width: Math.max(1, width)
         };
@@ -639,11 +640,12 @@ export function curriculumLayerWindow(graph, requestedStart = 0, width = 3) {
     const layerCount = Math.max(...ranks.values()) + 1;
     const windowWidth = Math.max(1, Math.round(width));
     const maxStart = Math.max(0, layerCount - windowWidth);
-    const numericStart = Number(requestedStart);
-    const start = Math.max(0, Math.min(
-        maxStart,
-        Number.isFinite(numericStart) ? Math.round(numericStart) : 0
+    const numericLayer = Number(requestedLayer);
+    const layer = Math.max(0, Math.min(
+        layerCount - 1,
+        Number.isFinite(numericLayer) ? Math.round(numericLayer) : 0
     ));
+    const start = Math.max(0, Math.min(maxStart, layer - Math.floor(windowWidth / 2)));
     const end = Math.min(layerCount, start + windowWidth);
     const visible = new Set(graph.nodes
         .filter(node => {
@@ -661,6 +663,7 @@ export function curriculumLayerWindow(graph, requestedStart = 0, width = 3) {
         },
         start,
         end,
+        layer,
         layerCount,
         width: windowWidth
     };
@@ -777,6 +780,7 @@ export function layoutCurriculumGraph(graph, {
         edges: graph.edges,
         nodeWidth,
         nodeHeight,
+        columnGap,
         width: margin * 2 + (maxRank + 1) * nodeWidth + maxRank * columnGap,
         height: margin * 2 + maxRows * nodeHeight + (maxRows - 1) * rowGap
     };

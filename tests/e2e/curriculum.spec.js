@@ -19,7 +19,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(subjects).toHaveCount(3);
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
 
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
     await expect(page.getByRole('button', { name: 'Zoom in' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Zoom out' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Fit', exact: true })).toBeVisible();
@@ -52,25 +52,44 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 })
                 .map(node => node.dataset.rank))];
         });
-        expect(visibleRanks).toHaveLength(3);
-        const transformBeforeWheel = await page.locator('.curriculum-graph-viewport')
-            .evaluate(element => element.style.transform);
-        await page.locator('.curriculum-graph-stage').hover();
+        expect(visibleRanks).toHaveLength(2);
+        const firstLayerOffset = await page.locator('.curriculum-graph-stage').evaluate(stage => {
+            const stageRect = stage.getBoundingClientRect();
+            const focal = stage.querySelector('.curriculum-graph-node[data-rank="0"]')?.getBoundingClientRect();
+            const viewportCenter = stageRect.left + stage.clientLeft + stage.clientWidth / 2;
+            return Math.abs((focal.left + focal.width / 2) - viewportCenter);
+        });
+        expect(firstLayerOffset).toBeLessThan(20);
+        const stage = page.locator('.curriculum-graph-stage');
+        const scrolling = await stage.evaluate(element => ({
+            top: element.scrollTop,
+            hasVertical: element.scrollHeight > element.clientHeight,
+            hasHorizontal: element.scrollWidth > element.clientWidth
+        }));
+        expect(scrolling.hasVertical).toBe(true);
+        expect(scrolling.hasHorizontal).toBe(true);
+        await stage.hover();
         await page.mouse.wheel(0, 180);
-        await expect.poll(() => page.locator('.curriculum-graph-viewport')
-            .evaluate(element => element.style.transform)).not.toBe(transformBeforeWheel);
+        await expect.poll(() => stage.evaluate(element => element.scrollTop)).toBeGreaterThan(scrolling.top);
         await page.getByRole('button', { name: 'Fit', exact: true }).click();
     }
-    const firstNode = page.locator('.curriculum-graph-node').first();
-    await firstNode.hover();
+    const baselineOpacity = Number(await page.locator('.curriculum-graph-connection').first()
+        .evaluate(element => getComputedStyle(element).opacity));
+    expect(baselineOpacity).toBeLessThan(0.4);
+    const branchNode = page.locator('.curriculum-graph-node[data-deck-id="physics/advanced-quantum-mechanics"]');
+    await branchNode.hover();
     await expect(page.locator('.curriculum-graph-connection.is-related')).not.toHaveCount(0);
     await expect(page.locator('.curriculum-graph-connection.is-dimmed')).not.toHaveCount(0);
     await expect(page.locator('.curriculum-graph-arrowhead')).not.toHaveCount(0);
     await expect(page.locator('.curriculum-graph-edge[marker-end]')).toHaveCount(0);
     await expect(page.locator('.curriculum-graph-connection.is-primary')).not.toHaveCount(0);
-    const primaryOpacity = Number(await page.locator('.curriculum-graph-connection.is-primary').first().evaluate(element => getComputedStyle(element).opacity));
-    const secondaryOpacity = Number(await page.locator('.curriculum-graph-connection.is-long').first().evaluate(element => getComputedStyle(element).opacity));
-    expect(primaryOpacity).toBe(secondaryOpacity);
+    await expect.poll(async () => {
+        const relatedOpacity = Number(await page.locator('.curriculum-graph-connection.is-related').first()
+            .evaluate(element => getComputedStyle(element).opacity));
+        const dimmedOpacity = Number(await page.locator('.curriculum-graph-connection.is-dimmed').first()
+            .evaluate(element => getComputedStyle(element).opacity));
+        return dimmedOpacity < relatedOpacity && relatedOpacity === baselineOpacity;
+    }).toBe(true);
     await expect(page.locator('.curriculum-graph-connection.is-long .curriculum-graph-edge').first())
         .toHaveCSS('stroke-dasharray', 'none');
     const cableRouting = await page.locator('.curriculum-graph-stage').evaluate(stage => {
@@ -109,21 +128,45 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(Math.abs(arrowGeometry.lineX - arrowGeometry.headBaseX)).toBeLessThan(0.5);
     expect(Math.abs(arrowGeometry.lineY - arrowGeometry.headCenterY)).toBeLessThan(0.5);
     expect(Math.abs(arrowGeometry.headTipX - arrowGeometry.targetX)).toBeLessThan(0.5);
-    const viewport = page.locator('.curriculum-graph-viewport');
-    const transformBeforePan = await viewport.evaluate(element => element.style.transform);
-    const stageBox = await page.locator('.curriculum-graph-stage').boundingBox();
-    await page.mouse.move(stageBox.x + 10, stageBox.y + 10);
-    await page.mouse.down();
-    await page.mouse.move(stageBox.x + 130, stageBox.y + 10);
-    await page.mouse.up();
-    await expect.poll(() => viewport.evaluate(element => element.style.transform)).not.toBe(transformBeforePan);
-    await page.getByRole('button', { name: 'Show next three dependency layers' }).click();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 3 of');
+    await page.getByRole('button', { name: 'Show next dependency layer' }).click();
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
+    if (testInfo.project.name === 'desktop-chromium') {
+        const visibleRanks = await page.locator('.curriculum-graph-stage').evaluate(stage => {
+            const stageRect = stage.getBoundingClientRect();
+            return [...new Set([...stage.querySelectorAll('.curriculum-graph-node[data-rank]')]
+                .filter(node => {
+                    const rect = node.getBoundingClientRect();
+                    const center = rect.left + rect.width / 2;
+                    return center >= stageRect.left && center <= stageRect.right;
+                })
+                .map(node => node.dataset.rank))];
+        });
+        expect(visibleRanks).toHaveLength(3);
+    }
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(completeDeckGraphCount);
     await expect(page).toHaveURL(/curriculum-layer=1/);
-    await page.getByRole('button', { name: 'Show previous three dependency layers' }).click();
+    await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
     await page.reload();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
+    const layerCount = Number((await page.locator('.curriculum-layer-label').textContent()).split(' of ')[1]);
+    for (let layer = 1; layer < layerCount; layer += 1) {
+        await page.getByRole('button', { name: 'Show next dependency layer' }).click();
+    }
+    await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer ${layerCount} of ${layerCount}`);
+    await expect(page.getByRole('button', { name: 'Show next dependency layer' })).toBeDisabled();
+    if (testInfo.project.name === 'desktop-chromium') {
+        const lastLayerOffset = await page.locator('.curriculum-graph-stage').evaluate((stage, rank) => {
+            const stageRect = stage.getBoundingClientRect();
+            const focal = stage.querySelector(`.curriculum-graph-node[data-rank="${rank}"]`)?.getBoundingClientRect();
+            const viewportCenter = stageRect.left + stage.clientLeft + stage.clientWidth / 2;
+            return Math.abs((focal.left + focal.width / 2) - viewportCenter);
+        }, layerCount - 1);
+        expect(lastLayerOffset).toBeLessThan(20);
+    }
+    for (let layer = layerCount; layer > 1; layer -= 1) {
+        await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
+    }
+    await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer 1 of ${layerCount}`);
 
     await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
@@ -176,14 +219,14 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Back to previous selected deck' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Forward to next selected deck' })).toHaveCount(0);
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(10);
 
     await page.goBack();
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
     await page.goBack();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
 });
 
 test('aligns another focused deck and explains an unpublished chapter plan', async ({ page }, testInfo) => {

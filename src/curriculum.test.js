@@ -242,7 +242,7 @@ describe('curriculum dependency planning', () => {
     it('shows three complete dependency ranks and slides one rank at a time', () => {
         const graph = curriculumGraph(index);
         const first = curriculumLayerWindow(graph, 0, 3);
-        expect(first).toMatchObject({ start: 0, end: 3, layerCount: 3, width: 3 });
+        expect(first).toMatchObject({ start: 0, end: 3, layer: 0, layerCount: 3, width: 3 });
         expect(first.graph.nodes.map(node => [node.id, node.curriculumRank])).toEqual([
             ['mathematics/arithmetic', 0],
             ['mathematics/algebra', 1],
@@ -258,13 +258,17 @@ describe('curriculum dependency planning', () => {
             }],
             seedIds: []
         };
-        const second = curriculumLayerWindow(extended, 1, 3);
-        expect(second).toMatchObject({ start: 1, end: 4, layerCount: 4 });
+        const second = curriculumLayerWindow(extended, 3, 3);
+        expect(second).toMatchObject({ start: 1, end: 4, layer: 3, layerCount: 4 });
         expect(second.graph.nodes.map(node => node.id)).toEqual([
             'mathematics/algebra',
             'physics/physical-reasoning',
             'physics/mechanics'
         ]);
+        const firstBoundary = curriculumLayerWindow(extended, 0, 3);
+        const lastBoundary = curriculumLayerWindow(extended, 99, 3);
+        expect(firstBoundary).toMatchObject({ start: 0, end: 3, layer: 0 });
+        expect(lastBoundary).toMatchObject({ start: 1, end: 4, layer: 3 });
     });
 
     it('builds chapter-level edges from resolved local dependencies', () => {

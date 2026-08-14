@@ -2780,6 +2780,11 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         : await layoutCurriculumGraphElk(graph, {
             direction: graph.nodes.every(node => node.nodeType === 'subject') ? 'DOWN' : 'RIGHT'
         });
+    if (ranked) {
+        const boundaryPadding = layout.nodeWidth + layout.columnGap;
+        layout.nodes.forEach(node => { node.x += boundaryPadding; });
+        layout.width += boundaryPadding * 2;
+    }
     const stage = document.createElement('div');
     stage.className = 'curriculum-graph-stage';
     if (graph.nodes.length > 12) stage.classList.add('is-dense');
@@ -2792,6 +2797,8 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     }
     const positioned = new Map(layout.nodes.map(node => [node.id, node]));
     const canvasHeight = Math.max(layout.height, cableRouting.height);
+    const scrollCanvas = document.createElement('div');
+    scrollCanvas.className = 'curriculum-graph-scroll-canvas';
     const viewport = document.createElement('div');
     viewport.className = 'curriculum-graph-viewport';
     viewport.style.width = `${layout.width}px`;
@@ -2931,24 +2938,34 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         nodeElements.push(node);
         viewport.appendChild(node);
     }
-    stage.appendChild(viewport);
+    scrollCanvas.appendChild(viewport);
+    stage.appendChild(scrollCanvas);
     root.appendChild(stage);
 
     const edgeElements = [...svg.querySelectorAll('.curriculum-graph-connection')];
     const setRelated = deckId => {
         const related = new Set([deckId]);
-        for (const edge of layout.edges) {
-            if (edge.source === deckId || edge.target === deckId) {
-                related.add(edge.source);
-                related.add(edge.target);
+        const visit = (initial, direction) => {
+            const pending = [initial];
+            while (pending.length) {
+                const current = pending.pop();
+                for (const edge of layout.edges) {
+                    const from = direction === 'upstream' ? edge.target : edge.source;
+                    const to = direction === 'upstream' ? edge.source : edge.target;
+                    if (from !== current || related.has(to)) continue;
+                    related.add(to);
+                    pending.push(to);
+                }
             }
-        }
+        };
+        visit(deckId, 'upstream');
+        visit(deckId, 'downstream');
         nodeElements.forEach(node => {
             node.classList.toggle('is-dimmed', !related.has(node.dataset.deckId));
             node.classList.toggle('is-related', related.has(node.dataset.deckId));
         });
         edgeElements.forEach(edge => {
-            const active = edge.dataset.source === deckId || edge.dataset.target === deckId;
+            const active = related.has(edge.dataset.source) && related.has(edge.dataset.target);
             edge.classList.toggle('is-dimmed', !active);
             edge.classList.toggle('is-related', active);
         });
@@ -2964,24 +2981,25 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         node.addEventListener('blur', clearRelated);
     });
 
-    let transform = { x: 24, y: 24, scale: 1 };
-    const applyTransform = () => {
-        viewport.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`;
+    let scale = 1;
+    const applyScale = () => {
+        viewport.style.transform = `scale(${scale})`;
+        scrollCanvas.style.width = `${layout.width * scale}px`;
+        scrollCanvas.style.height = `${canvasHeight * scale}px`;
     };
     const fitBounds = (bounds, { horizontal = false } = {}) => {
         const padding = 48;
         const width = Math.max(1, stage.clientWidth - padding * 2);
         const height = Math.max(1, stage.clientHeight - padding * 2);
-        transform.scale = horizontal
+        scale = horizontal
             ? Math.min(3, width / bounds.width)
             : Math.min(1, width / bounds.width, height / bounds.height);
-        transform.x = (stage.clientWidth - bounds.width * transform.scale) / 2
-            - bounds.x * transform.scale;
-        transform.y = horizontal
-            ? padding - bounds.y * transform.scale
-            : (stage.clientHeight - bounds.height * transform.scale) / 2
-                - bounds.y * transform.scale;
-        applyTransform();
+        applyScale();
+        const left = bounds.x * scale - (stage.clientWidth - bounds.width * scale) / 2;
+        const top = horizontal
+            ? bounds.y * scale - padding
+            : bounds.y * scale - (stage.clientHeight - bounds.height * scale) / 2;
+        stage.scrollTo({ left: Math.max(0, left), top: Math.max(0, top) });
     };
     const graphBounds = { x: 0, y: 0, width: layout.width, height: layout.height };
     const rankBounds = range => {
@@ -2995,10 +3013,17 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const minY = Math.min(...nodes.map(node => node.y));
         const maxX = Math.max(...nodes.map(node => node.x + node.width));
         const maxY = Math.max(...nodes.map(node => node.y + node.height));
+        const focalNodes = Number.isInteger(range.layer)
+            ? layout.nodes.filter(node => node.rank === range.layer)
+            : [];
+        const columnStep = layout.nodeWidth + (layout.columnGap || 0);
+        const focalX = focalNodes.length ? Math.min(...focalNodes.map(node => node.x)) : minX;
         return {
-            x: minX,
+            x: Number.isInteger(range.layer) ? focalX - columnStep : minX,
             y: minY,
-            width: Math.max(1, maxX - minX),
+            width: Number.isInteger(range.layer)
+                ? layout.nodeWidth + columnStep * 2
+                : Math.max(1, maxX - minX),
             height: Math.max(1, maxY - minY)
         };
     };
@@ -3013,54 +3038,10 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         stage.style.height = `${height}px`;
         fit();
     };
-    const zoomAt = (factor, clientX = null, clientY = null) => {
-        const rect = stage.getBoundingClientRect();
-        const pointX = clientX == null ? rect.width / 2 : clientX - rect.left;
-        const pointY = clientY == null ? rect.height / 2 : clientY - rect.top;
-        const next = Math.min(3, Math.max(0.15, transform.scale * factor));
-        const worldX = (pointX - transform.x) / transform.scale;
-        const worldY = (pointY - transform.y) / transform.scale;
-        transform.x = pointX - worldX * next;
-        transform.y = pointY - worldY * next;
-        transform.scale = next;
-        applyTransform();
-    };
-
-    let drag = null;
-    stage.addEventListener('pointerdown', event => {
-        if (event.target.closest('.curriculum-graph-node')) return;
-        drag = {
-            pointerId: event.pointerId,
-            startX: event.clientX,
-            startY: event.clientY,
-            originX: transform.x,
-            originY: transform.y
-        };
-        stage.setPointerCapture(event.pointerId);
-        stage.classList.add('is-panning');
-    });
-    stage.addEventListener('pointermove', event => {
-        if (!drag || drag.pointerId !== event.pointerId) return;
-        transform.x = drag.originX + event.clientX - drag.startX;
-        transform.y = drag.originY + event.clientY - drag.startY;
-        applyTransform();
-    });
-    const endDrag = event => {
-        if (!drag || drag.pointerId !== event.pointerId) return;
-        drag = null;
-        stage.classList.remove('is-panning');
-    };
-    stage.addEventListener('pointerup', endDrag);
-    stage.addEventListener('pointercancel', endDrag);
     stage.addEventListener('wheel', event => {
+        if (!event.deltaX) return;
         event.preventDefault();
-        if (event.ctrlKey || event.metaKey) {
-            zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX, event.clientY);
-            return;
-        }
-        transform.x -= event.deltaX;
-        transform.y -= event.deltaY;
-        applyTransform();
+        stage.scrollTop += event.deltaY || event.deltaX;
     }, { passive: false });
     const onViewportResize = () => {
         if (!stage.isConnected) {
@@ -3071,11 +3052,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     };
     window.addEventListener('resize', onViewportResize);
     requestAnimationFrame(fitVisibleViewport);
-    return {
-        fit,
-        zoomIn: () => zoomAt(1.2),
-        zoomOut: () => zoomAt(1 / 1.2)
-    };
+    return { fit };
 }
 
 function curriculumStateSnapshot() {
@@ -3410,14 +3387,11 @@ function renderCurriculumNeighborhood(root, progressStates) {
 function curriculumGraphControls({ windowState = null } = {}) {
     const controls = document.createElement('div');
     controls.className = `curriculum-graph-controls${windowState ? ' is-layered' : ''}`;
-    const focalLayer = windowState
-        ? windowState.start + Math.ceil((windowState.end - windowState.start) / 2)
-        : 0;
     const layerNavigation = windowState ? `
         <span class="curriculum-graph-navigation">
-            <button type="button" data-action="previous-layer" aria-label="Show previous three dependency layers"${windowState.start === 0 ? ' disabled' : ''}>←</button>
-            <span class="curriculum-layer-label">Layer ${focalLayer} of ${windowState.layerCount}</span>
-            <button type="button" data-action="next-layer" aria-label="Show next three dependency layers"${windowState.end >= windowState.layerCount ? ' disabled' : ''}>→</button>
+            <button type="button" data-action="previous-layer" aria-label="Show previous dependency layer"${windowState.layer === 0 ? ' disabled' : ''}>←</button>
+            <span class="curriculum-layer-label">Layer ${windowState.layer + 1} of ${windowState.layerCount}</span>
+            <button type="button" data-action="next-layer" aria-label="Show next dependency layer"${windowState.layer >= windowState.layerCount - 1 ? ' disabled' : ''}>→</button>
         </span>` : '';
     controls.innerHTML = `
         ${layerNavigation}
@@ -3442,19 +3416,23 @@ async function renderCurriculumGraph(root, progressStates, graph, { layered = fa
     const windowState = layered
         ? curriculumLayerWindow(graph, curriculumViewState.layerStart, 3)
         : null;
-    if (windowState) curriculumViewState.layerStart = windowState.start;
+    if (windowState) curriculumViewState.layerStart = windowState.layer;
     const controls = curriculumGraphControls({ windowState });
     root.appendChild(controls);
     const controller = await renderCurriculumGraphCanvas(root, graph, progressStates, {
         ranked: layered,
-        focusRanks: windowState ? { start: windowState.start, end: windowState.end } : null
+        focusRanks: windowState ? {
+            start: Math.max(0, windowState.layer - 1),
+            end: Math.min(windowState.layerCount, windowState.layer + 2),
+            layer: windowState.layer
+        } : null
     });
     connectCurriculumGraphControls(controls, controller);
     if (!windowState) return;
     const previous = controls.querySelector('[data-action="previous-layer"]');
     const next = controls.querySelector('[data-action="next-layer"]');
-    previous.onclick = () => navigateCurriculum({ layerStart: windowState.start - 1 });
-    next.onclick = () => navigateCurriculum({ layerStart: windowState.start + 1 });
+    previous.onclick = () => navigateCurriculum({ layerStart: windowState.layer - 1 });
+    next.onclick = () => navigateCurriculum({ layerStart: windowState.layer + 1 });
 }
 
 async function renderCurriculumView(options = {}) {

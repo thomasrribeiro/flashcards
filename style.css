@@ -3535,7 +3535,7 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-builder-modal {
     width: min(1120px, calc(100vw - 32px));
     max-height: calc(100dvh - 32px);
-    overflow: auto;
+    overflow: scroll;
     border: 1px solid var(--black);
     background: var(--white);
     color: var(--black);
@@ -4040,20 +4040,36 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-graph-stage {
     position: relative;
     height: clamp(480px, 68dvh, 760px);
-    overflow: hidden;
+    overflow: auto;
+    scrollbar-gutter: stable;
     border: 1px solid var(--black);
     background-color: var(--white);
     background-image:
         linear-gradient(to right, var(--subtle-border) 1px, transparent 1px),
         linear-gradient(to bottom, var(--subtle-border) 1px, transparent 1px);
     background-size: 28px 28px;
-    cursor: grab;
-    touch-action: none;
+    touch-action: pan-y;
     user-select: none;
 }
 
-.curriculum-graph-stage.is-panning {
-    cursor: grabbing;
+.curriculum-graph-stage::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+.curriculum-graph-stage::-webkit-scrollbar-thumb {
+    border: 3px solid var(--white);
+    background: var(--muted);
+}
+
+.curriculum-graph-stage::-webkit-scrollbar-track {
+    background: var(--white);
+}
+
+.curriculum-graph-scroll-canvas {
+    position: relative;
+    min-width: 100%;
+    min-height: 100%;
 }
 
 .curriculum-graph-viewport {
@@ -4073,7 +4089,7 @@ body.standalone-phone .mobile-sidebar-close {
 
 .curriculum-graph-connection {
     color: var(--muted);
-    opacity: 0.64;
+    opacity: 0.3;
     transition: color 120ms ease, opacity 120ms ease;
 }
 
@@ -4092,7 +4108,7 @@ body.standalone-phone .mobile-sidebar-close {
 
 .curriculum-graph-connection.is-recommended {
     color: var(--gold);
-    opacity: 0.74;
+    opacity: 0.36;
 }
 
 .curriculum-graph-connection.is-recommended .curriculum-graph-edge {
@@ -4104,25 +4120,20 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-graph-stage.is-dense .curriculum-graph-connection {
-    opacity: 0.16;
+    opacity: 0.18;
 }
 
 .curriculum-graph-stage.is-dense .curriculum-graph-connection.is-recommended {
-    opacity: 0.24;
+    opacity: 0.22;
 }
 
-.curriculum-graph-connection.is-dimmed,
-.curriculum-graph-node.is-dimmed {
-    opacity: 0.1;
+.curriculum-graph-stage .curriculum-graph-connection.is-dimmed,
+.curriculum-graph-stage .curriculum-graph-node.is-dimmed {
+    opacity: 0.045;
 }
 
 .curriculum-graph-connection.is-related {
-    color: var(--gold);
-    opacity: 1;
-}
-
-.curriculum-graph-connection.is-related .curriculum-graph-edge {
-    stroke-width: 3;
+    color: var(--muted);
 }
 
 .curriculum-graph-node {
@@ -4166,8 +4177,8 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-graph-node:focus-visible,
 .curriculum-graph-node.is-related {
     z-index: 2;
-    border-color: var(--gold);
-    background: color-mix(in srgb, var(--gold) 18%, var(--white));
+    border-color: var(--black);
+    background: var(--white);
 }
 
 .curriculum-graph-node-subject,
