@@ -155,9 +155,30 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 const target = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.target)}"]`);
                 const path = connection.querySelector('.curriculum-graph-edge');
                 const targetRise = Number.parseFloat(target.style.left) - 10;
-                return Math.abs(path.getPointAtLength(0).x - targetRise) < 0.5
-                    && Math.abs(path.getPointAtLength(path.getTotalLength() - 5).x - targetRise) < 0.5;
+                return path.getPointAtLength(0).x < targetRise
+                    && Math.abs(path.getPointAtLength(path.getTotalLength()).x - targetRise) < 0.5;
             }),
+            staggeredRises: (() => {
+                const byRank = new Map();
+                for (const connection of longConnections) {
+                    const target = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.target)}"]`);
+                    const rises = byRank.get(target.dataset.rank) || [];
+                    rises.push({
+                        x: Number(connection.dataset.riseX),
+                        targetY: Number.parseFloat(target.style.top)
+                    });
+                    byRank.set(target.dataset.rank, rises);
+                }
+                const sharedRanks = [...byRank.values()].filter(rises => rises.length > 1);
+                return sharedRanks.length > 0 && sharedRanks.every(rises => {
+                    const xs = rises.map(rise => rise.x).sort((a, b) => a - b);
+                    const gaps = xs.slice(1).map((value, index) => value - xs[index]);
+                    const orderedByTarget = [...rises].sort((a, b) => a.targetY - b.targetY || b.x - a.x);
+                    return new Set(xs.map(value => value.toFixed(3))).size === xs.length
+                        && gaps.every(gap => gap > 0 && gap <= 6.01)
+                        && orderedByTarget.every((rise, index) => !index || rise.x < orderedByTarget[index - 1].x);
+                });
+            })(),
             trunksAligned: trunks.every(trunk => {
                 const source = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(trunk.dataset.source)}"]`);
                 const targets = trunk.dataset.targets.split('|').map(target =>
@@ -233,6 +254,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.cableYs.length).toBeGreaterThan(0);
     expect(cableRouting.routesBelowCrossedColumns).toBe(true);
     expect(cableRouting.edgeAligned).toBe(true);
+    expect(cableRouting.staggeredRises).toBe(true);
     expect(cableRouting.trunksAligned).toBe(true);
     expect(cableRouting.staggeredDescents).toBe(true);
     expect(cableRouting.evenlySpacedTrunks).toBe(true);
