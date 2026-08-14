@@ -120,6 +120,67 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             .evaluate(element => getComputedStyle(element).opacity));
         return dimmedOpacity < relatedOpacity && relatedOpacity === baselineOpacity;
     }).toBe(true);
+    const clippingCandidate = await page.locator('.curriculum-graph-stage').evaluate(stage => {
+        const connections = [...stage.querySelectorAll('.curriculum-graph-connection:not(.is-cable-trunk)')];
+        const trunks = [...stage.querySelectorAll('.curriculum-graph-connection.is-cable-trunk')];
+        const nodeIds = [...stage.querySelectorAll('.curriculum-graph-node')].map(node => node.dataset.deckId);
+        for (const nodeId of nodeIds) {
+            const related = new Set([nodeId]);
+            const visit = direction => {
+                const pending = [nodeId];
+                while (pending.length) {
+                    const current = pending.pop();
+                    for (const edge of connections) {
+                        const from = direction === 'upstream' ? edge.dataset.target : edge.dataset.source;
+                        const to = direction === 'upstream' ? edge.dataset.source : edge.dataset.target;
+                        if (from !== current || related.has(to)) continue;
+                        related.add(to);
+                        pending.push(to);
+                    }
+                }
+            };
+            visit('upstream');
+            visit('downstream');
+            const clipsSharedTrunk = trunks.some(trunk => {
+                const relatedBranches = connections.filter(edge =>
+                    edge.dataset.cableTrunkSource === trunk.dataset.source
+                    && related.has(edge.dataset.source)
+                    && related.has(edge.dataset.target));
+                if (!relatedBranches.length) return false;
+                const cutoffX = Math.max(...relatedBranches.map(edge => Number(edge.dataset.riseX)));
+                const path = trunk.querySelector('.curriculum-graph-edge');
+                return cutoffX < path.getPointAtLength(path.getTotalLength()).x - 0.5;
+            });
+            if (clipsSharedTrunk) return nodeId;
+        }
+        return '';
+    });
+    expect(clippingCandidate).not.toBe('');
+    await branchNode.dispatchEvent('pointerleave');
+    const clippingNode = page.locator(`.curriculum-graph-node[data-deck-id="${clippingCandidate}"]`);
+    await clippingNode.dispatchEvent('pointerenter');
+    await page.waitForTimeout(500);
+    const highlightedCableTrunks = await page.locator('.curriculum-graph-connection.is-cable-trunk.is-related')
+        .evaluateAll(trunks => trunks.map(trunk => {
+            const path = trunk.querySelector('.curriculum-graph-edge');
+            const cutoffX = Number(trunk.dataset.highlightCutoffX);
+            const relatedBranches = [...trunk.ownerSVGElement.querySelectorAll(
+                `.curriculum-graph-connection.is-long.is-related[data-cable-trunk-source="${CSS.escape(trunk.dataset.source)}"]`
+            )];
+            const expectedCutoffX = Math.max(-Infinity, ...relatedBranches.map(edge => Number(edge.dataset.riseX)));
+            const fullEndX = path.getPointAtLength(path.getTotalLength()).x;
+            const dashArray = path.style.strokeDasharray;
+            return {
+                hasUnrelatedTail: expectedCutoffX < fullEndX - 0.5,
+                cutoffMatches: Math.abs(cutoffX - expectedCutoffX) < 0.5,
+                clipped: Boolean(dashArray)
+            };
+        }));
+    expect(highlightedCableTrunks.some(trunk => trunk.hasUnrelatedTail)).toBe(true);
+    expect(highlightedCableTrunks
+        .filter(trunk => trunk.hasUnrelatedTail)
+        .every(trunk => trunk.cutoffMatches && trunk.clipped)).toBe(true);
+    await clippingNode.dispatchEvent('pointerleave');
     await expect(page.locator('.curriculum-graph-connection.is-long .curriculum-graph-edge').first())
         .toHaveCSS('stroke-dasharray', 'none');
     const cableRouting = await page.locator('.curriculum-graph-stage').evaluate(stage => {

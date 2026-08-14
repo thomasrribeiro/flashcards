@@ -3164,6 +3164,41 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     root.appendChild(stage);
 
     const edgeElements = [...svg.querySelectorAll('.curriculum-graph-connection')];
+    const clipCableTrunk = (trunk, related) => {
+        if (!trunk.classList.contains('is-cable-trunk')) return;
+        const line = trunk.querySelector('.curriculum-graph-edge');
+        if (!line) return;
+        const relatedBranches = edgeElements.filter(edge =>
+            !edge.classList.contains('is-cable-trunk')
+            && edge.dataset.cableTrunkSource === trunk.dataset.source
+            && related.has(edge.dataset.source)
+            && related.has(edge.dataset.target));
+        const cutoffX = Math.max(-Infinity, ...relatedBranches.map(edge => Number(edge.dataset.riseX)));
+        const fullEndX = line.getPointAtLength(line.getTotalLength()).x;
+        if (!Number.isFinite(cutoffX) || cutoffX >= fullEndX - 0.5) {
+            line.style.removeProperty('stroke-dasharray');
+            trunk.dataset.highlightCutoffX = '';
+            return;
+        }
+
+        // A shared bus may continue toward branches that are unrelated to the
+        // hovered node. Clip its emphasized stroke at the last related branch
+        // so hover tracing never leaves a visually active, disconnected tail.
+        // Cable paths advance monotonically from left to right, including
+        // their vertical floor transitions, so a length binary search finds
+        // the precise join without rebuilding the route.
+        const totalLength = line.getTotalLength();
+        let lower = 0;
+        let upper = totalLength;
+        for (let iteration = 0; iteration < 30; iteration += 1) {
+            const middle = (lower + upper) / 2;
+            if (line.getPointAtLength(middle).x <= cutoffX) lower = middle;
+            else upper = middle;
+        }
+        const visibleLength = Math.min(totalLength, lower + 3);
+        line.style.strokeDasharray = `${visibleLength} ${Math.max(1, totalLength - visibleLength + 1)}`;
+        trunk.dataset.highlightCutoffX = String(cutoffX);
+    };
     const setRelated = deckId => {
         const related = new Set([deckId]);
         const visit = (initial, direction) => {
@@ -3192,11 +3227,16 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
                 : related.has(edge.dataset.source) && related.has(edge.dataset.target);
             edge.classList.toggle('is-dimmed', !active);
             edge.classList.toggle('is-related', active);
+            clipCableTrunk(edge, related);
         });
     };
     const clearRelated = () => {
-        [...nodeElements, ...edgeElements].forEach(element =>
-            element.classList.remove('is-dimmed', 'is-related'));
+        [...nodeElements, ...edgeElements].forEach(element => {
+            element.classList.remove('is-dimmed', 'is-related');
+            if (!element.classList.contains('is-cable-trunk')) return;
+            element.querySelector('.curriculum-graph-edge')?.style.removeProperty('stroke-dasharray');
+            element.dataset.highlightCutoffX = '';
+        });
     };
     let hoveredNode = null;
     let hoverTimer = null;
