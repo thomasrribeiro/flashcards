@@ -5799,21 +5799,11 @@ function renderAIProviderConnections() {
         connect.onclick = () => openAIProviderConnectPanel(provider.id);
         actions.append(connect);
         if (provider.connected) {
-            const refresh = document.createElement('button');
-            refresh.type = 'button';
-            refresh.textContent = 'Models';
-            refresh.onclick = async () => {
-                const selected = document.getElementById('generation-provider');
-                if (selected) selected.value = provider.id;
-                aiProviderModelCatalogs.delete(provider.id);
-                await updateGenerationModelChoices();
-                activateStudySettingsTab('generation', { focus: true });
-            };
             const remove = document.createElement('button');
             remove.type = 'button';
             remove.textContent = 'Remove';
             remove.onclick = () => removeAIProviderConnection(provider.id);
-            actions.append(refresh, remove);
+            actions.append(remove);
         }
         row.append(name, state, actions);
         container.append(row);
@@ -5845,16 +5835,16 @@ function rebuildGenerationProviderOptions(preferredProvider) {
 
 function syncGenerationReasoningChoices() {
     const provider = document.getElementById('generation-provider');
-    const modelInput = document.getElementById('generation-model');
+    const modelSelect = document.getElementById('generation-model');
     const reasoning = document.getElementById('generation-reasoning');
-    if (!provider || !modelInput || !reasoning) return;
+    if (!provider || !modelSelect || !reasoning) return;
     if (!providerDefinition(provider.value)) {
         reasoning.disabled = true;
         return;
     }
     reasoning.disabled = false;
     const catalog = aiProviderModelCatalogs.get(provider.value) || [];
-    const model = catalog.find(item => item.id === modelInput.value) || null;
+    const model = catalog.find(item => item.id === modelSelect.value) || null;
     const choices = reasoningEffortsForProvider(provider.value, model);
     const previous = reasoning.value;
     reasoning.replaceChildren(...choices.map(value => {
@@ -5870,15 +5860,17 @@ function syncGenerationReasoningChoices() {
 
 async function updateGenerationModelChoices() {
     const provider = document.getElementById('generation-provider');
-    const modelInput = document.getElementById('generation-model');
-    const options = document.getElementById('generation-model-options');
+    const modelSelect = document.getElementById('generation-model');
     const status = document.getElementById('generation-model-status');
-    if (!provider || !modelInput || !options || !status) return;
-    options.replaceChildren();
+    if (!provider || !modelSelect || !status) return;
+    const preferredModel = modelSelect.value;
+    modelSelect.replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    modelSelect.append(placeholder);
     if (!providerDefinition(provider.value)) {
-        modelInput.value = '';
-        modelInput.disabled = true;
-        modelInput.placeholder = 'Connect a provider above';
+        placeholder.textContent = 'Connect a provider above';
+        modelSelect.disabled = true;
         const reasoning = document.getElementById('generation-reasoning');
         if (reasoning) reasoning.disabled = true;
         status.textContent = 'Connect an AI provider above, then choose its provider, model, and reasoning level.';
@@ -5886,30 +5878,30 @@ async function updateGenerationModelChoices() {
     }
     const connection = aiProviderConnections.find(item => item.id === provider.value);
     if (!connection?.connected) {
-        modelInput.disabled = true;
+        placeholder.textContent = 'Connect this provider first';
+        modelSelect.disabled = true;
         const reasoning = document.getElementById('generation-reasoning');
         if (reasoning) reasoning.disabled = true;
         status.textContent = 'Connect this provider before selecting a model.';
         return;
     }
-    modelInput.disabled = true;
+    placeholder.textContent = 'Loading available models…';
+    modelSelect.disabled = true;
     status.textContent = `Loading models available to your ${connection.name} API key…`;
     let models = aiProviderModelCatalogs.get(provider.value);
     if (!models) {
         models = await loadAIProviderModels(generationApiRequest, provider.value);
         aiProviderModelCatalogs.set(provider.value, models);
     }
-    if (modelInput.value && !models.some(model => model.id === modelInput.value)) {
-        modelInput.value = '';
-    }
+    placeholder.textContent = models.length ? 'Choose an available model' : 'No eligible models returned';
     for (const model of models) {
         const option = document.createElement('option');
         option.value = model.id;
-        option.label = model.name;
-        options.append(option);
+        option.textContent = model.name;
+        modelSelect.append(option);
     }
-    modelInput.disabled = false;
-    modelInput.placeholder = models.length ? 'Choose an available model' : 'No eligible models returned';
+    modelSelect.value = models.some(model => model.id === preferredModel) ? preferredModel : '';
+    modelSelect.disabled = models.length === 0;
     status.textContent = models.length
         ? `${models.length} generation-capable model${models.length === 1 ? '' : 's'} available. Choose the exact model ID for reproducibility.`
         : 'The provider returned no models eligible for the flashcard-generation pipeline.';
@@ -5978,8 +5970,8 @@ async function saveAIProviderConnection() {
         closeAIProviderConnectPanel();
         renderAIProviderConnections();
         rebuildGenerationProviderOptions(providerId);
-        const modelInput = document.getElementById('generation-model');
-        if (modelInput) modelInput.value = '';
+        const modelSelect = document.getElementById('generation-model');
+        if (modelSelect) modelSelect.value = '';
         await updateGenerationModelChoices();
     } catch (error) {
         status.textContent = error.message;

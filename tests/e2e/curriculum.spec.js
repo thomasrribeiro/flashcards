@@ -940,10 +940,11 @@ test('AI generation stays blank until an API provider is connected', async ({ pa
         [...pane.children].map(element => element.textContent.trim().split('\n')[0])
     ));
     expect(sectionOrder.indexOf('Provider connections')).toBeLessThan(sectionOrder.indexOf('Generation defaults'));
-    await expect(page.getByLabel('Generation provider')).toBeDisabled();
-    await expect(page.getByLabel('Generation provider')).toHaveValue('');
-    await expect(page.getByLabel('Generation provider')).toContainText('Connect a provider above');
+    await expect(page.getByLabel('Provider', { exact: true })).toBeDisabled();
+    await expect(page.getByLabel('Provider', { exact: true })).toHaveValue('');
+    await expect(page.getByLabel('Provider', { exact: true })).toContainText('Connect a provider above');
     await expect(page.getByLabel('Model')).toBeDisabled();
+    expect(await page.getByLabel('Model').evaluate(element => element.tagName)).toBe('SELECT');
     await expect(page.getByLabel('Reasoning effort')).toBeDisabled();
     await expect(form.getByText(/local runner/i)).toHaveCount(0);
     await form.getByRole('tab', { name: 'Curriculum' }).click();
@@ -958,7 +959,7 @@ test('AI generation stays blank until an API provider is connected', async ({ pa
 
     await page.locator('#study-settings-btn').click();
     await form.getByRole('tab', { name: 'AI generation' }).click();
-    await expect(page.getByLabel('Generation provider')).toHaveValue('');
+    await expect(page.getByLabel('Provider', { exact: true })).toHaveValue('');
     await expect(page.getByLabel('Model')).toBeDisabled();
 });
 
