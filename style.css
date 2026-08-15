@@ -4073,6 +4073,7 @@ body.standalone-phone .mobile-sidebar-close {
 
 .curriculum-graph-stage.is-subject-overview {
     cursor: grab;
+    overflow: hidden;
 }
 
 .curriculum-graph-stage.is-subject-overview.is-panning {

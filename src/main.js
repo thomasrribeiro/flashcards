@@ -3300,17 +3300,22 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     });
 
     let scale = 1;
+    let subjectPanX = 0;
+    let subjectPanY = 0;
+    const subjectBaseOffset = () => ({
+        x: Math.max(0, (stage.clientWidth - layout.width * scale) / 2),
+        y: Math.max(0, (stage.clientHeight - scrollExtentHeight * scale) / 2)
+    });
     const applyScale = () => {
         viewport.style.transform = `scale(${scale})`;
         const renderedWidth = layout.width * scale;
         const renderedHeight = scrollExtentHeight * scale;
         if (isSubjectOverview) {
-            const offsetX = Math.max(0, (stage.clientWidth - renderedWidth) / 2);
-            const offsetY = Math.max(0, (stage.clientHeight - renderedHeight) / 2);
-            viewport.style.left = `${offsetX}px`;
-            viewport.style.top = `${offsetY}px`;
-            scrollCanvas.style.width = `${Math.max(stage.clientWidth, renderedWidth)}px`;
-            scrollCanvas.style.height = `${Math.max(stage.clientHeight, renderedHeight)}px`;
+            const base = subjectBaseOffset();
+            viewport.style.left = `${base.x + subjectPanX}px`;
+            viewport.style.top = `${base.y + subjectPanY}px`;
+            scrollCanvas.style.width = `${stage.clientWidth}px`;
+            scrollCanvas.style.height = `${stage.clientHeight}px`;
             return;
         }
         viewport.style.left = `${horizontalGutter}px`;
@@ -3325,6 +3330,10 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         scale = horizontal
             ? Math.min(3, width / bounds.width)
             : Math.min(1, width / bounds.width, height / bounds.height);
+        if (isSubjectOverview) {
+            subjectPanX = 0;
+            subjectPanY = 0;
+        }
         applyScale();
         if (isSubjectOverview) {
             stage.scrollTo({ left: 0, top: 0 });
@@ -3364,46 +3373,45 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         };
     };
     const fit = () => fitBounds(rankBounds(focusRanks), { horizontal: Boolean(focusRanks) });
-    const zoom = factor => {
+    const zoom = (factor, originX = stage.clientWidth / 2, originY = stage.clientHeight / 2) => {
         if (!isSubjectOverview) return;
         const oldScale = scale;
-        const oldLeft = Number.parseFloat(viewport.style.left) || 0;
-        const oldTop = Number.parseFloat(viewport.style.top) || 0;
-        const graphCenterX = (stage.scrollLeft + stage.clientWidth / 2 - oldLeft) / oldScale;
-        const graphCenterY = (stage.scrollTop + stage.clientHeight / 2 - oldTop) / oldScale;
+        const oldBase = subjectBaseOffset();
+        const graphOriginX = oldBase.x + subjectPanX;
+        const graphOriginY = oldBase.y + subjectPanY;
+        const graphPointX = (originX - graphOriginX) / oldScale;
+        const graphPointY = (originY - graphOriginY) / oldScale;
         scale = Math.max(0.45, Math.min(2.5, scale * factor));
+        const newBase = subjectBaseOffset();
+        subjectPanX = originX - graphPointX * scale - newBase.x;
+        subjectPanY = originY - graphPointY * scale - newBase.y;
         applyScale();
-        const newLeft = Number.parseFloat(viewport.style.left) || 0;
-        const newTop = Number.parseFloat(viewport.style.top) || 0;
-        stage.scrollTo({
-            left: Math.max(0, graphCenterX * scale + newLeft - stage.clientWidth / 2),
-            top: Math.max(0, graphCenterY * scale + newTop - stage.clientHeight / 2)
-        });
     };
     const zoomIn = () => zoom(1.2);
     const zoomOut = () => zoom(1 / 1.2);
     if (isSubjectOverview) {
-        let pan = null;
+        let dragState = null;
         stage.addEventListener('pointerdown', event => {
             if (event.button !== 0 || event.target.closest('.curriculum-graph-node')) return;
-            pan = {
+            dragState = {
                 pointerId: event.pointerId,
                 x: event.clientX,
                 y: event.clientY,
-                left: stage.scrollLeft,
-                top: stage.scrollTop
+                panX: subjectPanX,
+                panY: subjectPanY
             };
             stage.classList.add('is-panning');
             stage.setPointerCapture(event.pointerId);
         });
         stage.addEventListener('pointermove', event => {
-            if (!pan || event.pointerId !== pan.pointerId) return;
-            stage.scrollLeft = pan.left - (event.clientX - pan.x);
-            stage.scrollTop = pan.top - (event.clientY - pan.y);
+            if (!dragState || event.pointerId !== dragState.pointerId) return;
+            subjectPanX = dragState.panX + event.clientX - dragState.x;
+            subjectPanY = dragState.panY + event.clientY - dragState.y;
+            applyScale();
         });
         const stopPanning = event => {
-            if (!pan || event.pointerId !== pan.pointerId) return;
-            pan = null;
+            if (!dragState || event.pointerId !== dragState.pointerId) return;
+            dragState = null;
             stage.classList.remove('is-panning');
             if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
         };
@@ -3412,7 +3420,12 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         stage.addEventListener('wheel', event => {
             if (!event.ctrlKey && !event.metaKey) return;
             event.preventDefault();
-            zoom(event.deltaY < 0 ? 1.12 : 1 / 1.12);
+            const stageRect = stage.getBoundingClientRect();
+            zoom(
+                event.deltaY < 0 ? 1.12 : 1 / 1.12,
+                event.clientX - stageRect.left,
+                event.clientY - stageRect.top
+            );
         }, { passive: false });
     }
     const fitVisibleViewport = () => {

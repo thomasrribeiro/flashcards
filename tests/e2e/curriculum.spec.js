@@ -22,7 +22,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.getByRole('button', { name: 'Zoom in' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Zoom out' })).toBeVisible();
     expect(await page.locator('.curriculum-graph-stage').evaluate(stage => getComputedStyle(stage).overflowX))
-        .toBe('auto');
+        .toBe('hidden');
     if (testInfo.project.name === 'desktop-chromium') {
         const stage = page.locator('.curriculum-graph-stage');
         const centered = () => stage.evaluate(element => {
@@ -42,22 +42,24 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         });
         await expect.poll(async () => (await centered()).x).toBeLessThan(2);
         await expect.poll(async () => (await centered()).y).toBeLessThan(2);
+        const viewport = stage.locator('.curriculum-graph-viewport');
+        const initialViewportBox = await viewport.boundingBox();
+        const stageBox = await stage.boundingBox();
+        await page.mouse.move(stageBox.x + stageBox.width - 20, stageBox.y + stageBox.height - 20);
+        await page.mouse.down();
+        await page.mouse.move(stageBox.x + stageBox.width - 100, stageBox.y + stageBox.height - 70);
+        await page.mouse.up();
+        await expect.poll(async () => {
+            const moved = await viewport.boundingBox();
+            return Math.hypot(moved.x - initialViewportBox.x, moved.y - initialViewportBox.y);
+        }).toBeGreaterThan(80);
+        await page.getByRole('button', { name: 'Fit', exact: true }).click();
+        await expect.poll(async () => (await centered()).x).toBeLessThan(2);
+        await expect.poll(async () => (await centered()).y).toBeLessThan(2);
         const initialNodeWidth = (await subjects.first().boundingBox()).width;
         await page.getByRole('button', { name: 'Zoom in' }).click();
         await expect.poll(async () => (await subjects.first().boundingBox()).width)
             .toBeGreaterThan(initialNodeWidth);
-        for (let index = 0; index < 5; index += 1) {
-            await page.getByRole('button', { name: 'Zoom in' }).click();
-        }
-        await expect.poll(() => stage.evaluate(element => element.scrollWidth > element.clientWidth))
-            .toBe(true);
-        const stageBox = await stage.boundingBox();
-        const panStart = await stage.evaluate(element => element.scrollLeft);
-        await page.mouse.move(stageBox.x + stageBox.width - 20, stageBox.y + stageBox.height - 20);
-        await page.mouse.down();
-        await page.mouse.move(stageBox.x + stageBox.width - 100, stageBox.y + stageBox.height - 20);
-        await page.mouse.up();
-        await expect.poll(() => stage.evaluate(element => element.scrollLeft)).toBeGreaterThan(panStart);
         await page.getByRole('button', { name: 'Fit', exact: true }).click();
         await expect.poll(async () => (await centered()).x).toBeLessThan(2);
         await expect.poll(async () => (await centered()).y).toBeLessThan(2);
