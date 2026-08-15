@@ -4071,6 +4071,18 @@ body.standalone-phone .mobile-sidebar-close {
     touch-action: pan-y;
 }
 
+.curriculum-graph-stage.is-subject-overview {
+    cursor: grab;
+}
+
+.curriculum-graph-stage.is-subject-overview.is-panning {
+    cursor: grabbing;
+}
+
+.curriculum-graph-stage.is-subject-overview .curriculum-graph-node {
+    cursor: pointer;
+}
+
 .curriculum-graph-scroll-canvas {
     position: relative;
     min-width: 100%;

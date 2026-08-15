@@ -2971,6 +2971,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     ranked = false,
     focusRanks = null
 } = {}) {
+    const isSubjectOverview = !ranked && graph.nodes.every(node => node.nodeType === 'subject');
     const layout = ranked
         ? layoutCurriculumGraph(graph)
         : await layoutCurriculumGraphElk(graph, {
@@ -2984,6 +2985,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const stage = document.createElement('div');
     stage.className = 'curriculum-graph-stage';
     if (ranked) stage.classList.add('is-layered');
+    if (isSubjectOverview) stage.classList.add('is-subject-overview');
     if (graph.nodes.length > 12) stage.classList.add('is-dense');
     stage.setAttribute('aria-label', 'Interactive curriculum prerequisite graph');
     const cableRouting = ranked
@@ -3300,8 +3302,21 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     let scale = 1;
     const applyScale = () => {
         viewport.style.transform = `scale(${scale})`;
-        scrollCanvas.style.width = `${layout.width * scale + horizontalGutter * 2}px`;
-        scrollCanvas.style.height = `${scrollExtentHeight * scale}px`;
+        const renderedWidth = layout.width * scale;
+        const renderedHeight = scrollExtentHeight * scale;
+        if (isSubjectOverview) {
+            const offsetX = Math.max(0, (stage.clientWidth - renderedWidth) / 2);
+            const offsetY = Math.max(0, (stage.clientHeight - renderedHeight) / 2);
+            viewport.style.left = `${offsetX}px`;
+            viewport.style.top = `${offsetY}px`;
+            scrollCanvas.style.width = `${Math.max(stage.clientWidth, renderedWidth)}px`;
+            scrollCanvas.style.height = `${Math.max(stage.clientHeight, renderedHeight)}px`;
+            return;
+        }
+        viewport.style.left = `${horizontalGutter}px`;
+        viewport.style.top = '0px';
+        scrollCanvas.style.width = `${renderedWidth + horizontalGutter * 2}px`;
+        scrollCanvas.style.height = `${renderedHeight}px`;
     };
     const fitBounds = (bounds, { horizontal = false } = {}) => {
         const padding = 48;
@@ -3311,6 +3326,10 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             ? Math.min(3, width / bounds.width)
             : Math.min(1, width / bounds.width, height / bounds.height);
         applyScale();
+        if (isSubjectOverview) {
+            stage.scrollTo({ left: 0, top: 0 });
+            return;
+        }
         const left = bounds.x * scale + horizontalGutter
             - (stage.clientWidth - bounds.width * scale) / 2;
         const top = horizontal
@@ -3345,6 +3364,57 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         };
     };
     const fit = () => fitBounds(rankBounds(focusRanks), { horizontal: Boolean(focusRanks) });
+    const zoom = factor => {
+        if (!isSubjectOverview) return;
+        const oldScale = scale;
+        const oldLeft = Number.parseFloat(viewport.style.left) || 0;
+        const oldTop = Number.parseFloat(viewport.style.top) || 0;
+        const graphCenterX = (stage.scrollLeft + stage.clientWidth / 2 - oldLeft) / oldScale;
+        const graphCenterY = (stage.scrollTop + stage.clientHeight / 2 - oldTop) / oldScale;
+        scale = Math.max(0.45, Math.min(2.5, scale * factor));
+        applyScale();
+        const newLeft = Number.parseFloat(viewport.style.left) || 0;
+        const newTop = Number.parseFloat(viewport.style.top) || 0;
+        stage.scrollTo({
+            left: Math.max(0, graphCenterX * scale + newLeft - stage.clientWidth / 2),
+            top: Math.max(0, graphCenterY * scale + newTop - stage.clientHeight / 2)
+        });
+    };
+    const zoomIn = () => zoom(1.2);
+    const zoomOut = () => zoom(1 / 1.2);
+    if (isSubjectOverview) {
+        let pan = null;
+        stage.addEventListener('pointerdown', event => {
+            if (event.button !== 0 || event.target.closest('.curriculum-graph-node')) return;
+            pan = {
+                pointerId: event.pointerId,
+                x: event.clientX,
+                y: event.clientY,
+                left: stage.scrollLeft,
+                top: stage.scrollTop
+            };
+            stage.classList.add('is-panning');
+            stage.setPointerCapture(event.pointerId);
+        });
+        stage.addEventListener('pointermove', event => {
+            if (!pan || event.pointerId !== pan.pointerId) return;
+            stage.scrollLeft = pan.left - (event.clientX - pan.x);
+            stage.scrollTop = pan.top - (event.clientY - pan.y);
+        });
+        const stopPanning = event => {
+            if (!pan || event.pointerId !== pan.pointerId) return;
+            pan = null;
+            stage.classList.remove('is-panning');
+            if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+        };
+        stage.addEventListener('pointerup', stopPanning);
+        stage.addEventListener('pointercancel', stopPanning);
+        stage.addEventListener('wheel', event => {
+            if (!event.ctrlKey && !event.metaKey) return;
+            event.preventDefault();
+            zoom(event.deltaY < 0 ? 1.12 : 1 / 1.12);
+        }, { passive: false });
+    }
     const fitVisibleViewport = () => {
         const top = stage.getBoundingClientRect().top;
         const available = Math.floor(window.innerHeight - top - 16);
@@ -3374,7 +3444,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     };
     window.addEventListener('resize', onViewportResize);
     requestAnimationFrame(fitVisibleViewport);
-    return { fit };
+    return { fit, zoomIn, zoomOut };
 }
 
 function curriculumStateSnapshot() {
@@ -3828,7 +3898,7 @@ function renderCurriculumNeighborhood(root, progressStates) {
     fitCurriculumNeighborhoodViewport(explorer);
 }
 
-function curriculumGraphControls({ windowState = null } = {}) {
+function curriculumGraphControls({ windowState = null, interactive = false } = {}) {
     const controls = document.createElement('div');
     controls.className = `curriculum-graph-controls${windowState ? ' is-layered' : ''}`;
     const layerNavigation = windowState ? `
@@ -3840,6 +3910,7 @@ function curriculumGraphControls({ windowState = null } = {}) {
     controls.innerHTML = `
         ${layerNavigation}
         <span class="curriculum-graph-view-actions">
+            ${interactive ? '<button type="button" data-action="zoom-out" aria-label="Zoom out">−</button><button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>' : ''}
             <button type="button" data-action="fit">Fit</button>
         </span>`;
     return controls;
@@ -3847,6 +3918,10 @@ function curriculumGraphControls({ windowState = null } = {}) {
 
 function connectCurriculumGraphControls(controls, controller) {
     controls.querySelector('[data-action="fit"]').onclick = controller.fit;
+    const zoomIn = controls.querySelector('[data-action="zoom-in"]');
+    const zoomOut = controls.querySelector('[data-action="zoom-out"]');
+    if (zoomIn) zoomIn.onclick = controller.zoomIn;
+    if (zoomOut) zoomOut.onclick = controller.zoomOut;
 }
 
 async function renderCurriculumGraph(root, progressStates, graph, { layered = false, emptyMessage = 'No curriculum items are available.' } = {}) {
@@ -3861,7 +3936,8 @@ async function renderCurriculumGraph(root, progressStates, graph, { layered = fa
         ? curriculumLayerWindow(graph, curriculumViewState.layerStart, 3)
         : null;
     if (windowState) curriculumViewState.layerStart = windowState.layer;
-    const controls = curriculumGraphControls({ windowState });
+    const subjectOverview = !layered && graph.nodes.every(node => node.nodeType === 'subject');
+    const controls = curriculumGraphControls({ windowState, interactive: subjectOverview });
     root.appendChild(controls);
     const controller = await renderCurriculumGraphCanvas(root, graph, progressStates, {
         ranked: layered,

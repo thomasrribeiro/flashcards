@@ -17,9 +17,51 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     }
     const subjects = page.locator('.curriculum-graph-node');
     await expect(subjects).toHaveCount(3);
+    await expect(page.locator('.curriculum-graph-stage')).toHaveClass(/is-subject-overview/);
     await expect(page.locator('.curriculum-graph-stage')).not.toHaveClass(/is-layered/);
+    await expect(page.getByRole('button', { name: 'Zoom in' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Zoom out' })).toBeVisible();
     expect(await page.locator('.curriculum-graph-stage').evaluate(stage => getComputedStyle(stage).overflowX))
         .toBe('auto');
+    if (testInfo.project.name === 'desktop-chromium') {
+        const stage = page.locator('.curriculum-graph-stage');
+        const centered = () => stage.evaluate(element => {
+            const stageRect = element.getBoundingClientRect();
+            const nodes = [...element.querySelectorAll('.curriculum-graph-node')]
+                .map(node => node.getBoundingClientRect());
+            const bounds = {
+                left: Math.min(...nodes.map(node => node.left)),
+                right: Math.max(...nodes.map(node => node.right)),
+                top: Math.min(...nodes.map(node => node.top)),
+                bottom: Math.max(...nodes.map(node => node.bottom))
+            };
+            return {
+                x: Math.abs((bounds.left + bounds.right) / 2 - (stageRect.left + stageRect.right) / 2),
+                y: Math.abs((bounds.top + bounds.bottom) / 2 - (stageRect.top + stageRect.bottom) / 2)
+            };
+        });
+        await expect.poll(async () => (await centered()).x).toBeLessThan(2);
+        await expect.poll(async () => (await centered()).y).toBeLessThan(2);
+        const initialNodeWidth = (await subjects.first().boundingBox()).width;
+        await page.getByRole('button', { name: 'Zoom in' }).click();
+        await expect.poll(async () => (await subjects.first().boundingBox()).width)
+            .toBeGreaterThan(initialNodeWidth);
+        for (let index = 0; index < 5; index += 1) {
+            await page.getByRole('button', { name: 'Zoom in' }).click();
+        }
+        await expect.poll(() => stage.evaluate(element => element.scrollWidth > element.clientWidth))
+            .toBe(true);
+        const stageBox = await stage.boundingBox();
+        const panStart = await stage.evaluate(element => element.scrollLeft);
+        await page.mouse.move(stageBox.x + stageBox.width - 20, stageBox.y + stageBox.height - 20);
+        await page.mouse.down();
+        await page.mouse.move(stageBox.x + stageBox.width - 100, stageBox.y + stageBox.height - 20);
+        await page.mouse.up();
+        await expect.poll(() => stage.evaluate(element => element.scrollLeft)).toBeGreaterThan(panStart);
+        await page.getByRole('button', { name: 'Fit', exact: true }).click();
+        await expect.poll(async () => (await centered()).x).toBeLessThan(2);
+        await expect.poll(async () => (await centered()).y).toBeLessThan(2);
+    }
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
 
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
