@@ -5838,7 +5838,7 @@ function syncGenerationReasoningChoices() {
     const modelSelect = document.getElementById('generation-model');
     const reasoning = document.getElementById('generation-reasoning');
     if (!provider || !modelSelect || !reasoning) return;
-    if (!providerDefinition(provider.value)) {
+    if (!providerDefinition(provider.value) || !modelSelect.value) {
         reasoning.disabled = true;
         return;
     }
@@ -5865,6 +5865,8 @@ async function updateGenerationModelChoices() {
     if (!provider || !modelSelect || !status) return;
     const preferredModel = modelSelect.value;
     modelSelect.replaceChildren();
+    const reasoning = document.getElementById('generation-reasoning');
+    if (reasoning) reasoning.disabled = true;
     const placeholder = document.createElement('option');
     placeholder.value = '';
     modelSelect.append(placeholder);
