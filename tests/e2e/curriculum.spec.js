@@ -277,12 +277,25 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                     return y >= columnBottom + 18;
                 });
             }),
-            edgeAligned: longConnections.every(connection => {
+            longTargetsUseBottomPorts: longConnections.every(connection => {
                 const target = stage.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.target)}"]`);
                 const path = connection.querySelector('.curriculum-graph-edge');
-                const targetRise = Number.parseFloat(target.style.left) - 10;
-                return path.getPointAtLength(0).x < targetRise
-                    && Math.abs(path.getPointAtLength(path.getTotalLength()).x - targetRise) < 0.5;
+                const arrowhead = connection.querySelector('.curriculum-graph-arrowhead');
+                const start = path.getPointAtLength(0);
+                const end = path.getPointAtLength(path.getTotalLength());
+                const headBounds = arrowhead.getBBox();
+                const targetLeft = Number.parseFloat(target.style.left);
+                const targetWidth = Number.parseFloat(target.style.width);
+                const targetBottom = Number.parseFloat(target.style.top)
+                    + Number.parseFloat(target.style.height);
+                const anchorX = Number(connection.dataset.riseX);
+                return Math.abs(start.x - anchorX) < 0.5
+                    && Math.abs(end.x - anchorX) < 0.5
+                    && Math.abs(end.y - (targetBottom + 10)) < 0.5
+                    && Math.abs(headBounds.x + headBounds.width / 2 - anchorX) < 0.5
+                    && Math.abs(headBounds.y - targetBottom) < 0.5
+                    && anchorX > targetLeft
+                    && anchorX < targetLeft + targetWidth / 2;
             }),
             staggeredRises: (() => {
                 const byRank = new Map();
@@ -532,7 +545,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     expect(cableRouting.trunkIntersectionCount).toBe(0);
     expect(cableRouting.routesBelowCrossedColumns).toBe(true);
     expect(cableRouting.busesClearBothAdjacentColumns).toBe(true);
-    expect(cableRouting.edgeAligned).toBe(true);
+    expect(cableRouting.longTargetsUseBottomPorts).toBe(true);
     expect(cableRouting.staggeredRises).toBe(true);
     expect(cableRouting.trunksAligned).toBe(true);
     expect(cableRouting.staggeredDescents).toBe(true);
@@ -770,6 +783,30 @@ test('keeps every mathematics bus branch joined to its trunk', async ({ page }, 
             )?.querySelector('.curriculum-graph-edge:not(.curriculum-graph-edge-highlight)');
             return !trunk?.isPointInStroke(new DOMPoint(join.x, join.y));
         });
+        const bottomEntries = branches.every(connection => {
+            const target = stage.querySelector(
+                `.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.target)}"]`
+            );
+            const path = connection.querySelector('.curriculum-graph-edge');
+            const arrowhead = connection.querySelector('.curriculum-graph-arrowhead');
+            const end = path.getPointAtLength(path.getTotalLength());
+            const headBounds = arrowhead.getBBox();
+            const targetLeft = Number.parseFloat(target.style.left);
+            const targetWidth = Number.parseFloat(target.style.width);
+            const targetBottom = Number.parseFloat(target.style.top)
+                + Number.parseFloat(target.style.height);
+            return Math.abs(end.x - Number(connection.dataset.riseX)) < 0.5
+                && Math.abs(end.y - (targetBottom + 10)) < 0.5
+                && Math.abs(headBounds.y - targetBottom) < 0.5
+                && end.x > targetLeft
+                && end.x < targetLeft + targetWidth / 2;
+        });
+        const bottomPortsAreDistinct = [...new Set(branches.map(connection => connection.dataset.target))]
+            .every(targetId => {
+                const xs = branches.filter(connection => connection.dataset.target === targetId)
+                    .map(connection => Number(connection.dataset.riseX));
+                return new Set(xs).size === xs.length;
+            });
         const rankBounds = rank => {
             const nodes = [...stage.querySelectorAll(`.curriculum-graph-node[data-rank="${rank}"]`)];
             return {
@@ -808,6 +845,8 @@ test('keeps every mathematics bus branch joined to its trunk', async ({ page }, 
         return {
             total: branches.length,
             disconnected: disconnected.length,
+            bottomEntries,
+            bottomPortsAreDistinct,
             newestUpwardAtNextLeft: Math.abs(newestUpward.x - rankBounds(4).left) < 0.5,
             upwardLanesStayCompact: upwardGaps.every(gap => Math.abs(gap - 4) < 0.01),
             newestDownwardAtCurrentRight: Math.abs(newestDownward.x - rankBounds(5).right) < 0.5
@@ -816,6 +855,8 @@ test('keeps every mathematics bus branch joined to its trunk', async ({ page }, 
 
     expect(branchJoins.total).toBeGreaterThan(0);
     expect(branchJoins.disconnected).toBe(0);
+    expect(branchJoins.bottomEntries).toBe(true);
+    expect(branchJoins.bottomPortsAreDistinct).toBe(true);
     expect(branchJoins.newestUpwardAtNextLeft).toBe(true);
     expect(branchJoins.upwardLanesStayCompact).toBe(true);
     expect(branchJoins.newestDownwardAtCurrentRight).toBe(true);
