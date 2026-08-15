@@ -5833,20 +5833,28 @@ function rebuildGenerationProviderOptions(preferredProvider) {
         : '';
 }
 
-function syncGenerationReasoningChoices() {
+function disableGenerationReasoningChoices(reasoning) {
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Choose a model first';
+    reasoning.replaceChildren(placeholder);
+    reasoning.disabled = true;
+}
+
+function syncGenerationReasoningChoices(preferredEffort = null) {
     const provider = document.getElementById('generation-provider');
     const modelSelect = document.getElementById('generation-model');
     const reasoning = document.getElementById('generation-reasoning');
     if (!provider || !modelSelect || !reasoning) return;
     if (!providerDefinition(provider.value) || !modelSelect.value) {
-        reasoning.disabled = true;
+        disableGenerationReasoningChoices(reasoning);
         return;
     }
     reasoning.disabled = false;
     const catalog = aiProviderModelCatalogs.get(provider.value) || [];
     const model = catalog.find(item => item.id === modelSelect.value) || null;
     const choices = reasoningEffortsForProvider(provider.value, model);
-    const previous = reasoning.value;
+    const previous = preferredEffort || reasoning.value;
     reasoning.replaceChildren(...choices.map(value => {
         const option = document.createElement('option');
         option.value = value;
@@ -5866,7 +5874,8 @@ async function updateGenerationModelChoices() {
     const preferredModel = modelSelect.value;
     modelSelect.replaceChildren();
     const reasoning = document.getElementById('generation-reasoning');
-    if (reasoning) reasoning.disabled = true;
+    const preferredReasoning = reasoning?.value || getGenerationPreferences().reasoningEffort || null;
+    if (reasoning) disableGenerationReasoningChoices(reasoning);
     const placeholder = document.createElement('option');
     placeholder.value = '';
     modelSelect.append(placeholder);
@@ -5907,7 +5916,7 @@ async function updateGenerationModelChoices() {
     status.textContent = models.length
         ? `${models.length} generation-capable model${models.length === 1 ? '' : 's'} available. Choose the exact model ID for reproducibility.`
         : 'The provider returned no models eligible for the flashcard-generation pipeline.';
-    syncGenerationReasoningChoices();
+    syncGenerationReasoningChoices(preferredReasoning);
 }
 
 async function loadAIProviderConnections(preferredProvider) {

@@ -934,7 +934,7 @@ test('AI generation stays blank until an API provider is connected', async ({ pa
     await expect(form).toBeVisible();
     await expect(form.getByRole('tab', { name: 'Study' })).toHaveAttribute('aria-selected', 'true');
     await form.getByRole('tab', { name: 'AI generation' }).click();
-    await expect(form.getByText('Keys are validated by the provider')).toBeVisible();
+    await expect(form.getByText('Keys are validated by the provider')).toHaveCount(0);
     await expect(form.locator('input[type="password"]')).toHaveCount(1);
     const sectionOrder = await form.locator('#study-settings-pane-generation').evaluate(pane => (
         [...pane.children].map(element => element.textContent.trim().split('\n')[0])
@@ -946,6 +946,8 @@ test('AI generation stays blank until an API provider is connected', async ({ pa
     await expect(page.getByLabel('Model')).toBeDisabled();
     expect(await page.getByLabel('Model').evaluate(element => element.tagName)).toBe('SELECT');
     await expect(page.getByLabel('Reasoning effort')).toBeDisabled();
+    await expect(page.getByLabel('Reasoning effort')).toHaveValue('');
+    await expect(page.getByLabel('Reasoning effort')).toContainText('Choose a model first');
     await expect(form.getByText(/local runner/i)).toHaveCount(0);
     await form.getByRole('tab', { name: 'Curriculum' }).click();
     await expect(form.getByRole('tab', { name: 'Curriculum' })).toHaveAttribute('aria-selected', 'true');
