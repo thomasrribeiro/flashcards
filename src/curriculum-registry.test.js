@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    curriculumRegistryForView,
     loadCurriculumRegistries,
     mergeCurriculumRegistries,
     registryIndexUrl,
@@ -27,6 +28,26 @@ describe('curriculum registries', () => {
         expect(merged.decks).toHaveLength(1);
         expect(merged.decks[0].registry_id).toBe('first');
         expect(merged.conflicts).toEqual([{ id: 'physics/mechanics', kept: 'first', ignored: 'second' }]);
+    });
+
+    it('resolves the registry repository represented by the current hierarchy', () => {
+        const merged = mergeCurriculumRegistries([
+            {
+                source: { id: 'first', repository: 'owner/first-curricula' },
+                index: index('physics/mechanics')
+            },
+            {
+                source: { id: 'second', repository: 'owner/second-curricula' },
+                index: index('biology/cells')
+            }
+        ]);
+        expect(curriculumRegistryForView(merged)?.repository).toBe('owner/first-curricula');
+        expect(curriculumRegistryForView(merged, { subjectId: 'biology' })?.repository)
+            .toBe('owner/second-curricula');
+        expect(curriculumRegistryForView(merged, { deckId: 'biology/cells' })?.repository)
+            .toBe('owner/second-curricula');
+        expect(curriculumRegistryForView({ registry: { id: 'bundled', repository: 'owner/bundled' } })?.repository)
+            .toBe('owner/bundled');
     });
 
     it('falls back to the bundled index only when all remote registries fail', async () => {

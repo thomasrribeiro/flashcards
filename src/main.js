@@ -80,6 +80,7 @@ import {
     subjectOverviewGraph
 } from './curriculum.js';
 import {
+    curriculumRegistryForView,
     getCurriculumRegistrySources,
     saveCurriculumRegistrySources
 } from './curriculum-registry.js';
@@ -3998,6 +3999,9 @@ async function renderCurriculumView(options = {}) {
     breadcrumbs.className = 'curriculum-breadcrumb';
     breadcrumbs.setAttribute('aria-label', 'Curriculum hierarchy');
     breadcrumbs.innerHTML = '<span class="curriculum-breadcrumb-home">~</span><span aria-hidden="true">/</span>';
+    const deckId = hierarchy === 'chapter' ? parentId : hierarchy === 'deck' && mode === 'focus' ? curriculumViewState.targetId : '';
+    const activeRegistry = curriculumRegistryForView(curriculumIndex, { subjectId: subject, deckId });
+    const registryLabel = activeRegistry?.repository || activeRegistry?.name || activeRegistry?.id || 'curricula';
     let crumbCount = 0;
     const addCrumb = (label, options, active = false) => {
         if (crumbCount > 0) {
@@ -4014,8 +4018,7 @@ async function renderCurriculumView(options = {}) {
         breadcrumbs.appendChild(button);
         crumbCount += 1;
     };
-    addCrumb('subjects', { mode: 'overview', hierarchy: 'subject', subject: '', parentId: '', targetId: '', query: '', layerStart: 0 }, hierarchy === 'subject');
-    const deckId = hierarchy === 'chapter' ? parentId : hierarchy === 'deck' && mode === 'focus' ? curriculumViewState.targetId : '';
+    addCrumb(registryLabel, { mode: 'overview', hierarchy: 'subject', subject: '', parentId: '', targetId: '', query: '', layerStart: 0 }, hierarchy === 'subject');
     if (subject) {
         const subjectAnchor = deckId || '';
         addCrumb(subject, {
@@ -4037,7 +4040,21 @@ async function renderCurriculumView(options = {}) {
     `;
     historyControls.firstElementChild.onclick = () => moveCurriculumNavigationHistory(-1);
     historyControls.lastElementChild.onclick = () => moveCurriculumNavigationHistory(1);
-    breadcrumbRow.append(breadcrumbs, historyControls);
+    const breadcrumbActions = document.createElement('span');
+    breadcrumbActions.className = 'curriculum-breadcrumb-actions';
+    if (hierarchy === 'subject' && mode === 'overview') {
+        const createSubject = document.createElement('button');
+        createSubject.type = 'button';
+        createSubject.className = 'curriculum-toolbar-action is-primary';
+        createSubject.textContent = 'Create subject';
+        createSubject.disabled = true;
+        createSubject.onclick = () => openCurriculumBuilder('', activeRegistry);
+        breadcrumbActions.append(createSubject);
+        configureWebsiteGenerationButton(createSubject);
+    }
+    breadcrumbRow.append(breadcrumbs);
+    if (breadcrumbActions.childElementCount) breadcrumbRow.append(breadcrumbActions);
+    breadcrumbRow.append(historyControls);
     root.appendChild(breadcrumbRow);
 
     if (mode === 'focus') renderCurriculumNeighborhood(root, progressStates);
@@ -4318,8 +4335,9 @@ function renderCurriculumSettingsSources() {
     });
 }
 
-function openCurriculumBuilder(subjectId = '') {
-    const generationPreferences = getGenerationPreferences();
+function openCurriculumBuilder(subjectId = '', registry = null) {
+    const targetRegistry = registry || curriculumRegistryForView(curriculumIndex, { subjectId });
+    const targetRepository = targetRegistry?.repository || 'the active curriculum registry';
     const existing = subjectId ? curriculumMaps(curriculumIndex).decks : new Map();
     const subjectMeta = curriculumIndex.subjects?.find(item => item.id === subjectId) || {};
     const draft = {
@@ -4338,8 +4356,8 @@ function openCurriculumBuilder(subjectId = '') {
                 prerequisites: (deck.prerequisites || []).map(id => id.startsWith(`${subjectId}/`) ? id.split('/')[1] : id)
             }))
     };
-    const { content } = curriculumOverlay(subjectId ? `Edit ${subjectId}` : 'Create curriculum');
-    content.innerHTML = `<p class="curriculum-builder-help">Define as much or as little as you want. The local isolated agent researches and completes the draft, validation checks the entire DAG, and the runner opens a draft pull request. Provider keys remain on your computer.</p>
+    const { content } = curriculumOverlay(subjectId ? `Edit ${subjectId}` : 'Create subject');
+    content.innerHTML = `<p class="curriculum-builder-help">Define as much or as little as you want. An isolated agent researches and completes the draft, validation checks the entire DAG, and the runner opens a draft pull request against ${escapeHtml(targetRepository)}. Nothing merges automatically.</p>
         <form class="curriculum-builder-form">
             <div class="curriculum-builder-grid">
                 <label>Subject slug<input name="subject" value="${escapeHtml(draft.subject)}" placeholder="earth-science" ${subjectId ? 'readonly' : ''}></label>
@@ -4347,7 +4365,6 @@ function openCurriculumBuilder(subjectId = '') {
                 <label>Destination<select name="destination"><option>literacy</option><option>undergraduate-core</option><option>graduate-core</option><option>whole-field</option><option>research-specialization</option></select></label>
                 <label>Deck size<select name="deckGranularity"><option value="module">module</option><option value="course">course</option><option value="broad-area">broad-area</option></select></label>
                 <label>Focus areas<input name="focus" value="${escapeHtml(draft.focus)}" placeholder="neuroscience, genomics"></label>
-                <label>Local provider<select name="provider"><option value="codex">Codex</option><option value="custom">Custom runner</option></select></label>
             </div>
             <label>Instructions<textarea name="instructions" rows="3" placeholder="Learner goals, constraints, or branches to emphasize"></textarea></label>
             <div class="curriculum-builder-decks-head"><h3>Draft decks and prerequisite edges</h3><button type="button" data-add-deck>Add deck</button></div>
@@ -4359,7 +4376,6 @@ function openCurriculumBuilder(subjectId = '') {
     const field = name => form.elements.namedItem(name);
     field('destination').value = draft.destination;
     field('deckGranularity').value = draft.deckGranularity;
-    field('provider').value = generationPreferences.providerId;
     const deckList = content.querySelector('[data-decks]');
     const readDraft = () => ({
         subject: field('subject').value,
@@ -4405,8 +4421,11 @@ function openCurriculumBuilder(subjectId = '') {
         event.preventDefault();
         if (!githubAuth.isAuthenticated()) return alert('Sign in with GitHub to queue a curriculum draft.');
         try {
+            const generationPreferences = await connectedWebsiteGenerationPreferences();
             const job = generationJobForDraft(readDraft(), {
-                providerId: field('provider').value,
+                registryId: targetRegistry?.id,
+                targetRepository: targetRegistry?.repository,
+                providerId: generationPreferences.providerId,
                 modelId: generationPreferences.modelId,
                 reasoningEffort: generationPreferences.reasoningEffort
             });
@@ -4416,7 +4435,15 @@ function openCurriculumBuilder(subjectId = '') {
             const result = await githubAuth.apiRequest('/api/generation-requests', {
                 method: 'POST', body: JSON.stringify(job)
             });
-            content.innerHTML = `<div class="curriculum-builder-success"><h3>Draft queued</h3><p>Request ${escapeHtml(result.request.id)} is waiting for your local isolated runner.</p><code>flashcards requests run --registry-root /path/to/curricula</code><p>The runner will open a draft pull request; nothing merges automatically.</p></div>`;
+            console.info('[Curriculum] Subject-design request queued', {
+                requestId: result.request.id,
+                subject: job.payload.subject,
+                registryId: job.registryId,
+                targetRepository: job.targetRepository,
+                providerId: job.providerId,
+                modelId: job.modelId
+            });
+            content.innerHTML = `<div class="curriculum-builder-success"><h3>Draft queued</h3><p>Request ${escapeHtml(result.request.id)} is waiting for an isolated runner.</p><p>The result will be a draft pull request; nothing merges automatically.</p></div>`;
         } catch (error) {
             content.querySelector('[data-errors]').textContent = error.message;
         }
@@ -4498,10 +4525,14 @@ async function renderDependencyModal() {
     copy.classList.toggle('hidden', plan.missingDecks.length === 0);
     request.classList.toggle('hidden', plan.missingDecks.length === 0 || !githubAuth.isAuthenticated());
     generate.classList.toggle('hidden', !generationScope || !githubAuth.isAuthenticated());
+    const generationAvailability = await websiteGenerationAvailability();
+    request.disabled = !generationAvailability.enabled;
+    request.title = generationAvailability.reason;
     generate.textContent = generationScope === 'full'
         ? 'Generate remaining chapters'
         : 'Generate pilot chapter';
-    generate.disabled = false;
+    generate.disabled = !generationAvailability.enabled;
+    generate.title = generationAvailability.reason;
 }
 
 async function openDependencyModal(deckId, chapterId = null) {
@@ -5759,6 +5790,29 @@ async function connectedWebsiteGenerationPreferences() {
         throw new Error(`Choose a ${definition.name} model in Settings before requesting generation.`);
     }
     return preferences;
+}
+
+async function websiteGenerationAvailability() {
+    if (!githubAuth.isAuthenticated()) {
+        return {
+            enabled: false,
+            reason: 'Sign in with GitHub, then connect an API provider and choose a model in Settings.'
+        };
+    }
+    try {
+        const preferences = await connectedWebsiteGenerationPreferences();
+        return { enabled: true, preferences, reason: '' };
+    } catch (error) {
+        return { enabled: false, reason: error.message };
+    }
+}
+
+async function configureWebsiteGenerationButton(button) {
+    const availability = await websiteGenerationAvailability();
+    if (!button.isConnected) return availability;
+    button.disabled = !availability.enabled;
+    button.title = availability.reason;
+    return availability;
 }
 
 function providerDefinition(providerId) {

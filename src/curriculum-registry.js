@@ -125,6 +125,20 @@ export function mergeCurriculumRegistries(results) {
     };
 }
 
+export function curriculumRegistryForView(index, { subjectId = '', deckId = '' } = {}) {
+    const registries = Array.isArray(index?.registries) && index.registries.length
+        ? index.registries
+        : index?.registry ? [index.registry] : [];
+    const deck = deckId
+        ? (index?.decks || []).find(item => item.id === deckId)
+        : null;
+    const subject = subjectId
+        ? (index?.subjects || []).find(item => item.id === subjectId)
+        : null;
+    const registryId = deck?.registry_id || subject?.registry_id || null;
+    return registries.find(registry => registry.id === registryId) || registries[0] || null;
+}
+
 export async function loadCurriculumRegistries({
     sources = getCurriculumRegistrySources(),
     fallbackUrl,

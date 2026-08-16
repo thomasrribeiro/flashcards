@@ -163,7 +163,7 @@ description = "Reason from systems, quantities, and evidence."
     it('creates subject context and a complete deck without overwriting subject files', async () => {
         const notesRoot = await temporaryRoot();
         const subject = await ensureSubject({ subject: 'earth-science', notesRoot });
-        expect(subject.created).toHaveLength(4);
+        expect(subject.created).toHaveLength(5);
 
         const roadmap = path.join(subject.subjectPath, 'ROADMAP.md');
         await writeFile(roadmap, '# My roadmap\n');
@@ -1648,6 +1648,7 @@ describe('flashcards CLI validation and Codex handoff', () => {
         const notesRoot = await temporaryRoot();
         const { subjectPath } = await ensureSubject({ subject: 'earth-science', notesRoot });
         const manifest = buildSubjectContextManifest({ subjectPath });
+        expect(await readFile(path.join(subjectPath, '.gitignore'), 'utf8')).toContain('.flashcards/context/');
         expect(manifest.files.some(file => file.path.endsWith('subject-workflow.md') && file.required)).toBe(true);
         expect(manifest.files.some(file => file.path.endsWith('ROADMAP.md') && file.required)).toBe(true);
         expect(manifest.files.some(file => file.path.endsWith('SUBJECT_BRIEF.md') && file.required)).toBe(true);
@@ -1706,6 +1707,41 @@ describe('flashcards CLI validation and Codex handoff', () => {
             expect(await readFile(manifest.files[0].path, 'utf8')).not.toBe('# Attempted context mutation\n');
             await rm(prepared.runPath, { recursive: true, force: true });
         } finally {
+            discardIsolatedRun(prepared);
+        }
+    });
+
+    it('applies isolated changes when the target is an untracked directory inside a parent Git worktree', async () => {
+        const registryRoot = await temporaryRoot();
+        spawnSync('git', ['init', '-q', '-b', 'master'], { cwd: registryRoot });
+        spawnSync('git', ['config', 'user.name', 'Flashcards test'], { cwd: registryRoot });
+        spawnSync('git', ['config', 'user.email', 'flashcards-test@localhost'], { cwd: registryRoot });
+        await writeFile(path.join(registryRoot, 'registry.toml'), 'schema_version = 1\n');
+        spawnSync('git', ['add', 'registry.toml'], { cwd: registryRoot });
+        spawnSync('git', ['commit', '-q', '-m', 'Registry baseline'], { cwd: registryRoot });
+
+        const notesRoot = path.join(registryRoot, 'subjects');
+        const { subjectPath } = await ensureSubject({
+            subject: 'chemistry',
+            notesRoot
+        });
+        const prepared = prepareIsolatedRun({
+            sourcePath: subjectPath,
+            contextFiles: [],
+            label: 'untracked-subject-test',
+            includeTopLevel: ['AGENTS.md', 'ROADMAP.md', 'SUBJECT_BRIEF.md', 'DOMAIN_GUIDE.md', 'subject.toml']
+        });
+        try {
+            await writeFile(path.join(prepared.workspacePath, 'subject.toml'), 'schema_version = 3\nsubject = "chemistry"\n\n[[decks]]\nid = "foundations"\n');
+            await writeFile(path.join(prepared.workspacePath, 'DOMAIN_GUIDE.md'), '# Chemistry domain guide\n');
+
+            finishIsolatedRun(prepared);
+
+            expect(await readFile(path.join(subjectPath, 'subject.toml'), 'utf8')).toContain('id = "foundations"');
+            expect(await readFile(path.join(subjectPath, 'DOMAIN_GUIDE.md'), 'utf8')).toBe('# Chemistry domain guide\n');
+            await expect(stat(path.join(registryRoot, 'DOMAIN_GUIDE.md'))).rejects.toMatchObject({ code: 'ENOENT' });
+        } finally {
+            await rm(prepared.runPath, { recursive: true, force: true });
             discardIsolatedRun(prepared);
         }
     });

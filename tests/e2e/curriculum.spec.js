@@ -6,9 +6,82 @@ test.beforeEach(async ({ page }) => {
     await page.locator('#tab-curriculum').click();
     await expect(page.locator('.curriculum-breadcrumb')).toBeVisible();
     await expect(page.locator('.curriculum-breadcrumb-row > .curriculum-breadcrumb')).toHaveCount(1);
+    await expect(page.locator('.curriculum-breadcrumb').getByRole('button', {
+        name: 'thomasrribeiro-flashcards/curricula', exact: true
+    })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByText('Recommended paths', { exact: true })).toHaveCount(0);
     await expect(page.locator('.curriculum-toolbar').getByRole('button', { name: 'Sources' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Create curriculum' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Create subject' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create subject' })).toBeDisabled();
+});
+
+test('queues a subject draft only for a signed-in account with a connected model', async ({ page }) => {
+    let queuedJob = null;
+    await page.route('**/api/**', async route => {
+        const request = route.request();
+        const path = new URL(request.url()).pathname;
+        if (path === '/api/users/ensure') return route.fulfill({ json: { success: true } });
+        if (path === '/api/reviews/test-user') return route.fulfill({ json: { reviews: [] } });
+        if (path === '/api/chapter-progress/test-user') return route.fulfill({ json: { chapters: [] } });
+        if (path === '/api/repos/test-user') return route.fulfill({ json: { repos: [] } });
+        if (path === '/api/settings/test-user') return route.fulfill({ json: { settings: {} } });
+        if (path === '/api/study-session/test-user') return route.fulfill({ json: { session: null } });
+        if (path === '/api/habit/test-user') {
+            return route.fulfill({ json: {
+                streak: 0,
+                today: { reviews: 0, newCards: 0, xp: 0, goalMet: false },
+                totalXp: 0,
+                settings: {}
+            } });
+        }
+        if (path === '/api/ai/providers') {
+            return route.fulfill({ json: { providers: [{
+                id: 'openai', connected: true, status: 'connected', keyHint: '••••test'
+            }] } });
+        }
+        if (path === '/api/generation-requests' && request.method() === 'POST') {
+            queuedJob = request.postDataJSON();
+            return route.fulfill({ json: { request: { id: 'request-123' } } });
+        }
+        return route.fulfill({ json: {} });
+    });
+    await page.addInitScript(() => {
+        localStorage.setItem('github_user', JSON.stringify({
+            id: 'test-user', username: 'test-user', name: 'Test User'
+        }));
+        localStorage.setItem('github_token', 'test-token');
+        localStorage.setItem('flashcards_generation_preferences_v1', JSON.stringify({
+            providerId: 'openai', modelId: 'gpt-test', reasoningEffort: 'high'
+        }));
+    });
+    await page.reload();
+    await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
+    await page.locator('#tab-curriculum').click();
+    const create = page.getByRole('button', { name: 'Create subject' });
+    await expect(create).toBeEnabled();
+    await create.click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText('thomasrribeiro-flashcards/curricula');
+    await expect(dialog.getByLabel('Local provider')).toHaveCount(0);
+    await dialog.getByLabel('Subject slug').fill('earth-science');
+    await dialog.getByLabel('Title').fill('Earth Science');
+    await dialog.getByRole('button', { name: 'Queue AI draft' }).click();
+    await expect(dialog.getByRole('heading', { name: 'Draft queued' })).toBeVisible();
+    expect(queuedJob).toMatchObject({
+        jobType: 'subject-design',
+        registryId: 'thomas-ribeiro',
+        targetRepository: 'thomasrribeiro-flashcards/curricula',
+        providerId: 'openai',
+        modelId: 'gpt-test',
+        payload: {
+            subject: 'earth-science',
+            title: 'Earth Science',
+            destination: 'whole-field',
+            deckGranularity: 'course',
+            reasoningEffort: 'high'
+        }
+    });
+    expect(JSON.stringify(queuedJob)).not.toMatch(/api.?key|secret/i);
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {
@@ -978,6 +1051,6 @@ test('curriculum controls fit a phone viewport', async ({ page }, testInfo) => {
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks')).toBeHidden();
     await page.getByRole('button', { name: 'Unlocks' }).click();
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks')).toBeVisible();
-    await page.getByRole('button', { name: 'subjects', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Create curriculum' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'thomasrribeiro-flashcards/curricula', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Create subject' })).toBeDisabled();
 });

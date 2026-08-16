@@ -178,10 +178,19 @@ function createPatch(workspacePath, allowedPaths) {
 
 function applyPatch(targetPath, patch) {
     if (!patch.trim()) return;
+    const env = {
+        ...process.env,
+        // A newly scaffolded subject can be an untracked directory inside the
+        // curriculum registry's Git worktree. Keep `git apply` rooted at the
+        // isolated run's actual target instead of letting Git discover that
+        // parent repository and place newly generated files at its root.
+        GIT_CEILING_DIRECTORIES: path.dirname(path.resolve(targetPath))
+    };
     const check = spawnSync('git', ['apply', '--binary', '--check', '-'], {
         cwd: targetPath,
         input: patch,
         encoding: 'utf8',
+        env,
         maxBuffer: 100 * 1024 * 1024
     });
     if (check.status !== 0) {
@@ -191,6 +200,7 @@ function applyPatch(targetPath, patch) {
         cwd: targetPath,
         input: patch,
         encoding: 'utf8',
+        env,
         maxBuffer: 100 * 1024 * 1024
     });
     if (applied.status !== 0) {
