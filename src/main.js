@@ -76,6 +76,7 @@ import {
     layoutCurriculumGraphElk,
     layoutCurriculumGraph,
     loadCurriculumIndex,
+    reloadCurriculumIndex,
     subjectDeckGraph,
     subjectOverviewGraph
 } from './curriculum.js';
@@ -4052,9 +4053,8 @@ async function renderCurriculumView(options = {}) {
         breadcrumbActions.append(createSubject);
         configureWebsiteGenerationButton(createSubject);
     }
-    breadcrumbRow.append(breadcrumbs);
+    breadcrumbRow.append(breadcrumbs, historyControls);
     if (breadcrumbActions.childElementCount) breadcrumbRow.append(breadcrumbActions);
-    breadcrumbRow.append(historyControls);
     root.appendChild(breadcrumbRow);
 
     if (mode === 'focus') renderCurriculumNeighborhood(root, progressStates);
@@ -6198,6 +6198,15 @@ async function saveStudySettingsFromForm(event) {
     // Keep settings responsive even when the service-worker readiness promise
     // takes time (notably in a fresh browser or an iOS standalone launch).
     closeStudySettings();
+    if (curriculumSourcesChanged) {
+        curriculumIndex = await reloadCurriculumIndex().catch(error => {
+            console.warn('[Curriculum] Updated sources could not be loaded:', error);
+            return curriculumIndex;
+        });
+        if (!document.getElementById('curriculum-view')?.classList.contains('hidden')) {
+            await renderCurriculumView();
+        }
+    }
     if (wantsReminder && !isStandalone()) {
         openPwaInstallGuide();
     } else if (wantsReminder) {
@@ -6221,15 +6230,6 @@ async function saveStudySettingsFromForm(event) {
     queueDailyPreparation()
         .then(() => renderReviewButton({ refreshStatus: false }))
         .catch(error => console.warn('[Main] Settings prefetch failed:', error));
-    if (curriculumSourcesChanged) {
-        curriculumIndex = await loadCurriculumIndex().catch(error => {
-            console.warn('[Curriculum] Updated sources could not be loaded:', error);
-            return curriculumIndex;
-        });
-        if (!document.getElementById('curriculum-view')?.classList.contains('hidden')) {
-            await renderCurriculumView();
-        }
-    }
 }
 
 function renderPwaInstallPrompt() {

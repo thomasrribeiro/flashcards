@@ -11,6 +11,11 @@ export async function loadCurriculumIndex(baseUrl = import.meta.env.BASE_URL) {
     return curriculumPromise;
 }
 
+export function reloadCurriculumIndex(baseUrl = import.meta.env.BASE_URL) {
+    curriculumPromise = null;
+    return loadCurriculumIndex(baseUrl);
+}
+
 export function curriculumMaps(index) {
     const decks = new Map((index?.decks || []).map(deck => [deck.id, deck]));
     const chapters = new Map();

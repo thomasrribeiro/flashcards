@@ -3480,8 +3480,10 @@ body.standalone-phone .mobile-sidebar-close {
     flex: 0 0 auto;
 }
 
-.curriculum-breadcrumb-actions + .curriculum-history-controls {
-    margin-left: 0;
+.curriculum-breadcrumb-actions .curriculum-toolbar-action {
+    height: 32px;
+    min-height: 32px;
+    padding-block: 0;
 }
 
 .curriculum-history-controls button {

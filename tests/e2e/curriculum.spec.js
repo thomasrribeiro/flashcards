@@ -1,4 +1,10 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+const bundledCurriculum = JSON.parse(readFileSync(
+    new URL('../../public/data/curriculum.json', import.meta.url),
+    'utf8'
+));
 
 test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -13,6 +19,48 @@ test.beforeEach(async ({ page }) => {
     await expect(page.locator('.curriculum-toolbar').getByRole('button', { name: 'Sources' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Create subject' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create subject' })).toBeDisabled();
+    const breadcrumbControlOrder = await page.locator('.curriculum-breadcrumb-row').evaluate(row => (
+        [...row.children].map(child => child.className)
+    ));
+    expect(breadcrumbControlOrder).toEqual([
+        'curriculum-breadcrumb',
+        'curriculum-history-controls',
+        'curriculum-breadcrumb-actions'
+    ]);
+    const [backBox, createBox] = await Promise.all([
+        page.getByRole('button', { name: 'Back in curriculum' }).boundingBox(),
+        page.getByRole('button', { name: 'Create subject' }).boundingBox()
+    ]);
+    expect(Math.abs(backBox.height - createBox.height)).toBeLessThan(1);
+});
+
+test('updates the root breadcrumb when the curriculum repository setting changes', async ({ page }) => {
+    const commit = '1234567890abcdef1234567890abcdef12345678';
+    await page.route('https://api.github.com/repos/example/new-curricula/commits/master', route => (
+        route.fulfill({ json: { sha: commit } })
+    ));
+    await page.route('https://raw.githubusercontent.com/example/new-curricula/**', route => (
+        route.fulfill({ json: {
+            ...bundledCurriculum,
+            registry: {
+                ...bundledCurriculum.registry,
+                id: 'example-new-curricula',
+                name: 'Example curricula',
+                repository: 'example/new-curricula',
+                ref: 'master'
+            }
+        } })
+    ));
+
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    await settings.getByRole('tab', { name: 'Curriculum' }).click();
+    await settings.getByLabel('Curriculum source repository 1').fill('example/new-curricula');
+    await settings.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect(page.locator('.curriculum-breadcrumb').getByRole('button', {
+        name: 'example/new-curricula', exact: true
+    })).toHaveAttribute('aria-current', 'page');
 });
 
 test('queues a subject draft only for a signed-in account with a connected model', async ({ page }) => {
