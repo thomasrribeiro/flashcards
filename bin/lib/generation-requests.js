@@ -78,17 +78,37 @@ export function updateGenerationRequest(id, partial, options = {}) {
 }
 
 async function runnerRequest(endpoint, { method = 'POST', body, token, url } = {}) {
-    const response = await fetch(`${workerUrl(url)}${endpoint}`, {
-        method,
-        headers: {
-            'X-Flashcards-Runner-Token': runnerToken(token),
-            'Content-Type': 'application/json'
-        },
-        body: body == null ? undefined : JSON.stringify(body)
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || `${response.status} ${response.statusText}`);
-    return payload;
+    const retryDelays = method === 'PATCH' ? [0, 250, 1000] : [0];
+    let lastError = null;
+
+    for (const [attempt, delay] of retryDelays.entries()) {
+        if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+        let response;
+        try {
+            response = await fetch(`${workerUrl(url)}${endpoint}`, {
+                method,
+                headers: {
+                    'X-Flashcards-Runner-Token': runnerToken(token),
+                    'Content-Type': 'application/json'
+                },
+                body: body == null ? undefined : JSON.stringify(body)
+            });
+        } catch (error) {
+            if (attempt === retryDelays.length - 1) throw error;
+            lastError = error;
+            continue;
+        }
+
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok) return payload;
+
+        const error = new Error(payload.error || `${response.status} ${response.statusText}`);
+        const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+        if (!retryable || attempt === retryDelays.length - 1) throw error;
+        lastError = error;
+    }
+
+    throw lastError || new Error('Generation runner request failed');
 }
 
 export function claimGenerationRequest(options = {}) {
