@@ -4363,7 +4363,7 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
             <div class="curriculum-builder-grid">
                 <div class="curriculum-builder-field">
                     <label>Subject name<input name="subject" value="${escapeHtml(draft.subject)}" placeholder="earth-science" aria-describedby="curriculum-subject-name-hint" ${subjectId ? 'readonly' : ''}></label>
-                    <p id="curriculum-subject-name-hint" class="curriculum-builder-field-hint">Subject must use lowercase kebab-case. Subject title is required.</p>
+                    <p id="curriculum-subject-name-hint" class="curriculum-builder-field-error" data-subject-errors aria-live="polite"></p>
                 </div>
                 <label>Destination<select name="destination"><option>literacy</option><option>undergraduate-core</option><option>graduate-core</option><option>whole-field</option><option>research-specialization</option></select></label>
                 <label>Deck size<select name="deckGranularity"><option value="module">module</option><option value="course">course</option><option value="broad-area">broad-area</option></select></label>
@@ -4396,7 +4396,16 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
     });
     const validate = () => {
         const result = validateCurriculumDraft(readDraft());
-        content.querySelector('[data-errors]').textContent = result.errors.join(' ');
+        const subjectErrorMessages = new Set([
+            'Subject must use lowercase kebab-case.',
+            'Subject title is required.'
+        ]);
+        content.querySelector('[data-subject-errors]').textContent = result.errors
+            .filter(error => subjectErrorMessages.has(error))
+            .join(' ');
+        content.querySelector('[data-errors]').textContent = result.errors
+            .filter(error => !subjectErrorMessages.has(error))
+            .join(' ');
         return result;
     };
     const renderDecks = () => {

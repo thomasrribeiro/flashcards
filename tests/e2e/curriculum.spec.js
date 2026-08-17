@@ -67,11 +67,14 @@ test('updates the root breadcrumb when the curriculum repository setting changes
     })).toHaveAttribute('aria-current', 'page');
 });
 
-test('queues a subject draft only for a signed-in account with a connected model', async ({ page }) => {
+test('queues a subject draft only for a signed-in account with a connected model', async ({ page }, testInfo) => {
     let queuedJob = null;
     await page.route('**/api/**', async route => {
         const request = route.request();
         const path = new URL(request.url()).pathname;
+        if (path === '/repos/thomasrribeiro-flashcards/curricula/commits/master') {
+            return route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } });
+        }
         if (path === '/api/users/ensure') return route.fulfill({ json: { success: true } });
         if (path === '/api/reviews/test-user') return route.fulfill({ json: { reviews: [] } });
         if (path === '/api/chapter-progress/test-user') return route.fulfill({ json: { chapters: [] } });
@@ -118,8 +121,22 @@ test('queues a subject draft only for a signed-in account with a connected model
     await expect(dialog.getByLabel('Local provider')).toHaveCount(0);
     await expect(dialog.getByLabel('Optional exceptions or emphasis')).toBeHidden();
     await expect(dialog.getByLabel('Title')).toHaveCount(0);
+    const subjectError = dialog.getByText('Subject must use lowercase kebab-case. Subject title is required.');
+    await expect(subjectError).toHaveCount(1);
+    await expect(subjectError).toBeVisible();
+    const [subjectBox, destinationBox, deckSizeBox] = await Promise.all([
+        dialog.getByLabel('Subject name').boundingBox(),
+        dialog.getByLabel('Destination').boundingBox(),
+        dialog.getByLabel('Deck size').boundingBox()
+    ]);
+    if (testInfo.project.name === 'desktop-chromium') {
+        expect(Math.abs(subjectBox.y - destinationBox.y)).toBeLessThan(1);
+        expect(Math.abs(subjectBox.y - deckSizeBox.y)).toBeLessThan(1);
+    }
+    expect(Math.abs(subjectBox.height - destinationBox.height)).toBeLessThan(1);
+    expect(Math.abs(subjectBox.height - deckSizeBox.height)).toBeLessThan(1);
     await dialog.getByLabel('Subject name').fill('earth-science');
-    await expect(dialog.getByText('Subject must use lowercase kebab-case. Subject title is required.')).toBeVisible();
+    await expect(subjectError).toBeHidden();
     await dialog.getByRole('button', { name: 'Queue AI draft' }).click();
     await expect(dialog.getByRole('heading', { name: 'Draft queued' })).toBeVisible();
     expect(queuedJob).toMatchObject({

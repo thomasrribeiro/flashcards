@@ -3607,6 +3607,7 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-builder-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
     gap: 12px;
 }
 .curriculum-builder-form label {
@@ -3616,9 +3617,10 @@ body.standalone-phone .mobile-sidebar-close {
     color: var(--muted);
     font-size: 0.66rem;
 }
-.curriculum-builder-field-hint {
+.curriculum-builder-field-error {
+    min-height: 1.4em;
     margin: -7px 0 12px;
-    color: var(--muted);
+    color: #c22;
     font-size: 0.6rem;
     line-height: 1.4;
 }
@@ -3635,6 +3637,11 @@ body.standalone-phone .mobile-sidebar-close {
     padding: 8px;
     font: inherit;
     font-size: 0.72rem;
+}
+.curriculum-builder-form input,
+.curriculum-builder-form select {
+    height: 48px;
+    min-height: 48px;
 }
 .curriculum-builder-advanced {
     margin-top: 4px;
