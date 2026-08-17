@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command, Option } from 'commander';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { addChapter, createDeck, ensureSubject } from './lib/scaffold.js';
 import { codexDoctor, formatInvocation, runDeckAgent, runSubjectAgent } from './lib/codex.js';
@@ -23,8 +24,10 @@ import { providerRunner, runExternalProviderJob } from './lib/agent-provider.js'
 import { executionOptionsForGenerationJob } from './lib/generation-job.js';
 import {
     abandonRegistryDraft,
+    assertRepositoryCommit,
     beginRegistryDraft,
-    publishRegistryDraft
+    publishRegistryDraft,
+    registryCatalogHash
 } from './lib/github-publisher.js';
 import {
     claimGenerationRequest,
@@ -33,7 +36,7 @@ import {
     updateClaimedGenerationRequest,
     updateGenerationRequest
 } from './lib/generation-requests.js';
-import { resolveNotesRoot, resolvePath } from './lib/paths.js';
+import { FLASHCARDS_ROOT, resolveNotesRoot, resolvePath } from './lib/paths.js';
 import { preserveDeckNamespace, stabilizeDeck, validateDeck } from './lib/validation.js';
 import {
     DECK_GRANULARITY_RANGES,
@@ -43,6 +46,7 @@ import {
     syncDeckPrerequisitesFromSubject,
     validateSubjectRoadmap
 } from './lib/subject-curriculum.js';
+import { validateSubjectDesignProvenance } from '../src/subject-generation-contract.js';
 
 const program = new Command();
 
@@ -766,13 +770,32 @@ addAgentOptions(requests
             let resultUrl = null;
             if (jobType === 'subject-design') {
                 registryRoot = resolvePath(options.registryRoot || '.');
+                const provenance = validateSubjectDesignProvenance(payload);
+                assertRepositoryCommit(FLASHCARDS_ROOT, provenance.workflowCommit);
+                registryDraft = beginRegistryDraft(registryRoot, queued.id, {
+                    baseCommit: provenance.registryBaseCommit,
+                    baseRef: provenance.registryRef
+                });
                 const registry = resolveRegistry(registryRoot);
                 if (registry.errors.length) throw new Error(`Invalid registry:\n- ${registry.errors.join('\n- ')}`);
-                registryDraft = beginRegistryDraft(registryRoot, queued.id);
+                if (queued.registry_id && registry.id !== queued.registry_id) {
+                    throw new Error(`Queued registry ${queued.registry_id} does not match checkout ${registry.id}.`);
+                }
+                if (queued.target_repository && registry.repository !== queued.target_repository) {
+                    throw new Error(`Queued repository ${queued.target_repository} does not match checkout ${registry.repository}.`);
+                }
+                if (registry.output !== provenance.catalogPath) {
+                    throw new Error(`Queued catalog path ${provenance.catalogPath} does not match registry output ${registry.output}.`);
+                }
+                const actualCatalogHash = registryCatalogHash(registryRoot, provenance.catalogPath);
+                if (actualCatalogHash !== provenance.catalogHash) {
+                    throw new Error(`Curriculum catalog changed after queueing: expected ${provenance.catalogHash}, received ${actualCatalogHash}.`);
+                }
                 const destination = payload.destination || 'whole-field';
                 const deckGranularity = payload.deckGranularity || 'course';
                 const focus = Array.isArray(payload.focus) ? payload.focus : [];
                 validateSubjectOptions(destination, focus);
+                const existingSubject = existsSync(path.join(registry.subjectsRoot, payload.subject, 'subject.toml'));
                 const subjectResult = await ensureSubject({
                     subject: payload.subject,
                     notesRoot: registry.subjectsRoot,
@@ -792,9 +815,11 @@ addAgentOptions(requests
                         model: queued.model_id || options.model,
                         providerId: queued.provider_id,
                         reasoningEffort: payload.reasoningEffort || options.reasoningEffort,
+                        operation: existingSubject ? 'audit' : 'create',
                         destination,
                         deckGranularity,
                         focus,
+                        workflowVersion: provenance.workflowVersion,
                         extraInstructions: [
                             payload.instructions,
                             payload.proposedDecks?.length
@@ -808,7 +833,14 @@ addAgentOptions(requests
                 buildRegistry(registryRoot);
                 resultUrl = publishRegistryDraft(registryRoot, registryDraft, {
                     title: `Design ${payload.subject} curriculum`,
-                    body: `Queued generation request ${queued.id}.\n\nThis is a draft for human review. No deck or cards are published by this pull request.`
+                    body: `Queued generation request ${queued.id}.\n\n` +
+                        `Workflow: ${provenance.workflowVersion}\n` +
+                        `Workflow commit: ${provenance.workflowCommit}\n` +
+                        `Registry base: ${provenance.registryBaseCommit}\n` +
+                        `Catalog: ${provenance.catalogHash}\n` +
+                        `Model: ${queued.model_id}\n` +
+                        `Reasoning effort: ${payload.reasoningEffort || options.reasoningEffort || 'high'}\n\n` +
+                        'This is a draft for human review. No deck or cards are published by this pull request.'
                 });
                 registryDraft = null;
             } else {

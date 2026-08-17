@@ -110,7 +110,9 @@ test('queues a subject draft only for a signed-in account with a connected model
     await create.click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('thomasrribeiro-flashcards/curricula');
+    await expect(dialog).toContainText('subject-design-v1');
     await expect(dialog.getByLabel('Local provider')).toHaveCount(0);
+    await expect(dialog.getByLabel('Optional exceptions or emphasis')).toBeHidden();
     await dialog.getByLabel('Subject slug').fill('earth-science');
     await dialog.getByLabel('Title').fill('Earth Science');
     await dialog.getByRole('button', { name: 'Queue AI draft' }).click();
@@ -126,6 +128,13 @@ test('queues a subject draft only for a signed-in account with a connected model
             title: 'Earth Science',
             destination: 'whole-field',
             deckGranularity: 'course',
+            instructions: '',
+            workflowVersion: 'subject-design-v1',
+            workflowCommit: '0'.repeat(40),
+            registryBaseCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
+            catalogHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+            registryRef: 'master',
+            catalogPath: 'dist/curriculum.json',
             reasoningEffort: 'high'
         }
     });

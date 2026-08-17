@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     curriculumRegistryForView,
+    curriculumCatalogHash,
     loadCurriculumRegistries,
     mergeCurriculumRegistries,
     registryIndexUrl,
@@ -81,6 +82,12 @@ describe('curriculum registries', () => {
         });
         expect(calls[1]).toContain(`/${sha}/dist/curriculum.json`);
         expect(result.index.registries[0].resolved_commit).toBe(sha);
+        expect(result.index.registries[0].catalog_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    });
+
+    it('hashes the exact catalog content reproducibly', async () => {
+        await expect(curriculumCatalogHash('curriculum\n')).resolves
+            .toBe('sha256:2359b6b3794fb00193a0bf05655f60a717f4e6554c5980dacb5fddc003962c53');
     });
 
     it('rejects duplicate deck IDs inside one index', () => {

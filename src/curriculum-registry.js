@@ -82,6 +82,21 @@ async function cacheResponse(url, response, cacheStorage) {
     await cache.put(url, response.clone());
 }
 
+export async function curriculumCatalogHash(content, cryptoImpl = globalThis.crypto) {
+    if (!cryptoImpl?.subtle) throw new Error('SHA-256 is unavailable in this browser');
+    const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
+    const digest = await cryptoImpl.subtle.digest('SHA-256', bytes);
+    return `sha256:${[...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function parsedRegistryResponse(response) {
+    const content = await response.text();
+    return {
+        index: validateCurriculumIndex(JSON.parse(content)),
+        catalogHash: await curriculumCatalogHash(content)
+    };
+}
+
 export async function fetchCurriculumRegistry(source, {
     fetchImpl = globalThis.fetch,
     cacheStorage = globalThis.caches
@@ -92,11 +107,21 @@ export async function fetchCurriculumRegistry(source, {
         const response = await fetchImpl(url, { cache: 'no-cache' });
         if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
         await cacheResponse(url, response, cacheStorage);
-        return { source: { ...source, resolved_commit: commit }, index: validateCurriculumIndex(await response.json()), cached: false };
+        const parsed = await parsedRegistryResponse(response);
+        return {
+            source: { ...source, resolved_commit: commit, catalog_hash: parsed.catalogHash },
+            index: parsed.index,
+            cached: false
+        };
     } catch (networkError) {
         const cached = await cachedResponse(url, cacheStorage);
         if (!cached) throw networkError;
-        return { source: { ...source, resolved_commit: commit }, index: validateCurriculumIndex(await cached.json()), cached: true };
+        const parsed = await parsedRegistryResponse(cached);
+        return {
+            source: { ...source, resolved_commit: commit, catalog_hash: parsed.catalogHash },
+            index: parsed.index,
+            cached: true
+        };
     }
 }
 

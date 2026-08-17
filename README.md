@@ -259,6 +259,17 @@ flashcards requests list
 flashcards requests run --notes-root ~/notes --registry-root /path/to/curricula
 ```
 
+Subject-design requests use a versioned workflow contract rather than relying
+on user-authored prompt text. The browser records the exact model, reasoning
+effort, workflow version and application commit, registry base commit, and SHA-256 of the catalog in
+the queued payload. The trusted runner creates its isolated branch from that
+commit and refuses the job if the catalog bytes no longer match. For the normal
+whole-field workflow, the user only supplies the subject slug and title; focus,
+manual deck constraints, and additional instructions are optional exceptions.
+An existing subject is automatically audited with stable identities preserved
+where their scope remains valid, while an absent subject is created from the
+same versioned contract.
+
 In the Curriculum view, select a planned deck and use **Generate pilot
 chapter** to enqueue that same isolated deck pipeline. After the pilot passes
 human review and is explicitly approved, the action becomes **Generate

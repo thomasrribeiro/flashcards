@@ -1,3 +1,5 @@
+import { subjectDesignProvenance } from './subject-generation-contract.js';
+
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DESTINATIONS = new Set(['literacy', 'undergraduate-core', 'graduate-core', 'whole-field', 'research-specialization']);
 const GRANULARITIES = new Set(['module', 'course', 'broad-area']);
@@ -61,16 +63,29 @@ export function generationJobForDraft(input, {
     targetRepository = 'thomasrribeiro-flashcards/curricula',
     providerId = 'codex',
     modelId = null,
-    reasoningEffort = 'high'
+    reasoningEffort = 'high',
+    workflowCommit,
+    registryBaseCommit,
+    catalogHash,
+    registryRef,
+    catalogPath
 } = {}) {
     const { draft, errors } = validateCurriculumDraft(input);
     if (errors.length) throw new Error(errors.join('\n'));
+    if (!modelId) throw new Error('Choose an exact model before generating a reproducible curriculum.');
+    const provenance = subjectDesignProvenance({
+        workflowCommit,
+        registryBaseCommit,
+        catalogHash,
+        registryRef,
+        catalogPath
+    });
     return {
         jobType: 'subject-design',
         registryId,
         targetRepository,
         providerId,
         modelId: modelId || null,
-        payload: { ...draft, reasoningEffort }
+        payload: { ...draft, ...provenance, reasoningEffort }
     };
 }

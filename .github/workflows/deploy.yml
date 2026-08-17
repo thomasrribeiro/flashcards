@@ -36,6 +36,7 @@ jobs:
           echo "VITE_WORKER_URL=${{ secrets.VITE_WORKER_URL }}" > .env.production
           echo "VITE_GITHUB_CLIENT_ID=${{ secrets.VITE_GITHUB_CLIENT_ID }}" >> .env.production
           echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY }}" >> .env.production
+          echo "VITE_APP_COMMIT=${GITHUB_SHA}" >> .env.production
 
       - name: Build
         run: npm run build

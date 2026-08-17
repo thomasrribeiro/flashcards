@@ -1670,6 +1670,14 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.prompt).toContain('deck level');
         expect(invocation.prompt).toContain('complete [[coverage]] matrix');
         expect(invocation.prompt).toContain('Do not create a deck');
+        expect(invocation.prompt).toContain('Subject-design workflow version: subject-design-v1');
+
+        const audit = buildSubjectAgentInvocation({
+            subjectPath,
+            operation: 'audit'
+        });
+        expect(audit.prompt).toContain('Independently audit and redesign the existing curriculum');
+        expect(audit.prompt).toContain('preserve every stable deck identity');
 
         const extension = buildSubjectAgentInvocation({
             subjectPath,

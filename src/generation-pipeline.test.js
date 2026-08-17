@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -8,7 +8,9 @@ import { executionOptionsForGenerationJob } from '../bin/lib/generation-job.js';
 import {
     abandonRegistryDraft,
     assertCleanRegistryWorktree,
-    beginRegistryDraft
+    assertRepositoryCommit,
+    beginRegistryDraft,
+    registryCatalogHash
 } from '../bin/lib/github-publisher.js';
 
 const roots = [];
@@ -74,10 +76,29 @@ describe('local generation pipeline', () => {
         await writeFile(path.join(root, 'README.md'), 'registry\n');
         spawnSync('git', ['add', '.'], { cwd: root });
         spawnSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'Initial'], { cwd: root });
-        const draft = beginRegistryDraft(root, 42);
-        expect(draft).toEqual({ base: 'master', branch: 'flashcards/request-42' });
+        const baseCommit = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+        expect(assertRepositoryCommit(root, baseCommit)).toBe(baseCommit);
+        expect(() => assertRepositoryCommit(root, 'f'.repeat(40))).toThrow(/requires/);
+        const draft = beginRegistryDraft(root, 42, { baseCommit });
+        expect(draft).toEqual({
+            base: 'master',
+            prBase: 'master',
+            baseCommit,
+            branch: 'flashcards/request-42'
+        });
+        expect(spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim())
+            .toBe(baseCommit);
         abandonRegistryDraft(root, draft);
         await writeFile(path.join(root, 'README.md'), 'dirty\n');
         expect(() => assertCleanRegistryWorktree(root)).toThrow(/uncommitted changes/);
+    });
+
+    it('hashes the pinned registry catalog bytes', async () => {
+        const root = await temporaryRoot();
+        await mkdir(path.join(root, 'dist'));
+        await writeFile(path.join(root, 'dist', 'curriculum.json'), 'catalog\n');
+        expect(registryCatalogHash(root))
+            .toBe('sha256:d2d094cc7007ecc4ebf7e234d7b36246b1ed64e9f6c18f7b3673378666476c11');
+        expect(() => registryCatalogHash(root, '../outside.json')).toThrow(/inside/);
     });
 });

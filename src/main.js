@@ -86,6 +86,7 @@ import {
     saveCurriculumRegistrySources
 } from './curriculum-registry.js';
 import { generationJobForDraft, validateCurriculumDraft } from './curriculum-builder.js';
+import { SUBJECT_DESIGN_WORKFLOW_VERSION } from './subject-generation-contract.js';
 import { curriculumDeckProgressStates } from './curriculum-progress.js';
 import {
     deckGenerationScope,
@@ -109,6 +110,8 @@ import { initFolderCreator, openFolderCreator } from './folder-creator.js';
 import { initCardEditor, openCardEditorCreate, openCardEditorEdit } from './card-editor.js';
 import { confirmDialog } from './confirm-modal.js';
 import './card-editor.css';
+
+const WORKFLOW_COMMIT = import.meta.env.VITE_APP_COMMIT || '0000000000000000000000000000000000000000';
 
 /**
  * Initialize the application
@@ -4051,7 +4054,7 @@ async function renderCurriculumView(options = {}) {
         createSubject.disabled = true;
         createSubject.onclick = () => openCurriculumBuilder('', activeRegistry);
         breadcrumbActions.append(createSubject);
-        configureWebsiteGenerationButton(createSubject);
+        configureWebsiteGenerationButton(createSubject, { registry: activeRegistry });
     }
     breadcrumbRow.append(breadcrumbs, historyControls);
     if (breadcrumbActions.childElementCount) breadcrumbRow.append(breadcrumbActions);
@@ -4357,18 +4360,26 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
             }))
     };
     const { content } = curriculumOverlay(subjectId ? `Edit ${subjectId}` : 'Create subject');
-    content.innerHTML = `<p class="curriculum-builder-help">Define as much or as little as you want. An isolated agent researches and completes the draft, validation checks the entire DAG, and the runner opens a draft pull request against ${escapeHtml(targetRepository)}. Nothing merges automatically.</p>
+    const baseCommit = targetRegistry?.resolved_commit || '';
+    const catalogHash = targetRegistry?.catalog_hash || '';
+    content.innerHTML = `<p class="curriculum-builder-help">Enter the structured subject intent. The versioned workflow researches and completes the curriculum, validation checks the entire DAG, and the runner opens a draft pull request against ${escapeHtml(targetRepository)}. Nothing merges automatically.</p>
+        <p class="curriculum-builder-provenance">Workflow <code>${escapeHtml(SUBJECT_DESIGN_WORKFLOW_VERSION)}@${escapeHtml(WORKFLOW_COMMIT.slice(0, 12))}</code> · registry <code>${escapeHtml(baseCommit.slice(0, 12) || 'unavailable')}</code> · catalog <code>${escapeHtml(catalogHash.replace('sha256:', '').slice(0, 12) || 'unavailable')}</code></p>
         <form class="curriculum-builder-form">
             <div class="curriculum-builder-grid">
                 <label>Subject slug<input name="subject" value="${escapeHtml(draft.subject)}" placeholder="earth-science" ${subjectId ? 'readonly' : ''}></label>
                 <label>Title<input name="title" value="${escapeHtml(draft.title)}" placeholder="Earth Science"></label>
                 <label>Destination<select name="destination"><option>literacy</option><option>undergraduate-core</option><option>graduate-core</option><option>whole-field</option><option>research-specialization</option></select></label>
                 <label>Deck size<select name="deckGranularity"><option value="module">module</option><option value="course">course</option><option value="broad-area">broad-area</option></select></label>
-                <label>Focus areas<input name="focus" value="${escapeHtml(draft.focus)}" placeholder="neuroscience, genomics"></label>
             </div>
-            <label>Instructions<textarea name="instructions" rows="3" placeholder="Learner goals, constraints, or branches to emphasize"></textarea></label>
-            <div class="curriculum-builder-decks-head"><h3>Draft decks and prerequisite edges</h3><button type="button" data-add-deck>Add deck</button></div>
-            <div data-decks class="curriculum-builder-decks"></div>
+            <details class="curriculum-builder-advanced">
+                <summary>Advanced options</summary>
+                <div class="curriculum-builder-grid">
+                    <label>Focus areas<input name="focus" value="${escapeHtml(draft.focus)}" placeholder="neuroscience, genomics"></label>
+                </div>
+                <label>Optional exceptions or emphasis<textarea name="instructions" rows="3" placeholder="Leave blank for the versioned workflow"></textarea></label>
+                <div class="curriculum-builder-decks-head"><h3>Draft decks and prerequisite edges</h3><button type="button" data-add-deck>Add deck</button></div>
+                <div data-decks class="curriculum-builder-decks"></div>
+            </details>
             <div data-errors class="curriculum-builder-errors" aria-live="polite"></div>
             <div class="curriculum-builder-actions"><button type="submit">Queue AI draft</button></div>
         </form>`;
@@ -4427,7 +4438,12 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
                 targetRepository: targetRegistry?.repository,
                 providerId: generationPreferences.providerId,
                 modelId: generationPreferences.modelId,
-                reasoningEffort: generationPreferences.reasoningEffort
+                reasoningEffort: generationPreferences.reasoningEffort,
+                workflowCommit: WORKFLOW_COMMIT,
+                registryBaseCommit: targetRegistry?.resolved_commit,
+                catalogHash: targetRegistry?.catalog_hash,
+                registryRef: targetRegistry?.ref,
+                catalogPath: targetRegistry?.path
             });
             const button = form.querySelector('[type="submit"]');
             button.disabled = true;
@@ -4441,7 +4457,10 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
                 registryId: job.registryId,
                 targetRepository: job.targetRepository,
                 providerId: job.providerId,
-                modelId: job.modelId
+                modelId: job.modelId,
+                workflowVersion: job.payload.workflowVersion,
+                registryBaseCommit: job.payload.registryBaseCommit,
+                catalogHash: job.payload.catalogHash
             });
             content.innerHTML = `<div class="curriculum-builder-success"><h3>Draft queued</h3><p>Request ${escapeHtml(result.request.id)} is waiting for an isolated runner.</p><p>The result will be a draft pull request; nothing merges automatically.</p></div>`;
         } catch (error) {
@@ -5807,8 +5826,13 @@ async function websiteGenerationAvailability() {
     }
 }
 
-async function configureWebsiteGenerationButton(button) {
+async function configureWebsiteGenerationButton(button, { registry = null } = {}) {
     const availability = await websiteGenerationAvailability();
+    if (availability.enabled && registry
+        && (!registry.resolved_commit || !registry.catalog_hash)) {
+        availability.enabled = false;
+        availability.reason = 'Refresh the curriculum registry to pin its Git commit and catalog SHA-256 before generating.';
+    }
     if (!button.isConnected) return availability;
     button.disabled = !availability.enabled;
     button.title = availability.reason;

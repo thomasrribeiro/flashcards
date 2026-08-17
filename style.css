@@ -3604,6 +3604,12 @@ body.standalone-phone .mobile-sidebar-close {
 
 .curriculum-builder-content { padding: 18px; }
 .curriculum-builder-help { color: var(--muted); font-size: 0.72rem; line-height: 1.5; }
+.curriculum-builder-provenance {
+    margin: -4px 0 16px;
+    color: var(--muted);
+    font-size: 0.6rem;
+}
+.curriculum-builder-provenance code { color: var(--black); }
 .curriculum-builder-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3630,6 +3636,17 @@ body.standalone-phone .mobile-sidebar-close {
     font: inherit;
     font-size: 0.72rem;
 }
+.curriculum-builder-advanced {
+    margin-top: 4px;
+    border: 1px solid var(--subtle-border);
+    padding: 10px 12px;
+}
+.curriculum-builder-advanced > summary {
+    cursor: pointer;
+    color: var(--black);
+    font-size: 0.68rem;
+}
+.curriculum-builder-advanced[open] > summary { margin-bottom: 12px; }
 .curriculum-builder-decks-head,
 .curriculum-builder-actions {
     display: flex;
