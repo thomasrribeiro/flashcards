@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generationJobForDraft, validateCurriculumDraft } from './curriculum-builder.js';
+import { generationJobForDraft, titleForSubject, validateCurriculumDraft } from './curriculum-builder.js';
 import { SUBJECT_DESIGN_WORKFLOW_VERSION } from './subject-generation-contract.js';
 
 const provenance = {
@@ -12,6 +12,10 @@ const provenance = {
 };
 
 describe('curriculum builder', () => {
+    it('derives the display title from the required subject name', () => {
+        expect(titleForSubject('earth-science')).toBe('Earth Science');
+    });
+
     it('produces a secret-free typed subject-design job', () => {
         const job = generationJobForDraft({
             subject: 'earth-science',

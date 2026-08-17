@@ -533,6 +533,7 @@ The context hierarchy deliberately avoids repetition:
 | subject curriculum workflow | Field mapping, deck granularity, tiers, hard versus recommended edges, and coverage decisions |
 | subject `ROADMAP.md` | Learner-facing explanation of field coverage, deck sequence, and durable outcomes |
 | subject `subject.toml` | AI-authored executable curriculum with tiers, scope estimates, hard/soft order, and coverage |
+| subject `generation.toml` | Runner-authored history of the provider, model, reasoning effort, workflow commit, and pinned catalog used for each subject generation request |
 | deck `deck.toml` | Machine-readable identity, subject curriculum order, external deck prerequisites, and assumed tools |
 | deck `README.md` | Scope, chapter map, and source register |
 | deck `CARD_README.md` | Deck-specific retrieval design and justified exceptions |

@@ -85,8 +85,7 @@ import {
     getCurriculumRegistrySources,
     saveCurriculumRegistrySources
 } from './curriculum-registry.js';
-import { generationJobForDraft, validateCurriculumDraft } from './curriculum-builder.js';
-import { SUBJECT_DESIGN_WORKFLOW_VERSION } from './subject-generation-contract.js';
+import { generationJobForDraft, titleForSubject, validateCurriculumDraft } from './curriculum-builder.js';
 import { curriculumDeckProgressStates } from './curriculum-progress.js';
 import {
     deckGenerationScope,
@@ -4360,14 +4359,12 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
             }))
     };
     const { content } = curriculumOverlay(subjectId ? `Edit ${subjectId}` : 'Create subject');
-    const baseCommit = targetRegistry?.resolved_commit || '';
-    const catalogHash = targetRegistry?.catalog_hash || '';
-    content.innerHTML = `<p class="curriculum-builder-help">Enter the structured subject intent. The versioned workflow researches and completes the curriculum, validation checks the entire DAG, and the runner opens a draft pull request against ${escapeHtml(targetRepository)}. Nothing merges automatically.</p>
-        <p class="curriculum-builder-provenance">Workflow <code>${escapeHtml(SUBJECT_DESIGN_WORKFLOW_VERSION)}@${escapeHtml(WORKFLOW_COMMIT.slice(0, 12))}</code> · registry <code>${escapeHtml(baseCommit.slice(0, 12) || 'unavailable')}</code> · catalog <code>${escapeHtml(catalogHash.replace('sha256:', '').slice(0, 12) || 'unavailable')}</code></p>
-        <form class="curriculum-builder-form">
+    content.innerHTML = `<form class="curriculum-builder-form">
             <div class="curriculum-builder-grid">
-                <label>Subject slug<input name="subject" value="${escapeHtml(draft.subject)}" placeholder="earth-science" ${subjectId ? 'readonly' : ''}></label>
-                <label>Title<input name="title" value="${escapeHtml(draft.title)}" placeholder="Earth Science"></label>
+                <div class="curriculum-builder-field">
+                    <label>Subject name<input name="subject" value="${escapeHtml(draft.subject)}" placeholder="earth-science" aria-describedby="curriculum-subject-name-hint" ${subjectId ? 'readonly' : ''}></label>
+                    <p id="curriculum-subject-name-hint" class="curriculum-builder-field-hint">Subject must use lowercase kebab-case. Subject title is required.</p>
+                </div>
                 <label>Destination<select name="destination"><option>literacy</option><option>undergraduate-core</option><option>graduate-core</option><option>whole-field</option><option>research-specialization</option></select></label>
                 <label>Deck size<select name="deckGranularity"><option value="module">module</option><option value="course">course</option><option value="broad-area">broad-area</option></select></label>
             </div>
@@ -4390,7 +4387,7 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
     const deckList = content.querySelector('[data-decks]');
     const readDraft = () => ({
         subject: field('subject').value,
-        title: field('title').value,
+        title: titleForSubject(field('subject').value),
         destination: field('destination').value,
         deckGranularity: field('deckGranularity').value,
         focus: field('focus').value,

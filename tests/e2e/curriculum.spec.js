@@ -31,7 +31,11 @@ test.beforeEach(async ({ page }) => {
         page.getByRole('button', { name: 'Back in curriculum' }).boundingBox(),
         page.getByRole('button', { name: 'Create subject' }).boundingBox()
     ]);
+    const breadcrumbBox = await page.locator('.curriculum-breadcrumb').boundingBox();
     expect(Math.abs(backBox.height - createBox.height)).toBeLessThan(1);
+    expect(Math.abs(backBox.x - breadcrumbBox.x)).toBeLessThan(1);
+    expect(backBox.y).toBeGreaterThanOrEqual(breadcrumbBox.y + breadcrumbBox.height);
+    expect(createBox.x).toBeGreaterThan(backBox.x);
 });
 
 test('updates the root breadcrumb when the curriculum repository setting changes', async ({ page }) => {
@@ -109,12 +113,13 @@ test('queues a subject draft only for a signed-in account with a connected model
     await expect(create).toBeEnabled();
     await create.click();
     const dialog = page.getByRole('dialog');
-    await expect(dialog).toContainText('thomasrribeiro-flashcards/curricula');
-    await expect(dialog).toContainText('subject-design-v1');
+    await expect(dialog).not.toContainText('Enter the structured subject intent');
+    await expect(dialog).not.toContainText('subject-design-v1');
     await expect(dialog.getByLabel('Local provider')).toHaveCount(0);
     await expect(dialog.getByLabel('Optional exceptions or emphasis')).toBeHidden();
-    await dialog.getByLabel('Subject slug').fill('earth-science');
-    await dialog.getByLabel('Title').fill('Earth Science');
+    await expect(dialog.getByLabel('Title')).toHaveCount(0);
+    await dialog.getByLabel('Subject name').fill('earth-science');
+    await expect(dialog.getByText('Subject must use lowercase kebab-case. Subject title is required.')).toBeVisible();
     await dialog.getByRole('button', { name: 'Queue AI draft' }).click();
     await expect(dialog.getByRole('heading', { name: 'Draft queued' })).toBeVisible();
     expect(queuedJob).toMatchObject({

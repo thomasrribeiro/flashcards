@@ -3451,13 +3451,14 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-breadcrumb-row {
     display: flex;
     align-items: flex-start;
+    flex-wrap: wrap;
     gap: 12px;
     margin: 0 0 14px;
 }
 
 .curriculum-breadcrumb {
     display: flex;
-    flex: 1;
+    flex: 0 0 100%;
     min-width: 0;
     align-items: baseline;
     flex-wrap: wrap;
@@ -3472,7 +3473,7 @@ body.standalone-phone .mobile-sidebar-close {
     display: inline-flex;
     flex: 0 0 auto;
     gap: 6px;
-    margin-left: auto;
+    margin-left: 0;
 }
 
 .curriculum-breadcrumb-actions {
@@ -3603,13 +3604,6 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-builder-content { padding: 18px; }
-.curriculum-builder-help { color: var(--muted); font-size: 0.72rem; line-height: 1.5; }
-.curriculum-builder-provenance {
-    margin: -4px 0 16px;
-    color: var(--muted);
-    font-size: 0.6rem;
-}
-.curriculum-builder-provenance code { color: var(--black); }
 .curriculum-builder-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3621,6 +3615,12 @@ body.standalone-phone .mobile-sidebar-close {
     margin-bottom: 12px;
     color: var(--muted);
     font-size: 0.66rem;
+}
+.curriculum-builder-field-hint {
+    margin: -7px 0 12px;
+    color: var(--muted);
+    font-size: 0.6rem;
+    line-height: 1.4;
 }
 .curriculum-builder-form input,
 .curriculum-builder-form select,

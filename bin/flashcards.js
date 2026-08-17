@@ -47,6 +47,7 @@ import {
     validateSubjectRoadmap
 } from './lib/subject-curriculum.js';
 import { validateSubjectDesignProvenance } from '../src/subject-generation-contract.js';
+import { appendSubjectGenerationProvenance } from './lib/subject-generation-provenance.js';
 
 const program = new Command();
 
@@ -796,6 +797,7 @@ addAgentOptions(requests
                 const focus = Array.isArray(payload.focus) ? payload.focus : [];
                 validateSubjectOptions(destination, focus);
                 const existingSubject = existsSync(path.join(registry.subjectsRoot, payload.subject, 'subject.toml'));
+                const subjectOperation = existingSubject ? 'audit' : 'create';
                 const subjectResult = await ensureSubject({
                     subject: payload.subject,
                     notesRoot: registry.subjectsRoot,
@@ -815,7 +817,7 @@ addAgentOptions(requests
                         model: queued.model_id || options.model,
                         providerId: queued.provider_id,
                         reasoningEffort: payload.reasoningEffort || options.reasoningEffort,
-                        operation: existingSubject ? 'audit' : 'create',
+                        operation: subjectOperation,
                         destination,
                         deckGranularity,
                         focus,
@@ -830,6 +832,17 @@ addAgentOptions(requests
                         agentEnv
                     });
                 if (agent.status !== 0) throw new Error(`Subject agent exited with status ${agent.status}`);
+                appendSubjectGenerationProvenance(subjectResult.subjectPath, {
+                    requestId: queued.id,
+                    operation: subjectOperation,
+                    providerId: queued.provider_id,
+                    modelId: queued.model_id || options.model,
+                    reasoningEffort: payload.reasoningEffort || options.reasoningEffort || 'high',
+                    workflowVersion: provenance.workflowVersion,
+                    workflowCommit: provenance.workflowCommit,
+                    registryBaseCommit: provenance.registryBaseCommit,
+                    catalogHash: provenance.catalogHash
+                });
                 buildRegistry(registryRoot);
                 resultUrl = publishRegistryDraft(registryRoot, registryDraft, {
                     title: `Design ${payload.subject} curriculum`,

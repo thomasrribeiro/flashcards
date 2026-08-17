@@ -4,6 +4,15 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DESTINATIONS = new Set(['literacy', 'undergraduate-core', 'graduate-core', 'whole-field', 'research-specialization']);
 const GRANULARITIES = new Set(['module', 'course', 'broad-area']);
 
+export function titleForSubject(subject) {
+    return String(subject || '')
+        .trim()
+        .split('-')
+        .filter(Boolean)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+
 export function normalizeCurriculumDraft(draft) {
     return {
         subject: String(draft.subject || '').trim().toLowerCase(),
