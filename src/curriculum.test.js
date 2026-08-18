@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    curriculumFallbackUrl,
     chapterPrerequisiteClosure,
     curriculumDirectory,
     curriculumGraph,
@@ -78,6 +79,12 @@ const index = {
 };
 
 describe('curriculum dependency planning', () => {
+    it('versions the bundled catalog URL so installed app caches cannot hide a merge', () => {
+        const url = new URL(curriculumFallbackUrl('/flashcards/'), 'https://example.test');
+        expect(url.pathname).toBe('/flashcards/data/curriculum.json');
+        expect(url.searchParams.get('v')).toBeTruthy();
+    });
+
     it('transitively reduces required edges without using recommended paths', () => {
         const graph = transitivelyReduceCurriculumGraph({
             nodes: ['a', 'b', 'c', 'd'].map(id => ({ id })),
