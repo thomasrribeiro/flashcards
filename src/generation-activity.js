@@ -40,6 +40,21 @@ export function summarizeGenerationActivity(requests) {
     }, { active: 0, review: 0 });
 }
 
+function initiatedAt(request) {
+    const value = String(request?.requestedAt || '');
+    const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+        ? `${value.replace(' ', 'T')}Z`
+        : value;
+    const timestamp = Date.parse(normalized);
+    return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+export function sortGenerationRequestsByInitiatedAt(requests) {
+    return [...requests].sort((a, b) => (
+        initiatedAt(b) - initiatedAt(a) || Number(b.id || 0) - Number(a.id || 0)
+    ));
+}
+
 export function pullRequestCoordinates(value) {
     let url;
     try {
@@ -79,10 +94,22 @@ export async function loadPullRequestCurriculum(request, {
     if (!/^[a-f0-9]{40}$/i.test(commit || '')) {
         throw new Error('The pull request does not expose a pinned head commit.');
     }
-    const catalog = await checkedJson(await fetchImpl(
-        `https://raw.githubusercontent.com/${encodeURIComponent(pull.owner)}/${encodeURIComponent(pull.repository)}/${commit}/dist/curriculum.json`,
-        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-    ), 'Could not load the pull request curriculum');
+    const rawUrl = `https://raw.githubusercontent.com/${encodeURIComponent(pull.owner)}/${encodeURIComponent(pull.repository)}/${commit}/dist/curriculum.json`;
+    const rawResponse = await fetchImpl(rawUrl, { cache: 'no-cache' });
+    let catalog;
+    if (rawResponse.ok) {
+        catalog = await rawResponse.json();
+    } else if (token) {
+        const contentUrl = `https://api.github.com/repos/${encodeURIComponent(pull.owner)}/${encodeURIComponent(pull.repository)}/contents/dist/curriculum.json?ref=${encodeURIComponent(commit)}`;
+        catalog = await checkedJson(await fetchImpl(contentUrl, {
+            headers: {
+                Accept: 'application/vnd.github.raw+json',
+                Authorization: `Bearer ${token}`
+            }
+        }), 'Could not load the pull request curriculum');
+    } else {
+        catalog = await checkedJson(rawResponse, 'Could not load the pull request curriculum');
+    }
     if (!Array.isArray(catalog?.subjects) || !Array.isArray(catalog?.decks)) {
         throw new Error('The pull request curriculum has an invalid catalog shape.');
     }

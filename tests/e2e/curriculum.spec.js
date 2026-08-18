@@ -38,6 +38,19 @@ test.beforeEach(async ({ page }) => {
     expect(createBox.x).toBeGreaterThan(backBox.x);
 });
 
+test('keeps Agents globally accessible beneath the theme control', async ({ page }) => {
+    const theme = page.getByRole('button', { name: 'Dark mode' });
+    const agents = page.getByRole('button', { name: /Agents/ });
+    await expect(theme).toBeVisible();
+    await expect(agents).toBeVisible();
+    const [themeBox, agentsBox] = await Promise.all([theme.boundingBox(), agents.boundingBox()]);
+    expect(Math.abs(themeBox.x - agentsBox.x)).toBeLessThan(1);
+    expect(agentsBox.y).toBeGreaterThanOrEqual(themeBox.y + themeBox.height);
+
+    await page.locator('#tab-decks').click();
+    await expect(agents).toBeVisible();
+});
+
 test('updates the root breadcrumb when the curriculum repository setting changes', async ({ page }) => {
     const commit = '1234567890abcdef1234567890abcdef12345678';
     await page.route('https://api.github.com/repos/example/new-curricula/commits/master', route => (
@@ -257,7 +270,7 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
     });
     await page.reload();
     await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
-    await page.locator('#tab-curriculum').click();
+    await page.locator('#tab-decks').click();
 
     const agents = page.getByRole('button', { name: /Agents/ });
     await expect(agents).toHaveText('Agents (1 review)');
@@ -267,6 +280,7 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
     await expect(activity.getByRole('heading', { name: 'Chemistry curriculum' })).toBeVisible();
     await activity.getByRole('button', { name: 'Preview curriculum' }).click();
 
+    await expect(page.locator('#tab-curriculum')).toHaveClass(/active/);
     await expect(page.locator('.curriculum-preview-banner')).toContainText('Previewing unmerged chemistry curriculum from pull request #12');
     await expect(page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'example/curricula' })).toBeVisible();
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toBeVisible();

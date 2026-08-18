@@ -82,6 +82,7 @@ textarea {
 }
 
 .theme-toggle,
+.generation-activity-global,
 .study-settings-btn {
     border: 1px solid var(--black);
     background: var(--white);
@@ -93,9 +94,20 @@ textarea {
 }
 
 .theme-toggle:hover,
+.generation-activity-global:hover,
 .study-settings-btn:hover,
 .study-settings-btn[aria-expanded="true"] {
     background: var(--light-gray);
+}
+
+.utility-action-stack {
+    display: inline-grid;
+    flex: 0 0 auto;
+    gap: 5px;
+}
+
+.utility-action-stack > button {
+    width: 100%;
 }
 
 /* Global clickable element cursor fix */

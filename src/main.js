@@ -92,6 +92,7 @@ import {
     loadPullRequestCurriculum,
     normalizeGenerationRequest,
     pullRequestCoordinates,
+    sortGenerationRequestsByInitiatedAt,
     summarizeGenerationActivity
 } from './generation-activity.js';
 import { curriculumDeckProgressStates } from './curriculum-progress.js';
@@ -2405,6 +2406,10 @@ function setupEventListeners() {
     const addBtn = document.getElementById('add-repo-btn');
     const repoInput = document.getElementById('github-repo-input');
     const createDeckBtn = document.getElementById('create-deck-btn');
+    const generationActivityButton = document.getElementById('generation-activity-button');
+
+    generationActivityButton?.addEventListener('click', () => openGenerationActivity());
+    ensureGenerationActivityPolling();
 
     // Add repository when + button is clicked
     if (addBtn) {
@@ -4057,14 +4062,6 @@ async function renderCurriculumView(options = {}) {
     historyControls.lastElementChild.onclick = () => moveCurriculumNavigationHistory(1);
     const breadcrumbActions = document.createElement('span');
     breadcrumbActions.className = 'curriculum-breadcrumb-actions';
-    const activity = document.createElement('button');
-    activity.type = 'button';
-    activity.className = 'curriculum-toolbar-action';
-    activity.dataset.generationActivity = '';
-    activity.textContent = generationActivityButtonText();
-    activity.onclick = () => openGenerationActivity();
-    breadcrumbActions.append(activity);
-    ensureGenerationActivityPolling();
     if (hierarchy === 'subject' && mode === 'overview') {
         if (!curriculumPreview) {
             const createSubject = document.createElement('button');
@@ -4316,7 +4313,8 @@ function upsertGenerationRequest(input) {
     generationRequests = [
         request,
         ...generationRequests.filter(item => item.id !== request.id)
-    ].sort((a, b) => b.id - a.id);
+    ];
+    generationRequests = sortGenerationRequestsByInitiatedAt(generationRequests);
     updateGenerationActivityButtons();
     return request;
 }
@@ -4327,8 +4325,8 @@ async function refreshGenerationActivity() {
     generationActivityRefreshPromise = githubAuth.apiRequest('/api/generation-requests')
         .then(result => {
             generationRequests = (result.requests || [])
-                .map(normalizeGenerationRequest)
-                .sort((a, b) => b.id - a.id);
+                .map(normalizeGenerationRequest);
+            generationRequests = sortGenerationRequestsByInitiatedAt(generationRequests);
             updateGenerationActivityButtons();
             document.dispatchEvent(new CustomEvent('generationactivitychange'));
             return generationRequests;
@@ -4349,6 +4347,13 @@ function ensureGenerationActivityPolling() {
 
 function generationRequestMeta(request) {
     const parts = [`Request ${request.id}`];
+    if (request.requestedAt) {
+        const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(request.requestedAt)
+            ? `${request.requestedAt.replace(' ', 'T')}Z`
+            : request.requestedAt;
+        const started = new Date(normalized);
+        if (!Number.isNaN(started.getTime())) parts.push(`started ${started.toLocaleString()}`);
+    }
     if (request.providerId) parts.push(request.providerId);
     if (request.modelId) parts.push(request.modelId);
     if (request.payload?.reasoningEffort) parts.push(`${request.payload.reasoningEffort} reasoning`);
@@ -4369,6 +4374,7 @@ async function enterCurriculumPreview(request, close, trigger) {
         curriculumNavigationHistory = [];
         curriculumNavigationHistoryIndex = -1;
         close();
+        await showMainView('curriculum');
         await navigateCurriculum({
             mode: 'subject', hierarchy: 'deck', subject: request.subject,
             parentId: request.subject, targetId: '', query: '', layerStart: 0
@@ -4477,11 +4483,7 @@ function openGenerationActivity({ focusRequestId = null, initialRequest = null }
         };
         const list = document.createElement('div');
         list.className = 'generation-activity-list';
-        const requests = [...generationRequests].sort((a, b) => {
-            if (a.id === Number(focusRequestId)) return -1;
-            if (b.id === Number(focusRequestId)) return 1;
-            return b.id - a.id;
-        });
+        const requests = sortGenerationRequestsByInitiatedAt(generationRequests);
         if (!requests.length) {
             const empty = document.createElement('p');
             empty.textContent = 'No generation requests yet.';
@@ -4490,6 +4492,10 @@ function openGenerationActivity({ focusRequestId = null, initialRequest = null }
             requests.forEach(request => appendGenerationRequestRow(list, request, close));
         }
         content.append(summaryText, refresh, list);
+        if (focusRequestId != null) {
+            list.querySelector(`[data-request-id="${CSS.escape(String(focusRequestId))}"]`)
+                ?.scrollIntoView({ block: 'nearest' });
+        }
     };
     const handleActivityChange = () => render();
     document.addEventListener('generationactivitychange', handleActivityChange);

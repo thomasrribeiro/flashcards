@@ -3,6 +3,7 @@ import {
     loadPullRequestCurriculum,
     normalizeGenerationRequest,
     pullRequestCoordinates,
+    sortGenerationRequestsByInitiatedAt,
     summarizeGenerationActivity
 } from './generation-activity.js';
 
@@ -23,6 +24,16 @@ describe('generation activity', () => {
         expect(() => pullRequestCoordinates('https://example.com/pull/12')).toThrow(/GitHub pull request/);
     });
 
+    it('orders requests by initiation time with newest first', () => {
+        const requests = [
+            normalizeGenerationRequest({ id: 8, requested_at: '2026-08-17 21:21:37' }),
+            normalizeGenerationRequest({ id: 4, requested_at: '2026-08-15 21:19:38' }),
+            normalizeGenerationRequest({ id: 7, requested_at: '2026-08-17 21:21:35' })
+        ];
+        expect(sortGenerationRequestsByInitiatedAt(requests).map(request => request.id))
+            .toEqual([8, 7, 4]);
+    });
+
     it('loads the catalog at the exact pull request head commit', async () => {
         const commit = 'a'.repeat(40);
         const fetchImpl = vi.fn()
@@ -39,5 +50,23 @@ describe('generation activity', () => {
         expect(result.catalog.decks).toHaveLength(1);
         expect(fetchImpl.mock.calls[1][0]).toContain(`/${commit}/dist/curriculum.json`);
         expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe('Bearer test-token');
+        expect(fetchImpl.mock.calls[1][1]).toEqual({ cache: 'no-cache' });
+    });
+
+    it('falls back to the authenticated GitHub contents API for a private catalog', async () => {
+        const commit = 'b'.repeat(40);
+        const fetchImpl = vi.fn()
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ head: { sha: commit } }) })
+            .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({
+                subjects: [{ id: 'chemistry' }],
+                decks: []
+            }) });
+        await loadPullRequestCurriculum({
+            resultUrl: 'https://github.com/example/private-curricula/pull/9',
+            subject: 'chemistry'
+        }, { fetchImpl, token: 'test-token' });
+        expect(fetchImpl.mock.calls[2][0]).toContain('/contents/dist/curriculum.json?ref=');
+        expect(fetchImpl.mock.calls[2][1].headers.Authorization).toBe('Bearer test-token');
     });
 });
