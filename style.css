@@ -3479,6 +3479,7 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-breadcrumb-actions {
     display: inline-flex;
     flex: 0 0 auto;
+    gap: 6px;
 }
 
 .curriculum-breadcrumb-actions .curriculum-toolbar-action {
@@ -3603,7 +3604,7 @@ body.standalone-phone .mobile-sidebar-close {
     font-size: 1.4rem;
 }
 
-.curriculum-builder-content { padding: 18px; }
+.curriculum-builder-content { position: relative; padding: 18px; }
 .curriculum-builder-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3689,6 +3690,100 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-builder-row-actions { display: inline-flex; gap: 3px; }
 .curriculum-builder-errors { min-height: 1.4em; margin-top: 8px; color: #c22; font-size: 0.68rem; }
 .curriculum-builder-success code { display: block; overflow-x: auto; padding: 12px; background: var(--light-gray); }
+.generation-activity-summary {
+    margin: 0 90px 14px 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+}
+.generation-activity-refresh {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    border: 1px solid var(--black);
+    border-radius: 0;
+    background: var(--white);
+    color: var(--black);
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 0.66rem;
+}
+.generation-activity-list {
+    display: grid;
+    gap: 10px;
+}
+.generation-activity-item {
+    border: 1px solid var(--subtle-border);
+    padding: 12px;
+}
+.generation-activity-item-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+.generation-activity-item h3 {
+    font-size: 0.82rem;
+}
+.generation-activity-item p {
+    margin: 5px 0 0;
+    color: var(--muted);
+    font-size: 0.62rem;
+}
+.generation-activity-status {
+    flex: 0 0 auto;
+    border: 1px solid var(--black);
+    padding: 4px 7px;
+    font-size: 0.58rem;
+    white-space: nowrap;
+}
+.generation-activity-status.is-queued,
+.generation-activity-status.is-running { background: var(--gold); }
+.generation-activity-status.is-needs-review { background: #fff5c7; }
+.generation-activity-status.is-failed { border-color: #c22; color: #c22; }
+.generation-activity-status.is-published,
+.generation-activity-status.is-cancelled { color: var(--muted); }
+.generation-activity-actions,
+.curriculum-preview-banner > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 10px;
+}
+.generation-activity-actions button,
+.generation-activity-actions a,
+.curriculum-preview-banner button,
+.curriculum-preview-banner a {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--black);
+    border-radius: 0;
+    background: var(--white);
+    color: var(--black);
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 0.64rem;
+    text-decoration: none;
+}
+.generation-activity-error,
+.generation-activity-item .generation-activity-error {
+    color: #c22;
+}
+.generation-activity-error:empty { display: none; }
+.curriculum-preview-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin: -3px 0 14px;
+    border: 1px solid var(--black);
+    background: #fff5c7;
+    padding: 10px 12px;
+}
+.curriculum-preview-banner p {
+    margin: 0;
+    font-size: 0.66rem;
+}
+.curriculum-preview-banner > div { margin: 0; }
 .curriculum-source-row {
     display: grid;
     grid-template-columns: auto 1fr 180px auto;
@@ -3698,6 +3793,9 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 @media (max-width: 760px) {
+    .generation-activity-summary { margin-right: 0; }
+    .generation-activity-refresh { position: static; margin-bottom: 12px; }
+    .curriculum-preview-banner { align-items: flex-start; flex-direction: column; }
     .curriculum-builder-grid { grid-template-columns: 1fr; }
     .curriculum-builder-deck { grid-template-columns: 28px 1fr auto; }
     .curriculum-builder-deck > input:nth-of-type(2),

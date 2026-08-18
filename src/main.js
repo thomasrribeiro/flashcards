@@ -86,6 +86,14 @@ import {
     saveCurriculumRegistrySources
 } from './curriculum-registry.js';
 import { generationJobForDraft, titleForSubject, validateCurriculumDraft } from './curriculum-builder.js';
+import {
+    generationRequestName,
+    generationStatusLabel,
+    loadPullRequestCurriculum,
+    normalizeGenerationRequest,
+    pullRequestCoordinates,
+    summarizeGenerationActivity
+} from './generation-activity.js';
 import { curriculumDeckProgressStates } from './curriculum-progress.js';
 import {
     deckGenerationScope,
@@ -1530,6 +1538,10 @@ function renderDeckTree(displayDecks, allCards, allReviews, searchTerm, grid) {
 let columnsSel = { subject: null, deck: null, chapter: null };
 let curriculumIndex = null;
 let pendingCurriculumSources = [];
+let generationRequests = [];
+let generationActivityRefreshPromise = null;
+let generationActivityPollTimer = null;
+let curriculumPreview = null;
 let activeDependencyTarget = null;
 let activeDeckActions = null;
 let activeDeckActionsTrigger = null;
@@ -4045,19 +4057,31 @@ async function renderCurriculumView(options = {}) {
     historyControls.lastElementChild.onclick = () => moveCurriculumNavigationHistory(1);
     const breadcrumbActions = document.createElement('span');
     breadcrumbActions.className = 'curriculum-breadcrumb-actions';
+    const activity = document.createElement('button');
+    activity.type = 'button';
+    activity.className = 'curriculum-toolbar-action';
+    activity.dataset.generationActivity = '';
+    activity.textContent = generationActivityButtonText();
+    activity.onclick = () => openGenerationActivity();
+    breadcrumbActions.append(activity);
+    ensureGenerationActivityPolling();
     if (hierarchy === 'subject' && mode === 'overview') {
-        const createSubject = document.createElement('button');
-        createSubject.type = 'button';
-        createSubject.className = 'curriculum-toolbar-action is-primary';
-        createSubject.textContent = 'Create subject';
-        createSubject.disabled = true;
-        createSubject.onclick = () => openCurriculumBuilder('', activeRegistry);
-        breadcrumbActions.append(createSubject);
-        configureWebsiteGenerationButton(createSubject, { registry: activeRegistry });
+        if (!curriculumPreview) {
+            const createSubject = document.createElement('button');
+            createSubject.type = 'button';
+            createSubject.className = 'curriculum-toolbar-action is-primary';
+            createSubject.textContent = 'Create subject';
+            createSubject.disabled = true;
+            createSubject.onclick = () => openCurriculumBuilder('', activeRegistry);
+            breadcrumbActions.append(createSubject);
+            configureWebsiteGenerationButton(createSubject, { registry: activeRegistry });
+        }
     }
     breadcrumbRow.append(breadcrumbs, historyControls);
     if (breadcrumbActions.childElementCount) breadcrumbRow.append(breadcrumbActions);
     root.appendChild(breadcrumbRow);
+    const previewBanner = curriculumPreviewBanner();
+    if (previewBanner) root.appendChild(previewBanner);
 
     if (mode === 'focus') renderCurriculumNeighborhood(root, progressStates);
     else if (mode === 'overview') {
@@ -4258,15 +4282,247 @@ async function renderLegacyCurriculumView(options = {}) {
 function curriculumOverlay(title) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay curriculum-builder-overlay';
-    overlay.innerHTML = `<div class="curriculum-builder-modal" role="dialog" aria-modal="true">
+    overlay.innerHTML = `<div class="curriculum-builder-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
         <header><h2>${escapeHtml(title)}</h2><button type="button" data-close aria-label="Close">×</button></header>
         <div class="curriculum-builder-content"></div>
     </div>`;
-    const close = () => overlay.remove();
+    const close = () => {
+        overlay.dispatchEvent(new Event('close'));
+        overlay.remove();
+    };
     overlay.querySelector('[data-close]').onclick = close;
     overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
     document.body.appendChild(overlay);
     return { overlay, content: overlay.querySelector('.curriculum-builder-content'), close };
+}
+
+function generationActivityButtonText() {
+    const { active, review } = summarizeGenerationActivity(generationRequests);
+    if (active) return `Agents (${active} active)`;
+    if (review) return `Agents (${review} review)`;
+    return 'Agents';
+}
+
+function updateGenerationActivityButtons() {
+    const label = generationActivityButtonText();
+    document.querySelectorAll('[data-generation-activity]').forEach(button => {
+        button.textContent = label;
+        button.setAttribute('aria-label', `AI generation activity. ${label}.`);
+    });
+}
+
+function upsertGenerationRequest(input) {
+    const request = normalizeGenerationRequest(input);
+    generationRequests = [
+        request,
+        ...generationRequests.filter(item => item.id !== request.id)
+    ].sort((a, b) => b.id - a.id);
+    updateGenerationActivityButtons();
+    return request;
+}
+
+async function refreshGenerationActivity() {
+    if (!githubAuth.isAuthenticated()) return [];
+    if (generationActivityRefreshPromise) return generationActivityRefreshPromise;
+    generationActivityRefreshPromise = githubAuth.apiRequest('/api/generation-requests')
+        .then(result => {
+            generationRequests = (result.requests || [])
+                .map(normalizeGenerationRequest)
+                .sort((a, b) => b.id - a.id);
+            updateGenerationActivityButtons();
+            document.dispatchEvent(new CustomEvent('generationactivitychange'));
+            return generationRequests;
+        })
+        .finally(() => { generationActivityRefreshPromise = null; });
+    return generationActivityRefreshPromise;
+}
+
+function ensureGenerationActivityPolling() {
+    if (!githubAuth.isAuthenticated()) return;
+    refreshGenerationActivity().catch(error => console.warn('[Generation] Activity refresh failed:', error));
+    if (generationActivityPollTimer) return;
+    generationActivityPollTimer = setInterval(() => {
+        if (document.hidden || !document.querySelector('[data-generation-activity], [data-generation-activity-list]')) return;
+        refreshGenerationActivity().catch(error => console.warn('[Generation] Activity refresh failed:', error));
+    }, 5000);
+}
+
+function generationRequestMeta(request) {
+    const parts = [`Request ${request.id}`];
+    if (request.providerId) parts.push(request.providerId);
+    if (request.modelId) parts.push(request.modelId);
+    if (request.payload?.reasoningEffort) parts.push(`${request.payload.reasoningEffort} reasoning`);
+    return parts.join(' · ');
+}
+
+async function enterCurriculumPreview(request, close, trigger) {
+    const originalText = trigger.textContent;
+    trigger.disabled = true;
+    trigger.textContent = 'Loading…';
+    try {
+        const { catalog, commit, pull } = await loadPullRequestCurriculum(request, {
+            token: githubAuth.getToken()
+        });
+        const publishedIndex = curriculumPreview?.publishedIndex || curriculumIndex;
+        curriculumPreview = { publishedIndex, request, commit, pull };
+        curriculumIndex = catalog;
+        curriculumNavigationHistory = [];
+        curriculumNavigationHistoryIndex = -1;
+        close();
+        await navigateCurriculum({
+            mode: 'subject', hierarchy: 'deck', subject: request.subject,
+            parentId: request.subject, targetId: '', query: '', layerStart: 0
+        }, { replace: true, trackHistory: false });
+    } catch (error) {
+        trigger.disabled = false;
+        trigger.textContent = originalText;
+        const row = trigger.closest('.generation-activity-item');
+        const message = row?.querySelector('[data-preview-error]');
+        if (message) message.textContent = error.message;
+    }
+}
+
+async function exitCurriculumPreview() {
+    if (!curriculumPreview) return;
+    curriculumIndex = curriculumPreview.publishedIndex;
+    curriculumPreview = null;
+    curriculumNavigationHistory = [];
+    curriculumNavigationHistoryIndex = -1;
+    await navigateCurriculum({
+        mode: 'overview', hierarchy: 'subject', subject: '', parentId: '',
+        targetId: '', query: '', layerStart: 0
+    }, { replace: true, trackHistory: false });
+}
+
+function appendGenerationRequestRow(list, request, close) {
+    const item = document.createElement('article');
+    item.className = 'generation-activity-item';
+    item.dataset.requestId = String(request.id);
+
+    const header = document.createElement('div');
+    header.className = 'generation-activity-item-header';
+    const identity = document.createElement('div');
+    const title = document.createElement('h3');
+    title.textContent = generationRequestName(request);
+    const meta = document.createElement('p');
+    meta.textContent = generationRequestMeta(request);
+    identity.append(title, meta);
+    const status = document.createElement('span');
+    status.className = `generation-activity-status is-${request.status}`;
+    status.textContent = generationStatusLabel(request.status);
+    header.append(identity, status);
+    item.appendChild(header);
+
+    if (request.error) {
+        const error = document.createElement('p');
+        error.className = 'generation-activity-error';
+        error.textContent = request.error;
+        item.appendChild(error);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'generation-activity-actions';
+    if (request.jobType === 'subject-design' && request.status === 'needs-review' && request.resultUrl) {
+        const preview = document.createElement('button');
+        preview.type = 'button';
+        preview.textContent = 'Preview curriculum';
+        preview.onclick = () => enterCurriculumPreview(request, close, preview);
+        actions.appendChild(preview);
+    }
+    if (request.resultUrl) {
+        try {
+            pullRequestCoordinates(request.resultUrl);
+            const link = document.createElement('a');
+            link.href = request.resultUrl;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'Open pull request';
+            actions.appendChild(link);
+        } catch { /* The worker result is not a pull request. */ }
+    }
+    if (actions.childElementCount) item.appendChild(actions);
+    const previewError = document.createElement('p');
+    previewError.className = 'generation-activity-error';
+    previewError.dataset.previewError = '';
+    previewError.setAttribute('aria-live', 'polite');
+    item.appendChild(previewError);
+    list.appendChild(item);
+}
+
+function openGenerationActivity({ focusRequestId = null, initialRequest = null } = {}) {
+    if (!githubAuth.isAuthenticated()) {
+        alert('Sign in with GitHub to view generation activity.');
+        return;
+    }
+    if (initialRequest) upsertGenerationRequest(initialRequest);
+    const { overlay, content, close } = curriculumOverlay('AI activity');
+    content.dataset.generationActivityList = '';
+    const render = () => {
+        if (!overlay.isConnected) return;
+        content.replaceChildren();
+        const summary = summarizeGenerationActivity(generationRequests);
+        const summaryText = document.createElement('p');
+        summaryText.className = 'generation-activity-summary';
+        summaryText.textContent = summary.active
+            ? `${summary.active} agent${summary.active === 1 ? '' : 's'} currently running or queued. ${summary.review} awaiting review.`
+            : `No agents currently running. ${summary.review} result${summary.review === 1 ? '' : 's'} awaiting review.`;
+        const refresh = document.createElement('button');
+        refresh.type = 'button';
+        refresh.className = 'generation-activity-refresh';
+        refresh.textContent = 'Refresh';
+        refresh.onclick = async () => {
+            refresh.disabled = true;
+            await refreshGenerationActivity().catch(error => { summaryText.textContent = error.message; });
+            render();
+        };
+        const list = document.createElement('div');
+        list.className = 'generation-activity-list';
+        const requests = [...generationRequests].sort((a, b) => {
+            if (a.id === Number(focusRequestId)) return -1;
+            if (b.id === Number(focusRequestId)) return 1;
+            return b.id - a.id;
+        });
+        if (!requests.length) {
+            const empty = document.createElement('p');
+            empty.textContent = 'No generation requests yet.';
+            list.appendChild(empty);
+        } else {
+            requests.forEach(request => appendGenerationRequestRow(list, request, close));
+        }
+        content.append(summaryText, refresh, list);
+    };
+    const handleActivityChange = () => render();
+    document.addEventListener('generationactivitychange', handleActivityChange);
+    overlay.addEventListener('close', () => {
+        document.removeEventListener('generationactivitychange', handleActivityChange);
+    }, { once: true });
+    render();
+    refreshGenerationActivity().then(render).catch(error => {
+        if (!overlay.isConnected) return;
+        content.innerHTML = `<p class="generation-activity-error">${escapeHtml(error.message)}</p>`;
+    });
+    ensureGenerationActivityPolling();
+}
+
+function curriculumPreviewBanner() {
+    if (!curriculumPreview) return null;
+    const banner = document.createElement('aside');
+    banner.className = 'curriculum-preview-banner';
+    const text = document.createElement('p');
+    text.textContent = `Previewing unmerged ${curriculumPreview.request.subject} curriculum from pull request #${curriculumPreview.pull.number} at ${curriculumPreview.commit.slice(0, 12)}.`;
+    const actions = document.createElement('div');
+    const link = document.createElement('a');
+    link.href = curriculumPreview.request.resultUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'Open pull request';
+    const exit = document.createElement('button');
+    exit.type = 'button';
+    exit.textContent = 'Exit preview';
+    exit.onclick = exitCurriculumPreview;
+    actions.append(link, exit);
+    banner.append(text, actions);
+    return banner;
 }
 
 function openCurriculumSources() {
@@ -4358,7 +4614,7 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
                 prerequisites: (deck.prerequisites || []).map(id => id.startsWith(`${subjectId}/`) ? id.split('/')[1] : id)
             }))
     };
-    const { content } = curriculumOverlay(subjectId ? `Edit ${subjectId}` : 'Create subject');
+    const { content, close } = curriculumOverlay(subjectId ? `Edit ${subjectId}` : 'Create subject');
     content.innerHTML = `<form class="curriculum-builder-form">
             <div class="curriculum-builder-grid">
                 <div class="curriculum-builder-field">
@@ -4468,7 +4724,19 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
                 registryBaseCommit: job.payload.registryBaseCommit,
                 catalogHash: job.payload.catalogHash
             });
-            content.innerHTML = `<div class="curriculum-builder-success"><h3>Draft queued</h3><p>Request ${escapeHtml(result.request.id)} is waiting for an isolated runner.</p><p>The result will be a draft pull request; nothing merges automatically.</p></div>`;
+            close();
+            openGenerationActivity({
+                focusRequestId: result.request.id,
+                initialRequest: {
+                    ...result.request,
+                    job_type: job.jobType,
+                    registry_id: job.registryId,
+                    target_repository: job.targetRepository,
+                    provider_id: job.providerId,
+                    model_id: job.modelId,
+                    payload: job.payload
+                }
+            });
         } catch (error) {
             content.querySelector('[data-errors]').textContent = error.message;
         }

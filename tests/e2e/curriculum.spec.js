@@ -94,9 +94,19 @@ test('queues a subject draft only for a signed-in account with a connected model
                 id: 'openai', connected: true, status: 'connected', keyHint: '••••test'
             }] } });
         }
+        if (path === '/api/generation-requests' && request.method() === 'GET') {
+            return route.fulfill({ json: { requests: queuedJob ? [{
+                id: 123,
+                status: 'queued',
+                job_type: 'subject-design',
+                provider_id: 'openai',
+                model_id: 'gpt-test',
+                payload_json: JSON.stringify(queuedJob.payload)
+            }] : [] } });
+        }
         if (path === '/api/generation-requests' && request.method() === 'POST') {
             queuedJob = request.postDataJSON();
-            return route.fulfill({ json: { request: { id: 'request-123' } } });
+            return route.fulfill({ json: { request: { id: 123, status: 'queued' } } });
         }
         return route.fulfill({ json: {} });
     });
@@ -138,7 +148,12 @@ test('queues a subject draft only for a signed-in account with a connected model
     await dialog.getByLabel('Subject name').fill('earth-science');
     await expect(subjectError).toBeHidden();
     await dialog.getByRole('button', { name: 'Queue AI draft' }).click();
-    await expect(dialog.getByRole('heading', { name: 'Draft queued' })).toBeVisible();
+    const activity = page.getByRole('dialog', { name: 'AI activity' });
+    await expect(activity).toBeVisible();
+    await expect(activity.getByRole('heading', { name: 'Earth Science curriculum' })).toBeVisible();
+    await expect(activity.getByText('Request 123 · openai · gpt-test · high reasoning')).toBeVisible();
+    await expect(activity.getByText('Queued', { exact: true })).toBeVisible();
+    await expect(activity).not.toContainText('waiting for an isolated runner');
     expect(queuedJob).toMatchObject({
         jobType: 'subject-design',
         registryId: 'thomas-ribeiro',
@@ -161,6 +176,107 @@ test('queues a subject draft only for a signed-in account with a connected model
         }
     });
     expect(JSON.stringify(queuedJob)).not.toMatch(/api.?key|secret/i);
+});
+
+test('tracks generation activity and previews an unmerged subject PR in the DAG', async ({ page }) => {
+    const commit = 'a'.repeat(40);
+    const resultUrl = 'https://github.com/example/curricula/pull/12';
+    const previewCatalog = {
+        ...bundledCurriculum,
+        registry: {
+            ...bundledCurriculum.registry,
+            id: 'example-curricula',
+            name: 'Example curricula',
+            repository: 'example/curricula'
+        },
+        subjects: [
+            ...bundledCurriculum.subjects,
+            { id: 'chemistry', destination: 'whole-field', focus: [], deck_granularity: 'course' }
+        ],
+        decks: [
+            ...bundledCurriculum.decks,
+            {
+                id: 'chemistry/chemical-literacy', subject: 'chemistry', deck: 'chemical-literacy',
+                order: 1, tier: 'core', level: 'foundational', status: 'planned',
+                description: 'Chemical measurement, matter, and scientific practice.',
+                prerequisites: [], recommended_after: [], materialized: false, chapters: []
+            },
+            {
+                id: 'chemistry/chemical-reactions', subject: 'chemistry', deck: 'chemical-reactions',
+                order: 2, tier: 'core', level: 'intermediate', status: 'planned',
+                description: 'Stoichiometry, reaction classes, and energetics.',
+                prerequisites: ['chemistry/chemical-literacy'], recommended_after: [],
+                materialized: false, chapters: []
+            }
+        ]
+    };
+    await page.route('https://api.github.com/repos/example/curricula/pulls/12', route => (
+        route.fulfill({ json: { head: { sha: commit } } })
+    ));
+    await page.route('**/api/**', async route => {
+        const request = route.request();
+        const path = new URL(request.url()).pathname;
+        if (path === '/repos/thomasrribeiro-flashcards/curricula/commits/master') {
+            return route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } });
+        }
+        if (path === '/api/users/ensure') return route.fulfill({ json: { success: true } });
+        if (path === '/api/reviews/test-user') return route.fulfill({ json: { reviews: [] } });
+        if (path === '/api/chapter-progress/test-user') return route.fulfill({ json: { chapters: [] } });
+        if (path === '/api/repos/test-user') return route.fulfill({ json: { repos: [] } });
+        if (path === '/api/settings/test-user') return route.fulfill({ json: { settings: {} } });
+        if (path === '/api/study-session/test-user') return route.fulfill({ json: { session: null } });
+        if (path === '/api/habit/test-user') {
+            return route.fulfill({ json: {
+                streak: 0,
+                today: { reviews: 0, newCards: 0, xp: 0, goalMet: false },
+                totalXp: 0,
+                settings: {}
+            } });
+        }
+        if (path === '/api/generation-requests') {
+            return route.fulfill({ json: { requests: [{
+                id: 4,
+                status: 'needs-review',
+                job_type: 'subject-design',
+                provider_id: 'openai',
+                model_id: 'gpt-test',
+                result_url: resultUrl,
+                payload_json: JSON.stringify({ subject: 'chemistry', reasoningEffort: 'high' })
+            }] } });
+        }
+        return route.fulfill({ json: {} });
+    });
+    await page.route(`https://raw.githubusercontent.com/example/curricula/${commit}/dist/curriculum.json`, route => (
+        route.fulfill({ json: previewCatalog })
+    ));
+    await page.addInitScript(() => {
+        localStorage.setItem('github_user', JSON.stringify({
+            id: 'test-user', username: 'test-user', name: 'Test User'
+        }));
+        localStorage.setItem('github_token', 'test-token');
+    });
+    await page.reload();
+    await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
+    await page.locator('#tab-curriculum').click();
+
+    const agents = page.getByRole('button', { name: /Agents/ });
+    await expect(agents).toHaveText('Agents (1 review)');
+    await agents.click();
+    const activity = page.getByRole('dialog', { name: 'AI activity' });
+    await expect(activity.getByText('No agents currently running. 1 result awaiting review.')).toBeVisible();
+    await expect(activity.getByRole('heading', { name: 'Chemistry curriculum' })).toBeVisible();
+    await activity.getByRole('button', { name: 'Preview curriculum' }).click();
+
+    await expect(page.locator('.curriculum-preview-banner')).toContainText('Previewing unmerged chemistry curriculum from pull request #12');
+    await expect(page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'example/curricula' })).toBeVisible();
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toBeVisible();
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-reactions"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create subject' })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Exit preview' }).click();
+    await expect(page.locator('.curriculum-preview-banner')).toHaveCount(0);
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Create subject' })).toBeVisible();
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {
