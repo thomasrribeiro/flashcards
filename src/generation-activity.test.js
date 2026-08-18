@@ -3,6 +3,7 @@ import {
     loadPullRequestCurriculum,
     normalizeGenerationRequest,
     pullRequestCoordinates,
+    reconcileGenerationRequestStatuses,
     sortGenerationRequestsByInitiatedAt,
     summarizeGenerationActivity
 } from './generation-activity.js';
@@ -32,6 +33,30 @@ describe('generation activity', () => {
         ];
         expect(sortGenerationRequestsByInitiatedAt(requests).map(request => request.id))
             .toEqual([8, 7, 4]);
+    });
+
+    it('persists merged and closed pull request outcomes', async () => {
+        const updateRequest = vi.fn(async (id, partial) => ({ request: { id, ...partial } }));
+        const fetchImpl = vi.fn()
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ state: 'closed', merged: true }) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ state: 'closed', merged: false }) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ state: 'open', merged: false }) });
+        const requests = [
+            normalizeGenerationRequest({ id: 4, status: 'needs-review', result_url: 'https://github.com/example/curricula/pull/1' }),
+            normalizeGenerationRequest({ id: 5, status: 'needs-review', result_url: 'https://github.com/example/curricula/pull/2' }),
+            normalizeGenerationRequest({ id: 6, status: 'needs-review', result_url: 'https://github.com/example/curricula/pull/3' })
+        ];
+        const reconciled = await reconcileGenerationRequestStatuses(requests, {
+            fetchImpl, token: 'test-token', updateRequest
+        });
+        expect(reconciled.map(request => request.status)).toEqual(['published', 'cancelled', 'needs-review']);
+        expect(summarizeGenerationActivity(reconciled)).toEqual({ active: 0, review: 1 });
+        expect(updateRequest.mock.calls).toEqual([
+            [4, { status: 'published', resultUrl: 'https://github.com/example/curricula/pull/1' }],
+            [5, { status: 'cancelled', resultUrl: 'https://github.com/example/curricula/pull/2' }]
+        ]);
+        expect(fetchImpl.mock.calls[0][0]).toMatch(/\/pulls\/1\?activity_fresh=\d+$/);
+        expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe('Bearer test-token');
     });
 
     it('loads the catalog at the exact pull request head commit', async () => {

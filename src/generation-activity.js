@@ -69,6 +69,54 @@ export function pullRequestCoordinates(value) {
     return { owner: match[1], repository: match[2], number: Number(match[3]) };
 }
 
+export async function reconcileGenerationRequestStatuses(requests, {
+    fetchImpl = fetch,
+    token = '',
+    updateRequest = async () => ({})
+} = {}) {
+    return Promise.all(requests.map(async request => {
+        if (request.status !== 'needs-review' || !request.resultUrl) return request;
+        let pull;
+        try {
+            pull = pullRequestCoordinates(request.resultUrl);
+        } catch {
+            return request;
+        }
+        try {
+            const freshness = Date.now();
+            const response = await fetchImpl(
+                `https://api.github.com/repos/${encodeURIComponent(pull.owner)}/${encodeURIComponent(pull.repository)}/pulls/${pull.number}?activity_fresh=${freshness}`,
+                {
+                    cache: 'no-cache',
+                    headers: {
+                        Accept: 'application/vnd.github+json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {})
+                    }
+                }
+            );
+            if (!response.ok) return request;
+            const details = await response.json();
+            const status = details.merged || details.merged_at
+                ? 'published'
+                : details.state === 'closed' ? 'cancelled' : null;
+            if (!status) return request;
+            const updated = await updateRequest(request.id, {
+                status,
+                resultUrl: request.resultUrl
+            });
+            return normalizeGenerationRequest({
+                ...request,
+                ...(updated?.request || updated),
+                status
+            });
+        } catch {
+            // Activity remains reviewable if GitHub or persistence is temporarily
+            // unavailable; the next poll safely retries reconciliation.
+            return request;
+        }
+    }));
+}
+
 async function checkedJson(response, message) {
     if (!response.ok) {
         const payload = await response.json().catch(() => ({}));

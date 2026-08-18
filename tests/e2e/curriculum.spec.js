@@ -243,8 +243,8 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
             }
         ]
     };
-    await page.route('https://api.github.com/repos/example/curricula/pulls/12', route => (
-        route.fulfill({ json: { head: { sha: commit } } })
+    await page.route('https://api.github.com/repos/example/curricula/pulls/12**', route => (
+        route.fulfill({ json: { state: 'open', merged: false, head: { sha: commit } } })
     ));
     await page.route('https://api.github.com/repos/thomasrribeiro-flashcards/curricula/commits/master**', route => (
         route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } })
@@ -313,6 +313,72 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
     await expect(page.locator('.curriculum-preview-banner')).toHaveCount(0);
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Create subject' })).toBeVisible();
+});
+
+test('publishes merged review requests and clears the Agents review count', async ({ page }) => {
+    const resultUrl = 'https://github.com/example/curricula/pull/1';
+    const patches = [];
+    await page.route('https://api.github.com/repos/example/curricula/pulls/1**', route => (
+        route.fulfill({ json: { state: 'closed', merged: true, merged_at: '2026-08-18T22:09:24Z' } })
+    ));
+    await page.route('**/api/**', async route => {
+        const request = route.request();
+        const path = new URL(request.url()).pathname;
+        if (path === '/api/users/ensure') return route.fulfill({ json: { success: true } });
+        if (path === '/api/reviews/test-user') return route.fulfill({ json: { reviews: [] } });
+        if (path === '/api/chapter-progress/test-user') return route.fulfill({ json: { chapters: [] } });
+        if (path === '/api/repos/test-user') return route.fulfill({ json: { repos: [] } });
+        if (path === '/api/settings/test-user') return route.fulfill({ json: { settings: {} } });
+        if (path === '/api/study-session/test-user') return route.fulfill({ json: { session: null } });
+        if (path === '/api/habit/test-user') {
+            return route.fulfill({ json: {
+                streak: 0,
+                today: { reviews: 0, newCards: 0, xp: 0, goalMet: false },
+                totalXp: 0,
+                settings: {}
+            } });
+        }
+        if (path === '/api/ai/providers') return route.fulfill({ json: { providers: [] } });
+        if (path === '/api/generation-requests/4' && request.method() === 'PATCH') {
+            patches.push(request.postDataJSON());
+            return route.fulfill({ json: { request: { id: 4, status: 'published' } } });
+        }
+        if (path === '/api/generation-requests') {
+            return route.fulfill({ json: { requests: [{
+                id: 4,
+                status: 'needs-review',
+                job_type: 'subject-design',
+                provider_id: 'openai',
+                model_id: 'gpt-test',
+                result_url: resultUrl,
+                payload_json: JSON.stringify({ subject: 'chemistry', reasoningEffort: 'high' })
+            }] } });
+        }
+        return route.fulfill({ json: {} });
+    });
+    await page.addInitScript(() => {
+        localStorage.setItem('github_user', JSON.stringify({
+            id: 'test-user', username: 'test-user', name: 'Test User'
+        }));
+        localStorage.setItem('github_token', 'test-token');
+    });
+    await page.reload();
+    await expect(page.locator('#study-settings-btn')).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => patches.length).toBeGreaterThan(0);
+    expect(patches[0]).toEqual({
+        status: 'published',
+        resultUrl: 'https://github.com/example/curricula/pull/1'
+    });
+
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    const agents = settings.getByRole('tab', { name: /Agents/ });
+    await expect(agents).toHaveText('Agents');
+    await agents.click();
+    const activity = settings.locator('#study-settings-pane-agents');
+    await expect(activity.getByText('No agents currently running. 0 results awaiting review.')).toBeVisible();
+    await expect(activity.getByText('Published', { exact: true })).toBeVisible();
+    await expect(activity.getByRole('button', { name: 'Preview curriculum' })).toHaveCount(0);
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {

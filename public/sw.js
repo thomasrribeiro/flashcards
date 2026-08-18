@@ -89,9 +89,10 @@ self.addEventListener('fetch', event => {
     // Never cache the sync/habit worker
     if (url.hostname.endsWith('.workers.dev')) return;
 
-    // Mutable GitHub branch-head requests must reach the network so newly
-    // merged curriculum catalogs appear on the next application load.
-    if (url.hostname === 'api.github.com' && /\/commits\/[^/]+$/.test(url.pathname)) {
+    // Mutable GitHub branch and pull-request status must reach the network so
+    // newly merged curricula appear and leave the review queue promptly.
+    if (url.hostname === 'api.github.com'
+        && (/\/commits\/[^/]+$/.test(url.pathname) || /\/pulls\/\d+$/.test(url.pathname))) {
         event.respondWith(fetch(request));
         return;
     }

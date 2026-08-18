@@ -92,6 +92,7 @@ import {
     loadPullRequestCurriculum,
     normalizeGenerationRequest,
     pullRequestCoordinates,
+    reconcileGenerationRequestStatuses,
     sortGenerationRequestsByInitiatedAt,
     summarizeGenerationActivity
 } from './generation-activity.js';
@@ -1542,6 +1543,7 @@ let pendingCurriculumSources = [];
 let generationRequests = [];
 let generationActivityRefreshPromise = null;
 let generationActivityPollTimer = null;
+let generationActivityLastReconciledAt = 0;
 let curriculumPreview = null;
 let activeDependencyTarget = null;
 let activeDeckActions = null;
@@ -4317,13 +4319,24 @@ function upsertGenerationRequest(input) {
     return request;
 }
 
-async function refreshGenerationActivity() {
+async function refreshGenerationActivity({ forceReconcile = false } = {}) {
     if (!githubAuth.isAuthenticated()) return [];
     if (generationActivityRefreshPromise) return generationActivityRefreshPromise;
     generationActivityRefreshPromise = githubAuth.apiRequest('/api/generation-requests')
-        .then(result => {
-            generationRequests = (result.requests || [])
-                .map(normalizeGenerationRequest);
+        .then(async result => {
+            const requests = (result.requests || []).map(normalizeGenerationRequest);
+            const shouldReconcile = forceReconcile
+                || Date.now() - generationActivityLastReconciledAt >= 60_000;
+            generationRequests = shouldReconcile
+                ? await reconcileGenerationRequestStatuses(requests, {
+                    token: githubAuth.getToken(),
+                    updateRequest: (id, partial) => githubAuth.apiRequest(`/api/generation-requests/${id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify(partial)
+                    })
+                })
+                : requests;
+            if (shouldReconcile) generationActivityLastReconciledAt = Date.now();
             generationRequests = sortGenerationRequestsByInitiatedAt(generationRequests);
             updateGenerationActivityButtons();
             document.dispatchEvent(new CustomEvent('generationactivitychange'));
@@ -4335,7 +4348,8 @@ async function refreshGenerationActivity() {
 
 function ensureGenerationActivityPolling() {
     if (!githubAuth.isAuthenticated()) return;
-    refreshGenerationActivity().catch(error => console.warn('[Generation] Activity refresh failed:', error));
+    refreshGenerationActivity({ forceReconcile: true })
+        .catch(error => console.warn('[Generation] Activity refresh failed:', error));
     if (generationActivityPollTimer) return;
     generationActivityPollTimer = setInterval(() => {
         if (document.hidden || !document.querySelector('[data-generation-activity], [data-generation-activity-list]')) return;
@@ -4469,7 +4483,8 @@ function renderGenerationActivitySettings({ focusRequestId = null } = {}) {
     refresh.textContent = 'Refresh';
     refresh.onclick = async () => {
         refresh.disabled = true;
-        await refreshGenerationActivity().catch(error => { summaryText.textContent = error.message; });
+        await refreshGenerationActivity({ forceReconcile: true })
+            .catch(error => { summaryText.textContent = error.message; });
         renderGenerationActivitySettings({ focusRequestId });
     };
     const list = document.createElement('div');
