@@ -14,6 +14,12 @@
       "deck_granularity": "course"
     },
     {
+      "id": "chemistry",
+      "destination": "whole-field",
+      "focus": [],
+      "deck_granularity": "course"
+    },
+    {
       "id": "mathematics",
       "destination": "whole-field",
       "focus": [],
@@ -1220,6 +1226,1102 @@
       "generation_command": "flashcards curriculum materialize biology/global-change-biology-and-biodiversity-science"
     },
     {
+      "id": "chemistry/chemistry-literacy-and-safe-practice",
+      "subject": "chemistry",
+      "deck": "chemistry-literacy-and-safe-practice",
+      "order": 1,
+      "tier": "core",
+      "level": "foundational",
+      "status": "proposed",
+      "description": "Interpret everyday chemical claims, quantities, particles, reactions, hazards, and sustainability choices with safe evidence-based reasoning.",
+      "prerequisites": [
+        "mathematics/number-sense-and-arithmetic"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/chemistry-literacy-and-safe-practice",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/chemistry-literacy-and-safe-practice"
+    },
+    {
+      "id": "chemistry/quantitative-general-chemistry",
+      "subject": "chemistry",
+      "deck": "quantitative-general-chemistry",
+      "order": 2,
+      "tier": "core",
+      "level": "foundational",
+      "status": "proposed",
+      "description": "Relate composition, structure, energy, rates, and equilibrium through quantitative molecular and macroscopic models.",
+      "prerequisites": [
+        "chemistry/chemistry-literacy-and-safe-practice",
+        "mathematics/elementary-algebra-and-functions"
+      ],
+      "recommended_after": [
+        "physics/measurement-and-physical-reasoning"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/quantitative-general-chemistry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/quantitative-general-chemistry"
+    },
+    {
+      "id": "chemistry/laboratory-methods-safety-and-data",
+      "subject": "chemistry",
+      "deck": "laboratory-methods-safety-and-data",
+      "order": 3,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Plan and document safe chemical work, select core manipulations, evaluate uncertainty, and connect observations to defensible claims.",
+      "prerequisites": [
+        "chemistry/quantitative-general-chemistry"
+      ],
+      "recommended_after": [
+        "physics/measurement-and-physical-reasoning"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/laboratory-methods-safety-and-data",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/laboratory-methods-safety-and-data"
+    },
+    {
+      "id": "chemistry/analytical-chemistry-and-chemical-measurement",
+      "subject": "chemistry",
+      "deck": "analytical-chemistry-and-chemical-measurement",
+      "order": 4,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Design quantitative analyses from sampling and calibration through separations, electroanalysis, validation, and reported uncertainty.",
+      "prerequisites": [
+        "chemistry/laboratory-methods-safety-and-data"
+      ],
+      "recommended_after": [
+        "mathematics/statistical-inference-and-data-analysis"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/analytical-chemistry-and-chemical-measurement",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/analytical-chemistry-and-chemical-measurement"
+    },
+    {
+      "id": "chemistry/organic-chemistry-structure-and-mechanism",
+      "subject": "chemistry",
+      "deck": "organic-chemistry-structure-and-mechanism",
+      "order": 5,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Predict organic structure, stereochemistry, acidity, conformation, and elementary reactivity using electron-flow mechanisms.",
+      "prerequisites": [
+        "chemistry/quantitative-general-chemistry"
+      ],
+      "recommended_after": [],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/organic-chemistry-structure-and-mechanism",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/organic-chemistry-structure-and-mechanism"
+    },
+    {
+      "id": "chemistry/organic-chemistry-synthesis-and-analysis",
+      "subject": "chemistry",
+      "deck": "organic-chemistry-synthesis-and-analysis",
+      "order": 6,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Design and critique multistep organic syntheses using mechanism, selectivity, functional-group strategy, purification, and evidence.",
+      "prerequisites": [
+        "chemistry/organic-chemistry-structure-and-mechanism"
+      ],
+      "recommended_after": [
+        "chemistry/laboratory-methods-safety-and-data"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/organic-chemistry-synthesis-and-analysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/organic-chemistry-synthesis-and-analysis"
+    },
+    {
+      "id": "chemistry/inorganic-chemistry",
+      "subject": "chemistry",
+      "deck": "inorganic-chemistry",
+      "order": 7,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Explain main-group, transition-metal, coordination, and solid-state structure and reactivity through periodic and bonding models.",
+      "prerequisites": [
+        "chemistry/quantitative-general-chemistry"
+      ],
+      "recommended_after": [
+        "chemistry/laboratory-methods-safety-and-data"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/inorganic-chemistry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/inorganic-chemistry"
+    },
+    {
+      "id": "chemistry/thermodynamics-and-chemical-kinetics",
+      "subject": "chemistry",
+      "deck": "thermodynamics-and-chemical-kinetics",
+      "order": 8,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Use thermodynamic potentials, phase and chemical equilibria, transport ideas, and rate laws to predict chemical change.",
+      "prerequisites": [
+        "chemistry/quantitative-general-chemistry",
+        "mathematics/multivariable-and-vector-calculus"
+      ],
+      "recommended_after": [
+        "physics/matter-fluids-and-thermal-behavior",
+        "mathematics/differential-equations"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/thermodynamics-and-chemical-kinetics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/thermodynamics-and-chemical-kinetics"
+    },
+    {
+      "id": "chemistry/quantum-chemistry-and-molecular-spectroscopy",
+      "subject": "chemistry",
+      "deck": "quantum-chemistry-and-molecular-spectroscopy",
+      "order": 9,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Use wavefunctions, operators, approximation, molecular orbitals, and selection rules to connect quantum models with spectra.",
+      "prerequisites": [
+        "chemistry/quantitative-general-chemistry",
+        "mathematics/differential-equations",
+        "mathematics/multivariable-and-vector-calculus"
+      ],
+      "recommended_after": [
+        "physics/quantum-phenomena-and-atomic-structure"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/quantum-chemistry-and-molecular-spectroscopy",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/quantum-chemistry-and-molecular-spectroscopy"
+    },
+    {
+      "id": "chemistry/biochemistry",
+      "subject": "chemistry",
+      "deck": "biochemistry",
+      "order": 10,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Explain biomolecular structure, binding, catalysis, metabolism, and information chemistry using chemical mechanism and energetics.",
+      "prerequisites": [
+        "chemistry/organic-chemistry-structure-and-mechanism"
+      ],
+      "recommended_after": [
+        "chemistry/thermodynamics-and-chemical-kinetics",
+        "biology/cell-biology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/biochemistry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/biochemistry"
+    },
+    {
+      "id": "chemistry/chemical-data-computation-and-information",
+      "subject": "chemistry",
+      "deck": "chemical-data-computation-and-information",
+      "order": 11,
+      "tier": "core",
+      "level": "undergraduate-core",
+      "status": "proposed",
+      "description": "Find, represent, clean, visualize, and reproducibly analyze chemical structures and data while preserving provenance.",
+      "prerequisites": [
+        "chemistry/quantitative-general-chemistry",
+        "mathematics/mathematical-computing-and-experimentation"
+      ],
+      "recommended_after": [
+        "chemistry/analytical-chemistry-and-chemical-measurement",
+        "mathematics/statistical-inference-and-data-analysis"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/chemical-data-computation-and-information",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/chemical-data-computation-and-information"
+    },
+    {
+      "id": "chemistry/spectroscopy-and-structure-determination",
+      "subject": "chemistry",
+      "deck": "spectroscopy-and-structure-determination",
+      "order": 12,
+      "tier": "core",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Infer molecular and material structure by integrating spectra, diffraction, mass data, uncertainty, and competing hypotheses.",
+      "prerequisites": [
+        "chemistry/analytical-chemistry-and-chemical-measurement",
+        "chemistry/organic-chemistry-structure-and-mechanism",
+        "chemistry/quantum-chemistry-and-molecular-spectroscopy"
+      ],
+      "recommended_after": [
+        "chemistry/organic-chemistry-synthesis-and-analysis",
+        "chemistry/inorganic-chemistry",
+        "physics/waves-sound-and-light"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/spectroscopy-and-structure-determination",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/spectroscopy-and-structure-determination"
+    },
+    {
+      "id": "chemistry/organometallic-chemistry-and-catalysis",
+      "subject": "chemistry",
+      "deck": "organometallic-chemistry-and-catalysis",
+      "order": 13,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Analyze metal-ligand bonding, organometallic elementary steps, catalytic cycles, selectivity, and catalyst failure.",
+      "prerequisites": [
+        "chemistry/organic-chemistry-synthesis-and-analysis",
+        "chemistry/inorganic-chemistry"
+      ],
+      "recommended_after": [
+        "chemistry/thermodynamics-and-chemical-kinetics",
+        "chemistry/spectroscopy-and-structure-determination"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/organometallic-chemistry-and-catalysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/organometallic-chemistry-and-catalysis"
+    },
+    {
+      "id": "chemistry/materials-and-solid-state-chemistry",
+      "subject": "chemistry",
+      "deck": "materials-and-solid-state-chemistry",
+      "order": 14,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Relate crystal, defect, band, phase, and nanoscale structure to synthesis, characterization, and material properties.",
+      "prerequisites": [
+        "chemistry/inorganic-chemistry",
+        "chemistry/thermodynamics-and-chemical-kinetics",
+        "chemistry/quantum-chemistry-and-molecular-spectroscopy"
+      ],
+      "recommended_after": [
+        "chemistry/spectroscopy-and-structure-determination",
+        "physics/condensed-matter-and-solid-state-physics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/materials-and-solid-state-chemistry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/materials-and-solid-state-chemistry"
+    },
+    {
+      "id": "chemistry/polymer-and-supramolecular-chemistry",
+      "subject": "chemistry",
+      "deck": "polymer-and-supramolecular-chemistry",
+      "order": 15,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Predict polymerization, molecular-weight distributions, assembly, recognition, morphology, and bulk behavior across scales.",
+      "prerequisites": [
+        "chemistry/organic-chemistry-structure-and-mechanism",
+        "chemistry/thermodynamics-and-chemical-kinetics"
+      ],
+      "recommended_after": [
+        "chemistry/materials-and-solid-state-chemistry"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/polymer-and-supramolecular-chemistry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/polymer-and-supramolecular-chemistry"
+    },
+    {
+      "id": "chemistry/electrochemistry-and-energy-storage",
+      "subject": "chemistry",
+      "deck": "electrochemistry-and-energy-storage",
+      "order": 16,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Connect interfacial charge transfer, transport, potentials, voltammetry, batteries, fuel cells, and degradation mechanisms.",
+      "prerequisites": [
+        "chemistry/analytical-chemistry-and-chemical-measurement",
+        "chemistry/thermodynamics-and-chemical-kinetics"
+      ],
+      "recommended_after": [
+        "chemistry/materials-and-solid-state-chemistry"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/electrochemistry-and-energy-storage",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/electrochemistry-and-energy-storage"
+    },
+    {
+      "id": "chemistry/surface-colloid-and-interface-chemistry",
+      "subject": "chemistry",
+      "deck": "surface-colloid-and-interface-chemistry",
+      "order": 17,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Reason about adsorption, wetting, colloidal stability, self-assembly, interfacial transport, and surface-sensitive evidence.",
+      "prerequisites": [
+        "chemistry/thermodynamics-and-chemical-kinetics"
+      ],
+      "recommended_after": [
+        "chemistry/materials-and-solid-state-chemistry",
+        "chemistry/polymer-and-supramolecular-chemistry"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/surface-colloid-and-interface-chemistry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/surface-colloid-and-interface-chemistry"
+    },
+    {
+      "id": "chemistry/environmental-and-atmospheric-chemistry",
+      "subject": "chemistry",
+      "deck": "environmental-and-atmospheric-chemistry",
+      "order": 18,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Model chemical fate, transport, speciation, transformation, exposure, and measurement in air, water, soil, and climate systems.",
+      "prerequisites": [
+        "chemistry/analytical-chemistry-and-chemical-measurement",
+        "chemistry/thermodynamics-and-chemical-kinetics"
+      ],
+      "recommended_after": [
+        "chemistry/organic-chemistry-structure-and-mechanism",
+        "biology/ecosystem-ecology-and-global-change"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/environmental-and-atmospheric-chemistry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/environmental-and-atmospheric-chemistry"
+    },
+    {
+      "id": "chemistry/green-and-sustainable-chemistry",
+      "subject": "chemistry",
+      "deck": "green-and-sustainable-chemistry",
+      "order": 19,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Compare chemical products and routes using hazard, atom and mass efficiency, energy, feedstocks, life cycle, and systems tradeoffs.",
+      "prerequisites": [
+        "chemistry/organic-chemistry-synthesis-and-analysis",
+        "chemistry/thermodynamics-and-chemical-kinetics"
+      ],
+      "recommended_after": [
+        "chemistry/organometallic-chemistry-and-catalysis",
+        "chemistry/environmental-and-atmospheric-chemistry"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/green-and-sustainable-chemistry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/green-and-sustainable-chemistry"
+    },
+    {
+      "id": "chemistry/chemical-biology",
+      "subject": "chemistry",
+      "deck": "chemical-biology",
+      "order": 20,
+      "tier": "recommended",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Use probes, perturbations, biomolecular recognition, and mechanistic assays to ask chemical questions in living systems.",
+      "prerequisites": [
+        "chemistry/organic-chemistry-synthesis-and-analysis",
+        "chemistry/biochemistry"
+      ],
+      "recommended_after": [
+        "biology/molecular-biology-of-the-gene",
+        "biology/protein-structure-function-and-enzymology"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/chemical-biology",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/chemical-biology"
+    },
+    {
+      "id": "chemistry/medicinal-chemistry-and-drug-discovery",
+      "subject": "chemistry",
+      "deck": "medicinal-chemistry-and-drug-discovery",
+      "order": 21,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Relate target evidence, structure-activity relationships, physicochemical properties, ADME, safety, and study design in drug discovery.",
+      "prerequisites": [
+        "chemistry/organic-chemistry-synthesis-and-analysis",
+        "chemistry/biochemistry"
+      ],
+      "recommended_after": [
+        "chemistry/chemical-biology",
+        "biology/cell-biology",
+        "mathematics/statistical-inference-and-data-analysis"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/medicinal-chemistry-and-drug-discovery",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/medicinal-chemistry-and-drug-discovery"
+    },
+    {
+      "id": "chemistry/nuclear-and-radiochemistry",
+      "subject": "chemistry",
+      "deck": "nuclear-and-radiochemistry",
+      "order": 22,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Interpret nuclear stability, decay, reactions, isotope production, radiochemical measurement, applications, and radiation risk.",
+      "prerequisites": [
+        "chemistry/inorganic-chemistry",
+        "chemistry/quantum-chemistry-and-molecular-spectroscopy"
+      ],
+      "recommended_after": [
+        "chemistry/analytical-chemistry-and-chemical-measurement",
+        "physics/nuclear-and-particle-physics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/nuclear-and-radiochemistry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/nuclear-and-radiochemistry"
+    },
+    {
+      "id": "chemistry/computational-chemistry-and-cheminformatics",
+      "subject": "chemistry",
+      "deck": "computational-chemistry-and-cheminformatics",
+      "order": 23,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Choose and validate electronic-structure, molecular-mechanics, simulation, structure-search, and molecular-data workflows.",
+      "prerequisites": [
+        "chemistry/quantum-chemistry-and-molecular-spectroscopy",
+        "chemistry/chemical-data-computation-and-information"
+      ],
+      "recommended_after": [
+        "mathematics/numerical-analysis"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/computational-chemistry-and-cheminformatics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/computational-chemistry-and-cheminformatics"
+    },
+    {
+      "id": "chemistry/industrial-chemistry-and-scale-up",
+      "subject": "chemistry",
+      "deck": "industrial-chemistry-and-scale-up",
+      "order": 24,
+      "tier": "specialization",
+      "level": "undergraduate-advanced",
+      "status": "proposed",
+      "description": "Evaluate route selection, scale-dependent hazards, separations, quality, process evidence, and life-cycle constraints from a chemist's perspective.",
+      "prerequisites": [
+        "chemistry/laboratory-methods-safety-and-data",
+        "chemistry/organic-chemistry-synthesis-and-analysis",
+        "chemistry/thermodynamics-and-chemical-kinetics"
+      ],
+      "recommended_after": [
+        "chemistry/organometallic-chemistry-and-catalysis",
+        "chemistry/green-and-sustainable-chemistry"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/industrial-chemistry-and-scale-up",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/industrial-chemistry-and-scale-up"
+    },
+    {
+      "id": "chemistry/chemistry-research-methods-and-literature",
+      "subject": "chemistry",
+      "deck": "chemistry-research-methods-and-literature",
+      "order": 25,
+      "tier": "core",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Interrogate chemical literature, designs, controls, uncertainty, records, data, authorship, peer review, and reproducibility.",
+      "prerequisites": [
+        "chemistry/chemical-data-computation-and-information",
+        "chemistry/spectroscopy-and-structure-determination",
+        "mathematics/statistical-inference-and-data-analysis"
+      ],
+      "recommended_after": [
+        "chemistry/organic-chemistry-synthesis-and-analysis",
+        "chemistry/inorganic-chemistry",
+        "chemistry/biochemistry",
+        "chemistry/materials-and-solid-state-chemistry"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/chemistry-research-methods-and-literature",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/chemistry-research-methods-and-literature"
+    },
+    {
+      "id": "chemistry/advanced-chemical-thermodynamics-and-statistical-mechanics",
+      "subject": "chemistry",
+      "deck": "advanced-chemical-thermodynamics-and-statistical-mechanics",
+      "order": 26,
+      "tier": "recommended",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Derive molecular ensembles, partition functions, nonideal equilibria, fluctuations, phase behavior, and nonequilibrium response.",
+      "prerequisites": [
+        "chemistry/thermodynamics-and-chemical-kinetics",
+        "mathematics/probability"
+      ],
+      "recommended_after": [
+        "physics/thermodynamics-and-statistical-mechanics",
+        "chemistry/chemistry-research-methods-and-literature"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/advanced-chemical-thermodynamics-and-statistical-mechanics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/advanced-chemical-thermodynamics-and-statistical-mechanics"
+    },
+    {
+      "id": "chemistry/advanced-quantum-chemistry-and-spectroscopy",
+      "subject": "chemistry",
+      "deck": "advanced-quantum-chemistry-and-spectroscopy",
+      "order": 27,
+      "tier": "recommended",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Apply angular momentum, symmetry, many-electron theory, approximation, light-matter interaction, and high-resolution spectroscopy.",
+      "prerequisites": [
+        "chemistry/quantum-chemistry-and-molecular-spectroscopy",
+        "mathematics/partial-differential-equations"
+      ],
+      "recommended_after": [
+        "chemistry/advanced-chemical-thermodynamics-and-statistical-mechanics",
+        "physics/quantum-mechanics",
+        "chemistry/chemistry-research-methods-and-literature"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/advanced-quantum-chemistry-and-spectroscopy",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/advanced-quantum-chemistry-and-spectroscopy"
+    },
+    {
+      "id": "chemistry/reaction-dynamics-and-kinetic-modeling",
+      "subject": "chemistry",
+      "deck": "reaction-dynamics-and-kinetic-modeling",
+      "order": 28,
+      "tier": "recommended",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Infer mechanisms using coupled kinetics, transition-state and dynamical models, isotope effects, transport, and time-resolved evidence.",
+      "prerequisites": [
+        "chemistry/thermodynamics-and-chemical-kinetics",
+        "chemistry/quantum-chemistry-and-molecular-spectroscopy"
+      ],
+      "recommended_after": [
+        "chemistry/computational-chemistry-and-cheminformatics",
+        "chemistry/advanced-chemical-thermodynamics-and-statistical-mechanics",
+        "chemistry/advanced-quantum-chemistry-and-spectroscopy"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/reaction-dynamics-and-kinetic-modeling",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/reaction-dynamics-and-kinetic-modeling"
+    },
+    {
+      "id": "chemistry/advanced-synthesis-and-mechanistic-analysis",
+      "subject": "chemistry",
+      "deck": "advanced-synthesis-and-mechanistic-analysis",
+      "order": 29,
+      "tier": "recommended",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Plan complex synthesis and distinguish mechanisms using selectivity models, physical-organic experiments, and converging structural evidence.",
+      "prerequisites": [
+        "chemistry/organic-chemistry-synthesis-and-analysis",
+        "chemistry/spectroscopy-and-structure-determination"
+      ],
+      "recommended_after": [
+        "chemistry/organometallic-chemistry-and-catalysis",
+        "chemistry/computational-chemistry-and-cheminformatics",
+        "chemistry/chemistry-research-methods-and-literature"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/advanced-synthesis-and-mechanistic-analysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/advanced-synthesis-and-mechanistic-analysis"
+    },
+    {
+      "id": "chemistry/advanced-inorganic-organometallic-and-catalysis",
+      "subject": "chemistry",
+      "deck": "advanced-inorganic-organometallic-and-catalysis",
+      "order": 30,
+      "tier": "recommended",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Analyze electronic structure, reactivity, catalytic networks, bioinorganic function, and mechanistic evidence across inorganic systems.",
+      "prerequisites": [
+        "chemistry/spectroscopy-and-structure-determination",
+        "chemistry/organometallic-chemistry-and-catalysis"
+      ],
+      "recommended_after": [
+        "chemistry/advanced-chemical-thermodynamics-and-statistical-mechanics",
+        "chemistry/advanced-synthesis-and-mechanistic-analysis",
+        "chemistry/chemistry-research-methods-and-literature"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/advanced-inorganic-organometallic-and-catalysis",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/advanced-inorganic-organometallic-and-catalysis"
+    },
+    {
+      "id": "chemistry/advanced-chemical-measurement-and-chemometrics",
+      "subject": "chemistry",
+      "deck": "advanced-chemical-measurement-and-chemometrics",
+      "order": 31,
+      "tier": "recommended",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Develop and validate measurements using signal models, instrument response, chemometrics, traceability, imaging, and inverse problems.",
+      "prerequisites": [
+        "chemistry/chemistry-research-methods-and-literature"
+      ],
+      "recommended_after": [
+        "chemistry/computational-chemistry-and-cheminformatics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/advanced-chemical-measurement-and-chemometrics",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/advanced-chemical-measurement-and-chemometrics"
+    },
+    {
+      "id": "chemistry/molecular-simulation-and-computational-chemistry",
+      "subject": "chemistry",
+      "deck": "molecular-simulation-and-computational-chemistry",
+      "order": 32,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Build, sample, benchmark, and interpret quantum and molecular simulations with explicit error, uncertainty, and reproducibility checks.",
+      "prerequisites": [
+        "chemistry/computational-chemistry-and-cheminformatics",
+        "chemistry/advanced-quantum-chemistry-and-spectroscopy"
+      ],
+      "recommended_after": [
+        "mathematics/numerical-analysis",
+        "physics/computational-physics",
+        "chemistry/chemistry-research-methods-and-literature"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/molecular-simulation-and-computational-chemistry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/molecular-simulation-and-computational-chemistry"
+    },
+    {
+      "id": "chemistry/advanced-materials-chemistry-and-characterization",
+      "subject": "chemistry",
+      "deck": "advanced-materials-chemistry-and-characterization",
+      "order": 33,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Connect synthesis and processing to defects, microstructure, operando characterization, emergent properties, and structure-property claims.",
+      "prerequisites": [
+        "chemistry/spectroscopy-and-structure-determination",
+        "chemistry/materials-and-solid-state-chemistry",
+        "chemistry/advanced-chemical-thermodynamics-and-statistical-mechanics"
+      ],
+      "recommended_after": [
+        "chemistry/surface-colloid-and-interface-chemistry",
+        "chemistry/advanced-chemical-measurement-and-chemometrics",
+        "physics/condensed-matter-and-solid-state-physics",
+        "chemistry/chemistry-research-methods-and-literature"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/advanced-materials-chemistry-and-characterization",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/advanced-materials-chemistry-and-characterization"
+    },
+    {
+      "id": "chemistry/advanced-macromolecular-and-soft-matter-chemistry",
+      "subject": "chemistry",
+      "deck": "advanced-macromolecular-and-soft-matter-chemistry",
+      "order": 34,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Use statistical, kinetic, and rheological models to explain polymer architecture, assembly, responsive matter, and multiscale behavior.",
+      "prerequisites": [
+        "chemistry/polymer-and-supramolecular-chemistry",
+        "chemistry/advanced-chemical-thermodynamics-and-statistical-mechanics"
+      ],
+      "recommended_after": [
+        "chemistry/surface-colloid-and-interface-chemistry",
+        "chemistry/advanced-materials-chemistry-and-characterization",
+        "physics/soft-matter-and-complex-fluids",
+        "chemistry/chemistry-research-methods-and-literature"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/advanced-macromolecular-and-soft-matter-chemistry",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/advanced-macromolecular-and-soft-matter-chemistry"
+    },
+    {
+      "id": "chemistry/advanced-electrochemistry-and-interfacial-energy",
+      "subject": "chemistry",
+      "deck": "advanced-electrochemistry-and-interfacial-energy",
+      "order": 35,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Model electrified interfaces, coupled charge and mass transfer, porous electrodes, electrocatalysis, operando evidence, and degradation.",
+      "prerequisites": [
+        "chemistry/electrochemistry-and-energy-storage",
+        "chemistry/surface-colloid-and-interface-chemistry",
+        "chemistry/chemistry-research-methods-and-literature",
+        "chemistry/advanced-chemical-thermodynamics-and-statistical-mechanics"
+      ],
+      "recommended_after": [
+        "chemistry/advanced-inorganic-organometallic-and-catalysis",
+        "chemistry/advanced-materials-chemistry-and-characterization"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/advanced-electrochemistry-and-interfacial-energy",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/advanced-electrochemistry-and-interfacial-energy"
+    },
+    {
+      "id": "chemistry/advanced-chemical-biology-and-biomolecular-design",
+      "subject": "chemistry",
+      "deck": "advanced-chemical-biology-and-biomolecular-design",
+      "order": 36,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Design biomolecular probes, covalent and noncovalent modulators, engineered catalysts, and causal experiments in complex biological systems.",
+      "prerequisites": [
+        "chemistry/chemical-biology",
+        "chemistry/chemistry-research-methods-and-literature",
+        "chemistry/advanced-synthesis-and-mechanistic-analysis"
+      ],
+      "recommended_after": [
+        "chemistry/advanced-chemical-measurement-and-chemometrics",
+        "biology/macromolecular-structure-and-mechanism"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/advanced-chemical-biology-and-biomolecular-design",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/advanced-chemical-biology-and-biomolecular-design"
+    },
+    {
+      "id": "chemistry/advanced-environmental-chemistry-and-exposure-science",
+      "subject": "chemistry",
+      "deck": "advanced-environmental-chemistry-and-exposure-science",
+      "order": 37,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Resolve coupled environmental reaction networks, trace analysis, exposure, source attribution, model uncertainty, and intervention evidence.",
+      "prerequisites": [
+        "chemistry/environmental-and-atmospheric-chemistry",
+        "chemistry/advanced-chemical-measurement-and-chemometrics"
+      ],
+      "recommended_after": [
+        "chemistry/green-and-sustainable-chemistry",
+        "biology/ecosystem-ecology-and-global-change"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/advanced-environmental-chemistry-and-exposure-science",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/advanced-environmental-chemistry-and-exposure-science"
+    },
+    {
+      "id": "chemistry/catalysis-and-sustainable-synthesis-research",
+      "subject": "chemistry",
+      "deck": "catalysis-and-sustainable-synthesis-research",
+      "order": 38,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Critique frontier catalytic and synthetic claims using mechanism, selectivity, reaction networks, sustainability metrics, and reproducible evidence.",
+      "prerequisites": [
+        "chemistry/chemistry-research-methods-and-literature",
+        "chemistry/reaction-dynamics-and-kinetic-modeling",
+        "chemistry/advanced-synthesis-and-mechanistic-analysis",
+        "chemistry/advanced-inorganic-organometallic-and-catalysis"
+      ],
+      "recommended_after": [
+        "chemistry/computational-chemistry-and-cheminformatics",
+        "chemistry/advanced-chemical-thermodynamics-and-statistical-mechanics"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/catalysis-and-sustainable-synthesis-research",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/catalysis-and-sustainable-synthesis-research"
+    },
+    {
+      "id": "chemistry/molecular-measurement-imaging-and-sensing-research",
+      "subject": "chemistry",
+      "deck": "molecular-measurement-imaging-and-sensing-research",
+      "order": 39,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Evaluate emerging spectroscopic, microscopic, separation, sensing, and single-entity measurements from instrument physics to inference.",
+      "prerequisites": [
+        "chemistry/advanced-chemical-measurement-and-chemometrics"
+      ],
+      "recommended_after": [
+        "chemistry/molecular-simulation-and-computational-chemistry"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/molecular-measurement-imaging-and-sensing-research",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/molecular-measurement-imaging-and-sensing-research"
+    },
+    {
+      "id": "chemistry/theory-simulation-and-data-driven-chemistry-research",
+      "subject": "chemistry",
+      "deck": "theory-simulation-and-data-driven-chemistry-research",
+      "order": 40,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Judge frontier theoretical, simulation, and machine-learning chemistry through model assumptions, benchmarks, uncertainty, and data leakage controls.",
+      "prerequisites": [
+        "chemistry/chemistry-research-methods-and-literature",
+        "chemistry/molecular-simulation-and-computational-chemistry"
+      ],
+      "recommended_after": [
+        "mathematics/mathematics-of-machine-learning-and-data-science"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/theory-simulation-and-data-driven-chemistry-research",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/theory-simulation-and-data-driven-chemistry-research"
+    },
+    {
+      "id": "chemistry/functional-materials-and-interfaces-research",
+      "subject": "chemistry",
+      "deck": "functional-materials-and-interfaces-research",
+      "order": 41,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Interrogate functional, quantum, porous, nanoscale, and energy materials by linking synthesis history, interfaces, operando data, and performance.",
+      "prerequisites": [
+        "chemistry/chemistry-research-methods-and-literature",
+        "chemistry/advanced-materials-chemistry-and-characterization"
+      ],
+      "recommended_after": [
+        "chemistry/advanced-macromolecular-and-soft-matter-chemistry",
+        "chemistry/advanced-electrochemistry-and-interfacial-energy",
+        "physics/quantum-matter-and-materials-research"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/functional-materials-and-interfaces-research",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/functional-materials-and-interfaces-research"
+    },
+    {
+      "id": "chemistry/macromolecular-supramolecular-and-soft-matter-research",
+      "subject": "chemistry",
+      "deck": "macromolecular-supramolecular-and-soft-matter-research",
+      "order": 42,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Read frontier polymer, supramolecular, adaptive, and soft-material research through multiscale synthesis, dynamics, rheology, and function.",
+      "prerequisites": [
+        "chemistry/chemistry-research-methods-and-literature",
+        "chemistry/advanced-macromolecular-and-soft-matter-chemistry"
+      ],
+      "recommended_after": [
+        "chemistry/advanced-materials-chemistry-and-characterization",
+        "physics/soft-matter-and-complex-fluids"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/macromolecular-supramolecular-and-soft-matter-research",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/macromolecular-supramolecular-and-soft-matter-research"
+    },
+    {
+      "id": "chemistry/chemical-biology-and-molecular-therapeutics-research",
+      "subject": "chemistry",
+      "deck": "chemical-biology-and-molecular-therapeutics-research",
+      "order": 43,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Assess research on chemical control of biology and therapeutics using target validation, probe quality, mechanism, translation, and causal evidence.",
+      "prerequisites": [
+        "chemistry/advanced-chemical-biology-and-biomolecular-design"
+      ],
+      "recommended_after": [
+        "chemistry/medicinal-chemistry-and-drug-discovery",
+        "biology/macromolecular-structure-and-mechanism"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/chemical-biology-and-molecular-therapeutics-research",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/chemical-biology-and-molecular-therapeutics-research"
+    },
+    {
+      "id": "chemistry/environmental-atmospheric-and-sustainable-chemistry-research",
+      "subject": "chemistry",
+      "deck": "environmental-atmospheric-and-sustainable-chemistry-research",
+      "order": 44,
+      "tier": "specialization",
+      "level": "research-specialization",
+      "status": "proposed",
+      "description": "Evaluate molecular evidence for atmospheric, water, soil, climate, circularity, and remediation claims across coupled human-natural systems.",
+      "prerequisites": [
+        "chemistry/green-and-sustainable-chemistry",
+        "chemistry/advanced-environmental-chemistry-and-exposure-science"
+      ],
+      "recommended_after": [
+        "chemistry/advanced-electrochemistry-and-interfacial-energy",
+        "biology/global-change-biology-and-biodiversity-science"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/environmental-atmospheric-and-sustainable-chemistry-research",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize chemistry/environmental-atmospheric-and-sustainable-chemistry-research"
+    },
+    {
       "id": "mathematics/number-sense-and-arithmetic",
       "subject": "mathematics",
       "deck": "number-sense-and-arithmetic",
@@ -1867,7 +2969,7 @@
       "tier": "core",
       "level": "undergraduate-advanced",
       "status": "proposed",
-      "description": "Use holomorphy, the Cauchy-Riemann equations, contour integration, Cauchy theory, power and Laurent series, residues, and conformal mapping.",
+      "description": "Use holomorphy, the Cauchy-Riemann equations, contour integration, Cauchy theory, power and Laurent series, analytic continuation, residues, and conformal mapping.",
       "prerequisites": [
         "mathematics/multivariable-and-vector-calculus",
         "mathematics/mathematical-reasoning-and-proof"
@@ -1915,7 +3017,8 @@
       "description": "Analyze curves and surfaces with curvature and fundamental forms, then work on smooth manifolds with tangent spaces, vector fields, differential forms, Stokes' theorem, and first Riemannian metrics.",
       "prerequisites": [
         "mathematics/multivariable-and-vector-calculus",
-        "mathematics/linear-algebra"
+        "mathematics/linear-algebra",
+        "mathematics/mathematical-reasoning-and-proof"
       ],
       "recommended_after": [
         "mathematics/real-analysis",
@@ -2054,14 +3157,14 @@
       "generation_command": "flashcards curriculum materialize mathematics/information-theory"
     },
     {
-      "id": "mathematics/mathematical-logic-and-set-theory",
+      "id": "mathematics/mathematical-logic-and-computability",
       "subject": "mathematics",
-      "deck": "mathematical-logic-and-set-theory",
+      "deck": "mathematical-logic-and-computability",
       "order": 26,
       "tier": "recommended",
       "level": "undergraduate-advanced",
       "status": "proposed",
-      "description": "Reason about formal languages, deduction, models, soundness, completeness, compactness, axiomatic set theory, ordinals and cardinals, computability, and incompleteness.",
+      "description": "Reason about formal languages, deduction, models, soundness, completeness, compactness, computability, recursive functions, decidability, and incompleteness.",
       "prerequisites": [
         "mathematics/mathematical-reasoning-and-proof"
       ],
@@ -2071,11 +3174,11 @@
       ],
       "materialized": false,
       "repository": {
-        "url": "https://github.com/thomasrribeiro-flashcards/mathematical-logic-and-set-theory",
+        "url": "https://github.com/thomasrribeiro-flashcards/mathematical-logic-and-computability",
         "configured": false
       },
       "chapters": [],
-      "generation_command": "flashcards curriculum materialize mathematics/mathematical-logic-and-set-theory"
+      "generation_command": "flashcards curriculum materialize mathematics/mathematical-logic-and-computability"
     },
     {
       "id": "mathematics/theory-of-computation-and-complexity",
@@ -2091,7 +3194,7 @@
       ],
       "recommended_after": [
         "mathematics/mathematical-computing-and-experimentation",
-        "mathematics/mathematical-logic-and-set-theory"
+        "mathematics/mathematical-logic-and-computability"
       ],
       "materialized": false,
       "repository": {
@@ -2203,7 +3306,7 @@
       "tier": "core",
       "level": "graduate",
       "status": "proposed",
-      "description": "Analyze normed, Banach, and Hilbert spaces, bounded and compact operators, the Hahn-Banach, open-mapping, closed-graph, and uniform-boundedness theorems, duality, weak topologies, and spectra.",
+      "description": "Analyze normed, Banach, and Hilbert spaces, bounded and compact operators, the Hahn-Banach, open-mapping, closed-graph, uniform-boundedness, Riesz representation, and Lax-Milgram theorems, duality, weak topologies, and spectra.",
       "prerequisites": [
         "mathematics/measure-theory-and-lebesgue-integration",
         "mathematics/linear-algebra"
@@ -2227,7 +3330,7 @@
       "tier": "core",
       "level": "graduate",
       "status": "proposed",
-      "description": "Ground probability in measure theory: independence, modes of convergence, laws of large numbers, characteristic functions, central limit theorems, conditional expectation, and martingales.",
+      "description": "Ground probability in measure theory: independence, modes of convergence, laws of large numbers, characteristic functions, central limit theorems, conditional expectation, martingales, and concentration inequalities.",
       "prerequisites": [
         "mathematics/measure-theory-and-lebesgue-integration",
         "mathematics/probability"
@@ -2358,33 +3461,107 @@
       "generation_command": "flashcards curriculum materialize mathematics/representation-theory-and-lie-theory"
     },
     {
-      "id": "mathematics/algebraic-and-analytic-number-theory",
+      "id": "mathematics/algebraic-number-theory",
       "subject": "mathematics",
-      "deck": "algebraic-and-analytic-number-theory",
+      "deck": "algebraic-number-theory",
       "order": 39,
       "tier": "specialization",
       "level": "graduate",
       "status": "proposed",
-      "description": "Study number fields, rings of integers, ideal factorization, class groups and units, and use Dirichlet series, zeta and L-functions to prove distribution results about primes.",
+      "description": "Study number fields, rings of integers, valuations, ideal factorization, class groups, units, local fields, ramification, and first class-field phenomena.",
       "prerequisites": [
         "mathematics/advanced-algebra-and-galois-theory",
-        "mathematics/complex-analysis",
         "mathematics/number-theory"
       ],
-      "recommended_after": [],
+      "recommended_after": [
+        "mathematics/commutative-algebra"
+      ],
       "materialized": false,
       "repository": {
-        "url": "https://github.com/thomasrribeiro-flashcards/algebraic-and-analytic-number-theory",
+        "url": "https://github.com/thomasrribeiro-flashcards/algebraic-number-theory",
         "configured": false
       },
       "chapters": [],
-      "generation_command": "flashcards curriculum materialize mathematics/algebraic-and-analytic-number-theory"
+      "generation_command": "flashcards curriculum materialize mathematics/algebraic-number-theory"
+    },
+    {
+      "id": "mathematics/analytic-number-theory",
+      "subject": "mathematics",
+      "deck": "analytic-number-theory",
+      "order": 40,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Use arithmetic functions, summation methods, Dirichlet series, zeta and L-functions, sieve ideas, and exponential sums to analyze the distribution of primes and other arithmetic sequences.",
+      "prerequisites": [
+        "mathematics/complex-analysis",
+        "mathematics/number-theory"
+      ],
+      "recommended_after": [
+        "mathematics/real-analysis",
+        "mathematics/harmonic-and-fourier-analysis"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/analytic-number-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/analytic-number-theory"
+    },
+    {
+      "id": "mathematics/mathematical-statistics-and-asymptotic-inference",
+      "subject": "mathematics",
+      "deck": "mathematical-statistics-and-asymptotic-inference",
+      "order": 41,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Derive and compare likelihood, sufficiency, exponential-family, decision-theoretic, Bayesian, and asymptotic methods, and prove when estimators and tests achieve their guarantees.",
+      "prerequisites": [
+        "mathematics/measure-theoretic-probability",
+        "mathematics/statistical-inference-and-data-analysis"
+      ],
+      "recommended_after": [
+        "mathematics/mathematical-computing-and-experimentation"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/mathematical-statistics-and-asymptotic-inference",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/mathematical-statistics-and-asymptotic-inference"
+    },
+    {
+      "id": "mathematics/axiomatic-set-theory",
+      "subject": "mathematics",
+      "deck": "axiomatic-set-theory",
+      "order": 42,
+      "tier": "specialization",
+      "level": "graduate",
+      "status": "proposed",
+      "description": "Work in ZFC with ordinals, cardinals, transfinite recursion, choice principles, combinatorial set theory, constructibility, forcing, and independence arguments.",
+      "prerequisites": [
+        "mathematics/mathematical-logic-and-computability"
+      ],
+      "recommended_after": [
+        "mathematics/general-topology",
+        "mathematics/abstract-algebra"
+      ],
+      "materialized": false,
+      "repository": {
+        "url": "https://github.com/thomasrribeiro-flashcards/axiomatic-set-theory",
+        "configured": false
+      },
+      "chapters": [],
+      "generation_command": "flashcards curriculum materialize mathematics/axiomatic-set-theory"
     },
     {
       "id": "mathematics/modern-pde-and-sobolev-theory",
       "subject": "mathematics",
       "deck": "modern-pde-and-sobolev-theory",
-      "order": 40,
+      "order": 43,
       "tier": "specialization",
       "level": "graduate",
       "status": "proposed",
@@ -2408,7 +3585,7 @@
       "id": "mathematics/algebraic-geometry",
       "subject": "mathematics",
       "deck": "algebraic-geometry",
-      "order": 41,
+      "order": 44,
       "tier": "specialization",
       "level": "graduate",
       "status": "proposed",
@@ -2433,7 +3610,7 @@
       "id": "mathematics/riemannian-geometry-and-geometric-analysis",
       "subject": "mathematics",
       "deck": "riemannian-geometry-and-geometric-analysis",
-      "order": 42,
+      "order": 45,
       "tier": "specialization",
       "level": "graduate",
       "status": "proposed",
@@ -2458,7 +3635,7 @@
       "id": "mathematics/dynamical-systems-and-ergodic-theory",
       "subject": "mathematics",
       "deck": "dynamical-systems-and-ergodic-theory",
-      "order": 43,
+      "order": 46,
       "tier": "specialization",
       "level": "graduate",
       "status": "proposed",
@@ -2483,7 +3660,7 @@
       "id": "mathematics/stochastic-analysis-and-sdes",
       "subject": "mathematics",
       "deck": "stochastic-analysis-and-sdes",
-      "order": 44,
+      "order": 47,
       "tier": "specialization",
       "level": "graduate",
       "status": "proposed",
@@ -2507,7 +3684,7 @@
       "id": "mathematics/advanced-combinatorics-and-graph-theory",
       "subject": "mathematics",
       "deck": "advanced-combinatorics-and-graph-theory",
-      "order": 45,
+      "order": 48,
       "tier": "specialization",
       "level": "graduate",
       "status": "proposed",
@@ -2533,7 +3710,7 @@
       "id": "mathematics/numerical-methods-for-differential-equations",
       "subject": "mathematics",
       "deck": "numerical-methods-for-differential-equations",
-      "order": 46,
+      "order": 49,
       "tier": "specialization",
       "level": "graduate",
       "status": "proposed",
@@ -2558,7 +3735,7 @@
       "id": "mathematics/mathematics-of-machine-learning-and-data-science",
       "subject": "mathematics",
       "deck": "mathematics-of-machine-learning-and-data-science",
-      "order": 47,
+      "order": 50,
       "tier": "specialization",
       "level": "graduate",
       "status": "proposed",
@@ -2570,7 +3747,8 @@
       ],
       "recommended_after": [
         "mathematics/numerical-analysis",
-        "mathematics/functional-analysis"
+        "mathematics/functional-analysis",
+        "mathematics/mathematical-statistics-and-asymptotic-inference"
       ],
       "materialized": false,
       "repository": {
@@ -2584,13 +3762,14 @@
       "id": "mathematics/arithmetic-geometry-and-modern-number-theory",
       "subject": "mathematics",
       "deck": "arithmetic-geometry-and-modern-number-theory",
-      "order": 48,
+      "order": 51,
       "tier": "specialization",
       "level": "research-specialization",
       "status": "proposed",
       "description": "Read current work on elliptic curves, modular forms, Galois representations, rational points, L-functions, computational databases, and arithmetic statistics.",
       "prerequisites": [
-        "mathematics/algebraic-and-analytic-number-theory",
+        "mathematics/algebraic-number-theory",
+        "mathematics/analytic-number-theory",
         "mathematics/algebraic-geometry",
         "mathematics/mathematical-research-practice"
       ],
@@ -2609,11 +3788,11 @@
       "id": "mathematics/low-dimensional-topology-and-geometric-topology",
       "subject": "mathematics",
       "deck": "low-dimensional-topology-and-geometric-topology",
-      "order": 49,
+      "order": 52,
       "tier": "specialization",
       "level": "research-specialization",
       "status": "proposed",
-      "description": "Engage literature on knots and links, surfaces and mapping class groups, three- and four-manifolds, hyperbolic structures, geometrization, and quantum and gauge-theoretic invariants.",
+      "description": "Engage literature on knots and links, surfaces and mapping class groups, three-manifolds, hyperbolic structures, geometrization, and geometric invariants, while identifying where four-dimensional and gauge-theoretic work needs further analysis.",
       "prerequisites": [
         "mathematics/algebraic-topology",
         "mathematics/riemannian-geometry-and-geometric-analysis",
@@ -2634,7 +3813,7 @@
       "id": "mathematics/topological-and-geometric-data-analysis",
       "subject": "mathematics",
       "deck": "topological-and-geometric-data-analysis",
-      "order": 50,
+      "order": 53,
       "tier": "specialization",
       "level": "research-specialization",
       "status": "proposed",
@@ -2647,6 +3826,7 @@
       ],
       "recommended_after": [
         "mathematics/mathematics-of-machine-learning-and-data-science",
+        "mathematics/mathematical-statistics-and-asymptotic-inference",
         "mathematics/category-theory-and-homological-algebra"
       ],
       "materialized": false,
@@ -2661,13 +3841,13 @@
       "id": "mathematics/formalization-and-proof-assistants",
       "subject": "mathematics",
       "deck": "formalization-and-proof-assistants",
-      "order": 51,
+      "order": 54,
       "tier": "specialization",
       "level": "research-specialization",
       "status": "proposed",
       "description": "Formalize definitions, theorems, and proofs in a dependent-type proof assistant, navigate a mathematical library, and assess what machine-checked mathematics does and does not certify.",
       "prerequisites": [
-        "mathematics/mathematical-logic-and-set-theory",
+        "mathematics/mathematical-logic-and-computability",
         "mathematics/mathematical-computing-and-experimentation",
         "mathematics/mathematical-research-practice"
       ],
@@ -2688,18 +3868,20 @@
       "id": "mathematics/random-matrices-and-high-dimensional-probability",
       "subject": "mathematics",
       "deck": "random-matrices-and-high-dimensional-probability",
-      "order": 52,
+      "order": 55,
       "tier": "specialization",
       "level": "research-specialization",
       "status": "proposed",
-      "description": "Work with concentration of measure, empirical processes, spectral limits, universality, and free probability, and read current high-dimensional probability literature.",
+      "description": "Work with concentration of measure, empirical processes, nonasymptotic random-matrix bounds, spectral limits, and universality, and read current high-dimensional probability literature.",
       "prerequisites": [
         "mathematics/measure-theoretic-probability",
+        "mathematics/linear-algebra",
         "mathematics/mathematical-research-practice"
       ],
       "recommended_after": [
         "mathematics/functional-analysis",
         "mathematics/harmonic-and-fourier-analysis",
+        "mathematics/mathematical-statistics-and-asymptotic-inference",
         "mathematics/mathematics-of-machine-learning-and-data-science"
       ],
       "materialized": false,
@@ -3305,7 +4487,7 @@
       "tier": "core",
       "level": "undergraduate-core",
       "status": "proposed",
-      "description": "Build and debug the measurement chain: network analysis, filters, diodes and transistors, operational amplifiers, digital logic, sampling, transducers, noise and shielding, and vacuum and cryogenic practice.",
+      "description": "Build and debug a measurement signal chain: network analysis, filters, diodes and transistors, operational amplifiers, digital logic, sampling and data acquisition, transducers and detectors, grounding, shielding, noise, calibration, and fault isolation.",
       "prerequisites": [
         "physics/electricity-magnetism-and-circuits",
         "physics/measurement-uncertainty-and-experimental-physics"
@@ -3888,7 +5070,7 @@
       "tier": "core",
       "level": "graduate",
       "status": "proposed",
-      "description": "Work the way researchers work: read and situate preprints and papers, design an investigation around a falsifiable claim, handle systematic uncertainty, blinding, and the look-elsewhere effect, build reproducible computational pipelines, apply the reproducibility and replicability distinction, and meet professional standards for authorship, peer review, conflict of interest, data retention, and safety.",
+      "description": "Work the way researchers work: read and situate papers, design an investigation around a falsifiable claim, handle systematic uncertainty, blinding, and the look-elsewhere effect, build reproducible computational and AI-assisted workflows while auditing provenance and outputs, distinguish reproducibility from replicability, and meet professional standards for authorship, peer review, conflicts, data retention, and safety.",
       "prerequisites": [
         "physics/measurement-uncertainty-and-experimental-physics",
         "physics/computational-physics"
@@ -4019,8 +5201,7 @@
         "physics/physics-research-practice"
       ],
       "recommended_after": [
-        "physics/electronics-and-instrumentation",
-        "physics/gravitational-wave-and-multimessenger-astrophysics"
+        "physics/electronics-and-instrumentation"
       ],
       "materialized": false,
       "repository": {
@@ -4041,10 +5222,10 @@
       "description": "Enter the physics-of-life literature: active-matter hydrodynamics and collective motion, cytoskeletal and tissue mechanics, nonequilibrium thermodynamics of biological energy use, information and inference limits in cellular decision-making, quantitative imaging and single-molecule evidence, and the standards a physical model of a living system must meet.",
       "prerequisites": [
         "physics/biological-physics",
+        "physics/soft-matter-and-complex-fluids",
         "physics/physics-research-practice"
       ],
       "recommended_after": [
-        "physics/soft-matter-and-complex-fluids",
         "biology/systems-and-quantitative-biology"
       ],
       "materialized": false,

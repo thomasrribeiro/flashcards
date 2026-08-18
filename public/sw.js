@@ -13,7 +13,7 @@
  * Also handles Web Push (see B3): a push shows a notification; a tap opens the app.
  */
 
-const VERSION = 'v5';
+const VERSION = 'v6';
 const SHELL_CACHE = `shell-${VERSION}`;
 const ASSET_CACHE = `assets-${VERSION}`;
 const GH_CACHE = `github-${VERSION}`;
@@ -88,6 +88,13 @@ self.addEventListener('fetch', event => {
 
     // Never cache the sync/habit worker
     if (url.hostname.endsWith('.workers.dev')) return;
+
+    // Mutable GitHub branch-head requests must reach the network so newly
+    // merged curriculum catalogs appear on the next application load.
+    if (url.hostname === 'api.github.com' && /\/commits\/[^/]+$/.test(url.pathname)) {
+        event.respondWith(fetch(request));
+        return;
+    }
 
     // GitHub API — deck content
     if (url.hostname === 'api.github.com' || url.hostname === 'raw.githubusercontent.com') {

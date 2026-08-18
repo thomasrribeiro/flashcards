@@ -25,7 +25,12 @@ export function registryIndexUrl(source, resolvedRef = null) {
 }
 
 async function resolveRegistryCommit(source, fetchImpl) {
-    const response = await fetchImpl(`https://api.github.com/repos/${source.repository}/commits/${encodeURIComponent(source.ref || 'master')}`, {
+    const repository = source.repository;
+    const ref = encodeURIComponent(source.ref || 'master');
+    // A unique query prevents an older installed service worker from returning
+    // a stale branch-head response immediately after a curriculum PR merges.
+    const freshness = Date.now();
+    const response = await fetchImpl(`https://api.github.com/repos/${repository}/commits/${ref}?curriculum_fresh=${freshness}`, {
         headers: { Accept: 'application/vnd.github+json' },
         cache: 'no-cache'
     });

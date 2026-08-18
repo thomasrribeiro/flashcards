@@ -2406,9 +2406,6 @@ function setupEventListeners() {
     const addBtn = document.getElementById('add-repo-btn');
     const repoInput = document.getElementById('github-repo-input');
     const createDeckBtn = document.getElementById('create-deck-btn');
-    const generationActivityButton = document.getElementById('generation-activity-button');
-
-    generationActivityButton?.addEventListener('click', () => openGenerationActivity());
     ensureGenerationActivityPolling();
 
     // Add repository when + button is clicked
@@ -2478,7 +2475,7 @@ function setupEventListeners() {
         });
     }
 
-    document.getElementById('study-settings-btn')?.addEventListener('click', openStudySettings);
+    document.getElementById('study-settings-btn')?.addEventListener('click', () => openStudySettings());
     document.getElementById('study-settings-cancel')?.addEventListener('click', closeStudySettings);
     document.getElementById('study-settings-close')?.addEventListener('click', closeStudySettings);
     document.querySelector('#study-settings-modal .modal-overlay')?.addEventListener('click', closeStudySettings);
@@ -2497,6 +2494,7 @@ function setupEventListeners() {
             activateStudySettingsTab(settingsTabs[nextIndex].dataset.settingsTab, { focus: true });
         });
     });
+    document.addEventListener('generationactivitychange', () => renderGenerationActivitySettings());
     document.getElementById('generation-provider')?.addEventListener('change', () => {
         updateGenerationModelChoices().catch(error => showGenerationModelError(error));
     });
@@ -4455,58 +4453,49 @@ function appendGenerationRequestRow(list, request, close) {
     list.appendChild(item);
 }
 
+function renderGenerationActivitySettings({ focusRequestId = null } = {}) {
+    const content = document.getElementById('study-settings-pane-agents');
+    if (!content || content.hidden) return;
+    content.replaceChildren();
+    const summary = summarizeGenerationActivity(generationRequests);
+    const summaryText = document.createElement('p');
+    summaryText.className = 'generation-activity-summary';
+    summaryText.textContent = summary.active
+        ? `${summary.active} agent${summary.active === 1 ? '' : 's'} currently running or queued. ${summary.review} awaiting review.`
+        : `No agents currently running. ${summary.review} result${summary.review === 1 ? '' : 's'} awaiting review.`;
+    const refresh = document.createElement('button');
+    refresh.type = 'button';
+    refresh.className = 'generation-activity-refresh';
+    refresh.textContent = 'Refresh';
+    refresh.onclick = async () => {
+        refresh.disabled = true;
+        await refreshGenerationActivity().catch(error => { summaryText.textContent = error.message; });
+        renderGenerationActivitySettings({ focusRequestId });
+    };
+    const list = document.createElement('div');
+    list.className = 'generation-activity-list';
+    const requests = sortGenerationRequestsByInitiatedAt(generationRequests);
+    if (!requests.length) {
+        const empty = document.createElement('p');
+        empty.textContent = 'No generation requests yet.';
+        list.appendChild(empty);
+    } else {
+        requests.forEach(request => appendGenerationRequestRow(list, request, closeStudySettings));
+    }
+    content.append(summaryText, refresh, list);
+    if (focusRequestId != null) {
+        list.querySelector(`[data-request-id="${CSS.escape(String(focusRequestId))}"]`)
+            ?.scrollIntoView({ block: 'nearest' });
+    }
+}
+
 function openGenerationActivity({ focusRequestId = null, initialRequest = null } = {}) {
     if (!githubAuth.isAuthenticated()) {
         alert('Sign in with GitHub to view generation activity.');
         return;
     }
     if (initialRequest) upsertGenerationRequest(initialRequest);
-    const { overlay, content, close } = curriculumOverlay('AI activity');
-    content.dataset.generationActivityList = '';
-    const render = () => {
-        if (!overlay.isConnected) return;
-        content.replaceChildren();
-        const summary = summarizeGenerationActivity(generationRequests);
-        const summaryText = document.createElement('p');
-        summaryText.className = 'generation-activity-summary';
-        summaryText.textContent = summary.active
-            ? `${summary.active} agent${summary.active === 1 ? '' : 's'} currently running or queued. ${summary.review} awaiting review.`
-            : `No agents currently running. ${summary.review} result${summary.review === 1 ? '' : 's'} awaiting review.`;
-        const refresh = document.createElement('button');
-        refresh.type = 'button';
-        refresh.className = 'generation-activity-refresh';
-        refresh.textContent = 'Refresh';
-        refresh.onclick = async () => {
-            refresh.disabled = true;
-            await refreshGenerationActivity().catch(error => { summaryText.textContent = error.message; });
-            render();
-        };
-        const list = document.createElement('div');
-        list.className = 'generation-activity-list';
-        const requests = sortGenerationRequestsByInitiatedAt(generationRequests);
-        if (!requests.length) {
-            const empty = document.createElement('p');
-            empty.textContent = 'No generation requests yet.';
-            list.appendChild(empty);
-        } else {
-            requests.forEach(request => appendGenerationRequestRow(list, request, close));
-        }
-        content.append(summaryText, refresh, list);
-        if (focusRequestId != null) {
-            list.querySelector(`[data-request-id="${CSS.escape(String(focusRequestId))}"]`)
-                ?.scrollIntoView({ block: 'nearest' });
-        }
-    };
-    const handleActivityChange = () => render();
-    document.addEventListener('generationactivitychange', handleActivityChange);
-    overlay.addEventListener('close', () => {
-        document.removeEventListener('generationactivitychange', handleActivityChange);
-    }, { once: true });
-    render();
-    refreshGenerationActivity().then(render).catch(error => {
-        if (!overlay.isConnected) return;
-        content.innerHTML = `<p class="generation-activity-error">${escapeHtml(error.message)}</p>`;
-    });
+    openStudySettings({ tab: 'agents', focusRequestId });
     ensureGenerationActivityPolling();
 }
 
@@ -6067,6 +6056,9 @@ function activateStudySettingsTab(name, { focus = false } = {}) {
         tab.tabIndex = selected ? 0 : -1;
     }
     for (const pane of panes) pane.hidden = pane.dataset.settingsPane !== active.dataset.settingsTab;
+    const panel = document.getElementById('study-settings-panel');
+    if (panel) panel.dataset.activeSettingsTab = active.dataset.settingsTab;
+    if (active.dataset.settingsTab === 'agents') renderGenerationActivitySettings();
     if (focus) active.focus();
 }
 
@@ -6377,7 +6369,7 @@ function reflectCustomTargetField() {
     custom.required = select.value === 'custom';
 }
 
-async function openStudySettings() {
+async function openStudySettings({ tab = 'study', focusRequestId = null } = {}) {
     const modal = document.getElementById('study-settings-modal');
     const button = document.getElementById('study-settings-btn');
     const target = document.getElementById('daily-new-target');
@@ -6393,7 +6385,11 @@ async function openStudySettings() {
         || !generationProvider || !generationModel || !generationReasoning) return;
 
     if (!modal.classList.contains('hidden')) {
-        closeStudySettings();
+        if (tab === 'study') closeStudySettings();
+        else {
+            activateStudySettingsTab(tab);
+            renderGenerationActivitySettings({ focusRequestId });
+        }
         return;
     }
 
@@ -6417,8 +6413,9 @@ async function openStudySettings() {
     renderCurriculumSettingsSources();
     modal.classList.remove('hidden');
     button.setAttribute('aria-expanded', 'true');
-    activateStudySettingsTab('study');
-    target.focus();
+    activateStudySettingsTab(tab);
+    if (tab === 'agents') renderGenerationActivitySettings({ focusRequestId });
+    else target.focus();
 
     loadAIProviderConnections(generation.providerId).catch(error => {
         renderAIProviderConnections();

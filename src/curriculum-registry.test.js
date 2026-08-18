@@ -80,6 +80,9 @@ describe('curriculum registries', () => {
             fetchImpl,
             cacheStorage: null
         });
+        const commitUrl = new URL(calls[0]);
+        expect(commitUrl.pathname).toBe('/repos/owner/curricula/commits/master');
+        expect(commitUrl.searchParams.get('curriculum_fresh')).toMatch(/^\d+$/);
         expect(calls[1]).toContain(`/${sha}/dist/curriculum.json`);
         expect(result.index.registries[0].resolved_commit).toBe(sha);
         expect(result.index.registries[0].catalog_hash).toMatch(/^sha256:[a-f0-9]{64}$/);

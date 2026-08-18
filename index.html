@@ -97,10 +97,7 @@
                         <span class="connection-status-label">Checking…</span>
                     </span>
                     <button id="study-settings-btn" class="study-settings-btn" type="button" aria-expanded="false" aria-controls="study-settings-modal">Settings</button>
-                    <span class="utility-action-stack">
-                        <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
-                        <button id="generation-activity-button" class="generation-activity-global" type="button" data-generation-activity>Agents</button>
-                    </span>
+                    <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
                 </div>
                 <!-- <h2 class="section-title">Collection</h2> -->
 
@@ -169,6 +166,7 @@
                             <button id="study-settings-tab-study" type="button" role="tab" aria-selected="true" aria-controls="study-settings-pane-study" data-settings-tab="study">Study</button>
                             <button id="study-settings-tab-generation" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-generation" data-settings-tab="generation" tabindex="-1">AI generation</button>
                             <button id="study-settings-tab-curriculum" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-curriculum" data-settings-tab="curriculum" tabindex="-1">Curriculum</button>
+                            <button id="study-settings-tab-agents" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-agents" data-settings-tab="agents" data-generation-activity tabindex="-1">Agents</button>
                         </div>
                         <div class="modal-body study-settings-body">
                             <section id="study-settings-pane-study" class="study-settings-pane" role="tabpanel" aria-labelledby="study-settings-tab-study" data-settings-pane="study">
@@ -244,6 +242,7 @@
                                 <div id="curriculum-settings-sources" class="curriculum-settings-sources"></div>
                                 <button id="curriculum-settings-add-source" class="curriculum-settings-add-source" type="button">Add source</button>
                             </section>
+                            <section id="study-settings-pane-agents" class="study-settings-pane is-single-column generation-activity-settings" role="tabpanel" aria-labelledby="study-settings-tab-agents" data-settings-pane="agents" data-generation-activity-list hidden></section>
                         </div>
                         <div class="modal-footer">
                             <button id="study-settings-cancel" class="btn-cancel" type="button">Cancel</button>

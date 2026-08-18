@@ -7,6 +7,12 @@ const bundledCurriculum = JSON.parse(readFileSync(
 ));
 
 test.beforeEach(async ({ page }) => {
+    await page.route('https://api.github.com/repos/thomasrribeiro-flashcards/curricula/commits/master**', route => (
+        route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } })
+    ));
+    await page.route('https://raw.githubusercontent.com/thomasrribeiro-flashcards/curricula/**', route => (
+        route.fulfill({ json: bundledCurriculum })
+    ));
     await page.goto('/');
     await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
     await page.locator('#tab-curriculum').click();
@@ -38,22 +44,31 @@ test.beforeEach(async ({ page }) => {
     expect(createBox.x).toBeGreaterThan(backBox.x);
 });
 
-test('keeps Agents globally accessible beneath the theme control', async ({ page }) => {
+test('keeps header controls on one row and exposes Agents inside Settings', async ({ page }) => {
+    const status = page.locator('#connection-status');
+    const settingsButton = page.getByRole('button', { name: 'Settings' });
     const theme = page.getByRole('button', { name: 'Dark mode' });
-    const agents = page.getByRole('button', { name: /Agents/ });
+    await expect(status).toBeVisible();
+    await expect(settingsButton).toBeVisible();
     await expect(theme).toBeVisible();
-    await expect(agents).toBeVisible();
-    const [themeBox, agentsBox] = await Promise.all([theme.boundingBox(), agents.boundingBox()]);
-    expect(Math.abs(themeBox.x - agentsBox.x)).toBeLessThan(1);
-    expect(agentsBox.y).toBeGreaterThanOrEqual(themeBox.y + themeBox.height);
+    const [statusBox, settingsBox, themeBox] = await Promise.all([
+        status.boundingBox(), settingsButton.boundingBox(), theme.boundingBox()
+    ]);
+    expect(Math.abs(statusBox.y - settingsBox.y)).toBeLessThan(2);
+    expect(Math.abs(settingsBox.y - themeBox.y)).toBeLessThan(2);
 
-    await page.locator('#tab-decks').click();
+    await settingsButton.click();
+    const modal = page.getByRole('dialog', { name: 'Settings' });
+    const agents = modal.getByRole('tab', { name: /Agents/ });
     await expect(agents).toBeVisible();
+    await agents.click();
+    await expect(modal.locator('#study-settings-pane-agents')).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Save', exact: true })).toBeHidden();
 });
 
 test('updates the root breadcrumb when the curriculum repository setting changes', async ({ page }) => {
     const commit = '1234567890abcdef1234567890abcdef12345678';
-    await page.route('https://api.github.com/repos/example/new-curricula/commits/master', route => (
+    await page.route('https://api.github.com/repos/example/new-curricula/commits/master**', route => (
         route.fulfill({ json: { sha: commit } })
     ));
     await page.route('https://raw.githubusercontent.com/example/new-curricula/**', route => (
@@ -82,12 +97,15 @@ test('updates the root breadcrumb when the curriculum repository setting changes
 
 test('queues a subject draft only for a signed-in account with a connected model', async ({ page }, testInfo) => {
     let queuedJob = null;
+    await page.route('https://api.github.com/repos/thomasrribeiro-flashcards/curricula/commits/master**', route => (
+        route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } })
+    ));
+    await page.route('https://raw.githubusercontent.com/thomasrribeiro-flashcards/curricula/**', route => (
+        route.fulfill({ json: bundledCurriculum })
+    ));
     await page.route('**/api/**', async route => {
         const request = route.request();
         const path = new URL(request.url()).pathname;
-        if (path === '/repos/thomasrribeiro-flashcards/curricula/commits/master') {
-            return route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } });
-        }
         if (path === '/api/users/ensure') return route.fulfill({ json: { success: true } });
         if (path === '/api/reviews/test-user') return route.fulfill({ json: { reviews: [] } });
         if (path === '/api/chapter-progress/test-user') return route.fulfill({ json: { chapters: [] } });
@@ -161,7 +179,9 @@ test('queues a subject draft only for a signed-in account with a connected model
     await dialog.getByLabel('Subject name').fill('earth-science');
     await expect(subjectError).toBeHidden();
     await dialog.getByRole('button', { name: 'Queue AI draft' }).click();
-    const activity = page.getByRole('dialog', { name: 'AI activity' });
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    const activity = settings.locator('#study-settings-pane-agents');
+    await expect(settings.getByRole('tab', { name: /Agents/ })).toHaveAttribute('aria-selected', 'true');
     await expect(activity).toBeVisible();
     await expect(activity.getByRole('heading', { name: 'Earth Science curriculum' })).toBeVisible();
     await expect(activity.getByText('Request 123 · openai · gpt-test · high reasoning')).toBeVisible();
@@ -203,7 +223,7 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
             repository: 'example/curricula'
         },
         subjects: [
-            ...bundledCurriculum.subjects,
+            ...bundledCurriculum.subjects.filter(subject => subject.id !== 'chemistry'),
             { id: 'chemistry', destination: 'whole-field', focus: [], deck_granularity: 'course' }
         ],
         decks: [
@@ -226,12 +246,12 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
     await page.route('https://api.github.com/repos/example/curricula/pulls/12', route => (
         route.fulfill({ json: { head: { sha: commit } } })
     ));
+    await page.route('https://api.github.com/repos/thomasrribeiro-flashcards/curricula/commits/master**', route => (
+        route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } })
+    ));
     await page.route('**/api/**', async route => {
         const request = route.request();
         const path = new URL(request.url()).pathname;
-        if (path === '/repos/thomasrribeiro-flashcards/curricula/commits/master') {
-            return route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } });
-        }
         if (path === '/api/users/ensure') return route.fulfill({ json: { success: true } });
         if (path === '/api/reviews/test-user') return route.fulfill({ json: { reviews: [] } });
         if (path === '/api/chapter-progress/test-user') return route.fulfill({ json: { chapters: [] } });
@@ -272,10 +292,12 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
     await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
     await page.locator('#tab-decks').click();
 
-    const agents = page.getByRole('button', { name: /Agents/ });
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    const agents = settings.getByRole('tab', { name: /Agents/ });
     await expect(agents).toHaveText('Agents (1 review)');
     await agents.click();
-    const activity = page.getByRole('dialog', { name: 'AI activity' });
+    const activity = settings.locator('#study-settings-pane-agents');
     await expect(activity.getByText('No agents currently running. 1 result awaiting review.')).toBeVisible();
     await expect(activity.getByRole('heading', { name: 'Chemistry curriculum' })).toBeVisible();
     await activity.getByRole('button', { name: 'Preview curriculum' }).click();
@@ -289,7 +311,7 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
 
     await page.getByRole('button', { name: 'Exit preview' }).click();
     await expect(page.locator('.curriculum-preview-banner')).toHaveCount(0);
-    await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toHaveCount(0);
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Create subject' })).toBeVisible();
 });
 
@@ -298,7 +320,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         await page.setViewportSize({ width: 2000, height: 1100 });
     }
     const subjects = page.locator('.curriculum-graph-node');
-    await expect(subjects).toHaveCount(3);
+    await expect(subjects).toHaveCount(4);
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toBeVisible();
     await expect(page.locator('.curriculum-graph-stage')).toHaveClass(/is-subject-overview/);
     await expect(page.locator('.curriculum-graph-stage')).not.toHaveClass(/is-layered/);
     await expect(page.getByRole('button', { name: 'Zoom in' })).toBeVisible();
