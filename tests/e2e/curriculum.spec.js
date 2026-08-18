@@ -379,6 +379,14 @@ test('publishes merged review requests and clears the Agents review count', asyn
     await expect(activity.getByText('No agents currently running. 0 results awaiting review.')).toBeVisible();
     await expect(activity.getByText('Published', { exact: true })).toBeVisible();
     await expect(activity.getByRole('button', { name: 'Preview curriculum' })).toHaveCount(0);
+    await expect(activity.getByRole('link', { name: 'View merged pull request' })).toHaveAttribute('href', resultUrl);
+    const [summaryBox, refreshBox, listBox] = await Promise.all([
+        activity.locator('.generation-activity-summary').boundingBox(),
+        activity.getByRole('button', { name: 'Refresh' }).boundingBox(),
+        activity.locator('.generation-activity-list').boundingBox()
+    ]);
+    expect(Math.max(summaryBox.y + summaryBox.height, refreshBox.y + refreshBox.height))
+        .toBeLessThanOrEqual(listBox.y);
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {

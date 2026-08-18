@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+    generationPullRequestActionLabel,
     loadPullRequestCurriculum,
     normalizeGenerationRequest,
     pullRequestCoordinates,
@@ -23,6 +24,12 @@ describe('generation activity', () => {
         expect(pullRequestCoordinates('https://github.com/example/curricula/pull/12'))
             .toEqual({ owner: 'example', repository: 'curricula', number: 12 });
         expect(() => pullRequestCoordinates('https://example.com/pull/12')).toThrow(/GitHub pull request/);
+    });
+
+    it('labels pull request links by lifecycle state', () => {
+        expect(generationPullRequestActionLabel('needs-review')).toBe('Review pull request');
+        expect(generationPullRequestActionLabel('published')).toBe('View merged pull request');
+        expect(generationPullRequestActionLabel('cancelled')).toBe('View closed pull request');
     });
 
     it('orders requests by initiation time with newest first', () => {

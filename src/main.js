@@ -87,6 +87,7 @@ import {
 } from './curriculum-registry.js';
 import { generationJobForDraft, titleForSubject, validateCurriculumDraft } from './curriculum-builder.js';
 import {
+    generationPullRequestActionLabel,
     generationRequestName,
     generationStatusLabel,
     loadPullRequestCurriculum,
@@ -4454,7 +4455,7 @@ function appendGenerationRequestRow(list, request, close) {
             link.href = request.resultUrl;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
-            link.textContent = 'Open pull request';
+            link.textContent = generationPullRequestActionLabel(request.status);
             actions.appendChild(link);
         } catch { /* The worker result is not a pull request. */ }
     }
@@ -4525,7 +4526,7 @@ function curriculumPreviewBanner() {
     link.href = curriculumPreview.request.resultUrl;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    link.textContent = 'Open pull request';
+    link.textContent = 'Review pull request';
     const exit = document.createElement('button');
     exit.type = 'button';
     exit.textContent = 'Exit preview';

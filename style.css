@@ -1572,7 +1572,8 @@ kbd {
 }
 
 .generation-activity-settings {
-    position: relative;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
 }
 
 .study-setting-field {
@@ -3699,14 +3700,14 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-builder-errors { min-height: 1.4em; margin-top: 8px; color: #c22; font-size: 0.68rem; }
 .curriculum-builder-success code { display: block; overflow-x: auto; padding: 12px; background: var(--light-gray); }
 .generation-activity-summary {
-    margin: 0 90px 14px 0;
+    align-self: center;
+    margin: 0;
     color: var(--muted);
     font-size: 0.72rem;
 }
 .generation-activity-refresh {
-    position: absolute;
-    top: 18px;
-    right: 18px;
+    position: static;
+    justify-self: end;
     border: 1px solid var(--black);
     border-radius: 0;
     background: var(--white);
@@ -3717,6 +3718,7 @@ body.standalone-phone .mobile-sidebar-close {
 }
 .generation-activity-list {
     display: grid;
+    grid-column: 1 / -1;
     gap: 10px;
 }
 .generation-activity-item {
@@ -3801,8 +3803,9 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 @media (max-width: 760px) {
-    .generation-activity-summary { margin-right: 0; }
-    .generation-activity-refresh { position: static; margin-bottom: 12px; }
+    .generation-activity-settings { grid-template-columns: minmax(0, 1fr); }
+    .generation-activity-refresh { justify-self: start; }
+    .generation-activity-list { grid-column: 1; }
     .curriculum-preview-banner { align-items: flex-start; flex-direction: column; }
     .curriculum-builder-grid { grid-template-columns: 1fr; }
     .curriculum-builder-deck { grid-template-columns: 28px 1fr auto; }

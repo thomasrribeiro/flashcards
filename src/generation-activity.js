@@ -188,3 +188,11 @@ export function generationStatusLabel(status) {
         cancelled: 'Cancelled'
     })[status] || status;
 }
+
+export function generationPullRequestActionLabel(status) {
+    return ({
+        'needs-review': 'Review pull request',
+        published: 'View merged pull request',
+        cancelled: 'View closed pull request'
+    })[status] || 'View pull request';
+}
