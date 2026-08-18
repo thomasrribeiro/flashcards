@@ -1571,7 +1571,7 @@ kbd {
     display: none;
 }
 
-.generation-activity-settings {
+.study-settings-pane.generation-activity-settings {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
 }
@@ -3803,7 +3803,7 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 @media (max-width: 760px) {
-    .generation-activity-settings { grid-template-columns: minmax(0, 1fr); }
+    .study-settings-pane.generation-activity-settings { grid-template-columns: minmax(0, 1fr); }
     .generation-activity-refresh { justify-self: start; }
     .generation-activity-list { grid-column: 1; }
     .curriculum-preview-banner { align-items: flex-start; flex-direction: column; }

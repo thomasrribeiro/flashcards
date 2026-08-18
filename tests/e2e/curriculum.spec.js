@@ -315,7 +315,7 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
     await expect(page.getByRole('button', { name: 'Create subject' })).toBeVisible();
 });
 
-test('publishes merged review requests and clears the Agents review count', async ({ page }) => {
+test('publishes merged review requests and clears the Agents review count', async ({ page }, testInfo) => {
     const resultUrl = 'https://github.com/example/curricula/pull/1';
     const patches = [];
     await page.route('https://api.github.com/repos/example/curricula/pulls/1**', route => (
@@ -387,6 +387,12 @@ test('publishes merged review requests and clears the Agents review count', asyn
     ]);
     expect(Math.max(summaryBox.y + summaryBox.height, refreshBox.y + refreshBox.height))
         .toBeLessThanOrEqual(listBox.y);
+    if (testInfo.project.name === 'desktop-chromium') {
+        expect(Math.abs(
+            summaryBox.y + summaryBox.height / 2 - (refreshBox.y + refreshBox.height / 2)
+        )).toBeLessThan(1);
+        expect(refreshBox.x).toBeGreaterThan(summaryBox.x);
+    }
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {
