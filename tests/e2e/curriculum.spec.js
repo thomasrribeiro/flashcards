@@ -281,7 +281,7 @@ test('queues a chapter-curriculum agent from an empty deck chapter viewer', asyn
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
-    await page.locator('.curriculum-selected-item').click();
+    await expect(page.getByRole('button', { name: 'Prerequisites & unlocks' })).toBeVisible();
     const create = page.getByRole('button', { name: 'Create chapter curriculum' });
     await expect(create).toBeEnabled();
     await create.click();
@@ -321,7 +321,6 @@ test('queues content generation for one eligible chapter', async ({ page }) => {
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
-    await page.locator('.curriculum-selected-item').click();
     const chapterId = target.chapters[0].id;
     await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}#${chapterId}"]`).click();
     const generate = page.getByRole('button', { name: 'Generate chapter content' });
@@ -1240,6 +1239,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer 2 of ${layerCount}`);
 
     await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
+    await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
+    await page.getByRole('button', { name: 'Prerequisites & unlocks' }).click();
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
     await expect(page.locator('.curriculum-neighborhood-column')).toHaveCount(3);
     await expect(page.locator('.curriculum-neighborhood-column.is-prerequisites')).toBeVisible();
@@ -1264,16 +1265,12 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         const prerequisites = prerequisitesColumn.locator('.curriculum-neighborhood-scroll');
         const unlocksColumn = page.locator('.curriculum-neighborhood-column.is-unlocks');
         const unlocks = unlocksColumn.locator('.curriculum-neighborhood-scroll');
-        const shortDimensions = await prerequisites.evaluate(element => ({
-            clientHeight: element.clientHeight,
-            scrollHeight: element.scrollHeight,
-            overflowY: getComputedStyle(element).overflowY
-        }));
-        expect(shortDimensions.scrollHeight).toBeLessThanOrEqual(shortDimensions.clientHeight + 1);
-        expect(shortDimensions.overflowY).toBe('hidden');
-        await prerequisites.evaluate(element => { element.scrollTop = 100; });
-        expect(await prerequisites.evaluate(element => element.scrollTop)).toBe(0);
-        const dimensions = await unlocks.evaluate(element => ({
+        const independentOverflow = await Promise.all([prerequisites, unlocks].map(column => column.evaluate(element => ({
+            overflowY: getComputedStyle(element).overflowY,
+            scrollTop: element.scrollTop
+        }))));
+        expect(independentOverflow.every(item => item.overflowY === 'visible' && item.scrollTop === 0)).toBe(true);
+        const dimensions = await page.locator('.curriculum-neighborhood').evaluate(element => ({
             clientHeight: element.clientHeight,
             scrollHeight: element.scrollHeight,
             overflowY: getComputedStyle(element).overflowY
@@ -1283,19 +1280,17 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         const initialEdgeGeometry = await page.locator('.curriculum-neighborhood-edge').evaluateAll(paths => (
             paths.map(path => path.getAttribute('d')).join('|')
         ));
-        const unlocksHeaderTop = (await unlocksColumn.locator(':scope > h3').boundingBox()).y;
-        await unlocks.evaluate(element => { element.scrollTop = element.scrollHeight; });
-        await expect.poll(() => unlocks.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-        await expect.poll(() => page.locator('.curriculum-neighborhood-edge').evaluateAll(paths => (
-            paths.map(path => path.getAttribute('d')).join('|')
-        ))).not.toBe(initialEdgeGeometry);
-        expect((await unlocksColumn.locator(':scope > h3').boundingBox()).y).toBe(unlocksHeaderTop);
-        await unlocks.evaluate(element => { element.scrollTop = 0; });
         const selectedTop = (await page.locator('.curriculum-selected-item').boundingBox()).y;
         const prerequisiteTop = (await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().boundingBox()).y;
         const unlockTop = (await page.locator('.curriculum-neighborhood-column.is-unlocks .curriculum-explorer-item').first().boundingBox()).y;
         expect(Math.abs(selectedTop - prerequisiteTop)).toBeLessThan(2);
         expect(Math.abs(selectedTop - unlockTop)).toBeLessThan(2);
+        await page.locator('.curriculum-neighborhood').evaluate(element => { element.scrollTop = element.scrollHeight; });
+        await expect.poll(() => page.locator('.curriculum-neighborhood').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+        await expect.poll(() => page.locator('.curriculum-neighborhood-edge').evaluateAll(paths => (
+            paths.map(path => path.getAttribute('d')).join('|')
+        ))).not.toBe(initialEdgeGeometry);
+        await page.locator('.curriculum-neighborhood').evaluate(element => { element.scrollTop = 0; });
     }
     const firstFocusedDeck = await page.locator('.curriculum-selected-item h2').textContent();
     const firstFocusedId = await page.locator('.curriculum-selected-item').getAttribute('data-curriculum-node-id');
@@ -1306,37 +1301,42 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             const stageRect = stage.getBoundingClientRect();
             const anchorRect = [...stage.querySelectorAll('.curriculum-graph-node')]
                 .find(node => node.dataset.deckId === deckId).getBoundingClientRect();
-            return Math.abs(anchorRect.top + anchorRect.height / 2
-                - (stageRect.top + stage.clientHeight / 2));
-        }, firstFocusedId)).toBeLessThan(30);
+            return {
+                anchorVisible: anchorRect.bottom > stageRect.top && anchorRect.top < stageRect.bottom,
+                viewportTop: Number.parseFloat(stage.querySelector('.curriculum-graph-viewport').style.top || '0')
+            };
+        }, firstFocusedId)).toEqual({ anchorVisible: true, viewportTop: 0 });
     }
     await historyBack.click();
     await expect(page.locator('.curriculum-selected-item h2')).toHaveText(firstFocusedDeck);
-    await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().click();
+    const relatedDeck = page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first();
+    const secondFocusedDeck = await relatedDeck.locator('.curriculum-explorer-item-name').textContent();
+    await relatedDeck.click();
+    await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Prerequisites & unlocks' })).toBeVisible();
+    await page.getByRole('button', { name: 'Prerequisites & unlocks' }).click();
     await expect(page.locator('.curriculum-selected-item h2')).not.toHaveText(firstFocusedDeck);
-    const secondFocusedDeck = await page.locator('.curriculum-selected-item h2').textContent();
+    await expect(page.locator('.curriculum-selected-item h2')).toHaveText(secondFocusedDeck);
     await expect(historyBack).toBeEnabled();
     await expect(historyForward).toBeDisabled();
     await page.reload();
     await expect(page.locator('.curriculum-selected-item h2')).toHaveText(secondFocusedDeck);
     await expect(historyBack).toBeEnabled();
     await historyBack.click();
-    await expect(page.locator('.curriculum-selected-item h2')).toHaveText(firstFocusedDeck);
+    await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
     await expect(historyForward).toBeEnabled();
     await historyForward.click();
     await expect(page.locator('.curriculum-selected-item h2')).toHaveText(secondFocusedDeck);
-    await historyBack.click();
-    await expect(page.locator('.curriculum-selected-item h2')).toHaveText(firstFocusedDeck);
 
-    await page.locator('.curriculum-selected-item').click();
+    await page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'curricula', exact: true }).click();
+    await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
+    await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Back in curriculum' })).toBeEnabled();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(10);
 
-    await historyBack.click();
-    await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
     await historyBack.click();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
 });
@@ -1441,6 +1441,7 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     test.skip(testInfo.project.name !== 'desktop-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/elementary-algebra-and-functions"]').click();
+    await page.getByRole('button', { name: 'Prerequisites & unlocks' }).click();
 
     const selectedTop = (await page.locator('.curriculum-selected-item').boundingBox()).y;
     const prerequisiteTop = (await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().boundingBox()).y;
@@ -1448,13 +1449,11 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     expect(Math.abs(selectedTop - prerequisiteTop)).toBeLessThan(2);
     expect(Math.abs(selectedTop - unlockTop)).toBeLessThan(2);
 
-    await page.goBack();
+    await page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'mathematics', exact: true }).click();
     await expect(page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]')).toBeVisible();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
-    await expect(page.locator('.curriculum-selected-item')).toHaveClass(/is-unavailable/);
-    await expect(page.locator('.curriculum-selected-item')).not.toHaveClass(/is-learning/);
-    await page.locator('.curriculum-selected-item').click();
     await expect(page.getByRole('heading', { name: 'No chapter curriculum yet' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Prerequisites & unlocks' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create chapter curriculum' })).toBeDisabled();
     await expect(page.locator('.curriculum-layer-label')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /selected deck/ })).toHaveCount(0);
@@ -1501,6 +1500,7 @@ test('curriculum controls fit a phone viewport', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
+    await page.getByRole('button', { name: 'Prerequisites & unlocks' }).click();
     const explorer = page.locator('.curriculum-neighborhood');
     await expect(explorer).toBeVisible();
     const box = await explorer.boundingBox();

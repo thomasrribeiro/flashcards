@@ -3206,12 +3206,13 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
                 openDependencyModal(deck.id.slice(0, separator), deck.id.slice(separator + 1));
             } else {
                 navigateCurriculum({
-                    mode: 'focus',
-                    hierarchy: 'deck',
+                    mode: 'chapters',
+                    hierarchy: 'chapter',
                     subject: deck.subject,
-                    targetId: deck.id,
-                    parentId: deck.subject,
-                    query: ''
+                    targetId: '',
+                    parentId: deck.id,
+                    query: '',
+                    layerStart: 0
                 });
             }
         };
@@ -3512,8 +3513,7 @@ function captureCurriculumPosition() {
     if (!neighborhood) return null;
     return {
         type: 'neighborhood',
-        columns: [...neighborhood.querySelectorAll('.curriculum-neighborhood-scroll')]
-            .map(column => column.scrollTop)
+        top: neighborhood.scrollTop
     };
 }
 
@@ -3601,24 +3601,16 @@ function restoreCurriculumPosition() {
         const anchorRect = anchor.getBoundingClientRect();
         const delta = anchorRect.top + anchorRect.height / 2
             - (stageRect.top + stage.clientHeight / 2);
-        let desiredTop = stage.scrollTop + delta;
-        const scrollCanvas = stage.querySelector('.curriculum-graph-scroll-canvas');
-        const viewport = stage.querySelector('.curriculum-graph-viewport');
-        if (desiredTop < 0 && scrollCanvas && viewport) {
-            const inset = -desiredTop;
-            viewport.style.top = `${inset}px`;
-            scrollCanvas.style.height = `${scrollCanvas.scrollHeight + inset}px`;
-            desiredTop = 0;
-        } else if (desiredTop > stage.scrollHeight - stage.clientHeight && scrollCanvas) {
-            const inset = desiredTop - (stage.scrollHeight - stage.clientHeight);
-            scrollCanvas.style.height = `${scrollCanvas.scrollHeight + inset}px`;
-        }
-        stage.scrollTop = desiredTop;
+        const desiredTop = stage.scrollTop + delta;
+        stage.scrollTop = Math.max(0, Math.min(
+            desiredTop,
+            stage.scrollHeight - stage.clientHeight
+        ));
         return;
     }
     if (position?.type === 'neighborhood') {
-        document.querySelectorAll('#curriculum-view .curriculum-neighborhood-scroll')
-            .forEach((column, index) => { column.scrollTop = position.columns?.[index] || 0; });
+        const neighborhood = document.querySelector('#curriculum-view .curriculum-neighborhood');
+        if (neighborhood) neighborhood.scrollTop = position.top || 0;
     }
 }
 
@@ -3716,7 +3708,10 @@ function curriculumFocusOptions(item) {
     if (item.nodeType === 'chapter') {
         return { mode: 'focus', hierarchy: 'chapter', subject: item.subject, parentId: item.deckId, targetId: item.id, query: '' };
     }
-    return { mode: 'focus', hierarchy: 'deck', subject: item.subject, parentId: item.subject, targetId: item.id, query: '' };
+    return {
+        mode: 'chapters', hierarchy: 'chapter', subject: item.subject,
+        parentId: item.id, targetId: '', query: '', layerStart: 0
+    };
 }
 
 function makeCurriculumItemButton(item, progressStates, extra = '') {
@@ -3775,18 +3770,16 @@ function makeCurriculumNeighborhoodScroll(label) {
 }
 
 function fitCurriculumNeighborhoodViewport(explorer) {
-    const scrollAreas = [...explorer.querySelectorAll('.curriculum-neighborhood-scroll')];
     const updateOverflow = () => {
-        for (const scroll of scrollAreas) {
-            const canScroll = scroll.scrollHeight > scroll.clientHeight + 1;
-            scroll.classList.toggle('is-scrollable', canScroll);
-            scroll.tabIndex = canScroll ? 0 : -1;
-            if (canScroll) {
-                scroll.setAttribute('aria-label', scroll.dataset.scrollLabel);
-            } else {
-                scroll.removeAttribute('aria-label');
-                scroll.scrollTop = 0;
-            }
+        const mobile = window.matchMedia('(max-width: 760px)').matches;
+        const canScroll = !mobile && explorer.scrollHeight > explorer.clientHeight + 1;
+        explorer.classList.toggle('is-scrollable', canScroll);
+        explorer.tabIndex = canScroll ? 0 : -1;
+        if (canScroll) {
+            explorer.setAttribute('aria-label', 'Scrollable curriculum dependencies');
+        } else {
+            explorer.removeAttribute('aria-label');
+            explorer.scrollTop = 0;
         }
     };
     const fit = () => {
@@ -3806,7 +3799,7 @@ function fitCurriculumNeighborhoodViewport(explorer) {
     const resizeObserver = typeof ResizeObserver === 'function'
         ? new ResizeObserver(updateOverflow)
         : null;
-    scrollAreas.forEach(scroll => resizeObserver?.observe(scroll));
+    resizeObserver?.observe(explorer);
     const onViewportResize = () => {
         if (!explorer.isConnected) {
             window.removeEventListener('resize', onViewportResize);
@@ -3819,66 +3812,75 @@ function fitCurriculumNeighborhoodViewport(explorer) {
     requestAnimationFrame(fit);
 }
 
-function attachCurriculumNeighborhoodEdges(explorer, selectedNode, scrollAreas) {
+function attachCurriculumNeighborhoodEdges(explorer, selectedNode) {
     const namespace = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(namespace, 'svg');
     svg.classList.add('curriculum-neighborhood-edges');
     svg.setAttribute('aria-hidden', 'true');
-    svg.innerHTML = `
-        <defs>
-            <marker id="curriculum-neighborhood-arrow" viewBox="0 0 10 10" refX="9" refY="5"
-                markerWidth="4.5" markerHeight="4.5" orient="auto">
-                <path d="M 0 1 L 9 5 L 0 9 z"></path>
-            </marker>
-        </defs>
-    `;
     explorer.prepend(svg);
 
     let frame = null;
-    const visibleInScrollArea = node => {
-        const scroll = node.closest('.curriculum-neighborhood-scroll');
-        if (!scroll) return true;
-        const nodeRect = node.getBoundingClientRect();
-        const scrollRect = scroll.getBoundingClientRect();
-        return nodeRect.bottom > scrollRect.top && nodeRect.top < scrollRect.bottom;
-    };
     const draw = () => {
         frame = null;
-        svg.querySelectorAll('.curriculum-neighborhood-edge').forEach(path => path.remove());
+        svg.replaceChildren();
         if (window.matchMedia('(max-width: 760px)').matches || !selectedNode.isConnected) return;
         const explorerRect = explorer.getBoundingClientRect();
         const selectedRect = selectedNode.getBoundingClientRect();
-        svg.setAttribute('width', String(explorer.clientWidth));
-        svg.setAttribute('height', String(explorer.clientHeight));
+        const isVisible = rect => rect.bottom > explorerRect.top
+            && rect.top < explorerRect.bottom
+            && rect.right > explorerRect.left
+            && rect.left < explorerRect.right;
+        if (!isVisible(selectedRect)) return;
+        const contentWidth = explorer.scrollWidth;
+        const contentHeight = explorer.scrollHeight;
+        svg.setAttribute('width', String(contentWidth));
+        svg.setAttribute('height', String(contentHeight));
+        svg.setAttribute('viewBox', `0 0 ${contentWidth} ${contentHeight}`);
+        const box = rect => ({
+            x: rect.left - explorerRect.left + explorer.scrollLeft,
+            y: rect.top - explorerRect.top + explorer.scrollTop,
+            width: rect.width,
+            height: rect.height
+        });
+        const selectedBox = box(selectedRect);
         const relationshipNodes = [...explorer.querySelectorAll('[data-relationship]')]
-            .filter(visibleInScrollArea);
+            .filter(node => isVisible(node.getBoundingClientRect()));
         for (const relationship of ['prerequisite', 'unlock']) {
             const nodes = relationshipNodes.filter(node => node.dataset.relationship === relationship);
             nodes.forEach((node, index) => {
-                const nodeRect = node.getBoundingClientRect();
+                const nodeBox = box(node.getBoundingClientRect());
                 const prerequisite = relationship === 'prerequisite';
-                const selectedPortY = selectedRect.top
-                    + selectedRect.height * (index + 1) / (nodes.length + 1)
-                    - explorerRect.top;
-                const outerPortY = nodeRect.top + nodeRect.height / 2 - explorerRect.top;
-                const sourceX = (prerequisite ? nodeRect.right + 2 : selectedRect.right + 2) - explorerRect.left;
-                const sourceY = prerequisite ? outerPortY : selectedPortY;
-                const targetX = (prerequisite ? selectedRect.left - 5 : nodeRect.left - 5) - explorerRect.left;
-                const targetY = prerequisite ? selectedPortY : outerPortY;
-                const bend = Math.max(24, Math.abs(targetX - sourceX) * 0.4);
-                const path = document.createElementNS(namespace, 'path');
-                path.classList.add('curriculum-neighborhood-edge');
-                if (Number(node.dataset.distance) > 1) path.classList.add('is-transitive');
-                path.setAttribute('d', `M ${sourceX} ${sourceY} C ${sourceX + bend} ${sourceY}, ${targetX - bend} ${targetY}, ${targetX} ${targetY}`);
-                path.setAttribute('marker-end', 'url(#curriculum-neighborhood-arrow)');
-                svg.appendChild(path);
+                const selectedPortY = selectedBox.y
+                    + selectedBox.height * (index + 1) / (nodes.length + 1);
+                const outerPortY = nodeBox.y + nodeBox.height / 2;
+                const source = prerequisite ? nodeBox : selectedBox;
+                const target = prerequisite ? selectedBox : nodeBox;
+                const geometry = curriculumEdgeGeometry(
+                    source,
+                    target,
+                    prerequisite ? outerPortY : selectedPortY,
+                    prerequisite ? selectedPortY : outerPortY
+                );
+                const connection = document.createElementNS(namespace, 'g');
+                connection.classList.add('curriculum-graph-connection', 'curriculum-neighborhood-connection', 'is-primary');
+                if (Number(node.dataset.distance) > 1) connection.classList.add('is-transitive');
+                connection.dataset.source = prerequisite ? node.dataset.curriculumNodeId : selectedNode.dataset.curriculumNodeId;
+                connection.dataset.target = prerequisite ? selectedNode.dataset.curriculumNodeId : node.dataset.curriculumNodeId;
+                const line = document.createElementNS(namespace, 'path');
+                line.classList.add('curriculum-graph-edge', 'curriculum-neighborhood-edge');
+                line.setAttribute('d', geometry.line);
+                const arrowhead = document.createElementNS(namespace, 'path');
+                arrowhead.classList.add('curriculum-graph-arrowhead');
+                arrowhead.setAttribute('d', geometry.head);
+                connection.append(line, arrowhead);
+                svg.appendChild(connection);
             });
         }
     };
     const scheduleDraw = () => {
         if (frame == null) frame = requestAnimationFrame(draw);
     };
-    scrollAreas.forEach(scroll => scroll.addEventListener('scroll', scheduleDraw, { passive: true }));
+    explorer.addEventListener('scroll', scheduleDraw, { passive: true });
     const resizeObserver = typeof ResizeObserver === 'function'
         ? new ResizeObserver(scheduleDraw)
         : null;
@@ -3887,7 +3889,7 @@ function attachCurriculumNeighborhoodEdges(explorer, selectedNode, scrollAreas) 
     requestAnimationFrame(scheduleDraw);
     return () => {
         if (frame != null) cancelAnimationFrame(frame);
-        scrollAreas.forEach(scroll => scroll.removeEventListener('scroll', scheduleDraw));
+        explorer.removeEventListener('scroll', scheduleDraw);
         resizeObserver?.disconnect();
     };
 }
@@ -3934,8 +3936,6 @@ function renderCurriculumNeighborhood(root, progressStates) {
         <article class="curriculum-selected-item${selectedProgress ? ` is-${selectedProgress}` : ''}" data-curriculum-node-id="${escapeHtml(neighborhood.target.id)}">
             <span class="curriculum-selected-kind">${escapeHtml(neighborhood.hierarchy)}</span>
             <h2>${escapeHtml(curriculumItemName(neighborhood.target))}</h2>
-            <p class="curriculum-selected-id">${escapeHtml(neighborhood.target.id)}</p>
-            ${neighborhood.target.description ? `<p>${escapeHtml(neighborhood.target.description)}</p>` : ''}
             <p class="curriculum-explorer-item-meta">${escapeHtml(curriculumItemMeta(neighborhood.target, progressStates))}</p>
         </article>
     `;
@@ -4010,11 +4010,7 @@ function renderCurriculumNeighborhood(root, progressStates) {
     explorer.append(prerequisites, selected, mobileTabs, unlocks);
     root.appendChild(explorer);
     fitCurriculumNeighborhoodViewport(explorer);
-    activeCurriculumNeighborhoodCleanup = attachCurriculumNeighborhoodEdges(
-        explorer,
-        selectedCard,
-        [prerequisiteScroll, selectedScroll, unlockScroll]
-    );
+    activeCurriculumNeighborhoodCleanup = attachCurriculumNeighborhoodEdges(explorer, selectedCard);
 }
 
 function curriculumGraphControls({ windowState = null, interactive = false } = {}) {
@@ -4246,6 +4242,17 @@ async function renderCurriculumView(options = {}) {
             breadcrumbActions.append(createSubject);
             configureWebsiteGenerationButton(createSubject, { registry: activeRegistry });
         }
+    }
+    if (hierarchy === 'chapter' && deckId) {
+        const dependencies = document.createElement('button');
+        dependencies.type = 'button';
+        dependencies.className = 'curriculum-toolbar-action';
+        dependencies.textContent = 'Prerequisites & unlocks';
+        dependencies.onclick = () => navigateCurriculum({
+            mode: 'focus', hierarchy: 'deck', subject: subject || deckId.split('/')[0],
+            parentId: subject || deckId.split('/')[0], targetId: deckId, query: ''
+        });
+        breadcrumbActions.append(dependencies);
     }
     breadcrumbRow.append(breadcrumbs, historyControls);
     if (breadcrumbActions.childElementCount) breadcrumbRow.append(breadcrumbActions);
