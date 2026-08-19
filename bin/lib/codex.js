@@ -13,7 +13,12 @@ import {
     prepareIsolatedRun,
     recordIsolatedInvocation
 } from './isolation.js';
-import { markFullBuilt, markPilotBuilt, requireFullBuildApproval } from './pilot.js';
+import {
+    markChapterCurriculumPlanned,
+    markFullBuilt,
+    markPilotBuilt,
+    requireFullBuildApproval
+} from './pilot.js';
 import {
     compactExternalPrerequisiteChapters,
     compactTransitivePrerequisiteChapters,
@@ -28,7 +33,12 @@ import {
     validateSubjectExtension,
     validateSubjectRoadmap
 } from './subject-curriculum.js';
-import { stabilizeDeck, validateDeck, validateGeneratedChapterMarkup } from './validation.js';
+import {
+    stabilizeDeck,
+    validateChapterCurriculumPlan,
+    validateDeck,
+    validateGeneratedChapterMarkup
+} from './validation.js';
 import { SUBJECT_DESIGN_WORKFLOW_VERSION } from '../../src/subject-generation-contract.js';
 
 function auditTimestamp() {
@@ -172,7 +182,7 @@ export function compactStagedChapterContext(stagedContext, deckId, chapterNumber
     return compacted;
 }
 
-export function stampChangedChapterAuthoringModel(workspacePath, model, reasoningEffort) {
+export function stampChangedChapterAuthoringModel(workspacePath, model, reasoningEffort, kind = 'authoring') {
     if (!model) return [];
     const modified = spawnSync(
         'git',
@@ -201,15 +211,23 @@ export function stampChangedChapterAuthoringModel(workspacePath, model, reasonin
         if (!frontmatterMatch) {
             throw new Error(`Generated chapter is missing TOML frontmatter: ${chapterPath}`);
         }
-        const field = `authoring_model = ${JSON.stringify(model)}`;
-        let frontmatter = /^authoring_model\s*=/m.test(frontmatterMatch[1])
-            ? frontmatterMatch[1].replace(/^authoring_model\s*=.*$/m, field)
+        const fieldName = kind === 'curriculum' ? 'curriculum_model' : 'authoring_model';
+        const reasoningFieldName = kind === 'curriculum'
+            ? 'curriculum_reasoning_effort'
+            : 'authoring_reasoning_effort';
+        const fieldPattern = new RegExp(`^${fieldName}\\s*=`, 'm');
+        const fieldLinePattern = new RegExp(`^${fieldName}\\s*=.*$`, 'm');
+        const field = `${fieldName} = ${JSON.stringify(model)}`;
+        let frontmatter = fieldPattern.test(frontmatterMatch[1])
+            ? frontmatterMatch[1].replace(fieldLinePattern, field)
             : frontmatterMatch[1].replace(/^(subject\s*=.*)$/m, `$1\n${field}`);
         if (reasoningEffort) {
-            const reasoningField = `authoring_reasoning_effort = ${JSON.stringify(reasoningEffort)}`;
-            frontmatter = /^authoring_reasoning_effort\s*=/m.test(frontmatter)
-                ? frontmatter.replace(/^authoring_reasoning_effort\s*=.*$/m, reasoningField)
-                : frontmatter.replace(/^(authoring_model\s*=.*)$/m, `$1\n${reasoningField}`);
+            const reasoningPattern = new RegExp(`^${reasoningFieldName}\\s*=`, 'm');
+            const reasoningLinePattern = new RegExp(`^${reasoningFieldName}\\s*=.*$`, 'm');
+            const reasoningField = `${reasoningFieldName} = ${JSON.stringify(reasoningEffort)}`;
+            frontmatter = reasoningPattern.test(frontmatter)
+                ? frontmatter.replace(reasoningLinePattern, reasoningField)
+                : frontmatter.replace(fieldLinePattern, `$&\n${reasoningField}`);
         }
         writeFileSync(
             chapterPath,
@@ -221,6 +239,9 @@ export function stampChangedChapterAuthoringModel(workspacePath, model, reasonin
 }
 
 function deckModeInstruction(mode, buildScope, reportOnly, chapterNumber, chapterName, prerequisiteResolution) {
+    if (mode === 'build' && buildScope === 'curriculum') {
+        return 'Follow references/chapter-curriculum-workflow.md. Research and create the complete ordered chapter curriculum, sparse prerequisite/provides metadata, and synchronized README.md and CARD_README.md blueprint. Create empty chapter scaffolds only. DO NOT author cards, worked solutions, lesson content, SVG, TikZ, or other figures. Stop after deterministic chapter-graph validation.';
+    }
     if (mode === 'build' && buildScope === 'pilot') {
         return 'Research and design the curriculum, but AUTHOR ONLY THE FIRST ORDERED CHAPTER as a novice-first pilot. If no ordered chapter exists, design the chapter map and create the first chapter. Do not author, delete, or modify cards in later chapters. Complete the pilot dependency ledger and write .flashcards/audits/pilot-cold-start.md with a front-by-front audit. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains, then stop for human approval.';
     }
@@ -285,6 +306,7 @@ function buildDeckPrompt({
     prerequisiteGraph,
     prerequisiteResolution
 }) {
+    const planningOnly = mode === 'build' && buildScope === 'curriculum';
     return [
         `Use $manage-flashcard-decks in ${mode} mode. Read the complete skill at ${skillPath} before acting.`,
         `Target deck: ${targetPath}`,
@@ -311,16 +333,18 @@ function buildDeckPrompt({
         freshPilot
             ? 'The pilot chapter was intentionally blanked inside this temporary workspace. Design and author it from the declared learner model, standards, domain guide, and current research; do not reconstruct or recover the previous pilot from outside the workspace. Work only on chapter 1, its figures, the deck planning documents, and the pilot audit.'
             : null,
-        'Before large-scale authoring, complete a chapter design ledger covering retrieval targets, card-form choices, problem progression, authentic representations, and included or intentionally omitted figure opportunities.',
-        'Treat all unconfirmed domain knowledge as unseen. Build a concept-dependency ledger and perform the cold-start scan without reading each answer until that front\'s dependencies are recorded.',
-        'Apply CARD_STANDARD U11 and D8 strictly: maintain the learner concept frontier, reject future-facing examples and supplied premises, sequence new ideas before reuse, and document a separate first-use scan.',
-        'The application schedules only Q:/A:, C:, and P:/S: blocks. Headings, lesson prose, tables, equations, and figures outside those blocks are ignored by the parser and cannot satisfy initial-learning prerequisites; embed a minimal teaching bridge on a scheduled front or establish it in an earlier scheduled card.',
-        'Author markup defensively: never begin an A: or S: body with a bare number and period such as "9. ..."; use semantic prose, a bolded direct answer such as "**9**.", or an escaped intentional period.',
-        'Every P:/S: card must use the complete ordered IDENTIFY → PLAN → EXECUTE → EVALUATE sequence. Begin S: immediately with IDENTIFY and place the direct result as the first sentence inside EXECUTE. Fade support inside stages, never by omitting headings. Never put an unlabeled answer prelude before IDENTIFY or PLAN. Generated chapters that violate these structure or markup rules are rejected before they leave the isolated workspace.',
-        'Never use terminology, symbols, representations, or examples from a later chapter to scaffold an earlier chapter unless a minimal explicit bridge establishes them first.',
-        'Do not optimize for a type distribution or figure count. Zero clozes may be correct; visually rich chapters may need several figures. Do not treat one figure per chapter as a target or cap.',
-        'For every figure, keep the visible drawing centered inside a tight responsive canvas. In TikZ, normalize data positions to compact local coordinates near the origin and put displayed values in node labels; generated figures with large one-sided coordinate offsets are rejected.',
-        'Before handoff, reconcile and report planned versus actual card-type, problem, and figure inventories by chapter, investigating unexplained omissions.',
+        planningOnly
+            ? 'The output is a reviewable curriculum plan. Every ordered chapter must contain valid frontmatter and a title but zero scheduled card blocks; do not create figure assets.'
+            : 'Before large-scale authoring, complete a chapter design ledger covering retrieval targets, card-form choices, problem progression, authentic representations, and included or intentionally omitted figure opportunities.',
+        planningOnly ? null : 'Treat all unconfirmed domain knowledge as unseen. Build a concept-dependency ledger and perform the cold-start scan without reading each answer until that front\'s dependencies are recorded.',
+        planningOnly ? null : 'Apply CARD_STANDARD U11 and D8 strictly: maintain the learner concept frontier, reject future-facing examples and supplied premises, sequence new ideas before reuse, and document a separate first-use scan.',
+        planningOnly ? null : 'The application schedules only Q:/A:, C:, and P:/S: blocks. Headings, lesson prose, tables, equations, and figures outside those blocks are ignored by the parser and cannot satisfy initial-learning prerequisites; embed a minimal teaching bridge on a scheduled front or establish it in an earlier scheduled card.',
+        planningOnly ? null : 'Author markup defensively: never begin an A: or S: body with a bare number and period such as "9. ..."; use semantic prose, a bolded direct answer such as "**9**.", or an escaped intentional period.',
+        planningOnly ? null : 'Every P:/S: card must use the complete ordered IDENTIFY → PLAN → EXECUTE → EVALUATE sequence. Begin S: immediately with IDENTIFY and place the direct result as the first sentence inside EXECUTE. Fade support inside stages, never by omitting headings. Never put an unlabeled answer prelude before IDENTIFY or PLAN. Generated chapters that violate these structure or markup rules are rejected before they leave the isolated workspace.',
+        planningOnly ? null : 'Never use terminology, symbols, representations, or examples from a later chapter to scaffold an earlier chapter unless a minimal explicit bridge establishes them first.',
+        planningOnly ? null : 'Do not optimize for a type distribution or figure count. Zero clozes may be correct; visually rich chapters may need several figures. Do not treat one figure per chapter as a target or cap.',
+        planningOnly ? null : 'For every figure, keep the visible drawing centered inside a tight responsive canvas. In TikZ, normalize data positions to compact local coordinates near the origin and put displayed values in node labels; generated figures with large one-sided coordinate offsets are rejected.',
+        planningOnly ? null : 'Before handoff, reconcile and report planned versus actual card-type, problem, and figure inventories by chapter, investigating unexplained omissions.',
         'Do not load deprecated compatibility guides or unrelated subject encyclopedias unless the user explicitly asks.',
         isolated
             ? 'Do not inspect files outside this workspace. Use workspace-relative paths for edits so operating-system path aliases cannot be mistaken for out-of-workspace writes. Do not modify .agents/, .flashcards/context/, .flashcards/prerequisites/, or AGENTS.override.md.'
@@ -496,7 +520,13 @@ export function buildAgentInvocation({
     isolated = true
 }) {
     const deckPath = resolvePath(inputPath);
-    const contextManifest = buildContextManifest({ deckPath, mode, preflightPath, chapterNumber });
+    const contextManifest = buildContextManifest({
+        deckPath,
+        mode,
+        preflightPath,
+        chapterNumber,
+        buildScope
+    });
     const missingRequired = contextManifest.files.filter(file => file.required && !file.exists);
     if (missingRequired.length) {
         throw new Error(`Missing required authoring context: ${missingRequired.map(file => file.path).join(', ')}`);
@@ -966,7 +996,15 @@ export function runDeckAgent({
                 isolated: true,
                 resultPath: isolatedResultPath(prepared)
             });
-            const allowedPaths = buildScope === 'chapter'
+            const allowedPaths = buildScope === 'curriculum'
+                ? [
+                    'flashcards',
+                    'figures',
+                    'README.md',
+                    'CARD_README.md',
+                    'deck.toml'
+                ]
+                : buildScope === 'chapter'
                 ? [
                     path.join('flashcards', chapterName),
                     path.join('figures', chapterName.replace(/\.md$/, '')),
@@ -1004,12 +1042,14 @@ export function runDeckAgent({
                         stampChangedChapterAuthoringModel(
                             workspacePath,
                             invocation.model,
-                            invocation.reasoningEffort
+                            invocation.reasoningEffort,
+                            buildScope === 'curriculum' ? 'curriculum' : 'authoring'
                         );
                         validateGeneratedChapterMarkup(workspacePath);
+                        if (buildScope === 'curriculum') validateChapterCurriculumPlan(workspacePath);
                     }
                     : undefined,
-                recoverOnFailure: mode === 'build' ? workspacePath => {
+                recoverOnFailure: mode === 'build' && buildScope !== 'curriculum' ? workspacePath => {
                     const validation = validateDeck(workspacePath, { quiet: true });
                     if (validation.status !== 0) {
                         throw new Error('deck validation did not pass');
@@ -1073,6 +1113,10 @@ export function runDeckAgent({
         if (mode === 'build') {
             if (buildScope === 'full') markFullBuilt(deckPath);
             else if (buildScope === 'pilot') markPilotBuilt(deckPath);
+            else if (buildScope === 'curriculum') {
+                validateChapterCurriculumPlan(deckPath);
+                markChapterCurriculumPlanned(deckPath);
+            }
         }
     }
     return result;
@@ -1084,6 +1128,7 @@ export function codexDoctor() {
     const requiredFiles = [
         path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'),
         path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'references', 'cold-start-workflow.md'),
+        path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'references', 'chapter-curriculum-workflow.md'),
         path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'CARD_STANDARD.md'),
         path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'AUTHORING_PLAYBOOK.md'),
         path.join(FLASHCARDS_ROOT, 'scripts', 'validate-notes.js')

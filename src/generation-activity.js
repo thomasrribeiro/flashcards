@@ -175,6 +175,13 @@ export function generationRequestName(request) {
             .join(' ');
         return `${subject} curriculum`;
     }
+    if (request.jobType === 'deck-plan') {
+        return `${request.deckId || 'Deck'} chapter curriculum`;
+    }
+    if (request.jobType === 'chapter-expand') {
+        const chapter = request.payload?.chapterId || '';
+        return `${request.deckId || 'Deck'}${chapter ? ` / ${chapter}` : ''} content`;
+    }
     return request.deckId || request.requestKey || `Request ${request.id}`;
 }
 

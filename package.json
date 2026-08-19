@@ -19,6 +19,7 @@
     "src/card-id-annotator.js",
     "src/hasher.js",
     "src/parser.js",
+    "src/deck-generation-contract.js",
     "src/subject-generation-contract.js",
     "templates/",
     "AGENTS.md",

@@ -60,6 +60,31 @@ export function validateGeneratedChapterMarkup(workspacePath) {
     return [];
 }
 
+export function validateChapterCurriculumPlan(inputPath) {
+    const deckPath = resolvePath(inputPath);
+    const validation = validateDeck(deckPath, { quiet: true, capture: true });
+    const failures = [...validation.prerequisiteGraph.errors];
+    if (!validation.prerequisiteGraph.chapters.length) {
+        failures.push('the chapter curriculum does not contain any ordered chapters');
+    }
+    for (const chapter of validation.prerequisiteGraph.chapters) {
+        const parsed = parseDeck(readFileSync(chapter.path, 'utf8'), chapter.filename);
+        if (parsed.cards.length) {
+            failures.push(`${chapter.filename} contains ${parsed.cards.length} scheduled card(s); chapter planning must not author content`);
+        }
+    }
+    if (validation.status !== 0 && !validation.prerequisiteGraph.errors.length) {
+        failures.push('deck validation did not pass');
+    }
+    if (failures.length) {
+        throw new Error(`Chapter curriculum validation failed:\n- ${failures.join('\n- ')}`);
+    }
+    return {
+        deckPath,
+        chapters: validation.prerequisiteGraph.chapters.map(chapter => chapter.id)
+    };
+}
+
 export function validateDeck(inputPath, { outputPath, quiet = false, capture = false } = {}) {
     const deckPath = resolvePath(inputPath);
     requireDeckPath(deckPath);

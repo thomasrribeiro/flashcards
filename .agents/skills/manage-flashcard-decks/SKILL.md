@@ -41,11 +41,13 @@ read each applicable file completely before editing:
 6. the resolved prerequisite graph and staged transitive prerequisite closure
    supplied by the CLI; treat it as executable truth and do not infer knowledge
    from file order or unavailable chapters;
-7. [references/subject-workflow.md](references/subject-workflow.md) for new or
+7. [references/chapter-curriculum-workflow.md](references/chapter-curriculum-workflow.md)
+   for a plan-only deck chapter curriculum;
+8. [references/subject-workflow.md](references/subject-workflow.md) for new or
    revised subject curricula;
-8. [references/audit-workflow.md](references/audit-workflow.md) for whole-deck
+9. [references/audit-workflow.md](references/audit-workflow.md) for whole-deck
    audits;
-9. the preflight JSON report named in the prompt, when present.
+10. the preflight JSON report named in the prompt, when present.
 
 If a deck predates these files, infer its current contract from its README and
 cards. Add missing metadata only when the requested mode permits edits. Do not
@@ -119,6 +121,12 @@ included or intentionally omitted with a short reason. This is not a numeric
 quota: zero clozes or figures can be correct, and a visually rich chapter can
 require several figures. Reconcile the planned and actual inventories before
 handoff.
+
+For a chapter-curriculum-only request, follow
+[references/chapter-curriculum-workflow.md](references/chapter-curriculum-workflow.md),
+create the complete ordered chapter and dependency scaffold, and stop before
+authoring any cards or figures. Planning a later chapter is not permission to
+generate its contents.
 
 For a new deck, author one pilot chapter before scaling. Run the cold-start
 workflow in [references/cold-start-workflow.md](references/cold-start-workflow.md),

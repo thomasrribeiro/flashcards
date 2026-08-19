@@ -1,3 +1,9 @@
+import {
+    DECK_PLAN_WORKFLOW_VERSION,
+    chapterContentGenerationScope,
+    deckNeedsChapterCurriculum
+} from './deck-generation-contract.js';
+
 const STORAGE_KEY = 'flashcards_generation_preferences_v1';
 const PROVIDERS = new Set(['none', 'codex', 'custom', 'anthropic', 'openai', 'google']);
 const REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh']);
@@ -61,6 +67,65 @@ export function generationJobForDeck(deck, preferences = getGenerationPreference
             deckId: deck.id,
             buildScope,
             reasoningEffort: normalized.reasoningEffort
+        }
+    };
+}
+
+function generationProviderFields(preferences) {
+    const normalized = normalizeGenerationPreferences(preferences);
+    if (normalized.providerId === 'none') {
+        throw new Error('Connect an AI provider and choose a model before requesting generation.');
+    }
+    if (['anthropic', 'openai', 'google'].includes(normalized.providerId) && !normalized.modelId) {
+        throw new Error('Choose a model from the connected AI provider before requesting generation.');
+    }
+    return {
+        providerId: normalized.providerId,
+        modelId: normalized.modelId || null,
+        reasoningEffort: normalized.reasoningEffort
+    };
+}
+
+export function generationJobForChapterCurriculum(deck, preferences = getGenerationPreferences(), provenance = {}) {
+    if (!deckNeedsChapterCurriculum(deck)) {
+        throw new Error('This deck already has a chapter curriculum or is not ready for planning.');
+    }
+    const provider = generationProviderFields(preferences);
+    return {
+        jobType: 'deck-plan',
+        registryId: deck.registry_id || provenance.registryId || 'thomas-ribeiro',
+        providerId: provider.providerId,
+        modelId: provider.modelId,
+        payload: {
+            deckId: deck.id,
+            workflowVersion: DECK_PLAN_WORKFLOW_VERSION,
+            workflowCommit: provenance.workflowCommit || null,
+            registryBaseCommit: provenance.registryBaseCommit || null,
+            catalogHash: provenance.catalogHash || null,
+            reasoningEffort: provider.reasoningEffort
+        }
+    };
+}
+
+export function generationJobForChapterContent(deck, chapter, preferences = getGenerationPreferences(), provenance = {}) {
+    const buildScope = chapterContentGenerationScope(deck, chapter);
+    if (!buildScope) {
+        throw new Error('This chapter is not ready for content generation.');
+    }
+    const provider = generationProviderFields(preferences);
+    return {
+        jobType: 'chapter-expand',
+        registryId: deck.registry_id || provenance.registryId || 'thomas-ribeiro',
+        providerId: provider.providerId,
+        modelId: provider.modelId,
+        payload: {
+            deckId: deck.id,
+            chapterId: chapter.id,
+            buildScope,
+            workflowCommit: provenance.workflowCommit || null,
+            registryBaseCommit: provenance.registryBaseCommit || null,
+            catalogHash: provenance.catalogHash || null,
+            reasoningEffort: provider.reasoningEffort
         }
     };
 }

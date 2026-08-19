@@ -141,7 +141,13 @@ export function buildSubjectContextManifest({ subjectPath: inputPath } = {}) {
     };
 }
 
-export function buildContextManifest({ deckPath: inputPath, mode = 'build', preflightPath, chapterNumber } = {}) {
+export function buildContextManifest({
+    deckPath: inputPath,
+    mode = 'build',
+    preflightPath,
+    chapterNumber,
+    buildScope = 'pilot'
+} = {}) {
     if (!['build', 'audit'].includes(mode)) throw new Error(`Unknown context mode: ${mode}`);
     const deckPath = resolvePath(inputPath);
     if (!existsSync(deckPath) || !statSync(deckPath).isDirectory()) {
@@ -160,7 +166,15 @@ export function buildContextManifest({ deckPath: inputPath, mode = 'build', pref
     add(path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'SKILL.md'), 'agent workflow', { required: true });
     add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'CARD_STANDARD.md'), 'normative card standard', { required: true });
     add(path.join(FLASHCARDS_ROOT, 'templates', 'guides', 'AUTHORING_PLAYBOOK.md'), 'universal authoring playbook', { required: true });
-    add(path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'references', 'cold-start-workflow.md'), 'cold-start and pilot workflow', { required: true });
+    if (mode === 'build' && buildScope === 'curriculum') {
+        add(
+            path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'references', 'chapter-curriculum-workflow.md'),
+            'chapter curriculum workflow',
+            { required: true }
+        );
+    } else {
+        add(path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'references', 'cold-start-workflow.md'), 'cold-start and pilot workflow', { required: true });
+    }
     add(
         subjectGuide.path,
         subjectGuide.local ? 'subject-owned domain guide' : subjectGuide.overridden ? 'deck-selected domain guide' : `${subject} domain guide`

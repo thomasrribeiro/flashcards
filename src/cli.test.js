@@ -36,6 +36,7 @@ import {
 } from '../bin/lib/prerequisites.js';
 import {
     stabilizeDeck,
+    validateChapterCurriculumPlan,
     validateDeck,
     validateGeneratedChapterMarkup
 } from '../bin/lib/validation.js';
@@ -1499,6 +1500,44 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(formatInvocation(invocation)).toContain('codex');
     });
 
+    it('builds a plan-only chapter curriculum invocation with no content-authoring prompt', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false
+        });
+        const invocation = buildAgentInvocation({
+            mode: 'build',
+            deckPath,
+            buildScope: 'curriculum',
+            model: 'test-model'
+        });
+        expect(invocation.prompt).toContain('chapter-curriculum-workflow.md');
+        expect(invocation.prompt).toContain('Create empty chapter scaffolds only');
+        expect(invocation.prompt).toContain('zero scheduled card blocks');
+        expect(invocation.prompt).not.toContain('Author markup defensively');
+        expect(invocation.prerequisiteResolution).toBeUndefined();
+    });
+
+    it('accepts an empty-card chapter curriculum and rejects authored content', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['measurement', 'motion']
+        });
+        expect(validateChapterCurriculumPlan(deckPath)).toMatchObject({
+            chapters: ['01_measurement', '02_motion']
+        });
+        const first = path.join(deckPath, 'flashcards', '01_measurement.md');
+        await writeFile(first, `${await readFile(first, 'utf8')}\n<!-- card-id: planned-content -->\nQ: Content?\nA: Not allowed yet.\n`);
+        expect(() => validateChapterCurriculumPlan(deckPath)).toThrow(/must not author content/);
+    });
+
     it('routes Claude model aliases through a fresh non-persistent Claude Code session', async () => {
         const notesRoot = await temporaryRoot();
         const { deckPath } = await createDeck({
@@ -1950,6 +1989,15 @@ describe('flashcards CLI validation and Codex handoff', () => {
             expect(await readFile(first, 'utf8')).toContain('authoring_reasoning_effort = "medium"');
             expect((await readFile(first, 'utf8')).match(/^authoring_model\s*=/gm)).toHaveLength(1);
             expect((await readFile(first, 'utf8')).match(/^authoring_reasoning_effort\s*=/gm)).toHaveLength(1);
+
+            expect(stampChangedChapterAuthoringModel(
+                prepared.workspacePath,
+                'gpt-plan',
+                'high',
+                'curriculum'
+            )).toHaveLength(3);
+            expect(await readFile(first, 'utf8')).toContain('curriculum_model = "gpt-plan"');
+            expect(await readFile(first, 'utf8')).toContain('curriculum_reasoning_effort = "high"');
         } finally {
             await rm(prepared.runPath, { recursive: true, force: true });
             discardIsolatedRun(prepared);

@@ -48,6 +48,14 @@ describe('local generation pipeline', () => {
         expect(executionOptionsForGenerationJob({ job_type: 'chapter-expand' }, {
             chapterId: '03_kinematics_1d'
         }).chapter).toBe(3);
+        expect(executionOptionsForGenerationJob({ job_type: 'chapter-expand' }, {
+            chapterId: '01_measurement', buildScope: 'pilot'
+        }).chapter).toBeUndefined();
+        expect(() => executionOptionsForGenerationJob({ job_type: 'chapter-expand' }, {
+            chapterId: '02_motion', buildScope: 'pilot'
+        })).toThrow(/first ordered chapter/);
+        expect(executionOptionsForGenerationJob({ job_type: 'deck-plan' }, {}))
+            .toMatchObject({ chapterCurriculum: true, full: false });
     });
 
     it('runs a generic provider with a temporary secret-free manifest', async () => {

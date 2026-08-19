@@ -109,13 +109,17 @@ function executeAgent(mode, deckPath, options) {
     const chapter = Number.isInteger(options.chapter) ? options.chapter : undefined;
     const freshChapter = options.freshChapter === true;
     const freshPilot = options.freshPilot === true;
+    const chapterCurriculum = options.chapterCurriculum === true;
     if (full && chapter) throw new Error('--full cannot be combined with --chapter.');
+    if (chapterCurriculum && (full || chapter || freshChapter || freshPilot)) {
+        throw new Error('Chapter-curriculum planning cannot be combined with content build options.');
+    }
     if (freshChapter && !chapter) throw new Error('--fresh-chapter requires --chapter.');
     if (freshPilot && chapter && chapter !== 1) {
         throw new Error('--fresh-pilot cannot target a chapter other than 1.');
     }
     const chapterNumber = chapter || (freshPilot ? 1 : undefined);
-    const buildScope = full ? 'full' : chapter ? 'chapter' : 'pilot';
+    const buildScope = chapterCurriculum ? 'curriculum' : full ? 'full' : chapter ? 'chapter' : 'pilot';
     const synced = syncDeckPrerequisitesFromSubject(deckPath, { allowMissing: true });
     if (synced.changed) {
         console.log(`Synced subject curriculum metadata (order ${synced.curriculumOrder}).`);
@@ -674,6 +678,20 @@ deck
             const result = preserveDeckNamespace(deckPath, namespace, { check: options.check });
             const verb = options.check ? 'would add' : 'added';
             console.log(`${verb} ${result.addedCards} namespace alias(es) in ${result.changedFiles.length} file(s)`);
+        } catch (error) {
+            handleError(error);
+        }
+    });
+
+addAgentOptions(deck
+    .command('plan <deck-path>')
+    .description('Research and create the ordered chapter curriculum without authoring cards'))
+    .action((deckPath, options) => {
+        try {
+            executeAgent('build', resolvePath(deckPath), {
+                ...options,
+                chapterCurriculum: true
+            });
         } catch (error) {
             handleError(error);
         }

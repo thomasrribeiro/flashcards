@@ -6,6 +6,68 @@ const bundledCurriculum = JSON.parse(readFileSync(
     'utf8'
 ));
 
+async function installGenerationAccount(page, { catalog = bundledCurriculum, onPost = () => {} } = {}) {
+    let queued = null;
+    await page.route('https://api.github.com/repos/thomasrribeiro-flashcards/curricula/commits/master**', route => (
+        route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } })
+    ));
+    await page.route('https://raw.githubusercontent.com/thomasrribeiro-flashcards/curricula/**', route => (
+        route.fulfill({ json: catalog })
+    ));
+    await page.route('**/api/**', async route => {
+        const request = route.request();
+        const path = new URL(request.url()).pathname;
+        if (path === '/api/users/ensure') return route.fulfill({ json: { success: true } });
+        if (path === '/api/reviews/test-user') return route.fulfill({ json: { reviews: [] } });
+        if (path === '/api/chapter-progress/test-user') return route.fulfill({ json: { chapters: [] } });
+        if (path === '/api/repos/test-user') return route.fulfill({ json: { repos: [] } });
+        if (path === '/api/settings/test-user') return route.fulfill({ json: { settings: {} } });
+        if (path === '/api/study-session/test-user') return route.fulfill({ json: { session: null } });
+        if (path === '/api/habit/test-user') {
+            return route.fulfill({ json: {
+                streak: 0,
+                today: { reviews: 0, newCards: 0, xp: 0, goalMet: false },
+                totalXp: 0,
+                settings: {}
+            } });
+        }
+        if (path === '/api/ai/providers') {
+            return route.fulfill({ json: { providers: [{
+                id: 'openai', connected: true, status: 'connected', keyHint: '••••test'
+            }] } });
+        }
+        if (path === '/api/generation-requests' && request.method() === 'POST') {
+            queued = request.postDataJSON();
+            onPost(queued);
+            return route.fulfill({ json: { request: { id: 321, status: 'queued' }, existing: false } });
+        }
+        if (path === '/api/generation-requests') {
+            return route.fulfill({ json: { requests: queued ? [{
+                id: 321,
+                status: 'queued',
+                job_type: queued.jobType,
+                registry_id: queued.registryId,
+                provider_id: queued.providerId,
+                model_id: queued.modelId,
+                payload_json: JSON.stringify(queued.payload)
+            }] : [] } });
+        }
+        return route.fulfill({ json: {} });
+    });
+    await page.addInitScript(() => {
+        localStorage.setItem('github_user', JSON.stringify({
+            id: 'test-user', username: 'test-user', name: 'Test User'
+        }));
+        localStorage.setItem('github_token', 'test-token');
+        localStorage.setItem('flashcards_generation_preferences_v1', JSON.stringify({
+            providerId: 'openai', modelId: 'gpt-test', reasoningEffort: 'high'
+        }));
+    });
+    await page.reload();
+    await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
+    await page.locator('#tab-curriculum').click();
+}
+
 test.beforeEach(async ({ page }) => {
     await page.route('https://api.github.com/repos/thomasrribeiro-flashcards/curricula/commits/master**', route => (
         route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } })
@@ -18,8 +80,9 @@ test.beforeEach(async ({ page }) => {
     await page.locator('#tab-curriculum').click();
     await expect(page.locator('.curriculum-breadcrumb')).toBeVisible();
     await expect(page.locator('.curriculum-breadcrumb-row > .curriculum-breadcrumb')).toHaveCount(1);
+    await expect(page.locator('.curriculum-breadcrumb-label')).toHaveText('thomasrribeiro-flashcards');
     await expect(page.locator('.curriculum-breadcrumb').getByRole('button', {
-        name: 'thomasrribeiro-flashcards/curricula', exact: true
+        name: 'curricula', exact: true
     })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByText('Recommended paths', { exact: true })).toHaveCount(0);
     await expect(page.locator('.curriculum-toolbar').getByRole('button', { name: 'Sources' })).toHaveCount(0);
@@ -90,8 +153,9 @@ test('updates the root breadcrumb when the curriculum repository setting changes
     await settings.getByLabel('Curriculum source repository 1').fill('example/new-curricula');
     await settings.getByRole('button', { name: 'Save', exact: true }).click();
 
+    await expect(page.locator('.curriculum-breadcrumb-label')).toHaveText('example');
     await expect(page.locator('.curriculum-breadcrumb').getByRole('button', {
-        name: 'example/new-curricula', exact: true
+        name: 'new-curricula', exact: true
     })).toHaveAttribute('aria-current', 'page');
 });
 
@@ -211,6 +275,80 @@ test('queues a subject draft only for a signed-in account with a connected model
     expect(JSON.stringify(queuedJob)).not.toMatch(/api.?key|secret/i);
 });
 
+test('queues a chapter-curriculum agent from an empty deck chapter viewer', async ({ page }) => {
+    let queuedJob = null;
+    await installGenerationAccount(page, { onPost: job => { queuedJob = job; } });
+
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
+    await page.locator('.curriculum-selected-item').click();
+    const create = page.getByRole('button', { name: 'Create chapter curriculum' });
+    await expect(create).toBeEnabled();
+    await create.click();
+
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    await expect(settings.getByRole('tab', { name: /Agents/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(settings.getByRole('heading', {
+        name: 'mathematics/geometry-and-measurement chapter curriculum'
+    })).toBeVisible();
+    expect(queuedJob).toMatchObject({
+        jobType: 'deck-plan',
+        registryId: 'thomas-ribeiro',
+        providerId: 'openai',
+        modelId: 'gpt-test',
+        payload: {
+            deckId: 'mathematics/geometry-and-measurement',
+            workflowVersion: 'deck-plan-v1',
+            workflowCommit: '0'.repeat(40),
+            registryBaseCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
+            catalogHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+            reasoningEffort: 'high'
+        }
+    });
+});
+
+test('queues content generation for one eligible chapter', async ({ page }) => {
+    const targetId = 'mathematics/elementary-algebra-and-functions';
+    const catalog = structuredClone(bundledCurriculum);
+    const target = catalog.decks.find(deck => deck.id === targetId);
+    target.status = 'scaffolded';
+    target.chapters[0].card_count = 0;
+    let queuedJob = null;
+    await installGenerationAccount(page, {
+        catalog,
+        onPost: job => { queuedJob = job; }
+    });
+
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
+    await page.locator('.curriculum-selected-item').click();
+    const chapterId = target.chapters[0].id;
+    await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}#${chapterId}"]`).click();
+    const generate = page.getByRole('button', { name: 'Generate chapter content' });
+    await expect(generate).toBeEnabled();
+    await generate.click();
+
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    await expect(settings.getByRole('heading', {
+        name: `${targetId} / ${chapterId} content`
+    })).toBeVisible();
+    expect(queuedJob).toMatchObject({
+        jobType: 'chapter-expand',
+        registryId: 'thomas-ribeiro',
+        providerId: 'openai',
+        modelId: 'gpt-test',
+        payload: {
+            deckId: targetId,
+            chapterId,
+            buildScope: 'pilot',
+            workflowCommit: '0'.repeat(40),
+            registryBaseCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
+            catalogHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+            reasoningEffort: 'high'
+        }
+    });
+});
+
 test('tracks generation activity and previews an unmerged subject PR in the DAG', async ({ page }) => {
     const commit = 'a'.repeat(40);
     const resultUrl = 'https://github.com/example/curricula/pull/12';
@@ -304,7 +442,8 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
 
     await expect(page.locator('#tab-curriculum')).toHaveClass(/active/);
     await expect(page.locator('.curriculum-preview-banner')).toContainText('Previewing unmerged chemistry curriculum from pull request #12');
-    await expect(page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'example/curricula' })).toBeVisible();
+    await expect(page.locator('.curriculum-breadcrumb-label')).toHaveText('example');
+    await expect(page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'curricula' })).toBeVisible();
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toBeVisible();
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-reactions"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create subject' })).toHaveCount(0);
@@ -1104,7 +1243,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-selected-kind')).toHaveText('deck');
     await expect(page.locator('.curriculum-neighborhood-column')).toHaveCount(3);
     await expect(page.locator('.curriculum-neighborhood-column.is-prerequisites')).toBeVisible();
-    await expect(page.locator('.curriculum-neighborhood-edges')).toHaveCount(0);
+    await expect(page.locator('.curriculum-neighborhood-edges')).toHaveCount(1);
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks > h3 span')).not.toHaveText('0');
     await expect(page.getByRole('button', { name: 'Edit subject' })).toHaveCount(0);
     await expect(page.locator('.curriculum-toolbar button')).toHaveCount(0);
@@ -1118,6 +1257,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     const historyBox = await page.locator('.curriculum-history-controls').boundingBox();
     expect(historyBox.x + historyBox.width).toBeLessThanOrEqual(breadcrumbBox.x + breadcrumbBox.width + 1);
     if (testInfo.project.name === 'desktop-chromium') {
+        await expect.poll(() => page.locator('.curriculum-neighborhood-edge').count()).toBeGreaterThan(0);
         const neighborhoodBox = await page.locator('.curriculum-neighborhood').boundingBox();
         expect(neighborhoodBox.y + neighborhoodBox.height).toBeLessThanOrEqual(page.viewportSize().height);
         const prerequisitesColumn = page.locator('.curriculum-neighborhood-column.is-prerequisites');
@@ -1140,9 +1280,15 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         }));
         expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.clientHeight);
         expect(dimensions.overflowY).toBe('auto');
+        const initialEdgeGeometry = await page.locator('.curriculum-neighborhood-edge').evaluateAll(paths => (
+            paths.map(path => path.getAttribute('d')).join('|')
+        ));
         const unlocksHeaderTop = (await unlocksColumn.locator(':scope > h3').boundingBox()).y;
         await unlocks.evaluate(element => { element.scrollTop = element.scrollHeight; });
         await expect.poll(() => unlocks.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+        await expect.poll(() => page.locator('.curriculum-neighborhood-edge').evaluateAll(paths => (
+            paths.map(path => path.getAttribute('d')).join('|')
+        ))).not.toBe(initialEdgeGeometry);
         expect((await unlocksColumn.locator(':scope > h3').boundingBox()).y).toBe(unlocksHeaderTop);
         await unlocks.evaluate(element => { element.scrollTop = 0; });
         const selectedTop = (await page.locator('.curriculum-selected-item').boundingBox()).y;
@@ -1308,7 +1454,8 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     await expect(page.locator('.curriculum-selected-item')).toHaveClass(/is-unavailable/);
     await expect(page.locator('.curriculum-selected-item')).not.toHaveClass(/is-learning/);
     await page.locator('.curriculum-selected-item').click();
-    await expect(page.getByText('This deck does not have a published chapter plan yet.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No chapter curriculum yet' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create chapter curriculum' })).toBeDisabled();
     await expect(page.locator('.curriculum-layer-label')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /selected deck/ })).toHaveCount(0);
 });
@@ -1363,6 +1510,6 @@ test('curriculum controls fit a phone viewport', async ({ page }, testInfo) => {
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks')).toBeHidden();
     await page.getByRole('button', { name: 'Unlocks' }).click();
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks')).toBeVisible();
-    await page.getByRole('button', { name: 'thomasrribeiro-flashcards/curricula', exact: true }).click();
+    await page.getByRole('button', { name: 'curricula', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Create subject' })).toBeDisabled();
 });

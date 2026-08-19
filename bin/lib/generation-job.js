@@ -10,6 +10,7 @@ export function executionOptionsForGenerationJob(queued, payload, options = {}) 
         isolated: options.isolated,
         reasoningEffort: payload?.reasoningEffort || options.reasoningEffort,
         agentEnv: options.agentEnv || {},
+        chapterCurriculum: jobType === 'deck-plan',
         full: jobType === 'deck-build' && payload?.buildScope === 'full',
         freshChapter: false,
         freshPilot: false
@@ -17,7 +18,11 @@ export function executionOptionsForGenerationJob(queued, payload, options = {}) 
     if (jobType === 'chapter-expand') {
         const chapter = Number.parseInt(String(payload?.chapterId || queued?.chapter_id).slice(0, 2), 10);
         if (!Number.isInteger(chapter)) throw new Error('Chapter job has no ordered chapter identifier.');
-        executionOptions.chapter = chapter;
+        if (payload?.buildScope === 'pilot') {
+            if (chapter !== 1) throw new Error('A pilot content job must target the first ordered chapter.');
+        } else {
+            executionOptions.chapter = chapter;
+        }
     }
     return executionOptions;
 }

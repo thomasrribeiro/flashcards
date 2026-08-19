@@ -69,6 +69,12 @@ export function markPilotBuilt(inputPath) {
     return result;
 }
 
+export function markChapterCurriculumPlanned(inputPath) {
+    const deckPath = resolvePath(inputPath);
+    writeDeckStatus(deckPath, 'chapter-planned');
+    return { deckPath };
+}
+
 export function approvePilot(inputPath) {
     const deckPath = resolvePath(inputPath);
     const status = readDeckStatus(deckPath);
