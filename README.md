@@ -293,6 +293,24 @@ flashcards requests run --notes-root ~/notes --registry-root /path/to/curricula
 On macOS the CLI also reads a `flashcards-generation-runner` generic-password
 item for the current account, so the runner token need not live in shell files.
 
+For a production queue, install the macOS runner as a recurring LaunchAgent
+instead of starting the one-shot command manually. It starts at login, checks
+the queue every minute, and never stores the runner token or provider keys in
+its configuration:
+
+```bash
+npm run runner:install -- \
+  --worker-url https://flashcards-worker-prod.example.workers.dev \
+  --notes-root ~/notes \
+  --registry-root /path/to/curricula
+npm run runner:status
+```
+
+The service runs one request at a time. `launchd` does not overlap another
+instance while an agent is active. Output is written to
+`~/.flashcards/runner/stdout.log` and `stderr.log`; uninstalling the service
+leaves those diagnostic logs in place.
+
 The runner needs the corresponding provider CLI on `PATH`: Codex CLI for
 OpenAI, Claude Code for Anthropic, or Gemini CLI for Google. Consumer chat
 subscriptions and API billing are separate.

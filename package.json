@@ -34,6 +34,9 @@
     "process-submodules": "node scripts/build.js",
     "add-card-ids": "node scripts/add-card-ids.js",
     "watch": "node scripts/watch-simple.js",
+    "runner:install": "node scripts/manage-generation-runner.js install",
+    "runner:status": "node scripts/manage-generation-runner.js status",
+    "runner:uninstall": "node scripts/manage-generation-runner.js uninstall",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
