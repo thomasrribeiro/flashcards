@@ -1,7 +1,7 @@
 import {
     DECK_PLAN_WORKFLOW_VERSION,
     chapterContentGenerationScope,
-    deckNeedsChapterCurriculum
+    deckCanPlanChapterCurriculum
 } from './deck-generation-contract.js';
 
 const STORAGE_KEY = 'flashcards_generation_preferences_v1';
@@ -87,8 +87,8 @@ function generationProviderFields(preferences) {
 }
 
 export function generationJobForChapterCurriculum(deck, preferences = getGenerationPreferences(), provenance = {}) {
-    if (!deckNeedsChapterCurriculum(deck)) {
-        throw new Error('This deck already has a chapter curriculum or is not ready for planning.');
+    if (!deckCanPlanChapterCurriculum(deck)) {
+        throw new Error('This deck is not ready for chapter curriculum planning.');
     }
     const provider = generationProviderFields(preferences);
     return {

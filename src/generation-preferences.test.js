@@ -61,7 +61,7 @@ describe('generation preferences', () => {
         expect(JSON.stringify(job)).not.toMatch(/api[-_]?key|secret|credential/i);
     });
 
-    it('creates a provenance-pinned deck-plan job only for a deck without chapters', () => {
+    it('creates a provenance-pinned deck-plan job for initial planning or regeneration', () => {
         const job = generationJobForChapterCurriculum({
             id: 'physics/mechanics', status: 'proposed', chapters: [], registry_id: 'primary'
         }, {
@@ -85,9 +85,14 @@ describe('generation preferences', () => {
                 reasoningEffort: 'high'
             }
         });
-        expect(() => generationJobForChapterCurriculum({
-            id: 'physics/mechanics', status: 'proposed', chapters: [{ id: '01_motion' }]
-        })).toThrow(/already has a chapter curriculum/);
+        expect(generationJobForChapterCurriculum({
+            id: 'physics/mechanics', status: 'pilot-built', chapters: [{ id: '01_motion' }]
+        }, {
+            providerId: 'openai', modelId: 'gpt-example', reasoningEffort: 'high'
+        })).toMatchObject({
+            jobType: 'deck-plan',
+            payload: { deckId: 'physics/mechanics' }
+        });
     });
 
     it('creates pilot content only for chapter one and later content only after approval', () => {

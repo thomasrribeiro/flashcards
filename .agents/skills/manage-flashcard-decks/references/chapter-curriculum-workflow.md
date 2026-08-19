@@ -3,6 +3,12 @@
 Use this workflow when the requested output is the chapter curriculum for one
 deck, without card or figure authoring.
 
+When regenerating an existing curriculum, treat every existing card block,
+stable card ID, alias, and figure as immutable. The workflow may revise chapter
+metadata and the deck blueprint or add empty chapter scaffolds, but it must not
+modify, move, replace, or delete existing learning content. Preserve the
+deck's current build and approval status.
+
 ## 1. Freeze the deck contract
 
 Read the subject roadmap, executable subject curriculum, subject brief, deck

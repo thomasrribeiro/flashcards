@@ -35,6 +35,7 @@ import {
     stageExternalPrerequisites
 } from '../bin/lib/prerequisites.js';
 import {
+    chapterCurriculumCardSignatures,
     stabilizeDeck,
     validateChapterCurriculumPlan,
     validateDeck,
@@ -1516,6 +1517,7 @@ describe('flashcards CLI validation and Codex handoff', () => {
         });
         expect(invocation.prompt).toContain('chapter-curriculum-workflow.md');
         expect(invocation.prompt).toContain('Create empty chapter scaffolds only');
+        expect(invocation.prompt).toContain('Preserve all existing scheduled card blocks unchanged');
         expect(invocation.prompt).toContain('zero scheduled card blocks');
         expect(invocation.prompt).not.toContain('Author markup defensively');
         expect(invocation.prerequisiteResolution).toBeUndefined();
@@ -1536,6 +1538,31 @@ describe('flashcards CLI validation and Codex handoff', () => {
         const first = path.join(deckPath, 'flashcards', '01_measurement.md');
         await writeFile(first, `${await readFile(first, 'utf8')}\n<!-- card-id: planned-content -->\nQ: Content?\nA: Not allowed yet.\n`);
         expect(() => validateChapterCurriculumPlan(deckPath)).toThrow(/must not author content/);
+    });
+
+    it('allows curriculum regeneration only when existing card content is preserved', async () => {
+        const notesRoot = await temporaryRoot();
+        const { deckPath } = await createDeck({
+            subject: 'physics',
+            deck: 'mechanics',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['measurement']
+        });
+        const first = path.join(deckPath, 'flashcards', '01_measurement.md');
+        await writeFile(first, `${await readFile(first, 'utf8')}\n<!-- card-id: existing-content -->\nQ: Existing target?\nA: Preserve it.\n`);
+        const baselineCards = chapterCurriculumCardSignatures(deckPath);
+        expect(validateChapterCurriculumPlan(deckPath, { baselineCards })).toMatchObject({
+            preservedCards: 1
+        });
+        await writeFile(first, (await readFile(first, 'utf8')).replace('Preserve it.', 'Changed it.'));
+        expect(() => validateChapterCurriculumPlan(deckPath, { baselineCards }))
+            .toThrow(/changed existing scheduled card content/);
+        await writeFile(first, (await readFile(first, 'utf8'))
+            .replace('Changed it.', 'Preserve it.')
+            .replace('card-id: existing-content', 'card-id: replacement-content'));
+        expect(() => validateChapterCurriculumPlan(deckPath, { baselineCards }))
+            .toThrow(/changed existing scheduled card content/);
     });
 
     it('routes Claude model aliases through a fresh non-persistent Claude Code session', async () => {

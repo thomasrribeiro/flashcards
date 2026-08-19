@@ -18,6 +18,57 @@ function reviewRepository(review, cardsByHash) {
     return card?.source?.repo || card?.deckName || '';
 }
 
+function currentChapterProgress(progress, file) {
+    if (!progress || Number(progress.totalCards) <= 0) return false;
+    if (file?.sha && progress.sourceSha && file.sha !== progress.sourceSha) return false;
+    return Number(progress.reviewedCards) >= Number(progress.totalCards);
+}
+
+export function curriculumChapterProgressStates(
+    curriculumDecks = [],
+    repositories = [],
+    reviews = [],
+    chapterProgress = [],
+    now = new Date()
+) {
+    const states = new Map();
+    const repositoryByCurriculumId = new Map(repositories.map(repository => [
+        curriculumIdForRepository(repository),
+        repository
+    ]));
+    const progressByScope = new Map(chapterProgress.map(progress => [
+        `${progress.repo}\u0000${progress.filepath}`,
+        progress
+    ]));
+    const dueScopes = new Set(reviews.flatMap(review => {
+        const due = new Date(review?.fsrsCard?.due);
+        return review?.repo && review?.filepath && !Number.isNaN(due.getTime()) && due <= now
+            ? [`${review.repo}\u0000${review.filepath}`]
+            : [];
+    }));
+
+    for (const curriculumDeck of curriculumDecks || []) {
+        const repository = repositoryByCurriculumId.get(curriculumDeck.id);
+        const files = new Map((repository?.files || []).map(file => {
+            const normalized = typeof file === 'string' ? { path: file, sha: null } : file;
+            return [normalized.path, normalized];
+        }));
+        for (const chapter of curriculumDeck.chapters || []) {
+            const id = `${curriculumDeck.id}#${chapter.id}`;
+            if (Number(chapter.card_count || 0) <= 0) {
+                states.set(id, 'unavailable');
+                continue;
+            }
+            const scope = repository ? `${repository.id || repository.repo}\u0000${chapter.file}` : '';
+            const complete = scope
+                && currentChapterProgress(progressByScope.get(scope), files.get(chapter.file))
+                && !dueScopes.has(scope);
+            states.set(id, complete ? 'complete' : 'learning');
+        }
+    }
+    return states;
+}
+
 /**
  * Derive display-only curriculum states without loading card bodies. Durable
  * chapter progress establishes completion; review due dates can turn a

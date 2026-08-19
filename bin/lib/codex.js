@@ -17,7 +17,9 @@ import {
     markChapterCurriculumPlanned,
     markFullBuilt,
     markPilotBuilt,
-    requireFullBuildApproval
+    readDeckStatus,
+    requireFullBuildApproval,
+    writeDeckStatus
 } from './pilot.js';
 import {
     compactExternalPrerequisiteChapters,
@@ -34,6 +36,7 @@ import {
     validateSubjectRoadmap
 } from './subject-curriculum.js';
 import {
+    chapterCurriculumCardSignatures,
     stabilizeDeck,
     validateChapterCurriculumPlan,
     validateDeck,
@@ -240,7 +243,7 @@ export function stampChangedChapterAuthoringModel(workspacePath, model, reasonin
 
 function deckModeInstruction(mode, buildScope, reportOnly, chapterNumber, chapterName, prerequisiteResolution) {
     if (mode === 'build' && buildScope === 'curriculum') {
-        return 'Follow references/chapter-curriculum-workflow.md. Research and create the complete ordered chapter curriculum, sparse prerequisite/provides metadata, and synchronized README.md and CARD_README.md blueprint. Create empty chapter scaffolds only. DO NOT author cards, worked solutions, lesson content, SVG, TikZ, or other figures. Stop after deterministic chapter-graph validation.';
+        return 'Follow references/chapter-curriculum-workflow.md. Research and create or regenerate the complete ordered chapter curriculum, sparse prerequisite/provides metadata, and synchronized README.md and CARD_README.md blueprint. Preserve every existing card block, stable card ID, alias, and figure without modification or deletion. Create empty chapter scaffolds only for newly planned chapters. DO NOT author cards, worked solutions, lesson content, SVG, TikZ, or other figures. Stop after deterministic chapter-graph validation.';
     }
     if (mode === 'build' && buildScope === 'pilot') {
         return 'Research and design the curriculum, but AUTHOR ONLY THE FIRST ORDERED CHAPTER as a novice-first pilot. If no ordered chapter exists, design the chapter map and create the first chapter. Do not author, delete, or modify cards in later chapters. Complete the pilot dependency ledger and write .flashcards/audits/pilot-cold-start.md with a front-by-front audit. Include the exact lines "cold_start_status: pass" and "unresolved_dependencies: 0" only when no unexplained dependency remains, then stop for human approval.';
@@ -334,7 +337,7 @@ function buildDeckPrompt({
             ? 'The pilot chapter was intentionally blanked inside this temporary workspace. Design and author it from the declared learner model, standards, domain guide, and current research; do not reconstruct or recover the previous pilot from outside the workspace. Work only on chapter 1, its figures, the deck planning documents, and the pilot audit.'
             : null,
         planningOnly
-            ? 'The output is a reviewable curriculum plan. Every ordered chapter must contain valid frontmatter and a title but zero scheduled card blocks; do not create figure assets.'
+            ? 'The output is a reviewable curriculum plan. Preserve all existing scheduled card blocks unchanged. Every newly created ordered chapter must contain valid frontmatter and a title but zero scheduled card blocks; do not create or modify figure assets.'
             : 'Before large-scale authoring, complete a chapter design ledger covering retrieval targets, card-form choices, problem progression, authentic representations, and included or intentionally omitted figure opportunities.',
         planningOnly ? null : 'Treat all unconfirmed domain knowledge as unseen. Build a concept-dependency ledger and perform the cold-start scan without reading each answer until that front\'s dependencies are recorded.',
         planningOnly ? null : 'Apply CARD_STANDARD U11 and D8 strictly: maintain the learner concept frontier, reject future-facing examples and supplied premises, sequence new ideas before reuse, and document a separate first-use scan.',
@@ -878,11 +881,18 @@ export function runDeckAgent({
     if (mode === 'build' && buildScope === 'full') requireFullBuildApproval(deckPath);
     if (mode === 'build' && buildScope === 'chapter') requireFullBuildApproval(deckPath);
 
+    const chapterCurriculumStatus = buildScope === 'curriculum'
+        ? readDeckStatus(deckPath)
+        : null;
+
     if (!dryRun && !reportOnly) {
         if (mode === 'audit') requireSafeAuditWorktree(deckPath, allowDirty);
         const stabilized = stabilizeDeck(deckPath);
         if (stabilized.status !== 0) throw new Error('Unable to add stable card IDs before agent editing.');
     }
+    const chapterCurriculumBaseline = buildScope === 'curriculum'
+        ? chapterCurriculumCardSignatures(deckPath)
+        : null;
 
     if (mode === 'audit' && !dryRun) {
         preflightPath = reportOnly
@@ -999,7 +1009,6 @@ export function runDeckAgent({
             const allowedPaths = buildScope === 'curriculum'
                 ? [
                     'flashcards',
-                    'figures',
                     'README.md',
                     'CARD_README.md',
                     'deck.toml'
@@ -1046,7 +1055,11 @@ export function runDeckAgent({
                             buildScope === 'curriculum' ? 'curriculum' : 'authoring'
                         );
                         validateGeneratedChapterMarkup(workspacePath);
-                        if (buildScope === 'curriculum') validateChapterCurriculumPlan(workspacePath);
+                        if (buildScope === 'curriculum') {
+                            validateChapterCurriculumPlan(workspacePath, {
+                                baselineCards: chapterCurriculumBaseline
+                            });
+                        }
                     }
                     : undefined,
                 recoverOnFailure: mode === 'build' && buildScope !== 'curriculum' ? workspacePath => {
@@ -1114,8 +1127,14 @@ export function runDeckAgent({
             if (buildScope === 'full') markFullBuilt(deckPath);
             else if (buildScope === 'pilot') markPilotBuilt(deckPath);
             else if (buildScope === 'curriculum') {
-                validateChapterCurriculumPlan(deckPath);
-                markChapterCurriculumPlanned(deckPath);
+                validateChapterCurriculumPlan(deckPath, {
+                    baselineCards: chapterCurriculumBaseline
+                });
+                if (chapterCurriculumBaseline.length && chapterCurriculumStatus) {
+                    writeDeckStatus(deckPath, chapterCurriculumStatus);
+                } else {
+                    markChapterCurriculumPlanned(deckPath);
+                }
             }
         }
     }

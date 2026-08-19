@@ -6,7 +6,13 @@ const bundledCurriculum = JSON.parse(readFileSync(
     'utf8'
 ));
 
-async function installGenerationAccount(page, { catalog = bundledCurriculum, onPost = () => {} } = {}) {
+async function installGenerationAccount(page, {
+    catalog = bundledCurriculum,
+    onPost = () => {},
+    repos = [],
+    reviews = [],
+    chapterProgress = []
+} = {}) {
     let queued = null;
     await page.route('https://api.github.com/repos/thomasrribeiro-flashcards/curricula/commits/master**', route => (
         route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } })
@@ -18,9 +24,11 @@ async function installGenerationAccount(page, { catalog = bundledCurriculum, onP
         const request = route.request();
         const path = new URL(request.url()).pathname;
         if (path === '/api/users/ensure') return route.fulfill({ json: { success: true } });
-        if (path === '/api/reviews/test-user') return route.fulfill({ json: { reviews: [] } });
-        if (path === '/api/chapter-progress/test-user') return route.fulfill({ json: { chapters: [] } });
-        if (path === '/api/repos/test-user') return route.fulfill({ json: { repos: [] } });
+        if (path === '/api/reviews/test-user') return route.fulfill({ json: { reviews } });
+        if (path === '/api/chapter-progress/test-user') {
+            return route.fulfill({ json: { chapters: chapterProgress } });
+        }
+        if (path === '/api/repos/test-user') return route.fulfill({ json: { repos } });
         if (path === '/api/settings/test-user') return route.fulfill({ json: { settings: {} } });
         if (path === '/api/study-session/test-user') return route.fulfill({ json: { session: null } });
         if (path === '/api/habit/test-user') {
@@ -307,6 +315,76 @@ test('queues a chapter-curriculum agent from an empty deck chapter viewer', asyn
     });
 });
 
+test('can regenerate an existing chapter curriculum without hiding the action', async ({ page }) => {
+    const targetId = 'mathematics/elementary-algebra-and-functions';
+    let queuedJob = null;
+    await installGenerationAccount(page, { onPost: job => { queuedJob = job; } });
+
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
+    const regenerate = page.getByRole('button', { name: 'Regenerate chapter curriculum' });
+    await expect(regenerate).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Fit', exact: true })).toHaveCount(0);
+    await regenerate.click();
+
+    await expect.poll(() => queuedJob).not.toBeNull();
+    expect(queuedJob).toMatchObject({
+        jobType: 'deck-plan',
+        payload: { deckId: targetId, workflowVersion: 'deck-plan-v1' }
+    });
+});
+
+test('opens generated chapter flashcards directly from the chapter DAG', async ({ page }) => {
+    const targetId = 'mathematics/elementary-algebra-and-functions';
+    const target = bundledCurriculum.decks.find(deck => deck.id === targetId);
+    const chapter = target.chapters[0];
+    const repositoryId = 'thomasrribeiro-flashcards/elementary-algebra-and-functions';
+    await page.route(`https://api.github.com/repos/${repositoryId}`, route => route.fulfill({ json: {
+            full_name: repositoryId,
+            name: 'elementary-algebra-and-functions',
+            owner: { login: 'thomasrribeiro-flashcards' },
+            default_branch: 'master',
+            description: 'Elementary algebra',
+            topics: ['mathematics'],
+            private: false
+        } }));
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/trees/master**`, route => (
+        route.fulfill({ json: { truncated: false, tree: [
+            { type: 'blob', path: chapter.file, sha: 'chapter-sha', size: 240 },
+            { type: 'blob', path: 'deck.toml', sha: 'manifest-sha', size: 120 }
+        ] } })
+    ));
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/blobs/manifest-sha`, route => (
+        route.fulfill({
+            contentType: 'text/plain',
+            body: 'subject = "mathematics"\ndeck = "elementary-algebra-and-functions"\n'
+        })
+    ));
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/blobs/chapter-sha`, route => (
+        route.fulfill({
+            contentType: 'text/markdown',
+            body: `+++\norder = 1\nsubject = "mathematics"\ntags = ["algebra"]\nprerequisites = []\nprovides = []\n+++\n\n<!-- card-id: variables-test-001 -->\nQ: What does a variable represent?\nA: A quantity that can vary.\n`
+        })
+    ));
+    await installGenerationAccount(page, { repos: [{
+        repo_id: repositoryId,
+        owner: 'thomasrribeiro-flashcards',
+        repo_name: 'elementary-algebra-and-functions'
+    }] });
+
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
+    const chapterNode = page.locator(
+        `.curriculum-graph-node[data-deck-id="${targetId}#${chapter.id}"]`
+    );
+    await expect(chapterNode).toHaveClass(/is-learning/);
+    await chapterNode.click();
+
+    await expect(page.locator('#study-area')).toBeVisible();
+    await expect(page.getByText('What does a variable represent?', { exact: true })).toBeVisible();
+    await expect(page.locator('#dependency-modal')).toBeHidden();
+});
+
 test('queues content generation for one eligible chapter', async ({ page }) => {
     const targetId = 'mathematics/elementary-algebra-and-functions';
     const catalog = structuredClone(bundledCurriculum);
@@ -322,7 +400,9 @@ test('queues content generation for one eligible chapter', async ({ page }) => {
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
     const chapterId = target.chapters[0].id;
-    await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}#${chapterId}"]`).click();
+    const chapterNode = page.locator(`.curriculum-graph-node[data-deck-id="${targetId}#${chapterId}"]`);
+    await expect(chapterNode).toHaveClass(/is-unavailable/);
+    await chapterNode.click();
     const generate = page.getByRole('button', { name: 'Generate chapter content' });
     await expect(generate).toBeEnabled();
     await generate.click();
@@ -593,7 +673,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.getByRole('button', { name: 'Show previous dependency layer' })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Zoom in' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Zoom out' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Fit', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Fit', exact: true })).toHaveCount(0);
     await expect(page).toHaveURL(/curriculum-level=deck.*curriculum-subject=physics|curriculum-subject=physics.*curriculum-level=deck/);
     await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
     const completeDeckGraphCount = await page.locator('.curriculum-graph-node').count();
@@ -676,7 +756,6 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         expect(scrolling.routeExtentMatchesLayer).toBe(true);
         expect(scrolling.extentUsesAllVisibleRanks).toBe(true);
         expect(scrolling.extentMatchesLayer).toBe(true);
-        await page.getByRole('button', { name: 'Fit', exact: true }).click();
     }
     const baselineOpacity = Number(await page.locator('.curriculum-graph-connection').first()
         .evaluate(element => getComputedStyle(element).opacity));
@@ -1292,8 +1371,14 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             };
         });
         expect(cardChrome.selected).toEqual(cardChrome.related);
+        const headerTops = await page.locator('.curriculum-neighborhood-column > h3').evaluateAll(headers => (
+            headers.map(header => header.getBoundingClientRect().top)
+        ));
         await page.locator('.curriculum-neighborhood').evaluate(element => { element.scrollTop = element.scrollHeight; });
         await expect.poll(() => page.locator('.curriculum-neighborhood').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+        await expect.poll(() => page.locator('.curriculum-neighborhood-column > h3').evaluateAll(headers => (
+            headers.map(header => Math.round(header.getBoundingClientRect().top))
+        ))).toEqual(headerTops.map(value => Math.round(value)));
         await page.locator('.curriculum-neighborhood').evaluate(element => { element.scrollTop = 0; });
     }
     const selectedName = page.locator('.curriculum-selected-item .curriculum-explorer-item-name');

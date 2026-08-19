@@ -3872,7 +3872,7 @@ body.standalone-phone .mobile-sidebar-close {
     position: relative;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    align-items: start;
+    align-items: stretch;
     height: clamp(480px, 68dvh, 760px);
     overflow-x: hidden;
     overflow-y: auto;
@@ -3915,10 +3915,11 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-neighborhood-column > h3 {
-    position: relative;
-    z-index: 2;
+    position: sticky;
+    top: 0;
+    z-index: 3;
     margin: 0;
-    background: transparent;
+    background: var(--white);
     padding: 12px 18px 8px;
     font-size: 0.62rem;
     font-weight: 500;
@@ -4594,6 +4595,10 @@ body.standalone-phone .mobile-sidebar-close {
     .curriculum-neighborhood-column {
         display: flex;
         max-height: 58dvh;
+    }
+
+    .curriculum-neighborhood-column > h3 {
+        position: static;
     }
 
     .curriculum-neighborhood-column + .curriculum-neighborhood-column {

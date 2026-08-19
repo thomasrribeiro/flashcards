@@ -10,6 +10,10 @@ export function deckNeedsChapterCurriculum(deck) {
     );
 }
 
+export function deckCanPlanChapterCurriculum(deck) {
+    return Boolean(deck?.id);
+}
+
 export function chapterContentGenerationScope(deck, chapter) {
     if (!deck?.id || !chapter?.id || Number(chapter.card_count || 0) > 0) return null;
     const status = String(deck.status || '').toLowerCase();

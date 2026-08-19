@@ -60,17 +60,43 @@ export function validateGeneratedChapterMarkup(workspacePath) {
     return [];
 }
 
-export function validateChapterCurriculumPlan(inputPath) {
+export function chapterCurriculumCardSignatures(inputPath) {
+    const deckPath = resolvePath(inputPath);
+    requireDeckPath(deckPath);
+    return readdirSync(path.join(deckPath, 'flashcards'))
+        .filter(filename => /^\d{2}_.+\.md$/.test(filename))
+        .flatMap(filename => parseDeck(
+            readFileSync(path.join(deckPath, 'flashcards', filename), 'utf8'),
+            filename
+        ).cards.map(card => JSON.stringify({
+            filename,
+            type: card.type,
+            stableIdBase: card.stableIdBase || null,
+            stableId: card.stableId || null,
+            legacyHashes: [...(card.legacyHashes || [])].sort(),
+            content: card.content
+        })))
+        .sort();
+}
+
+export function validateChapterCurriculumPlan(inputPath, { baselineCards = null } = {}) {
     const deckPath = resolvePath(inputPath);
     const validation = validateDeck(deckPath, { quiet: true, capture: true });
     const failures = [...validation.prerequisiteGraph.errors];
     if (!validation.prerequisiteGraph.chapters.length) {
         failures.push('the chapter curriculum does not contain any ordered chapters');
     }
-    for (const chapter of validation.prerequisiteGraph.chapters) {
-        const parsed = parseDeck(readFileSync(chapter.path, 'utf8'), chapter.filename);
-        if (parsed.cards.length) {
-            failures.push(`${chapter.filename} contains ${parsed.cards.length} scheduled card(s); chapter planning must not author content`);
+    const currentCards = chapterCurriculumCardSignatures(deckPath);
+    if (Array.isArray(baselineCards)) {
+        if (JSON.stringify(currentCards) !== JSON.stringify([...baselineCards].sort())) {
+            failures.push('chapter planning changed existing scheduled card content');
+        }
+    } else if (currentCards.length) {
+        for (const chapter of validation.prerequisiteGraph.chapters) {
+            const parsed = parseDeck(readFileSync(chapter.path, 'utf8'), chapter.filename);
+            if (parsed.cards.length) {
+                failures.push(`${chapter.filename} contains ${parsed.cards.length} scheduled card(s); chapter planning must not author content`);
+            }
         }
     }
     if (validation.status !== 0 && !validation.prerequisiteGraph.errors.length) {
@@ -81,7 +107,8 @@ export function validateChapterCurriculumPlan(inputPath) {
     }
     return {
         deckPath,
-        chapters: validation.prerequisiteGraph.chapters.map(chapter => chapter.id)
+        chapters: validation.prerequisiteGraph.chapters.map(chapter => chapter.id),
+        preservedCards: currentCards.length
     };
 }
 

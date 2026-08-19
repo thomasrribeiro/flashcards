@@ -97,7 +97,10 @@ import {
     sortGenerationRequestsByInitiatedAt,
     summarizeGenerationActivity
 } from './generation-activity.js';
-import { curriculumDeckProgressStates } from './curriculum-progress.js';
+import {
+    curriculumChapterProgressStates,
+    curriculumDeckProgressStates
+} from './curriculum-progress.js';
 import {
     chapterContentGenerationScope,
     deckNeedsChapterCurriculum
@@ -2699,6 +2702,49 @@ function curriculumStatus(deck, progressStates) {
     return deck.repository?.configured || deck.materialized ? 'learning' : 'unavailable';
 }
 
+function repositoryIdForCurriculumDeck(deck) {
+    const match = /^https:\/\/github\.com\/([^/]+\/[^/#]+)\/?$/i.exec(deck?.repository?.url || '');
+    return match?.[1] || '';
+}
+
+async function startCurriculumChapterDrill(chapter) {
+    const deckId = chapter.deckId || chapter.id.split('#')[0];
+    const chapterId = chapter.id.includes('#') ? chapter.id.split('#')[1] : chapter.id;
+    if (Number(chapter.card_count || 0) <= 0) {
+        openDependencyModal(deckId, chapterId);
+        return;
+    }
+    const curriculumDeck = curriculumMaps(curriculumIndex).decks.get(deckId);
+    let repository = (await getAllDecks()).find(deck => (
+        deck.curriculumId === deckId
+        || `${subjectSlug(deck.subject)}/${String(deck.id || deck.repo || '').split('/').pop()}` === deckId
+    ));
+    if (!repository) {
+        const repositoryId = repositoryIdForCurriculumDeck(curriculumDeck);
+        if (repositoryId) {
+            try {
+                ({ deck: repository } = await loadRepositoryMetadata(repositoryId, { sync: true }));
+            } catch (error) {
+                console.error('[Curriculum] Could not add chapter repository:', error);
+            }
+        }
+    }
+    if (!repository?.id || !chapter.file) {
+        alert('This chapter’s flashcards are not available in your collection yet.');
+        return;
+    }
+    const deckName = repository.id.split('/').pop();
+    const chapterName = chapter.title || chapter.deck || chapterId;
+    await startScopedReview(
+        card => (card.source?.repo || card.deckName) === repository.id
+            && card.source?.file === chapter.file,
+        chapterName,
+        ['home', chapter.subject, deckName, chapterName],
+        [repository.id],
+        [{ repo: repository.id, path: chapter.file }]
+    );
+}
+
 function curriculumEdgeGeometry(source, target, sourceY = null, targetY = null) {
     const x1 = source.x + source.width;
     const y1 = sourceY ?? source.y + source.height / 2;
@@ -3158,7 +3204,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const node = document.createElement('button');
         node.type = 'button';
         node.className = 'curriculum-graph-node';
-        const progressState = deck.nodeType === 'deck'
+        const progressState = deck.nodeType === 'deck' || deck.nodeType === 'chapter'
             ? curriculumStatus(deck, progressStates)
             : null;
         if (progressState) {
@@ -3189,7 +3235,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             <span class="curriculum-graph-node-name">${escapeHtml(nodeName)}</span>
             <span class="curriculum-graph-node-status">${escapeHtml(nodeMeta)}</span>
         `;
-        node.onclick = () => {
+        node.onclick = async () => {
             if (deck.nodeType === 'subject') {
                 navigateCurriculum({
                     mode: 'subject',
@@ -3201,8 +3247,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
                     layerStart: 0
                 });
             } else if (deck.nodeType === 'chapter') {
-                const separator = deck.id.indexOf('#');
-                openDependencyModal(deck.id.slice(0, separator), deck.id.slice(separator + 1));
+                await startCurriculumChapterDrill(deck);
             } else {
                 navigateCurriculum({
                     mode: 'chapters',
@@ -3928,7 +3973,7 @@ function renderCurriculumNeighborhood(root, progressStates) {
     fitCurriculumNeighborhoodViewport(explorer);
 }
 
-function curriculumGraphControls({ windowState = null, interactive = false } = {}) {
+function curriculumGraphControls({ windowState = null, interactive = false, showFit = true } = {}) {
     const controls = document.createElement('div');
     controls.className = `curriculum-graph-controls${windowState ? ' is-layered' : ''}`;
     const layerNavigation = windowState ? `
@@ -3939,15 +3984,16 @@ function curriculumGraphControls({ windowState = null, interactive = false } = {
         </span>` : '';
     controls.innerHTML = `
         ${layerNavigation}
-        <span class="curriculum-graph-view-actions">
+        ${showFit ? `<span class="curriculum-graph-view-actions">
             ${interactive ? '<button type="button" data-action="zoom-out" aria-label="Zoom out">−</button><button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>' : ''}
             <button type="button" data-action="fit">Fit</button>
-        </span>`;
+        </span>` : ''}`;
     return controls;
 }
 
 function connectCurriculumGraphControls(controls, controller) {
-    controls.querySelector('[data-action="fit"]').onclick = controller.fit;
+    const fit = controls.querySelector('[data-action="fit"]');
+    if (fit) fit.onclick = controller.fit;
     const zoomIn = controls.querySelector('[data-action="zoom-in"]');
     const zoomOut = controls.querySelector('[data-action="zoom-out"]');
     if (zoomIn) zoomIn.onclick = controller.zoomIn;
@@ -3967,7 +4013,11 @@ async function renderCurriculumGraph(root, progressStates, graph, { layered = fa
         : null;
     if (windowState) curriculumViewState.layerStart = windowState.layer;
     const subjectOverview = !layered && graph.nodes.every(node => node.nodeType === 'subject');
-    const controls = curriculumGraphControls({ windowState, interactive: subjectOverview });
+    const controls = curriculumGraphControls({
+        windowState,
+        interactive: subjectOverview,
+        showFit: subjectOverview
+    });
     root.appendChild(controls);
     const controller = await renderCurriculumGraphCanvas(root, graph, progressStates, {
         ranked: layered,
@@ -4024,7 +4074,7 @@ async function queueCurriculumAgentJob(job, button) {
     }
 }
 
-function renderEmptyChapterCurriculum(root, deck, registry) {
+function renderEmptyChapterCurriculum(root, deck) {
     const empty = document.createElement('section');
     empty.className = 'curriculum-chapter-empty';
     const title = document.createElement('h2');
@@ -4032,29 +4082,32 @@ function renderEmptyChapterCurriculum(root, deck, registry) {
     const description = document.createElement('p');
     description.textContent = 'Create an AI-authored ordered chapter plan and dependency graph before generating any chapter content.';
     empty.append(title, description);
-    if (deckNeedsChapterCurriculum(deck) && !curriculumPreview) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'curriculum-toolbar-action is-primary';
-        button.textContent = 'Create chapter curriculum';
-        button.disabled = true;
-        button.onclick = async () => {
-            try {
-                const job = generationJobForChapterCurriculum(
-                    deck,
-                    await connectedWebsiteGenerationPreferences(),
-                    deckJobProvenance(registry)
-                );
-                await queueCurriculumAgentJob(job, button);
-            } catch (error) {
-                console.error('[Curriculum] Chapter curriculum request failed:', error);
-                alert(`Could not queue chapter curriculum: ${error.message}`);
-            }
-        };
-        empty.appendChild(button);
-        configureWebsiteGenerationButton(button, { registry });
-    }
     root.appendChild(empty);
+}
+
+function makeChapterCurriculumButton(deck, registry) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'curriculum-toolbar-action is-primary';
+    button.textContent = deck.chapters?.length
+        ? 'Regenerate chapter curriculum'
+        : 'Create chapter curriculum';
+    button.disabled = true;
+    button.onclick = async () => {
+        try {
+            const job = generationJobForChapterCurriculum(
+                deck,
+                await connectedWebsiteGenerationPreferences(),
+                deckJobProvenance(registry)
+            );
+            await queueCurriculumAgentJob(job, button);
+        } catch (error) {
+            console.error('[Curriculum] Chapter curriculum request failed:', error);
+            alert(`Could not queue chapter curriculum: ${error.message}`);
+        }
+    };
+    configureWebsiteGenerationButton(button, { registry });
+    return button;
 }
 
 async function renderCurriculumView(options = {}) {
@@ -4074,9 +4127,17 @@ async function renderCurriculumView(options = {}) {
     const [decks, cards, reviews, chapterProgress] = await Promise.all([
         getAllDecks(), getAllCards(), getAllReviews(), getAllChapterProgress()
     ]);
-    const progressStates = curriculumDeckProgressStates(
-        decks, cards, reviews, chapterProgress, new Date()
-    );
+    const now = new Date();
+    const progressStates = new Map([
+        ...curriculumDeckProgressStates(decks, cards, reviews, chapterProgress, now),
+        ...curriculumChapterProgressStates(
+            curriculumIndex.decks,
+            decks,
+            reviews,
+            chapterProgress,
+            now
+        )
+    ]);
     const { mode, hierarchy, subject, parentId } = curriculumViewState;
     ensureCurriculumNavigationHistory();
     root.innerHTML = '';
@@ -4089,6 +4150,7 @@ async function renderCurriculumView(options = {}) {
     breadcrumbs.innerHTML = '<span class="curriculum-breadcrumb-home">~</span><span aria-hidden="true">/</span>';
     const deckId = hierarchy === 'chapter' ? parentId : hierarchy === 'deck' && mode === 'focus' ? curriculumViewState.targetId : '';
     const activeRegistry = curriculumRegistryForView(curriculumIndex, { subjectId: subject, deckId });
+    const activeChapterDeck = deckId ? curriculumMaps(curriculumIndex).decks.get(deckId) : null;
     const registryLabel = activeRegistry?.repository || activeRegistry?.name || activeRegistry?.id || 'curricula';
     const repositoryParts = String(registryLabel).split('/');
     const repositoryOwner = repositoryParts.length === 2 ? repositoryParts[0] : '';
@@ -4166,6 +4228,9 @@ async function renderCurriculumView(options = {}) {
             parentId: subject || deckId.split('/')[0], targetId: deckId, query: ''
         });
         breadcrumbActions.append(dependencies);
+        if (activeChapterDeck && !curriculumPreview) {
+            breadcrumbActions.append(makeChapterCurriculumButton(activeChapterDeck, activeRegistry));
+        }
     }
     breadcrumbRow.append(breadcrumbs, historyControls);
     if (breadcrumbActions.childElementCount) breadcrumbRow.append(breadcrumbActions);
@@ -4181,7 +4246,7 @@ async function renderCurriculumView(options = {}) {
     } else {
         const graph = chapterGraph(curriculumIndex, parentId);
         const deck = curriculumMaps(curriculumIndex).decks.get(parentId);
-        if (!graph.nodes.length && deck) renderEmptyChapterCurriculum(root, deck, activeRegistry);
+        if (!graph.nodes.length && deck) renderEmptyChapterCurriculum(root, deck);
         else await renderCurriculumGraph(root, progressStates, graph, { layered: true });
     }
     requestAnimationFrame(() => requestAnimationFrame(restoreCurriculumPosition));
