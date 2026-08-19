@@ -3574,6 +3574,18 @@ body.standalone-phone .mobile-sidebar-close {
     background: var(--gold);
 }
 
+.curriculum-toolbar-action:disabled {
+    border-color: var(--muted);
+    background: var(--light-gray);
+    color: var(--muted);
+    cursor: not-allowed;
+    opacity: 0.72;
+}
+
+.curriculum-toolbar-action.is-checking {
+    cursor: wait;
+}
+
 .curriculum-builder-overlay {
     position: fixed;
     inset: 0;

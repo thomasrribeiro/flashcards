@@ -6296,6 +6296,11 @@ async function websiteGenerationAvailability() {
 }
 
 async function configureWebsiteGenerationButton(button, { registry = null } = {}) {
+    const readyLabel = button.textContent;
+    button.disabled = true;
+    button.classList.add('is-checking');
+    button.textContent = 'Checking AI access…';
+    button.title = 'Checking GitHub sign-in, AI provider, model, and curriculum provenance.';
     const availability = await websiteGenerationAvailability();
     if (availability.enabled && registry
         && (!registry.resolved_commit || !registry.catalog_hash)) {
@@ -6303,8 +6308,11 @@ async function configureWebsiteGenerationButton(button, { registry = null } = {}
         availability.reason = 'Refresh the curriculum registry to pin its Git commit and catalog SHA-256 before generating.';
     }
     if (!button.isConnected) return availability;
+    button.classList.remove('is-checking');
+    button.textContent = readyLabel;
     button.disabled = !availability.enabled;
     button.title = availability.reason;
+    button.setAttribute('aria-disabled', String(!availability.enabled));
     return availability;
 }
 

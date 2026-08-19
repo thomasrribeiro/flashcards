@@ -11,7 +11,8 @@ async function installGenerationAccount(page, {
     onPost = () => {},
     repos = [],
     reviews = [],
-    chapterProgress = []
+    chapterProgress = [],
+    providerDelayMs = 0
 } = {}) {
     let queued = null;
     await page.route('https://api.github.com/repos/thomasrribeiro-flashcards/curricula/commits/master**', route => (
@@ -40,6 +41,7 @@ async function installGenerationAccount(page, {
             } });
         }
         if (path === '/api/ai/providers') {
+            if (providerDelayMs) await new Promise(resolve => setTimeout(resolve, providerDelayMs));
             return route.fulfill({ json: { providers: [{
                 id: 'openai', connected: true, status: 'connected', keyHint: '••••test'
             }] } });
@@ -332,6 +334,20 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
         jobType: 'deck-plan',
         payload: { deckId: targetId, workflowVersion: 'deck-plan-v1' }
     });
+});
+
+test('shows chapter generation as checking until AI access is verified', async ({ page }) => {
+    await installGenerationAccount(page, { providerDelayMs: 1200 });
+
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
+    const button = page.locator('.curriculum-breadcrumb-actions .curriculum-toolbar-action.is-primary');
+    await expect(button).toHaveText('Checking AI access…');
+    await expect(button).toBeDisabled();
+    await expect(button).toHaveClass(/is-checking/);
+    await expect(button).toHaveText('Create chapter curriculum', { timeout: 5_000 });
+    await expect(button).toBeEnabled();
+    await expect(button).not.toHaveClass(/is-checking/);
 });
 
 test('opens generated chapter flashcards directly from the chapter DAG', async ({ page }) => {
