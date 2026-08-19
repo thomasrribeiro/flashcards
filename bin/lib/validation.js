@@ -79,10 +79,21 @@ export function chapterCurriculumCardSignatures(inputPath) {
         .sort();
 }
 
-export function validateChapterCurriculumPlan(inputPath, { baselineCards = null } = {}) {
+function isStagedExternalLookupError(error, stagedExternalDecks) {
+    if (!String(error).startsWith('Missing deck.toml: ')) return false;
+    const normalized = String(error).replaceAll('\\', '/');
+    return stagedExternalDecks.some(deckId => normalized.endsWith(`/${deckId}`));
+}
+
+export function validateChapterCurriculumPlan(inputPath, {
+    baselineCards = null,
+    stagedExternalDecks = []
+} = {}) {
     const deckPath = resolvePath(inputPath);
     const validation = validateDeck(deckPath, { quiet: true, capture: true });
-    const failures = [...validation.prerequisiteGraph.errors];
+    const failures = validation.prerequisiteGraph.errors.filter(error => (
+        !isStagedExternalLookupError(error, stagedExternalDecks)
+    ));
     if (!validation.prerequisiteGraph.chapters.length) {
         failures.push('the chapter curriculum does not contain any ordered chapters');
     }

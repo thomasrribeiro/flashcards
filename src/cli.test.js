@@ -1540,6 +1540,45 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(() => validateChapterCurriculumPlan(deckPath)).toThrow(/must not author content/);
     });
 
+    it('validates an isolated chapter curriculum against its staged external deck closure', async () => {
+        const notesRoot = await temporaryRoot();
+        await createDeck({
+            subject: 'mathematics',
+            deck: 'algebra',
+            notesRoot,
+            initializeGit: false,
+            chapters: ['expressions']
+        });
+        const { deckPath } = await createDeck({
+            subject: 'mathematics',
+            deck: 'geometry',
+            notesRoot,
+            initializeGit: false,
+            prerequisiteDecks: ['mathematics/algebra'],
+            chapters: ['objects', 'transformations']
+        });
+        const graph = resolvePrerequisiteGraph(deckPath);
+        const prepared = prepareIsolatedRun({
+            sourcePath: deckPath,
+            contextFiles: [],
+            label: 'chapter-curriculum-staged-prerequisites',
+            prepareWorkspace(workspacePath) {
+                return stageExternalPrerequisites(workspacePath, graph);
+            }
+        });
+        try {
+            expect(() => validateChapterCurriculumPlan(prepared.workspacePath))
+                .toThrow(/Missing deck\.toml/);
+            expect(validateChapterCurriculumPlan(prepared.workspacePath, {
+                stagedExternalDecks: prepared.preparedWorkspace.externalDecks.map(deck => deck.id)
+            })).toMatchObject({
+                chapters: ['01_objects', '02_transformations']
+            });
+        } finally {
+            discardIsolatedRun(prepared);
+        }
+    });
+
     it('allows curriculum regeneration only when existing card content is preserved', async () => {
         const notesRoot = await temporaryRoot();
         const { deckPath } = await createDeck({

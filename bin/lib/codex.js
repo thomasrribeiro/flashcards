@@ -1057,7 +1057,9 @@ export function runDeckAgent({
                         validateGeneratedChapterMarkup(workspacePath);
                         if (buildScope === 'curriculum') {
                             validateChapterCurriculumPlan(workspacePath, {
-                                baselineCards: chapterCurriculumBaseline
+                                baselineCards: chapterCurriculumBaseline,
+                                stagedExternalDecks: (prepared.preparedWorkspace?.externalDecks || [])
+                                    .map(deck => deck.id)
                             });
                         }
                     }
