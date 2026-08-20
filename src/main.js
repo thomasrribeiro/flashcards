@@ -88,6 +88,7 @@ import {
 import { generationJobForDraft, titleForSubject, validateCurriculumDraft } from './curriculum-builder.js';
 import {
     generationPullRequestActionLabel,
+    generationPreviewDestination,
     generationRequestName,
     generationStatusLabel,
     loadPullRequestCurriculum,
@@ -4545,10 +4546,10 @@ async function enterCurriculumPreview(request, close, trigger) {
         curriculumNavigationHistoryIndex = -1;
         close();
         await showMainView('curriculum');
-        await navigateCurriculum({
-            mode: 'subject', hierarchy: 'deck', subject: request.subject,
-            parentId: request.subject, targetId: '', query: '', layerStart: 0
-        }, { replace: true, trackHistory: false });
+        await navigateCurriculum(
+            generationPreviewDestination(request),
+            { replace: true, trackHistory: false }
+        );
     } catch (error) {
         trigger.disabled = false;
         trigger.textContent = originalText;

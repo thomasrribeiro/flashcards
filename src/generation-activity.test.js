@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
     generationPullRequestActionLabel,
+    generationPreviewDestination,
     loadPullRequestCurriculum,
     normalizeGenerationRequest,
     pullRequestCoordinates,
@@ -30,6 +31,18 @@ describe('generation activity', () => {
         expect(generationPullRequestActionLabel('needs-review')).toBe('Review pull request');
         expect(generationPullRequestActionLabel('published')).toBe('View merged pull request');
         expect(generationPullRequestActionLabel('cancelled')).toBe('View closed pull request');
+    });
+
+    it('opens deck-plan previews directly on the generated chapter DAG', () => {
+        expect(generationPreviewDestination({
+            jobType: 'deck-plan', deckId: 'mathematics/geometry-and-measurement'
+        })).toEqual({
+            mode: 'chapters', hierarchy: 'chapter', subject: 'mathematics',
+            parentId: 'mathematics/geometry-and-measurement', targetId: '', query: '', layerStart: 0
+        });
+        expect(generationPreviewDestination({
+            jobType: 'subject-design', subject: 'chemistry'
+        })).toMatchObject({ mode: 'subject', hierarchy: 'deck', subject: 'chemistry' });
     });
 
     it('orders requests by initiation time with newest first', () => {

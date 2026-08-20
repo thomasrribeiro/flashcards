@@ -206,3 +206,21 @@ export function generationPullRequestActionLabel(status) {
         cancelled: 'View closed pull request'
     })[status] || 'View pull request';
 }
+
+export function generationPreviewDestination(request) {
+    if (request.jobType === 'deck-plan') {
+        const deckId = String(request.deckId || request.payload?.deckId || '');
+        const subject = deckId.split('/')[0];
+        if (!subject || !deckId.includes('/')) {
+            throw new Error('The deck-plan result does not identify a canonical subject/deck target.');
+        }
+        return {
+            mode: 'chapters', hierarchy: 'chapter', subject,
+            parentId: deckId, targetId: '', query: '', layerStart: 0
+        };
+    }
+    return {
+        mode: 'subject', hierarchy: 'deck', subject: request.subject,
+        parentId: request.subject, targetId: '', query: '', layerStart: 0
+    };
+}
