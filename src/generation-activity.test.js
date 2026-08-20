@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
     generationPullRequestActionLabel,
     generationPreviewDestination,
+    mergeGenerationPullRequest,
     loadPullRequestCurriculum,
     normalizeGenerationRequest,
     pullRequestCoordinates,
@@ -25,6 +26,39 @@ describe('generation activity', () => {
         expect(pullRequestCoordinates('https://github.com/example/curricula/pull/12'))
             .toEqual({ owner: 'example', repository: 'curricula', number: 12 });
         expect(() => pullRequestCoordinates('https://example.com/pull/12')).toThrow(/GitHub pull request/);
+    });
+
+    it('marks a draft ready and merges the exact previewed commit', async () => {
+        const head = 'd'.repeat(40);
+        const fetchImpl = vi.fn()
+            .mockResolvedValueOnce({ ok: true, json: async () => ({
+                state: 'open', draft: true, node_id: 'PR_test', head: { sha: head }
+            }) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({
+                data: { markPullRequestReadyForReview: { pullRequest: { id: 'PR_test', isDraft: false } } }
+            }) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ merged: true, sha: 'e'.repeat(40) }) });
+        const result = await mergeGenerationPullRequest({
+            resultUrl: 'https://github.com/example/curricula/pull/12'
+        }, { fetchImpl, token: 'test-token', expectedHead: head });
+        expect(result.alreadyMerged).toBe(false);
+        expect(fetchImpl.mock.calls[1][0]).toBe('https://api.github.com/graphql');
+        expect(fetchImpl.mock.calls[1][1]).toMatchObject({ method: 'POST' });
+        expect(JSON.parse(fetchImpl.mock.calls[1][1].body).variables).toEqual({ id: 'PR_test' });
+        expect(fetchImpl.mock.calls[2][0]).toContain('/pulls/12/merge');
+        expect(fetchImpl.mock.calls[2][1]).toMatchObject({ method: 'PUT' });
+        expect(JSON.parse(fetchImpl.mock.calls[2][1].body)).toEqual({ sha: head, merge_method: 'merge' });
+    });
+
+    it('refuses to merge when the pull request changed after preview', async () => {
+        const fetchImpl = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({
+            state: 'open', draft: false, node_id: 'PR_test', head: { sha: 'e'.repeat(40) }
+        }) });
+        await expect(mergeGenerationPullRequest({
+            resultUrl: 'https://github.com/example/curricula/pull/12'
+        }, { fetchImpl, token: 'test-token', expectedHead: 'd'.repeat(40) }))
+            .rejects.toThrow(/changed after this preview loaded/);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
     });
 
     it('labels pull request links by lifecycle state', () => {

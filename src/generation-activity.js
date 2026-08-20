@@ -69,6 +69,58 @@ export function pullRequestCoordinates(value) {
     return { owner: match[1], repository: match[2], number: Number(match[3]) };
 }
 
+export async function mergeGenerationPullRequest(request, {
+    fetchImpl = fetch,
+    token = '',
+    expectedHead = ''
+} = {}) {
+    if (!token) throw new Error('Sign in with GitHub before merging curriculum changes.');
+    const pull = pullRequestCoordinates(request.resultUrl);
+    const headers = {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+    };
+    const details = await checkedJson(await fetchImpl(
+        `https://api.github.com/repos/${encodeURIComponent(pull.owner)}/${encodeURIComponent(pull.repository)}/pulls/${pull.number}`,
+        { headers }
+    ), 'Could not load the pull request before merging');
+    if (details.merged || details.merged_at) return { pull, alreadyMerged: true, details };
+    if (details.state !== 'open') throw new Error('This pull request is closed and cannot be merged.');
+    const head = details?.head?.sha;
+    if (!/^[a-f0-9]{40}$/i.test(head || '')) {
+        throw new Error('The pull request does not expose a pinned head commit.');
+    }
+    if (expectedHead && head.toLowerCase() !== expectedHead.toLowerCase()) {
+        throw new Error('The pull request changed after this preview loaded. Exit and preview it again before merging.');
+    }
+    if (details.draft) {
+        if (!details.node_id) throw new Error('The draft pull request does not expose a GitHub node ID.');
+        const readyResponse = await fetchImpl('https://api.github.com/graphql', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                query: 'mutation MarkReady($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { id isDraft } } }',
+                variables: { id: details.node_id }
+            })
+        });
+        const ready = await checkedJson(readyResponse, 'Could not mark the draft pull request ready');
+        if (ready.errors?.length) {
+            throw new Error(ready.errors.map(error => error.message).join('\n'));
+        }
+    }
+    const merged = await checkedJson(await fetchImpl(
+        `https://api.github.com/repos/${encodeURIComponent(pull.owner)}/${encodeURIComponent(pull.repository)}/pulls/${pull.number}/merge`,
+        {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({ sha: head, merge_method: 'merge' })
+        }
+    ), 'GitHub could not merge the curriculum pull request');
+    if (!merged.merged) throw new Error(merged.message || 'GitHub did not merge the curriculum pull request.');
+    return { pull, alreadyMerged: false, details, merged };
+}
+
 export async function reconcileGenerationRequestStatuses(requests, {
     fetchImpl = fetch,
     token = '',

@@ -92,6 +92,7 @@ import {
     generationRequestName,
     generationStatusLabel,
     loadPullRequestCurriculum,
+    mergeGenerationPullRequest,
     normalizeGenerationRequest,
     pullRequestCoordinates,
     reconcileGenerationRequestStatuses,
@@ -4685,16 +4686,53 @@ function curriculumPreviewBanner() {
         : `${curriculumPreview.request.subject} curriculum`;
     text.textContent = `Previewing unmerged ${target} from pull request #${curriculumPreview.pull.number} at ${curriculumPreview.commit.slice(0, 12)}.`;
     const actions = document.createElement('div');
-    const link = document.createElement('a');
-    link.href = curriculumPreview.request.resultUrl;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.textContent = 'Review pull request';
+    const merge = document.createElement('button');
+    merge.type = 'button';
+    merge.textContent = 'Merge curriculum';
+    merge.onclick = async () => {
+        const preview = curriculumPreview;
+        merge.disabled = true;
+        merge.textContent = 'Merging…';
+        try {
+            await mergeGenerationPullRequest(preview.request, {
+                token: githubAuth.getToken(),
+                expectedHead: preview.commit
+            });
+            merge.textContent = 'Merged';
+            await githubAuth.apiRequest(`/api/generation-requests/${preview.request.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    status: 'published',
+                    resultUrl: preview.request.resultUrl
+                })
+            }).catch(error => console.warn('[Generation] Merged result status will reconcile on refresh:', error));
+            await refreshGenerationActivity({ forceReconcile: true }).catch(error => (
+                console.warn('[Generation] Merged result activity refresh failed:', error)
+            ));
+            curriculumPreview = null;
+            curriculumNavigationHistory = [];
+            curriculumNavigationHistoryIndex = -1;
+            curriculumIndex = await reloadCurriculumIndex();
+            await navigateCurriculum(
+                generationPreviewDestination(preview.request),
+                { replace: true, trackHistory: false }
+            );
+        } catch (error) {
+            merge.disabled = false;
+            merge.textContent = 'Merge curriculum';
+            const message = document.createElement('p');
+            message.className = 'generation-activity-error';
+            message.setAttribute('aria-live', 'polite');
+            message.textContent = error.message;
+            actions.querySelector('.generation-activity-error')?.remove();
+            actions.appendChild(message);
+        }
+    };
     const exit = document.createElement('button');
     exit.type = 'button';
     exit.textContent = 'Exit preview';
     exit.onclick = exitCurriculumPreview;
-    actions.append(link, exit);
+    actions.append(merge, exit);
     banner.append(text, actions);
     return banner;
 }

@@ -537,6 +537,8 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
 
     await expect(page.locator('#tab-curriculum')).toHaveClass(/active/);
     await expect(page.locator('.curriculum-preview-banner')).toContainText('Previewing unmerged chemistry curriculum from pull request #12');
+    await expect(page.locator('.curriculum-preview-banner').getByRole('button', { name: 'Merge curriculum' })).toBeVisible();
+    await expect(page.locator('.curriculum-preview-banner').getByRole('link', { name: 'Review pull request' })).toHaveCount(0);
     await expect(page.locator('.curriculum-breadcrumb-label')).toHaveText('example');
     await expect(page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'curricula' })).toBeVisible();
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toBeVisible();
