@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 function git(cwd, args) {
@@ -62,7 +62,9 @@ export function registryCatalogHash(registryRoot, catalogPath = 'dist/curriculum
 }
 
 export function publishRegistryDraft(registryRoot, draft, { title, body }) {
-    git(registryRoot, ['add', 'subjects', 'dist/curriculum.json']);
+    const paths = ['subjects', 'dist/curriculum.json'];
+    if (existsSync(path.join(registryRoot, 'deck-metadata.json'))) paths.push('deck-metadata.json');
+    git(registryRoot, ['add', '--', ...paths]);
     if (!git(registryRoot, ['status', '--porcelain'])) throw new Error('Generation produced no registry changes.');
     git(registryRoot, ['commit', '-m', title]);
     git(registryRoot, ['push', '-u', 'origin', draft.branch]);

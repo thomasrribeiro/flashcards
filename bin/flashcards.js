@@ -48,6 +48,11 @@ import {
 } from './lib/subject-curriculum.js';
 import { validateSubjectDesignProvenance } from '../src/subject-generation-contract.js';
 import { appendSubjectGenerationProvenance } from './lib/subject-generation-provenance.js';
+import { validateDeckPlanProvenance } from '../src/deck-generation-contract.js';
+import {
+    createPinnedDeckContext,
+    updateRegistryDeckSnapshot
+} from './lib/deck-registry-publication.js';
 
 const program = new Command();
 
@@ -120,7 +125,10 @@ function executeAgent(mode, deckPath, options) {
     }
     const chapterNumber = chapter || (freshPilot ? 1 : undefined);
     const buildScope = chapterCurriculum ? 'curriculum' : full ? 'full' : chapter ? 'chapter' : 'pilot';
-    const synced = syncDeckPrerequisitesFromSubject(deckPath, { allowMissing: true });
+    const synced = syncDeckPrerequisitesFromSubject(deckPath, {
+        allowMissing: true,
+        subjectPath: options.subjectContextRoot
+    });
     if (synced.changed) {
         console.log(`Synced subject curriculum metadata (order ${synced.curriculumOrder}).`);
     }
@@ -140,7 +148,10 @@ function executeAgent(mode, deckPath, options) {
         freshPilot,
         isolated: options.isolated,
         reasoningEffort: options.reasoningEffort,
-        agentEnv: options.agentEnv || {}
+        agentEnv: options.agentEnv || {},
+        subjectContextRoot: options.subjectContextRoot,
+        collectionContextRoot: options.collectionContextRoot,
+        curriculumSlicePath: options.curriculumSlicePath
     });
     if (result.dryRun) {
         console.log('Preview only: a live isolated run replaces these source paths with hash-recorded staged copies.');
@@ -752,6 +763,7 @@ addAgentOptions(requests
         let queued = null;
         let registryDraft = null;
         let registryRoot = null;
+        let deckContext = null;
         const trustedRunner = hasGenerationRunnerToken(options.runnerToken);
         try {
             const result = trustedRunner
@@ -876,12 +888,44 @@ addAgentOptions(requests
                 registryDraft = null;
             } else {
                 const deckId = payload.deckId || queued.deck_id;
+                let deckProvenance = null;
+                if (jobType === 'deck-plan') {
+                    registryRoot = resolvePath(options.registryRoot || '.');
+                    deckProvenance = validateDeckPlanProvenance(payload);
+                    assertRepositoryCommit(FLASHCARDS_ROOT, deckProvenance.workflowCommit);
+                    registryDraft = beginRegistryDraft(registryRoot, queued.id, {
+                        baseCommit: deckProvenance.registryBaseCommit,
+                        baseRef: deckProvenance.registryRef
+                    });
+                    const pinnedRegistry = resolveRegistry(registryRoot);
+                    if (pinnedRegistry.errors.length) {
+                        throw new Error(`Invalid registry:\n- ${pinnedRegistry.errors.join('\n- ')}`);
+                    }
+                    if (queued.registry_id && pinnedRegistry.id !== queued.registry_id) {
+                        throw new Error(`Queued registry ${queued.registry_id} does not match checkout ${pinnedRegistry.id}.`);
+                    }
+                    if (queued.target_repository && pinnedRegistry.repository !== queued.target_repository) {
+                        throw new Error(`Queued repository ${queued.target_repository} does not match checkout ${pinnedRegistry.repository}.`);
+                    }
+                    if (pinnedRegistry.output !== deckProvenance.catalogPath) {
+                        throw new Error(`Queued catalog path ${deckProvenance.catalogPath} does not match registry output ${pinnedRegistry.output}.`);
+                    }
+                    const actualCatalogHash = registryCatalogHash(registryRoot, deckProvenance.catalogPath);
+                    if (actualCatalogHash !== deckProvenance.catalogHash) {
+                        throw new Error(`Curriculum catalog changed after queueing: expected ${deckProvenance.catalogHash}, received ${actualCatalogHash}.`);
+                    }
+                    deckContext = createPinnedDeckContext(registryRoot, deckId, deckProvenance);
+                }
                 const materialized = await materializeCurriculumDeck(deckId, {
-                    notesRoot: options.notesRoot
+                    notesRoot: options.notesRoot,
+                    curriculumRoot: deckContext?.registry.subjectsRoot
                 });
                 console.log(`${materialized.created ? 'Created' : 'Using'} deck: ${materialized.deckPath}`);
                 const mode = jobType === 'deck-audit' ? 'audit' : 'build';
                 const executionOptions = executionOptionsForGenerationJob(queued, payload, options);
+                executionOptions.subjectContextRoot = deckContext?.subjectContextRoot;
+                executionOptions.collectionContextRoot = deckContext?.registry.root;
+                executionOptions.curriculumSlicePath = deckContext?.contextPath;
                 agent = runner
                     ? runExternalProviderJob({ ...queued, payload }, {
                         workspacePath: materialized.deckPath,
@@ -893,6 +937,40 @@ addAgentOptions(requests
                         providerId: queued.provider_id,
                         agentEnv
                     });
+                if (agent.status === 0 && jobType === 'deck-plan') {
+                    const generation = {
+                        request_id: queued.id,
+                        provider_id: queued.provider_id,
+                        model_id: queued.model_id || options.model,
+                        reasoning_effort: payload.reasoningEffort || options.reasoningEffort || 'high',
+                        workflow_version: deckProvenance.workflowVersion,
+                        workflow_commit: deckProvenance.workflowCommit,
+                        registry_base_commit: deckProvenance.registryBaseCommit,
+                        catalog_hash: deckProvenance.catalogHash,
+                        context_hash: deckContext.sha256
+                    };
+                    const snapshot = updateRegistryDeckSnapshot(
+                        registryRoot,
+                        deckId,
+                        materialized.deckPath,
+                        generation
+                    );
+                    buildRegistry(registryRoot);
+                    resultUrl = publishRegistryDraft(registryRoot, registryDraft, {
+                        title: `Plan ${deckId} chapter curriculum`,
+                        body: `Queued generation request ${queued.id}.\n\n` +
+                            `Workflow: ${deckProvenance.workflowVersion}\n` +
+                            `Workflow commit: ${deckProvenance.workflowCommit}\n` +
+                            `Registry base: ${deckProvenance.registryBaseCommit}\n` +
+                            `Catalog: ${deckProvenance.catalogHash}\n` +
+                            `Bounded context: ${deckContext.sha256}\n` +
+                            `Model: ${queued.model_id}\n` +
+                            `Reasoning effort: ${generation.reasoning_effort}\n` +
+                            `Chapters: ${snapshot.chapters.length}\n\n` +
+                            'This draft updates the reviewable curriculum registry snapshot. Nothing merges automatically.'
+                    });
+                    registryDraft = null;
+                }
             }
             if (agent.status !== 0) throw new Error(`Deck agent exited with status ${agent.status}`);
             const update = trustedRunner ? updateClaimedGenerationRequest : updateGenerationRequest;
@@ -914,6 +992,8 @@ addAgentOptions(requests
                 }).catch(() => {});
             }
             handleError(error);
+        } finally {
+            deckContext?.cleanup();
         }
     });
 

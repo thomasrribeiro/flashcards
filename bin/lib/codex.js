@@ -520,7 +520,10 @@ export function buildAgentInvocation({
     chapterNumber,
     freshChapter = false,
     freshPilot = false,
-    isolated = true
+    isolated = true,
+    subjectContextRoot,
+    collectionContextRoot,
+    curriculumSlicePath
 }) {
     const deckPath = resolvePath(inputPath);
     const contextManifest = buildContextManifest({
@@ -528,7 +531,10 @@ export function buildAgentInvocation({
         mode,
         preflightPath,
         chapterNumber,
-        buildScope
+        buildScope,
+        subjectContextRoot,
+        collectionContextRoot,
+        curriculumSlicePath
     });
     const missingRequired = contextManifest.files.filter(file => file.required && !file.exists);
     if (missingRequired.length) {
@@ -868,7 +874,10 @@ export function runDeckAgent({
     freshChapter = false,
     freshPilot = false,
     isolated = true,
-    agentEnv = {}
+    agentEnv = {},
+    subjectContextRoot,
+    collectionContextRoot,
+    curriculumSlicePath
 }) {
     const deckPath = resolvePath(inputPath);
     let preflightPath;
@@ -919,7 +928,10 @@ export function runDeckAgent({
         chapterNumber,
         freshChapter,
         freshPilot,
-        isolated
+        isolated,
+        subjectContextRoot,
+        collectionContextRoot,
+        curriculumSlicePath
     });
     if (dryRun) return { invocation: preview, status: 0, dryRun: true };
 

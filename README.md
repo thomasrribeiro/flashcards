@@ -270,6 +270,15 @@ An existing subject is automatically audited with stable identities preserved
 where their scope remains valid, while an absent subject is created from the
 same versioned contract.
 
+Chapter-curriculum requests use the same reproducibility boundary. The runner
+loads the subject package from the exact queued registry commit and supplies a
+bounded catalog slice containing the target deck, direct prerequisite chapter
+capabilities, compact transitive prerequisites, and direct or recommended
+downstream consumers. A successful plan updates the registry's deck snapshot
+and compiled catalog on a draft pull request. The Agents tab previews that
+unmerged catalog; the production DAG changes only after the pull request is
+merged.
+
 In the Curriculum view, select a planned deck and use **Generate pilot
 chapter** to enqueue that same isolated deck pipeline. After the pilot passes
 human review and is explicitly approved, the action becomes **Generate
@@ -326,7 +335,7 @@ The untrusted local path uses `FLASHCARDS_GITHUB_TOKEN` or the token returned by
 design, deck pilots, chapter expansion, and audits. Codex is the default local
 provider; a custom provider can implement the one-manifest executable protocol
 configured through `FLASHCARDS_AGENT_RUNNER`. Provider credentials exist only
-in the claimed child-process environment. Subject changes
+in the claimed child-process environment. Subject and chapter-curriculum registry changes
 are committed to an isolated branch and opened as a draft pull request. A
 successful job is marked `needs-review`; nothing merges or publishes
 automatically.
@@ -556,6 +565,7 @@ The context hierarchy deliberately avoids repetition:
 | deck `README.md` | Scope, chapter map, and source register |
 | deck `CARD_README.md` | Deck-specific retrieval design and justified exceptions |
 | chapter frontmatter | Machine-readable chapter edges and provided concepts |
+| registry deck snapshot | Reviewable chapter list plus the request, model/reasoning settings, workflow/catalog commits, and bounded-context hash |
 
 ## Development checks
 

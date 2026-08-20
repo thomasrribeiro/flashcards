@@ -23,6 +23,10 @@ import {
 import { discardIsolatedRun, finishIsolatedRun, prepareIsolatedRun } from '../bin/lib/isolation.js';
 import { materializeCurriculumDeck, parseCurriculumDeckReference } from '../bin/lib/materialize.js';
 import { buildRegistry, resolveRegistry } from '../bin/lib/registry.js';
+import {
+    createPinnedDeckContext,
+    updateRegistryDeckSnapshot
+} from '../bin/lib/deck-registry-publication.js';
 import { approvePilot, markPilotBuilt, readDeckStatus, requireFullBuildApproval } from '../bin/lib/pilot.js';
 import { requireKebabSlug } from '../bin/lib/paths.js';
 import {
@@ -63,6 +67,87 @@ afterEach(async () => {
 });
 
 describe('flashcards CLI scaffolding', () => {
+    it('builds a bounded registry slice and publishes generated chapter metadata', async () => {
+        const root = await temporaryRoot();
+        await writeFile(path.join(root, 'registry.toml'), `schema_version = 1
+id = "learning-lab"
+name = "Learning Lab"
+repository = "example/curricula"
+default_ref = "master"
+subjects_dir = "subjects"
+output = "dist/curriculum.json"
+deck_metadata = "deck-metadata.json"
+deck_owner = "example-decks"
+`);
+        const subjectsRoot = path.join(root, 'subjects');
+        const { subjectPath } = await ensureSubject({ subject: 'physics', notesRoot: subjectsRoot });
+        await writeFile(path.join(subjectPath, 'subject.toml'), `schema_version = 1
+subject = "physics"
+
+[[decks]]
+id = "mechanics"
+order = 1
+prerequisites = []
+status = "proposed"
+description = "Reason about motion and forces."
+
+[[decks]]
+id = "waves"
+order = 2
+prerequisites = ["mechanics"]
+status = "proposed"
+description = "Reason about oscillations and waves."
+`);
+        const metadata = {
+            schema_version: 2,
+            decks: ['mechanics', 'waves'].map((deck, index) => ({
+                id: `physics/${deck}`,
+                subject: 'physics',
+                deck,
+                order: index + 1,
+                status: 'proposed',
+                materialized: false,
+                chapters: []
+            }))
+        };
+        await writeFile(path.join(root, 'deck-metadata.json'), `${JSON.stringify(metadata, null, 2)}\n`);
+        buildRegistry(root);
+
+        const context = createPinnedDeckContext(root, 'physics/mechanics', {
+            workflow_version: 'deck-plan-v2',
+            registry_base_commit: 'a'.repeat(40)
+        });
+        const slice = JSON.parse(await readFile(context.contextPath, 'utf8'));
+        expect(slice.target.id).toBe('physics/mechanics');
+        expect(slice.direct_prerequisites).toEqual([]);
+        expect(slice.direct_consumers.map(deck => deck.id)).toEqual(['physics/waves']);
+        expect(context.sha256).toMatch(/^sha256:[a-f0-9]{64}$/);
+
+        const notesRoot = await temporaryRoot();
+        const notesSubject = await ensureSubject({ subject: 'physics', notesRoot });
+        await writeFile(path.join(notesSubject.subjectPath, 'subject.toml'), await readFile(path.join(subjectPath, 'subject.toml')));
+        const materialized = await materializeCurriculumDeck('physics/mechanics', {
+            notesRoot,
+            curriculumRoot: subjectsRoot,
+            initializeGit: false
+        });
+        await addChapter({ deckPath: materialized.deckPath, name: 'Motion foundations', independent: true });
+        const result = updateRegistryDeckSnapshot(root, 'physics/mechanics', materialized.deckPath, {
+            model_id: 'gpt-example', reasoning_effort: 'high', context_hash: context.sha256
+        });
+        expect(result.chapters).toHaveLength(1);
+        buildRegistry(root);
+        const catalog = JSON.parse(await readFile(path.join(root, 'dist/curriculum.json'), 'utf8'));
+        expect(catalog.decks.find(deck => deck.id === 'physics/mechanics')).toMatchObject({
+            materialized: true,
+            chapters: [{ id: '01_motion_foundations', card_count: 0 }],
+            chapter_curriculum_generation: {
+                model_id: 'gpt-example', reasoning_effort: 'high', context_hash: context.sha256
+            }
+        });
+        context.cleanup();
+    });
+
     it('validates and deterministically compiles a portable curriculum registry', async () => {
         const root = await temporaryRoot();
         await writeFile(path.join(root, 'registry.toml'), `schema_version = 1

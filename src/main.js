@@ -4598,7 +4598,9 @@ function appendGenerationRequestRow(list, request, close) {
 
     const actions = document.createElement('div');
     actions.className = 'generation-activity-actions';
-    if (request.jobType === 'subject-design' && request.status === 'needs-review' && request.resultUrl) {
+    if (['subject-design', 'deck-plan'].includes(request.jobType)
+        && request.status === 'needs-review'
+        && request.resultUrl) {
         const preview = document.createElement('button');
         preview.type = 'button';
         preview.textContent = 'Preview curriculum';
@@ -4677,7 +4679,10 @@ function curriculumPreviewBanner() {
     const banner = document.createElement('aside');
     banner.className = 'curriculum-preview-banner';
     const text = document.createElement('p');
-    text.textContent = `Previewing unmerged ${curriculumPreview.request.subject} curriculum from pull request #${curriculumPreview.pull.number} at ${curriculumPreview.commit.slice(0, 12)}.`;
+    const target = curriculumPreview.request.jobType === 'deck-plan'
+        ? `${curriculumPreview.request.deckId} chapter curriculum`
+        : `${curriculumPreview.request.subject} curriculum`;
+    text.textContent = `Previewing unmerged ${target} from pull request #${curriculumPreview.pull.number} at ${curriculumPreview.commit.slice(0, 12)}.`;
     const actions = document.createElement('div');
     const link = document.createElement('a');
     link.href = curriculumPreview.request.resultUrl;

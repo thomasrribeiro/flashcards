@@ -674,14 +674,14 @@ function manifestRecommendedDecks(content) {
 
 export function syncDeckPrerequisitesFromSubject(
     inputPath,
-    { requireEntry = false, allowMissing = false } = {}
+    { requireEntry = false, allowMissing = false, subjectPath: inputSubjectPath } = {}
 ) {
     const deckPath = resolvePath(inputPath);
     const manifestPath = path.join(deckPath, 'deck.toml');
     const content = readFileSync(manifestPath, 'utf8');
     const subject = manifestString(content, 'subject');
     const deck = manifestString(content, 'deck');
-    const subjectPath = path.dirname(deckPath);
+    const subjectPath = inputSubjectPath ? resolvePath(inputSubjectPath) : path.dirname(deckPath);
     const graph = resolveSubjectCurriculum(subjectPath);
     if (graph.errors.length) throw new Error(`Invalid subject curriculum:\n- ${graph.errors.join('\n- ')}`);
     const entry = graph.decks.find(candidate => candidate.id === deck);

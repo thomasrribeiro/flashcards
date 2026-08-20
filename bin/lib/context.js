@@ -146,7 +146,10 @@ export function buildContextManifest({
     mode = 'build',
     preflightPath,
     chapterNumber,
-    buildScope = 'pilot'
+    buildScope = 'pilot',
+    subjectContextRoot: inputSubjectContextRoot,
+    collectionContextRoot: inputCollectionContextRoot,
+    curriculumSlicePath
 } = {}) {
     if (!['build', 'audit'].includes(mode)) throw new Error(`Unknown context mode: ${mode}`);
     const deckPath = resolvePath(inputPath);
@@ -157,9 +160,17 @@ export function buildContextManifest({
         throw new Error(`Not a flashcard deck (missing flashcards/): ${deckPath}`);
     }
     const subjectRoot = path.dirname(deckPath);
-    const collectionRoot = path.dirname(subjectRoot);
+    const contextSubjectRoot = inputSubjectContextRoot
+        ? resolvePath(inputSubjectContextRoot)
+        : subjectRoot;
+    const collectionRoot = inputCollectionContextRoot
+        ? resolvePath(inputCollectionContextRoot)
+        : path.dirname(contextSubjectRoot);
     const subject = readSubject(deckPath);
-    const subjectGuide = readSubjectGuide(deckPath, subject);
+    const subjectGuide = readSubjectGuide(
+        inputSubjectContextRoot ? path.join(contextSubjectRoot, path.basename(deckPath)) : deckPath,
+        subject
+    );
     const files = [];
     const add = (filePath, role, options) => files.push(inspectFile(filePath, role, options));
 
@@ -180,12 +191,12 @@ export function buildContextManifest({
         subjectGuide.local ? 'subject-owned domain guide' : subjectGuide.overridden ? 'deck-selected domain guide' : `${subject} domain guide`
     );
     add(path.join(collectionRoot, 'AGENTS.md'), 'collection routing instructions');
-    add(path.join(subjectRoot, 'AGENTS.md'), 'subject routing instructions');
-    add(path.join(subjectRoot, 'ROADMAP.md'), 'learner-specific subject roadmap');
-    add(path.join(subjectRoot, 'subject.toml'), 'machine-readable subject curriculum');
+    add(path.join(contextSubjectRoot, 'AGENTS.md'), 'subject routing instructions');
+    add(path.join(contextSubjectRoot, 'ROADMAP.md'), 'learner-specific subject roadmap');
+    add(path.join(contextSubjectRoot, 'subject.toml'), 'machine-readable subject curriculum');
 
-    const subjectBrief = path.join(subjectRoot, 'SUBJECT_BRIEF.md');
-    const legacyAuthoringGuide = path.join(subjectRoot, 'AUTHORING_GUIDE.md');
+    const subjectBrief = path.join(contextSubjectRoot, 'SUBJECT_BRIEF.md');
+    const legacyAuthoringGuide = path.join(contextSubjectRoot, 'AUTHORING_GUIDE.md');
     if (existsSync(subjectBrief) || !existsSync(legacyAuthoringGuide)) {
         add(subjectBrief, 'learner-specific subject brief');
     } else {
@@ -196,6 +207,9 @@ export function buildContextManifest({
     add(path.join(deckPath, 'deck.toml'), 'machine-readable deck identity');
     add(path.join(deckPath, 'README.md'), 'deck scope, chapter map, and source register');
     add(path.join(deckPath, 'CARD_README.md'), 'deck-specific retrieval blueprint');
+    if (curriculumSlicePath) {
+        add(curriculumSlicePath, 'pinned target, prerequisite, and downstream curriculum slice', { required: true });
+    }
 
     if (mode === 'audit') {
         add(path.join(FLASHCARDS_ROOT, '.agents', 'skills', 'manage-flashcard-decks', 'references', 'audit-workflow.md'), 'whole-deck audit workflow', { required: true });
@@ -208,6 +222,7 @@ export function buildContextManifest({
         mode,
         deckPath,
         subjectRoot,
+        contextSubjectRoot,
         collectionRoot,
         subject,
         prerequisiteGraph,

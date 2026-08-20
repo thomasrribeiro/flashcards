@@ -85,6 +85,21 @@ describe('generation activity', () => {
         expect(fetchImpl.mock.calls[1][1]).toEqual({ cache: 'no-cache' });
     });
 
+    it('validates a deck-plan preview against its exact target deck', async () => {
+        const commit = 'c'.repeat(40);
+        const fetchImpl = vi.fn()
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ head: { sha: commit } }) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({
+                subjects: [{ id: 'mathematics' }],
+                decks: [{ id: 'mathematics/geometry-and-measurement', subject: 'mathematics' }]
+            }) });
+        const result = await loadPullRequestCurriculum({
+            resultUrl: 'https://github.com/example/curricula/pull/13',
+            deckId: 'mathematics/geometry-and-measurement'
+        }, { fetchImpl });
+        expect(result.catalog.decks[0].id).toBe('mathematics/geometry-and-measurement');
+    });
+
     it('falls back to the authenticated GitHub contents API for a private catalog', async () => {
         const commit = 'b'.repeat(40);
         const fetchImpl = vi.fn()

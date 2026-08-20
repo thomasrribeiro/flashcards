@@ -78,7 +78,7 @@ describe('generation preferences', () => {
             modelId: 'gpt-example',
             payload: {
                 deckId: 'physics/mechanics',
-                workflowVersion: 'deck-plan-v1',
+                workflowVersion: 'deck-plan-v2',
                 workflowCommit: 'a'.repeat(40),
                 registryBaseCommit: 'b'.repeat(40),
                 catalogHash: 'sha256:test',

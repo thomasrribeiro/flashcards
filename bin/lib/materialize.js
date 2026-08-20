@@ -16,11 +16,12 @@ export function parseCurriculumDeckReference(reference) {
 
 export async function materializeCurriculumDeck(
     reference,
-    { notesRoot, initializeGit = true } = {}
+    { notesRoot, initializeGit = true, curriculumRoot } = {}
 ) {
     const root = resolveNotesRoot(notesRoot);
+    const curriculum = curriculumRoot ? resolveNotesRoot(curriculumRoot) : root;
     const { subject, deck } = parseCurriculumDeckReference(reference);
-    const graph = resolveGlobalCurriculum(root, { requireSubjects: true });
+    const graph = resolveGlobalCurriculum(curriculum, { requireSubjects: true });
     if (graph.errors.length) {
         throw new Error(`Invalid global curriculum:\n- ${graph.errors.join('\n- ')}`);
     }
@@ -41,7 +42,10 @@ export async function materializeCurriculumDeck(
         throw new Error(`Existing directory is not a flashcard deck: ${deckPath}`);
     }
 
-    const synced = syncDeckPrerequisitesFromSubject(deckPath, { requireEntry: true });
+    const synced = syncDeckPrerequisitesFromSubject(deckPath, {
+        requireEntry: true,
+        subjectPath: path.join(curriculum, subject)
+    });
     return {
         reference: `${subject}/${deck}`,
         subject,

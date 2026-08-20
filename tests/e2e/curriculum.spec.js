@@ -308,7 +308,7 @@ test('queues a chapter-curriculum agent from an empty deck chapter viewer', asyn
         modelId: 'gpt-test',
         payload: {
             deckId: 'mathematics/geometry-and-measurement',
-            workflowVersion: 'deck-plan-v1',
+            workflowVersion: 'deck-plan-v2',
             workflowCommit: '0'.repeat(40),
             registryBaseCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
             catalogHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
@@ -332,7 +332,7 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
     await expect.poll(() => queuedJob).not.toBeNull();
     expect(queuedJob).toMatchObject({
         jobType: 'deck-plan',
-        payload: { deckId: targetId, workflowVersion: 'deck-plan-v1' }
+        payload: { deckId: targetId, workflowVersion: 'deck-plan-v2' }
     });
 });
 
