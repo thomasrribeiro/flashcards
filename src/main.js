@@ -996,12 +996,14 @@ function showChapterBrowser({
     const reviewed = Math.min(Number(progress?.reviewed || 0), Number(progress?.total || 0));
     const total = Number(progress?.total || 0);
     if (total > 0) {
-        progressBar.innerHTML = `<span>${reviewed} of ${total} reviewed</span>
-            <span class="card-browser-progress-track" role="progressbar" aria-label="Chapter review progress" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${reviewed}">
-                <span style="width:${Math.round(reviewed / total * 100)}%"></span>
+        summary.classList.add('hidden');
+        progressBar.innerHTML = `<span>${reviewed} cards of ${total}</span>
+            <span class="progress-bar-container" role="progressbar" aria-label="Chapter review progress" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${reviewed}">
+                <span class="progress-bar-fill" style="width:${Math.round(reviewed / total * 100)}%"></span>
             </span>`;
         progressBar.classList.remove('hidden');
     } else {
+        summary.classList.remove('hidden');
         progressBar.replaceChildren();
         progressBar.classList.add('hidden');
     }
@@ -2857,15 +2859,13 @@ async function startCurriculumChapterDrill(chapter) {
         });
     };
     const actions = [
-        {
+        ...(hasGeneratedContent ? [{
             label: 'Study',
-            disabled: !hasGeneratedContent,
-            title: hasGeneratedContent ? '' : 'Generate this chapter before studying it.',
             onClick: async () => {
                 closeChapterBrowser();
                 await drillCurriculumChapter(chapter);
             }
-        },
+        }] : []),
         {
             label: 'Generate content',
             primary: true,
@@ -4950,7 +4950,7 @@ async function openChapterGenerationPreview(request, close, trigger) {
                         }
                     }
                 },
-                { label: 'Open pull request', href: request.resultUrl }
+                { label: 'View on GitHub', href: request.resultUrl }
             ]
         });
     } catch (error) {

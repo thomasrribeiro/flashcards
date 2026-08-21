@@ -388,7 +388,7 @@ test('shows chapter generation as checking until AI access is verified', async (
     await expect(button).not.toHaveClass(/is-checking/);
 });
 
-test('opens generated chapter actions before starting its flashcards', async ({ page }, testInfo) => {
+test('opens generated chapter actions before starting its flashcards', async ({ page }) => {
     const targetId = 'mathematics/elementary-algebra-and-functions';
     const catalog = structuredClone(bundledCurriculum);
     const target = catalog.decks.find(deck => deck.id === targetId);
@@ -442,25 +442,30 @@ test('opens generated chapter actions before starting its flashcards', async ({ 
     const compactLayout = await browser.evaluate(modal => {
         const panel = modal.querySelector('.card-browser-modal-content');
         const controls = [...modal.querySelectorAll('.card-browser-actions button')];
+        const close = modal.querySelector('.card-browser-close, #card-browser-close');
+        const progressTrack = modal.querySelector('.card-browser-progress .progress-bar-container');
+        const toggle = modal.querySelector('.card-browser-content-toggle');
         return {
             panelWidth: panel.getBoundingClientRect().width,
             viewportWidth: window.innerWidth,
             fonts: controls.map(control => getComputedStyle(control).fontFamily),
             fontSizes: controls.map(control => getComputedStyle(control).fontSize),
-            heights: controls.map(control => control.getBoundingClientRect().height)
+            heights: controls.map(control => control.getBoundingClientRect().height),
+            closeRight: close.getBoundingClientRect().right,
+            progressRight: progressTrack.getBoundingClientRect().right,
+            toggleRight: toggle.getBoundingClientRect().right
         };
     });
-    expect(compactLayout.panelWidth).toBeLessThanOrEqual(762);
-    if (testInfo.project.name === 'desktop-chromium') {
-        expect(compactLayout.panelWidth).toBeLessThan(compactLayout.viewportWidth * 0.75);
-    }
+    expect(compactLayout.panelWidth).toBeLessThanOrEqual(compactLayout.viewportWidth);
     expect(new Set(compactLayout.fonts).size).toBe(1);
     expect(new Set(compactLayout.fontSizes).size).toBe(1);
     expect(Math.abs(compactLayout.heights[0] - compactLayout.heights[1])).toBeLessThan(1);
+    expect(Math.abs(compactLayout.progressRight - compactLayout.closeRight)).toBeLessThan(1);
+    expect(Math.abs(compactLayout.toggleRight - compactLayout.closeRight)).toBeLessThan(1);
     await expect(page.locator('#card-browser-body')).toBeHidden();
-    await expect(page.locator('#card-browser-summary')).toHaveText('1 card');
+    await expect(page.locator('#card-browser-summary')).toBeHidden();
     await expect(page.locator('#card-browser-summary')).not.toContainText('read-only preview');
-    await expect(page.locator('#card-browser-progress')).toContainText('0 of 1 reviewed');
+    await expect(page.locator('#card-browser-progress')).toContainText('0 cards of 1');
     await expect(browser.getByRole('button', { name: 'Study', exact: true })).toBeVisible();
     await expect(browser.getByRole('button', { name: 'Generate content', exact: true })).toBeVisible();
     await expect(browser.getByRole('button', { name: 'Prerequisites & generation' })).toHaveCount(0);
@@ -472,6 +477,9 @@ test('opens generated chapter actions before starting its flashcards', async ({ 
     const toggle = page.getByLabel('Show flashcards');
     await expect(toggle).not.toBeChecked();
     await toggle.check();
+    await expect.poll(() => browser.locator('.card-browser-modal-content')
+        .evaluate(panel => panel.getBoundingClientRect().width))
+        .toBe(compactLayout.panelWidth);
     await expect(page.locator('#card-browser-body')).toContainText('What does a variable represent?');
     await browser.getByRole('button', { name: 'Study', exact: true }).click();
     await expect(page.locator('#study-area')).toBeVisible();
@@ -501,7 +509,7 @@ test('queues content generation for one eligible chapter', async ({ page }) => {
     await expect(page.locator('#card-browser-body')).toBeHidden();
     await expect(page.locator('.card-browser-modal-content')).toHaveClass(/is-summary-only/);
     const browser = page.locator('#card-browser-modal');
-    await expect(browser.getByRole('button', { name: 'Study', exact: true })).toBeDisabled();
+    await expect(browser.getByRole('button', { name: 'Study', exact: true })).toHaveCount(0);
     await expect(page.locator('#card-browser-modal')).not.toContainText('Required path');
     await expect(page.locator('#card-browser-modal')).not.toContainText('Deck generation');
     const generate = browser.getByRole('button', { name: 'Generate content', exact: true });
@@ -823,6 +831,14 @@ test('reviews generated flashcards in-app and publishes both pull requests', asy
     await expect(browser.getByText('What does a variable represent?', { exact: true })).toBeVisible();
     await expect(browser.getByText('A quantity whose value can vary.', { exact: true })).toBeVisible();
     await expect(browser.locator('#card-browser-summary')).toContainText('unmerged pull request #7');
+    const githubLink = browser.getByRole('link', { name: 'View on GitHub' });
+    await expect(githubLink).toHaveAttribute('href', deckResultUrl);
+    await expect(githubLink).toHaveCSS('text-decoration-line', 'none');
+    await expect(githubLink).toHaveCSS(
+        'font-family',
+        await browser.getByRole('button', { name: 'Merge flashcards' })
+            .evaluate(button => getComputedStyle(button).fontFamily)
+    );
 
     await browser.getByRole('button', { name: 'Merge flashcards' }).click();
     await expect(browser.getByRole('button', { name: 'Merged and published' })).toBeVisible();

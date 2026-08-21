@@ -24,12 +24,12 @@ describe('curriculumDeckProgressStates', () => {
         expect(states.get(deck.curriculumId)).toBe('learning');
     });
 
-    it('marks a fully introduced deck with no due cards as complete', () => {
+    it('marks a fully reviewed deck as complete', () => {
         const states = curriculumDeckProgressStates([deck], [], [], progress);
         expect(states.get(deck.curriculumId)).toBe('complete');
     });
 
-    it('turns a complete deck back to learning when review is due', () => {
+    it('keeps curriculum completion green when spaced review becomes due', () => {
         const reviews = [{
             cardHash: 'card-1',
             repo: deck.id,
@@ -38,7 +38,7 @@ describe('curriculumDeckProgressStates', () => {
         const states = curriculumDeckProgressStates(
             [deck], [], reviews, progress, new Date('2026-08-13T12:00:00.000Z')
         );
-        expect(states.get(deck.curriculumId)).toBe('learning');
+        expect(states.get(deck.curriculumId)).toBe('complete');
     });
 
     it('does not count progress from an outdated chapter revision', () => {
@@ -65,7 +65,7 @@ describe('curriculumChapterProgressStates', () => {
         expect(complete.get(`${deck.curriculumId}#01_foundations`)).toBe('complete');
     });
 
-    it('returns a reviewed chapter to yellow when one of its cards is due', () => {
+    it('keeps a fully reviewed chapter green when one of its cards is due', () => {
         const reviews = [{
             repo: deck.id,
             filepath: 'flashcards/01.md',
@@ -74,6 +74,6 @@ describe('curriculumChapterProgressStates', () => {
         const states = curriculumChapterProgressStates(
             [curriculumDeck], [deck], reviews, progress, new Date('2026-08-13T12:00:00.000Z')
         );
-        expect(states.get(`${deck.curriculumId}#01_foundations`)).toBe('learning');
+        expect(states.get(`${deck.curriculumId}#01_foundations`)).toBe('complete');
     });
 });
