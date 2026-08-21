@@ -1810,6 +1810,23 @@ describe('flashcards CLI validation and Codex handoff', () => {
             await writeFile(
                 chapterPath,
                 (await readFile(chapterPath, 'utf8'))
+                    + '\n<!-- card-id: stripped-math -->\nQ: Name the segment.\n'
+                    + 'A: (overline{AB}) is (\u000crac{1}{2}) of the line.\n'
+            );
+            expect(() => validateGeneratedChapterMarkup(prepared.workspacePath))
+                .toThrow(/invalid control character[\s\S]*stripped TeX-like notation/);
+            await writeFile(
+                chapterPath,
+                (await readFile(chapterPath, 'utf8')).replace(
+                    '(overline{AB}) is (\u000crac{1}{2})',
+                    '\\(\\overline{AB}\\) is \\(\\frac{1}{2}\\)'
+                )
+            );
+            expect(validateGeneratedChapterMarkup(prepared.workspacePath)).toEqual([]);
+
+            await writeFile(
+                chapterPath,
+                (await readFile(chapterPath, 'utf8'))
                     .replace('S: IDENTIFY: This is addition.', 'S:\nIDENTIFY\n\nThis is addition.')
                     .replace('PLAN: Add the two counts.', 'PLAN\n\nAdd the two counts.')
                     .replace('EXECUTE: **77 books.** $32 + 45 = 77$.', 'EXECUTE\n\n**77 books.** $32 + 45 = 77$.')

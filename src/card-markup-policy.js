@@ -8,6 +8,13 @@ function cardBack(card) {
     return '';
 }
 
+function cardSource(card) {
+    if (card.type === 'basic') return `${card.content.question}\n${card.content.answer}`;
+    if (card.type === 'problem') return `${card.content.problem}\n${card.content.solution}`;
+    if (card.type === 'cloze') return card.content.text;
+    return '';
+}
+
 /**
  * Return deterministic authoring-policy failures for a parsed card.
  *
@@ -17,9 +24,28 @@ function cardBack(card) {
  */
 export function cardMarkupErrors(card, { generated = false } = {}) {
     const content = cardBack(card);
-    if (!content) return [];
+    const source = cardSource(card);
+    if (!source) return [];
 
     const errors = [];
+    const controlCharacter = source.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/);
+    if (controlCharacter) {
+        errors.push({
+            rule: 'U10',
+            msg: `card contains an invalid control character (U+${controlCharacter[0].charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')})`,
+            excerpt: source.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').slice(0, 80)
+        });
+    }
+    const strippedMath = source.match(
+        /\((?:overline|overrightarrow|overleftrightarrow|angle|mangle)\b[^)]*\)|\([^\n)]*\^circ\)/i
+    );
+    if (strippedMath) {
+        errors.push({
+            rule: 'U10',
+            msg: 'card contains stripped TeX-like notation; use valid \\(…\\) delimiters and backslash commands',
+            excerpt: strippedMath[0].replace(/\s+/g, ' ').slice(0, 80)
+        });
+    }
     const numericPrefix = content.match(/^\s*(\d+)\.[ \t]+\S/);
     if (numericPrefix) {
         errors.push({
