@@ -335,7 +335,16 @@ The untrusted local path uses `FLASHCARDS_GITHUB_TOKEN` or the token returned by
 design, deck pilots, chapter expansion, and audits. Codex is the default local
 provider; a custom provider can implement the one-manifest executable protocol
 configured through `FLASHCARDS_AGENT_RUNNER`. Provider credentials exist only
-in the claimed child-process environment. Subject and chapter-curriculum registry changes
+in the claimed child-process environment. Chapter-content jobs resolve the deck
+repository from the pinned
+curriculum registry, create it under the registry's `deck_owner` when absent,
+and publish one review pull request for the chapter plus a companion registry
+snapshot pull request. Merging both from Agents publishes the cards and keeps
+the curriculum DAG's repository, status, card count, model, reasoning effort,
+and workflow provenance synchronized. The first chapter remains the pilot;
+merging its validated pull request is the explicit approval that unlocks later
+chapter jobs.
+Subject and chapter-curriculum registry changes
 are committed to an isolated branch and opened as a draft pull request. A
 successful job is marked `needs-review`; nothing merges or publishes
 automatically.

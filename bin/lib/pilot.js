@@ -90,7 +90,7 @@ export function approvePilot(inputPath) {
 export function requireFullBuildApproval(inputPath) {
     const deckPath = resolvePath(inputPath);
     const status = readDeckStatus(deckPath);
-    if (status !== 'pilot-approved') {
+    if (!['pilot-approved', 'built', 'full-built', 'active'].includes(status)) {
         throw new Error(
             `Full build requires an approved pilot (current status: "${status || 'missing'}"). `
             + `Run flashcards deck build ${deckPath}, review the first chapter, then run flashcards deck approve-pilot ${deckPath}.`

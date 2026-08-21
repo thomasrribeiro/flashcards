@@ -105,7 +105,10 @@ describe('generation preferences', () => {
             id: '01_motion', order: 1, card_count: 0
         }, preferences)).toMatchObject({
             jobType: 'chapter-expand',
-            payload: { chapterId: '01_motion', buildScope: 'pilot' }
+            payload: {
+                chapterId: '01_motion', buildScope: 'pilot',
+                generationMode: 'generate', workflowVersion: 'chapter-content-v1'
+            }
         });
         expect(() => generationJobForChapterContent({
             id: 'physics/mechanics', status: 'scaffolded'
@@ -118,6 +121,20 @@ describe('generation preferences', () => {
             id: '02_forces', order: 2, card_count: 0
         }, preferences)).toMatchObject({
             payload: { chapterId: '02_forces', buildScope: 'chapter' }
+        });
+        expect(generationJobForChapterContent({
+            id: 'physics/mechanics', status: 'active'
+        }, {
+            id: '02_forces', order: 2, card_count: 24
+        }, preferences)).toMatchObject({
+            payload: { chapterId: '02_forces', buildScope: 'chapter', generationMode: 'improve' }
+        });
+        expect(generationJobForChapterContent({
+            id: 'physics/mechanics', status: 'active'
+        }, {
+            id: '02_forces', order: 2, card_count: 24
+        }, preferences, {}, { replace: true })).toMatchObject({
+            payload: { generationMode: 'replace' }
         });
     });
 });

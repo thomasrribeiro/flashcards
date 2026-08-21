@@ -1,4 +1,5 @@
 import {
+    CHAPTER_CONTENT_WORKFLOW_VERSION,
     DECK_PLAN_WORKFLOW_VERSION,
     chapterContentGenerationScope,
     deckCanPlanChapterCurriculum
@@ -107,7 +108,13 @@ export function generationJobForChapterCurriculum(deck, preferences = getGenerat
     };
 }
 
-export function generationJobForChapterContent(deck, chapter, preferences = getGenerationPreferences(), provenance = {}) {
+export function generationJobForChapterContent(
+    deck,
+    chapter,
+    preferences = getGenerationPreferences(),
+    provenance = {},
+    { replace = false } = {}
+) {
     const buildScope = chapterContentGenerationScope(deck, chapter);
     if (!buildScope) {
         throw new Error('This chapter is not ready for content generation.');
@@ -122,6 +129,10 @@ export function generationJobForChapterContent(deck, chapter, preferences = getG
             deckId: deck.id,
             chapterId: chapter.id,
             buildScope,
+            generationMode: Number(chapter.card_count || 0) > 0
+                ? replace ? 'replace' : 'improve'
+                : 'generate',
+            workflowVersion: CHAPTER_CONTENT_WORKFLOW_VERSION,
             workflowCommit: provenance.workflowCommit || null,
             registryBaseCommit: provenance.registryBaseCommit || null,
             catalogHash: provenance.catalogHash || null,

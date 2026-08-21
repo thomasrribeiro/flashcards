@@ -1,4 +1,5 @@
 export const DECK_PLAN_WORKFLOW_VERSION = 'deck-plan-v2';
+export const CHAPTER_CONTENT_WORKFLOW_VERSION = 'chapter-content-v1';
 
 const GIT_COMMIT = /^[a-f0-9]{40}$/i;
 const SHA256 = /^sha256:[a-f0-9]{64}$/i;
@@ -17,12 +18,12 @@ export function deckCanPlanChapterCurriculum(deck) {
     return Boolean(deck?.id);
 }
 
-export function validateDeckPlanProvenance(input = {}) {
-    if (input.workflowVersion !== DECK_PLAN_WORKFLOW_VERSION) {
-        throw new Error(`Unsupported deck-plan workflow: ${input.workflowVersion || '(missing)'}`);
+function validateDeckWorkflowProvenance(input, expectedWorkflowVersion, label) {
+    if (input.workflowVersion !== expectedWorkflowVersion) {
+        throw new Error(`Unsupported ${label} workflow: ${input.workflowVersion || '(missing)'}`);
     }
     const provenance = {
-        workflowVersion: DECK_PLAN_WORKFLOW_VERSION,
+        workflowVersion: expectedWorkflowVersion,
         workflowCommit: String(input.workflowCommit || '').toLowerCase(),
         registryBaseCommit: String(input.registryBaseCommit || '').toLowerCase(),
         catalogHash: String(input.catalogHash || '').toLowerCase(),
@@ -51,11 +52,25 @@ export function validateDeckPlanProvenance(input = {}) {
     return provenance;
 }
 
+export function validateDeckPlanProvenance(input = {}) {
+    return validateDeckWorkflowProvenance(input, DECK_PLAN_WORKFLOW_VERSION, 'deck-plan');
+}
+
+export function validateChapterContentProvenance(input = {}) {
+    return validateDeckWorkflowProvenance(
+        input,
+        CHAPTER_CONTENT_WORKFLOW_VERSION,
+        'chapter-content'
+    );
+}
+
 export function chapterContentGenerationScope(deck, chapter) {
-    if (!deck?.id || !chapter?.id || Number(chapter.card_count || 0) > 0) return null;
+    if (!deck?.id || !chapter?.id) return null;
     const status = String(deck.status || '').toLowerCase();
     const order = Number(chapter.order ?? String(chapter.id).slice(0, 2));
-    if (order === 1 && INCOMPLETE_DECK_STATUSES.has(status)) return 'pilot';
-    if (status === 'pilot-approved') return 'chapter';
+    if (order === 1 && (INCOMPLETE_DECK_STATUSES.has(status) || status === 'pilot-built')) {
+        return 'pilot';
+    }
+    if (['pilot-approved', 'full-built', 'built', 'active'].includes(status)) return 'chapter';
     return null;
 }

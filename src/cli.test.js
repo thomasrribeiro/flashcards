@@ -231,7 +231,13 @@ description = "Reason from systems, quantities, and evidence."
 
         const result = await materializeCurriculumDeck('physics/physical-reasoning', {
             notesRoot,
-            initializeGit: false
+            initializeGit: false,
+            chapterSnapshot: [{
+                id: '01_measurement',
+                title: 'Measurement',
+                prerequisites: [],
+                provides: ['measurement']
+            }]
         });
 
         expect(parseCurriculumDeckReference(result.reference)).toEqual({
@@ -245,6 +251,8 @@ description = "Reason from systems, quantities, and evidence."
         });
         expect(await readFile(path.join(result.deckPath, 'README.md'), 'utf8'))
             .toContain('Reason from systems, quantities, and evidence.');
+        expect(await readFile(path.join(result.deckPath, 'flashcards', '01_measurement.md'), 'utf8'))
+            .toContain('provides = ["measurement"]');
     });
 
     it('creates subject context and a complete deck without overwriting subject files', async () => {

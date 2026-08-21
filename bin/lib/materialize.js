@@ -1,6 +1,7 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { createDeck } from './scaffold.js';
+import { addChapter, createDeck } from './scaffold.js';
 import { resolveGlobalCurriculum } from './global-curriculum.js';
 import { requireKebabSlug, resolveNotesRoot } from './paths.js';
 import { syncDeckPrerequisitesFromSubject } from './subject-curriculum.js';
@@ -16,7 +17,14 @@ export function parseCurriculumDeckReference(reference) {
 
 export async function materializeCurriculumDeck(
     reference,
-    { notesRoot, initializeGit = true, curriculumRoot } = {}
+    {
+        notesRoot,
+        initializeGit = true,
+        curriculumRoot,
+        chapterSnapshot = [],
+        repositoryUrl,
+        cloneExistingRepository = false
+    } = {}
 ) {
     const root = resolveNotesRoot(notesRoot);
     const curriculum = curriculumRoot ? resolveNotesRoot(curriculumRoot) : root;
@@ -31,15 +39,40 @@ export async function materializeCurriculumDeck(
     const deckPath = path.join(root, subject, deck);
     let created = null;
     if (!existsSync(deckPath)) {
-        created = await createDeck({
-            subject,
-            deck,
-            notesRoot: root,
-            initializeGit,
-            description: node.description
-        });
+        if (cloneExistingRepository && repositoryUrl) {
+            mkdirSync(path.dirname(deckPath), { recursive: true });
+            const cloned = spawnSync('gh', ['repo', 'clone', repositoryUrl, deckPath], {
+                encoding: 'utf8'
+            });
+            if (cloned.status !== 0) {
+                throw new Error(`Unable to clone ${repositoryUrl}: ${(cloned.stderr || cloned.stdout).trim()}`);
+            }
+        } else {
+            created = await createDeck({
+                subject,
+                deck,
+                notesRoot: root,
+                initializeGit,
+                description: node.description
+            });
+        }
     } else if (!existsSync(path.join(deckPath, 'deck.toml'))) {
         throw new Error(`Existing directory is not a flashcard deck: ${deckPath}`);
+    }
+
+    for (const chapter of chapterSnapshot || []) {
+        const id = String(chapter?.id || '');
+        const match = /^(\d{2})_([a-z0-9]+(?:_[a-z0-9]+)*)$/.exec(id);
+        if (!match) throw new Error(`Invalid pinned chapter identifier: ${id || '(missing)'}`);
+        const chapterPath = path.join(deckPath, 'flashcards', `${id}.md`);
+        if (existsSync(chapterPath)) continue;
+        await addChapter({
+            deckPath,
+            name: match[2],
+            order: Number(match[1]),
+            prerequisites: Array.isArray(chapter.prerequisites) ? chapter.prerequisites : [],
+            provides: Array.isArray(chapter.provides) ? chapter.provides : []
+        });
     }
 
     const synced = syncDeckPrerequisitesFromSubject(deckPath, {

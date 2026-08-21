@@ -3755,6 +3755,14 @@ body.standalone-phone .mobile-sidebar-close {
     color: var(--muted);
     font-size: 0.62rem;
 }
+.generation-activity-command {
+    display: block;
+    margin-top: 8px;
+    overflow-x: auto;
+    color: var(--muted);
+    font-size: 0.62rem;
+    white-space: nowrap;
+}
 .generation-activity-status {
     flex: 0 0 auto;
     border: 1px solid var(--black);

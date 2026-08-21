@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+    generationEffectiveCommand,
     generationPullRequestActionLabel,
     generationPreviewDestination,
     mergeGenerationPullRequest,
@@ -12,6 +13,17 @@ import {
 } from './generation-activity.js';
 
 describe('generation activity', () => {
+    it('shows the exact CLI-equivalent chapter command', () => {
+        expect(generationEffectiveCommand({
+            jobType: 'chapter-expand',
+            payload: { chapterId: '01_foundations', buildScope: 'pilot', generationMode: 'generate' }
+        })).toBe('flashcards deck build <deck-path>');
+        expect(generationEffectiveCommand({
+            jobType: 'chapter-expand',
+            payload: { chapterId: '03_motion', buildScope: 'chapter', generationMode: 'replace' }
+        })).toBe('flashcards deck build <deck-path> --chapter 3 --fresh-chapter');
+    });
+
     it('normalizes worker records and counts active and review work', () => {
         const requests = [
             normalizeGenerationRequest({ id: 1, status: 'running', payload_json: '{"subject":"chemistry"}' }),
@@ -111,6 +123,28 @@ describe('generation activity', () => {
         ]);
         expect(fetchImpl.mock.calls[0][0]).toMatch(/\/pulls\/1\?activity_fresh=\d+$/);
         expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe('Bearer test-token');
+    });
+
+    it('keeps chapter publication in review until both deck and registry pulls merge', async () => {
+        const request = normalizeGenerationRequest({
+            id: 9,
+            job_type: 'chapter-expand',
+            status: 'needs-review',
+            result_url: 'https://github.com/example/deck/pull/4',
+            result_json: JSON.stringify({
+                registryResultUrl: 'https://github.com/example/curricula/pull/8'
+            })
+        });
+        const updateRequest = vi.fn();
+        const fetchImpl = vi.fn()
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ state: 'closed', merged: true }) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ state: 'open', merged: false }) });
+        const [reconciled] = await reconcileGenerationRequestStatuses([request], {
+            fetchImpl, token: 'test-token', updateRequest
+        });
+        expect(reconciled.status).toBe('needs-review');
+        expect(updateRequest).not.toHaveBeenCalled();
+        expect(fetchImpl.mock.calls[1][0]).toContain('/curricula/pulls/8');
     });
 
     it('loads the catalog at the exact pull request head commit', async () => {

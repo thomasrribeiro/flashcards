@@ -23,6 +23,11 @@ import { buildRegistry, formatRegistry, resolveRegistry } from './lib/registry.j
 import { providerRunner, runExternalProviderJob } from './lib/agent-provider.js';
 import { executionOptionsForGenerationJob } from './lib/generation-job.js';
 import {
+    abandonDeckDraft,
+    beginDeckDraft,
+    publishDeckDraft
+} from './lib/deck-github-publisher.js';
+import {
     abandonRegistryDraft,
     assertRepositoryCommit,
     beginRegistryDraft,
@@ -48,7 +53,10 @@ import {
 } from './lib/subject-curriculum.js';
 import { validateSubjectDesignProvenance } from '../src/subject-generation-contract.js';
 import { appendSubjectGenerationProvenance } from './lib/subject-generation-provenance.js';
-import { validateDeckPlanProvenance } from '../src/deck-generation-contract.js';
+import {
+    validateChapterContentProvenance,
+    validateDeckPlanProvenance
+} from '../src/deck-generation-contract.js';
 import {
     createPinnedDeckContext,
     updateRegistryDeckSnapshot
@@ -764,6 +772,8 @@ addAgentOptions(requests
         let registryDraft = null;
         let registryRoot = null;
         let deckContext = null;
+        let deckDraft = null;
+        let deckPath = null;
         const trustedRunner = hasGenerationRunnerToken(options.runnerToken);
         try {
             const result = trustedRunner
@@ -799,6 +809,7 @@ addAgentOptions(requests
             const runner = providerRunner(queued.provider_id, options.agentRunner);
             let agent;
             let resultUrl = null;
+            let registryResultUrl = null;
             if (jobType === 'subject-design') {
                 registryRoot = resolvePath(options.registryRoot || '.');
                 const provenance = validateSubjectDesignProvenance(payload);
@@ -889,9 +900,11 @@ addAgentOptions(requests
             } else {
                 const deckId = payload.deckId || queued.deck_id;
                 let deckProvenance = null;
-                if (jobType === 'deck-plan') {
+                if (jobType === 'deck-plan' || jobType === 'chapter-expand') {
                     registryRoot = resolvePath(options.registryRoot || '.');
-                    deckProvenance = validateDeckPlanProvenance(payload);
+                    deckProvenance = jobType === 'deck-plan'
+                        ? validateDeckPlanProvenance(payload)
+                        : validateChapterContentProvenance(payload);
                     assertRepositoryCommit(FLASHCARDS_ROOT, deckProvenance.workflowCommit);
                     registryDraft = beginRegistryDraft(registryRoot, queued.id, {
                         baseCommit: deckProvenance.registryBaseCommit,
@@ -918,9 +931,20 @@ addAgentOptions(requests
                 }
                 const materialized = await materializeCurriculumDeck(deckId, {
                     notesRoot: options.notesRoot,
-                    curriculumRoot: deckContext?.registry.subjectsRoot
+                    curriculumRoot: deckContext?.registry.subjectsRoot,
+                    chapterSnapshot: deckContext?.target?.chapters,
+                    repositoryUrl: deckContext?.target?.repository?.url,
+                    cloneExistingRepository: Boolean(deckContext?.target?.repository?.configured)
                 });
+                deckPath = materialized.deckPath;
                 console.log(`${materialized.created ? 'Created' : 'Using'} deck: ${materialized.deckPath}`);
+                if (jobType === 'chapter-expand') {
+                    const repositoryUrl = deckContext?.target?.repository?.url;
+                    if (!repositoryUrl) throw new Error(`Pinned curriculum has no repository for ${deckId}.`);
+                    deckDraft = beginDeckDraft(materialized.deckPath, repositoryUrl, queued.id, {
+                        visibility: deckContext.registry.deckVisibility
+                    });
+                }
                 const mode = jobType === 'deck-audit' ? 'audit' : 'build';
                 const executionOptions = executionOptionsForGenerationJob(queued, payload, options);
                 executionOptions.subjectContextRoot = deckContext?.subjectContextRoot;
@@ -970,16 +994,82 @@ addAgentOptions(requests
                             'This draft updates the reviewable curriculum registry snapshot. Nothing merges automatically.'
                     });
                     registryDraft = null;
+                } else if (agent.status === 0 && jobType === 'chapter-expand') {
+                    const chapterId = payload.chapterId || queued.chapter_id;
+                    const generationMode = payload.generationMode || 'generate';
+                    if (payload.buildScope === 'pilot') {
+                        // The pull request remains the human gate: this status
+                        // reaches the default branch only if the reviewer
+                        // explicitly merges the validated pilot.
+                        approvePilot(materialized.deckPath);
+                    }
+                    const contentGeneration = {
+                        request_id: queued.id,
+                        chapter_id: chapterId,
+                        provider_id: queued.provider_id,
+                        model_id: queued.model_id || options.model,
+                        reasoning_effort: payload.reasoningEffort || options.reasoningEffort || 'high',
+                        workflow_version: deckProvenance.workflowVersion,
+                        workflow_commit: deckProvenance.workflowCommit,
+                        registry_base_commit: deckProvenance.registryBaseCommit,
+                        catalog_hash: deckProvenance.catalogHash,
+                        context_hash: deckContext.sha256,
+                        generation_mode: generationMode
+                    };
+                    const snapshot = updateRegistryDeckSnapshot(
+                        registryRoot,
+                        deckId,
+                        materialized.deckPath,
+                        contentGeneration,
+                        {
+                            generationKind: 'content',
+                            repositoryUrl: deckContext.target.repository.url
+                        }
+                    );
+                    buildRegistry(registryRoot);
+                    resultUrl = publishDeckDraft(materialized.deckPath, deckDraft, {
+                        title: `${generationMode === 'improve' ? 'Improve' : generationMode === 'replace' ? 'Regenerate' : 'Generate'} ${deckId} ${chapterId}`,
+                        body: `Queued generation request ${queued.id}.\n\n` +
+                            `Workflow: ${deckProvenance.workflowVersion}\n` +
+                            `Workflow commit: ${deckProvenance.workflowCommit}\n` +
+                            `Registry base: ${deckProvenance.registryBaseCommit}\n` +
+                            `Catalog: ${deckProvenance.catalogHash}\n` +
+                            `Bounded context: ${deckContext.sha256}\n` +
+                            `Model: ${queued.model_id}\n` +
+                            `Reasoning effort: ${payload.reasoningEffort || options.reasoningEffort || 'high'}\n` +
+                            `Generation mode: ${generationMode}\n\n` +
+                            'This draft contains flashcards for one ordered chapter and must pass deterministic deck validation before merge.'
+                    });
+                    deckDraft = null;
+                    registryResultUrl = publishRegistryDraft(registryRoot, registryDraft, {
+                        title: `Publish ${deckId} ${chapterId} metadata`,
+                        body: `Queued generation request ${queued.id}.\n\n` +
+                            `Deck pull request: ${resultUrl}\n` +
+                            `Workflow: ${deckProvenance.workflowVersion}\n` +
+                            `Workflow commit: ${deckProvenance.workflowCommit}\n` +
+                            `Registry base: ${deckProvenance.registryBaseCommit}\n` +
+                            `Catalog: ${deckProvenance.catalogHash}\n` +
+                            `Model: ${contentGeneration.model_id}\n` +
+                            `Reasoning effort: ${contentGeneration.reasoning_effort}\n` +
+                            `Cards in ${chapterId}: ${snapshot.chapters.find(chapter => chapter.id === chapterId)?.card_count || 0}\n\n` +
+                            'Merge the deck pull request before this synchronized registry snapshot.'
+                    });
+                    registryDraft = null;
                 }
             }
             if (agent.status !== 0) throw new Error(`Deck agent exited with status ${agent.status}`);
             const update = trustedRunner ? updateClaimedGenerationRequest : updateGenerationRequest;
-            await update(queued.id, { status: 'needs-review', resultUrl }, {
+            await update(queued.id, {
+                status: 'needs-review',
+                resultUrl,
+                ...(registryResultUrl ? { result: { registryResultUrl } } : {})
+            }, {
                 workerUrl: options.workerUrl,
                 runnerToken: options.runnerToken
             });
             console.log(`Request ${queued.id} is ready for human review${resultUrl ? `: ${resultUrl}` : '.'}`);
         } catch (error) {
+            if (deckDraft && deckPath) abandonDeckDraft(deckPath, deckDraft);
             if (registryDraft && registryRoot) abandonRegistryDraft(registryRoot, registryDraft);
             if (queued) {
                 const update = trustedRunner ? updateClaimedGenerationRequest : updateGenerationRequest;

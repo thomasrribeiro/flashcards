@@ -32,7 +32,8 @@ export function resolveRegistry(inputPath) {
         subjectsDir: scalar(content, 'subjects_dir', 'subjects'),
         output: scalar(content, 'output', 'dist/curriculum.json'),
         deckMetadataPath: scalar(content, 'deck_metadata', null),
-        deckOwner: scalar(content, 'deck_owner')
+        deckOwner: scalar(content, 'deck_owner'),
+        deckVisibility: scalar(content, 'deck_visibility', 'private')
     };
     if (registry.schemaVersion !== 1) errors.push('registry.toml: schema_version must be 1');
     if (!SLUG.test(String(registry.id || ''))) errors.push('registry.toml: id must use lowercase kebab-case');
@@ -68,6 +69,9 @@ export function resolveRegistry(inputPath) {
         }
     }
     if (!registry.deckOwner) registry.deckOwner = registry.repository?.split('/')[0] || null;
+    if (!['private', 'public'].includes(registry.deckVisibility)) {
+        errors.push('registry.toml: deck_visibility must be "private" or "public"');
+    }
     const subjectsRoot = path.join(root, registry.subjectsDir);
     const graph = errors.length
         ? null

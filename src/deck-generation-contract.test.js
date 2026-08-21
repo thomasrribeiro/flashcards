@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+    CHAPTER_CONTENT_WORKFLOW_VERSION,
     DECK_PLAN_WORKFLOW_VERSION,
+    validateChapterContentProvenance,
     validateDeckPlanProvenance
 } from './deck-generation-contract.js';
 
@@ -19,5 +21,11 @@ describe('deck generation contract', () => {
             .toThrow(/pinned Git commit/);
         expect(() => validateDeckPlanProvenance({ ...valid, catalogHash: 'sha256:test' }))
             .toThrow(/reproducible SHA-256/);
+        expect(validateChapterContentProvenance({
+            ...valid,
+            workflowVersion: CHAPTER_CONTENT_WORKFLOW_VERSION
+        })).toMatchObject({ workflowVersion: CHAPTER_CONTENT_WORKFLOW_VERSION });
+        expect(() => validateChapterContentProvenance(valid))
+            .toThrow(/Unsupported chapter-content workflow/);
     });
 });

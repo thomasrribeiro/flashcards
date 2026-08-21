@@ -88,6 +88,7 @@ import {
 import { generationJobForDraft, titleForSubject, validateCurriculumDraft } from './curriculum-builder.js';
 import {
     generationPullRequestActionLabel,
+    generationEffectiveCommand,
     generationPreviewDestination,
     generationRequestName,
     generationStatusLabel,
@@ -2539,6 +2540,7 @@ function setupEventListeners() {
     document.getElementById('dependency-add-path')?.addEventListener('click', addActiveDependencyPath);
     document.getElementById('dependency-copy-command')?.addEventListener('click', copyMissingGenerationCommands);
     document.getElementById('dependency-request-generation')?.addEventListener('click', requestMissingGeneration);
+    document.getElementById('dependency-study-chapter')?.addEventListener('click', studyActiveCurriculumChapter);
     document.getElementById('dependency-generate-deck')?.addEventListener('click', requestTargetChapterGeneration);
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
@@ -2712,10 +2714,12 @@ function repositoryIdForCurriculumDeck(deck) {
 async function startCurriculumChapterDrill(chapter) {
     const deckId = chapter.deckId || chapter.id.split('#')[0];
     const chapterId = chapter.id.includes('#') ? chapter.id.split('#')[1] : chapter.id;
-    if (Number(chapter.card_count || 0) <= 0) {
-        openDependencyModal(deckId, chapterId);
-        return;
-    }
+    await openDependencyModal(deckId, chapterId);
+}
+
+async function drillCurriculumChapter(chapter) {
+    const deckId = chapter.deckId || chapter.id.split('#')[0];
+    const chapterId = chapter.id.includes('#') ? chapter.id.split('#')[1] : chapter.id;
     const curriculumDeck = curriculumMaps(curriculumIndex).decks.get(deckId);
     let repository = (await getAllDecks()).find(deck => (
         deck.curriculumId === deckId
@@ -4591,6 +4595,14 @@ function appendGenerationRequestRow(list, request, close) {
     header.append(identity, status);
     item.appendChild(header);
 
+    const effectiveCommand = generationEffectiveCommand(request);
+    if (effectiveCommand) {
+        const command = document.createElement('code');
+        command.className = 'generation-activity-command';
+        command.textContent = effectiveCommand;
+        item.appendChild(command);
+    }
+
     if (request.error) {
         const error = document.createElement('p');
         error.className = 'generation-activity-error';
@@ -4616,9 +4628,60 @@ function appendGenerationRequestRow(list, request, close) {
             link.href = request.resultUrl;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
-            link.textContent = generationPullRequestActionLabel(request.status);
+            link.textContent = request.jobType === 'chapter-expand'
+                ? request.status === 'needs-review' ? 'Review flashcards' : 'View flashcards pull request'
+                : generationPullRequestActionLabel(request.status);
             actions.appendChild(link);
         } catch { /* The worker result is not a pull request. */ }
+    }
+    if (request.registryResultUrl) {
+        try {
+            pullRequestCoordinates(request.registryResultUrl);
+            const link = document.createElement('a');
+            link.href = request.registryResultUrl;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'Review curriculum metadata';
+            actions.appendChild(link);
+        } catch { /* Ignore malformed companion URLs. */ }
+    }
+    if (request.jobType === 'chapter-expand'
+        && request.status === 'needs-review'
+        && request.resultUrl) {
+        const merge = document.createElement('button');
+        merge.type = 'button';
+        merge.textContent = 'Merge flashcards';
+        merge.onclick = async () => {
+            merge.disabled = true;
+            merge.textContent = 'Merging…';
+            try {
+                await mergeGenerationPullRequest(request, { token: githubAuth.getToken() });
+                if (request.registryResultUrl) {
+                    await mergeGenerationPullRequest({ resultUrl: request.registryResultUrl }, {
+                        token: githubAuth.getToken()
+                    });
+                }
+                await githubAuth.apiRequest(`/api/generation-requests/${request.id}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        status: 'published',
+                        resultUrl: request.resultUrl,
+                        result: request.registryResultUrl
+                            ? { registryResultUrl: request.registryResultUrl }
+                            : null
+                    })
+                });
+                merge.textContent = 'Merged';
+                curriculumIndex = await reloadCurriculumIndex();
+                await refreshGenerationActivity({ forceReconcile: true });
+                renderGenerationActivitySettings();
+            } catch (error) {
+                merge.disabled = false;
+                merge.textContent = 'Merge flashcards';
+                previewError.textContent = error.message;
+            }
+        };
+        actions.appendChild(merge);
     }
     if (actions.childElementCount) item.appendChild(actions);
     const previewError = document.createElement('p');
@@ -4978,8 +5041,9 @@ async function renderDependencyModal() {
     const add = document.getElementById('dependency-add-path');
     const copy = document.getElementById('dependency-copy-command');
     const request = document.getElementById('dependency-request-generation');
+    const study = document.getElementById('dependency-study-chapter');
     const generate = document.getElementById('dependency-generate-deck');
-    if (!title || !path || !body || !add || !copy || !request || !generate || !plan.target) return;
+    if (!title || !path || !body || !add || !copy || !request || !study || !generate || !plan.target) return;
 
     title.textContent = targetChapter?.title || plan.target.deck;
     path.textContent = `~ / curriculum / ${deckId}${targetChapter ? ` / ${targetChapter.id}` : ''}`;
@@ -4999,9 +5063,15 @@ async function renderDependencyModal() {
     const generationScope = targetChapter
         ? chapterContentGenerationScope(plan.target, targetChapter)
         : null;
+    const hasGeneratedContent = Number(targetChapter?.card_count || 0) > 0;
+    const repositoryUrl = plan.target.repository?.url || '';
+    let repositoryLabel = repositoryUrl;
+    try { repositoryLabel = new URL(repositoryUrl).pathname.replace(/^\//, ''); } catch { /* display raw value */ }
     const generationNote = targetChapter
-        ? generationScope === 'pilot'
-            ? 'This first chapter is the novice-first pilot. Generate and review it before authoring any later chapter.'
+        ? hasGeneratedContent && generationScope
+            ? `This chapter has ${targetChapter.card_count} generated cards. Regeneration uses the current chapter as its baseline and preserves stable identities when retrieval targets remain valid.`
+            : generationScope === 'pilot'
+            ? 'This first chapter is the novice-first pilot. Merging its validated pull request explicitly approves the pilot and unlocks later chapters.'
             : generationScope === 'chapter'
                 ? 'The pilot is approved. This job will author only the selected chapter from its resolved prerequisite closure.'
                 : Number(targetChapter.card_count || 0) > 0
@@ -5024,6 +5094,7 @@ async function renderDependencyModal() {
         <section class="dependency-section">
             <h4>Deck generation</h4>
             <p class="dependency-generation-note">${escapeHtml(generationNote)}</p>
+            ${targetChapter && repositoryLabel ? `<p class="dependency-generation-note">Repository: ${escapeHtml(repositoryLabel)}${plan.target.repository?.configured ? '' : ' · created automatically when generation begins'}</p>` : ''}
         </section>
     `;
     const availablePrerequisites = plan.requiredDecks.filter(deck =>
@@ -5037,6 +5108,7 @@ async function renderDependencyModal() {
             : 'No prerequisites';
     copy.classList.toggle('hidden', plan.missingDecks.length === 0);
     request.classList.toggle('hidden', plan.missingDecks.length === 0 || !githubAuth.isAuthenticated());
+    study.classList.toggle('hidden', !targetChapter || !hasGeneratedContent);
     generate.classList.toggle('hidden', !targetChapter || !generationScope);
     const targetRegistry = curriculumRegistryForView(curriculumIndex, {
         subjectId: plan.target.subject,
@@ -5047,7 +5119,9 @@ async function renderDependencyModal() {
     });
     request.disabled = !generationAvailability.enabled;
     request.title = generationAvailability.reason;
-    generate.textContent = 'Generate chapter content';
+    generate.textContent = hasGeneratedContent
+        ? 'Regenerate chapter content'
+        : 'Generate chapter content';
 }
 
 async function openDependencyModal(deckId, chapterId = null) {
@@ -5146,6 +5220,16 @@ async function requestTargetChapterGeneration() {
             button.textContent = 'Generate chapter content';
         }
     }
+}
+
+async function studyActiveCurriculumChapter() {
+    if (!activeDependencyTarget || !curriculumIndex) return;
+    const chapter = curriculumMaps(curriculumIndex).chapters.get(
+        `${activeDependencyTarget.deckId}#${activeDependencyTarget.chapterId}`
+    );
+    if (!chapter || Number(chapter.card_count || 0) <= 0) return;
+    closeDependencyModal();
+    await drillCurriculumChapter(chapter);
 }
 
 async function addActiveDependencyPath() {

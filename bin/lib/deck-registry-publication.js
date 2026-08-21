@@ -48,9 +48,11 @@ export function createPinnedDeckContext(registryRoot, deckId, provenance) {
         status: deck.status,
         description: deck.description,
         prerequisites: deck.prerequisites || [],
+        repository: deck.repository || null,
         chapters: (deck.chapters || []).map(chapter => ({
             id: chapter.id,
             title: chapter.title,
+            prerequisites: chapter.prerequisites || [],
             provides: chapter.provides || [],
             card_count: chapter.card_count || 0
         }))
@@ -88,6 +90,7 @@ export function createPinnedDeckContext(registryRoot, deckId, provenance) {
     writeFileSync(contextPath, `${JSON.stringify(payload, null, 2)}\n`);
     return {
         registry,
+        target,
         subjectContextRoot: path.join(registry.subjectsRoot, target.subject),
         contextPath,
         sha256: `sha256:${createHash('sha256').update(readFileSync(contextPath)).digest('hex')}`,
@@ -95,7 +98,10 @@ export function createPinnedDeckContext(registryRoot, deckId, provenance) {
     };
 }
 
-export function updateRegistryDeckSnapshot(registryRoot, deckId, deckPath, generation) {
+export function updateRegistryDeckSnapshot(registryRoot, deckId, deckPath, generation, {
+    generationKind = 'curriculum',
+    repositoryUrl = null
+} = {}) {
     const registry = resolveRegistry(registryRoot);
     if (registry.errors.length) {
         throw new Error(`Invalid curriculum registry:\n- ${registry.errors.join('\n- ')}`);
@@ -132,8 +138,13 @@ export function updateRegistryDeckSnapshot(registryRoot, deckId, deckPath, gener
         ...metadata.decks[index],
         materialized: true,
         status: deckStatus(deckPath, declared.status),
+        ...(repositoryUrl ? {
+            repository: { url: repositoryUrl, configured: true }
+        } : {}),
         chapters,
-        chapter_curriculum_generation: generation
+        ...(generationKind === 'content'
+            ? { chapter_content_generation: generation }
+            : { chapter_curriculum_generation: generation })
     };
     writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
     return { metadataPath, chapters };

@@ -13,6 +13,7 @@ function parsePayload(value) {
 
 export function normalizeGenerationRequest(input) {
     const payload = parsePayload(input?.payload || input?.payload_json);
+    const result = parsePayload(input?.result || input?.result_json);
     return {
         id: Number(input?.id),
         jobType: input?.jobType || input?.job_type || 'deck-build',
@@ -23,6 +24,7 @@ export function normalizeGenerationRequest(input) {
         modelId: input?.modelId || input?.model_id || '',
         status: String(input?.status || 'queued').toLowerCase(),
         resultUrl: input?.resultUrl || input?.result_url || '',
+        registryResultUrl: input?.registryResultUrl || result.registryResultUrl || '',
         error: input?.error || '',
         requestedAt: input?.requestedAt || input?.requested_at || '',
         updatedAt: input?.updatedAt || input?.updated_at || '',
@@ -135,22 +137,31 @@ export async function reconcileGenerationRequestStatuses(requests, {
             return request;
         }
         try {
-            const freshness = Date.now();
-            const response = await fetchImpl(
-                `https://api.github.com/repos/${encodeURIComponent(pull.owner)}/${encodeURIComponent(pull.repository)}/pulls/${pull.number}?activity_fresh=${freshness}`,
-                {
-                    cache: 'no-cache',
-                    headers: {
-                        Accept: 'application/vnd.github+json',
-                        ...(token ? { Authorization: `Bearer ${token}` } : {})
+            const pulls = [pull];
+            if (request.registryResultUrl) {
+                try { pulls.push(pullRequestCoordinates(request.registryResultUrl)); } catch { return request; }
+            }
+            const details = [];
+            for (const coordinates of pulls) {
+                const freshness = Date.now();
+                const response = await fetchImpl(
+                    `https://api.github.com/repos/${encodeURIComponent(coordinates.owner)}/${encodeURIComponent(coordinates.repository)}/pulls/${coordinates.number}?activity_fresh=${freshness}`,
+                    {
+                        cache: 'no-cache',
+                        headers: {
+                            Accept: 'application/vnd.github+json',
+                            ...(token ? { Authorization: `Bearer ${token}` } : {})
+                        }
                     }
-                }
-            );
-            if (!response.ok) return request;
-            const details = await response.json();
-            const status = details.merged || details.merged_at
+                );
+                if (!response.ok) return request;
+                details.push(await response.json());
+            }
+            const status = details.every(item => item.merged || item.merged_at)
                 ? 'published'
-                : details.state === 'closed' ? 'cancelled' : null;
+                : details.some(item => item.state === 'closed' && !(item.merged || item.merged_at))
+                    ? 'cancelled'
+                    : null;
             if (!status) return request;
             const updated = await updateRequest(request.id, {
                 status,
@@ -238,6 +249,16 @@ export function generationRequestName(request) {
         return `${request.deckId || 'Deck'}${chapter ? ` / ${chapter}` : ''} content`;
     }
     return request.deckId || request.requestKey || `Request ${request.id}`;
+}
+
+export function generationEffectiveCommand(request) {
+    if (request.jobType !== 'chapter-expand') return '';
+    const chapter = Number.parseInt(String(request.payload?.chapterId || '').slice(0, 2), 10);
+    if (!Number.isInteger(chapter)) return '';
+    if (request.payload?.buildScope === 'pilot') {
+        return `flashcards deck build <deck-path>${request.payload?.generationMode === 'replace' ? ' --fresh-pilot' : ''}`;
+    }
+    return `flashcards deck build <deck-path> --chapter ${chapter}${request.payload?.generationMode === 'replace' ? ' --fresh-chapter' : ''}`;
 }
 
 export function generationStatusLabel(status) {

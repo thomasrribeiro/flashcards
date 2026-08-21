@@ -350,7 +350,7 @@ test('shows chapter generation as checking until AI access is verified', async (
     await expect(button).not.toHaveClass(/is-checking/);
 });
 
-test('opens generated chapter flashcards directly from the chapter DAG', async ({ page }) => {
+test('opens generated chapter actions before starting its flashcards', async ({ page }) => {
     const targetId = 'mathematics/elementary-algebra-and-functions';
     const target = bundledCurriculum.decks.find(deck => deck.id === targetId);
     const chapter = target.chapters[0];
@@ -396,6 +396,10 @@ test('opens generated chapter flashcards directly from the chapter DAG', async (
     await expect(chapterNode).toHaveClass(/is-learning/);
     await chapterNode.click();
 
+    await expect(page.locator('#dependency-modal')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Study chapter' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Regenerate chapter content' })).toBeVisible();
+    await page.getByRole('button', { name: 'Study chapter' }).click();
     await expect(page.locator('#study-area')).toBeVisible();
     await expect(page.getByText('What does a variable represent?', { exact: true })).toBeVisible();
     await expect(page.locator('#dependency-modal')).toBeHidden();
@@ -436,6 +440,8 @@ test('queues content generation for one eligible chapter', async ({ page }) => {
             deckId: targetId,
             chapterId,
             buildScope: 'pilot',
+            generationMode: 'generate',
+            workflowVersion: 'chapter-content-v1',
             workflowCommit: '0'.repeat(40),
             registryBaseCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
             catalogHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),

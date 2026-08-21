@@ -230,7 +230,8 @@ function materializedDeck(graph, deck, options = {}) {
                 status: snapshot.status || deck.status,
                 repository: snapshot.repository || { url: conventionalUrl, configured: false },
                 chapters: Array.isArray(snapshot.chapters) ? snapshot.chapters : [],
-                chapterCurriculumGeneration: snapshot.chapter_curriculum_generation || null
+                chapterCurriculumGeneration: snapshot.chapter_curriculum_generation || null,
+                chapterContentGeneration: snapshot.chapter_content_generation || null
             };
         }
         return {
@@ -301,6 +302,9 @@ export function globalCurriculumIndex(graph, options = {}) {
                 chapters: local.chapters,
                 ...(local.chapterCurriculumGeneration
                     ? { chapter_curriculum_generation: local.chapterCurriculumGeneration }
+                    : {}),
+                ...(local.chapterContentGeneration
+                    ? { chapter_content_generation: local.chapterContentGeneration }
                     : {}),
                 generation_command: `flashcards curriculum materialize ${deck.id}`
             };

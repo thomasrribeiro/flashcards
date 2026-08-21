@@ -23,6 +23,10 @@ export function executionOptionsForGenerationJob(queued, payload, options = {}) 
         } else {
             executionOptions.chapter = chapter;
         }
+        if (payload?.generationMode === 'replace') {
+            if (payload?.buildScope === 'pilot') executionOptions.freshPilot = true;
+            else executionOptions.freshChapter = true;
+        }
     }
     return executionOptions;
 }

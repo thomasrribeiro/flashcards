@@ -6,6 +6,11 @@ import { spawnSync } from 'node:child_process';
 import { providerRunner, runExternalProviderJob } from '../bin/lib/agent-provider.js';
 import { executionOptionsForGenerationJob } from '../bin/lib/generation-job.js';
 import {
+    beginDeckDraft,
+    deckRepositoryCoordinates,
+    publishDeckDraft
+} from '../bin/lib/deck-github-publisher.js';
+import {
     abandonRegistryDraft,
     assertCleanRegistryWorktree,
     assertRepositoryCommit,
@@ -22,6 +27,70 @@ const temporaryRoot = async () => {
 afterEach(async () => Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))));
 
 describe('local generation pipeline', () => {
+    it('accepts only canonical GitHub deck repository URLs', () => {
+        expect(deckRepositoryCoordinates('https://github.com/example-decks/mechanics')).toEqual({
+            owner: 'example-decks',
+            repository: 'mechanics',
+            url: 'https://github.com/example-decks/mechanics'
+        });
+        expect(() => deckRepositoryCoordinates('https://example.com/example-decks/mechanics'))
+            .toThrow(/github.com/);
+    });
+
+    it('initializes a missing deck repository and publishes a review branch', async () => {
+        const root = await temporaryRoot();
+        const deckPath = path.join(root, 'deck');
+        const binPath = path.join(root, 'bin');
+        const remotePath = path.join(root, 'remote.git');
+        await mkdir(deckPath, { recursive: true });
+        await mkdir(binPath, { recursive: true });
+        spawnSync('git', ['init', '-b', 'master'], { cwd: deckPath });
+        await writeFile(path.join(deckPath, 'README.md'), 'planned deck\n');
+        const ghPath = path.join(binPath, 'gh');
+        await writeFile(ghPath, `#!/bin/sh
+set -eu
+if [ "$1 $2" = "repo view" ]; then
+  [ -d "$FAKE_GH_REMOTE" ] || exit 1
+  printf '%s\\n' '{"nameWithOwner":"example/deck","defaultBranchRef":{"name":"master"}}'
+elif [ "$1 $2" = "repo create" ]; then
+  git init --bare "$FAKE_GH_REMOTE" >/dev/null
+  git -C "$6" remote add origin "$FAKE_GH_REMOTE"
+  git -C "$6" push -u origin master >/dev/null
+elif [ "$1 $2" = "pr create" ]; then
+  printf '%s\\n' 'https://github.com/example/deck/pull/12'
+else
+  exit 2
+fi
+`);
+        await chmod(ghPath, 0o755);
+        const previousPath = process.env.PATH;
+        const previousRemote = process.env.FAKE_GH_REMOTE;
+        process.env.PATH = `${binPath}:${previousPath}`;
+        process.env.FAKE_GH_REMOTE = remotePath;
+        try {
+            const draft = beginDeckDraft(
+                deckPath,
+                'https://github.com/example/deck',
+                12,
+                { visibility: 'public' }
+            );
+            expect(draft).toMatchObject({ base: 'master', branch: 'flashcards/request-12', createdRepository: true });
+            await writeFile(path.join(deckPath, 'flashcards.md'), 'Q: Generated?\nA: Yes.\n');
+            expect(publishDeckDraft(deckPath, draft, {
+                title: 'Generate chapter', body: 'Test pull request'
+            })).toBe('https://github.com/example/deck/pull/12');
+            expect(spawnSync('git', ['branch', '--show-current'], { cwd: deckPath, encoding: 'utf8' }).stdout.trim())
+                .toBe('master');
+            expect(spawnSync('git', ['show-ref', '--verify', 'refs/remotes/origin/flashcards/request-12'], {
+                cwd: deckPath, encoding: 'utf8'
+            }).status).toBe(0);
+        } finally {
+            process.env.PATH = previousPath;
+            if (previousRemote == null) delete process.env.FAKE_GH_REMOTE;
+            else process.env.FAKE_GH_REMOTE = previousRemote;
+        }
+    });
+
     it('maps the queued model and approved build scope into the standard CLI options', () => {
         const options = executionOptionsForGenerationJob({
             job_type: 'deck-build',
@@ -51,6 +120,12 @@ describe('local generation pipeline', () => {
         expect(executionOptionsForGenerationJob({ job_type: 'chapter-expand' }, {
             chapterId: '01_measurement', buildScope: 'pilot'
         }).chapter).toBeUndefined();
+        expect(executionOptionsForGenerationJob({ job_type: 'chapter-expand' }, {
+            chapterId: '01_measurement', buildScope: 'pilot', generationMode: 'replace'
+        })).toMatchObject({ freshPilot: true, freshChapter: false });
+        expect(executionOptionsForGenerationJob({ job_type: 'chapter-expand' }, {
+            chapterId: '03_kinematics_1d', buildScope: 'chapter', generationMode: 'replace'
+        })).toMatchObject({ chapter: 3, freshChapter: true, freshPilot: false });
         expect(() => executionOptionsForGenerationJob({ job_type: 'chapter-expand' }, {
             chapterId: '02_motion', buildScope: 'pilot'
         })).toThrow(/first ordered chapter/);
