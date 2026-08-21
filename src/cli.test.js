@@ -1809,8 +1809,18 @@ describe('flashcards CLI validation and Codex handoff', () => {
 
             await writeFile(
                 chapterPath,
+                (await readFile(chapterPath, 'utf8'))
+                    .replace('S: IDENTIFY: This is addition.', 'S:\nIDENTIFY\n\nThis is addition.')
+                    .replace('PLAN: Add the two counts.', 'PLAN\n\nAdd the two counts.')
+                    .replace('EXECUTE: **77 books.** $32 + 45 = 77$.', 'EXECUTE\n\n**77 books.** $32 + 45 = 77$.')
+                    .replace('EVALUATE: The total exceeds both addends.', 'EVALUATE\n\nThe total exceeds both addends.')
+            );
+            expect(validateGeneratedChapterMarkup(prepared.workspacePath)).toEqual([]);
+
+            await writeFile(
+                chapterPath,
                 (await readFile(chapterPath, 'utf8')).replace(
-                    'IDENTIFY: This is addition.\n\nPLAN: Add the two counts.\n\n',
+                    'IDENTIFY\n\nThis is addition.\n\nPLAN\n\nAdd the two counts.\n\n',
                     ''
                 )
             );
