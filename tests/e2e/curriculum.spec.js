@@ -482,6 +482,10 @@ test('opens generated chapter actions before starting its flashcards', async ({ 
         .toBe(compactLayout.panelWidth);
     await expect(page.locator('#card-browser-body')).toContainText('What does a variable represent?');
     await browser.getByRole('button', { name: 'Study', exact: true }).click();
+    await expect(page.locator('#tab-decks')).toHaveClass(/active/);
+    await expect(page.locator('#tab-curriculum')).not.toHaveClass(/active/);
+    await expect(page.locator('#curriculum-view')).toBeHidden();
+    await expect(page.locator('#curriculum-graph')).toBeHidden();
     await expect(page.locator('#study-area')).toBeVisible();
     await expect(page.getByText('What does a variable represent?', { exact: true })).toBeVisible();
     await expect(page.locator('#card-browser-modal')).toBeHidden();

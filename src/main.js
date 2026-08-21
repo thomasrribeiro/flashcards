@@ -2941,6 +2941,7 @@ async function drillCurriculumChapter(chapter) {
     }
     const deckName = repository.id.split('/').pop();
     const chapterName = chapter.title || chapter.deck || chapterId;
+    await navigateMainView('decks');
     await startScopedReview(
         card => (card.source?.repo || card.deckName) === repository.id
             && card.source?.file === chapter.file,
