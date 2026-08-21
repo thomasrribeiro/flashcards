@@ -388,7 +388,7 @@ test('shows chapter generation as checking until AI access is verified', async (
     await expect(button).not.toHaveClass(/is-checking/);
 });
 
-test('opens generated chapter actions before starting its flashcards', async ({ page }) => {
+test('opens generated chapter actions before starting its flashcards', async ({ page }, testInfo) => {
     const targetId = 'mathematics/elementary-algebra-and-functions';
     const catalog = structuredClone(bundledCurriculum);
     const target = catalog.decks.find(deck => deck.id === targetId);
@@ -438,11 +438,29 @@ test('opens generated chapter actions before starting its flashcards', async ({ 
     await chapterNode.click();
 
     await expect(page.locator('#card-browser-modal')).toBeVisible();
+    const browser = page.getByRole('dialog', { name: 'Variables and expressions' });
+    const compactLayout = await browser.evaluate(modal => {
+        const panel = modal.querySelector('.card-browser-modal-content');
+        const controls = [...modal.querySelectorAll('.card-browser-actions button')];
+        return {
+            panelWidth: panel.getBoundingClientRect().width,
+            viewportWidth: window.innerWidth,
+            fonts: controls.map(control => getComputedStyle(control).fontFamily),
+            fontSizes: controls.map(control => getComputedStyle(control).fontSize),
+            heights: controls.map(control => control.getBoundingClientRect().height)
+        };
+    });
+    expect(compactLayout.panelWidth).toBeLessThanOrEqual(762);
+    if (testInfo.project.name === 'desktop-chromium') {
+        expect(compactLayout.panelWidth).toBeLessThan(compactLayout.viewportWidth * 0.75);
+    }
+    expect(new Set(compactLayout.fonts).size).toBe(1);
+    expect(new Set(compactLayout.fontSizes).size).toBe(1);
+    expect(Math.abs(compactLayout.heights[0] - compactLayout.heights[1])).toBeLessThan(1);
     await expect(page.locator('#card-browser-body')).toBeHidden();
     await expect(page.locator('#card-browser-summary')).toHaveText('1 card');
     await expect(page.locator('#card-browser-summary')).not.toContainText('read-only preview');
     await expect(page.locator('#card-browser-progress')).toContainText('0 of 1 reviewed');
-    const browser = page.getByRole('dialog', { name: 'Variables and expressions' });
     await expect(browser.getByRole('button', { name: 'Study', exact: true })).toBeVisible();
     await expect(browser.getByRole('button', { name: 'Generate content', exact: true })).toBeVisible();
     await expect(browser.getByRole('button', { name: 'Prerequisites & generation' })).toHaveCount(0);
