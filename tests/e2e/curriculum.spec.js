@@ -79,6 +79,11 @@ async function installGenerationAccount(page, {
 }
 
 test.beforeEach(async ({ page }) => {
+    await page.route('https://api.github.com/repos/**', route => (
+        route.fulfill({ status: 404, json: { message: 'Not Found' } })
+    ));
+    await page.route('https://api.github.com/orgs/**', route => route.fulfill({ json: [] }));
+    await page.route('https://api.github.com/user/repos**', route => route.fulfill({ json: [] }));
     await page.route('https://api.github.com/repos/thomasrribeiro-flashcards/curricula/commits/master**', route => (
         route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } })
     ));
@@ -287,7 +292,16 @@ test('queues a subject draft only for a signed-in account with a connected model
 
 test('queues a chapter-curriculum agent from an empty deck chapter viewer', async ({ page }) => {
     let queuedJob = null;
-    await installGenerationAccount(page, { onPost: job => { queuedJob = job; } });
+    const catalog = structuredClone(bundledCurriculum);
+    const target = catalog.decks.find(deck => deck.id === 'mathematics/geometry-and-measurement');
+    target.chapters = [];
+    target.status = 'proposed';
+    target.materialized = false;
+    target.repository.configured = false;
+    await installGenerationAccount(page, {
+        catalog,
+        onPost: job => { queuedJob = job; }
+    });
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
@@ -337,7 +351,13 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
 });
 
 test('shows chapter generation as checking until AI access is verified', async ({ page }) => {
-    await installGenerationAccount(page, { providerDelayMs: 1200 });
+    const catalog = structuredClone(bundledCurriculum);
+    const target = catalog.decks.find(deck => deck.id === 'mathematics/geometry-and-measurement');
+    target.chapters = [];
+    target.status = 'proposed';
+    target.materialized = false;
+    target.repository.configured = false;
+    await installGenerationAccount(page, { catalog, providerDelayMs: 1200 });
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
@@ -352,7 +372,10 @@ test('shows chapter generation as checking until AI access is verified', async (
 
 test('opens generated chapter actions before starting its flashcards', async ({ page }) => {
     const targetId = 'mathematics/elementary-algebra-and-functions';
-    const target = bundledCurriculum.decks.find(deck => deck.id === targetId);
+    const catalog = structuredClone(bundledCurriculum);
+    const target = catalog.decks.find(deck => deck.id === targetId);
+    target.status = 'pilot-approved';
+    target.chapters[0].card_count = 1;
     const chapter = target.chapters[0];
     const repositoryId = 'thomasrribeiro-flashcards/elementary-algebra-and-functions';
     await page.route(`https://api.github.com/repos/${repositoryId}`, route => route.fulfill({ json: {
@@ -382,11 +405,7 @@ test('opens generated chapter actions before starting its flashcards', async ({ 
             body: `+++\norder = 1\nsubject = "mathematics"\ntags = ["algebra"]\nprerequisites = []\nprovides = []\n+++\n\n<!-- card-id: variables-test-001 -->\nQ: What does a variable represent?\nA: A quantity that can vary.\n`
         })
     ));
-    await installGenerationAccount(page, { repos: [{
-        repo_id: repositoryId,
-        owner: 'thomasrribeiro-flashcards',
-        repo_name: 'elementary-algebra-and-functions'
-    }] });
+    await installGenerationAccount(page, { catalog });
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
@@ -396,13 +415,15 @@ test('opens generated chapter actions before starting its flashcards', async ({ 
     await expect(chapterNode).toHaveClass(/is-learning/);
     await chapterNode.click();
 
-    await expect(page.locator('#dependency-modal')).toBeVisible();
+    await expect(page.locator('#card-browser-modal')).toBeVisible();
+    await expect(page.locator('#card-browser-body')).toContainText('What does a variable represent?');
     await expect(page.getByRole('button', { name: 'Study chapter' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Regenerate chapter content' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Prerequisites & generation' })).toBeVisible();
     await page.getByRole('button', { name: 'Study chapter' }).click();
     await expect(page.locator('#study-area')).toBeVisible();
     await expect(page.getByText('What does a variable represent?', { exact: true })).toBeVisible();
-    await expect(page.locator('#dependency-modal')).toBeHidden();
+    await expect(page.locator('#card-browser-modal')).toBeHidden();
 });
 
 test('queues content generation for one eligible chapter', async ({ page }) => {
@@ -635,6 +656,128 @@ test('publishes merged review requests and clears the Agents review count', asyn
         )).toBeLessThan(1);
         expect(refreshBox.x).toBeGreaterThan(summaryBox.x);
     }
+});
+
+test('reviews generated flashcards in-app and publishes both pull requests', async ({ page }) => {
+    const deckResultUrl = 'https://github.com/example/elementary-algebra-and-functions/pull/7';
+    const registryResultUrl = 'https://github.com/example/curricula/pull/8';
+    const deckHead = 'a'.repeat(40);
+    const registryHead = 'b'.repeat(40);
+    const merged = [];
+    const patches = [];
+    let status = 'needs-review';
+
+    const pullRoute = (number, head) => async route => {
+        const request = route.request();
+        if (request.method() === 'PUT') {
+            merged.push(number);
+            return route.fulfill({ json: { merged: true, sha: head } });
+        }
+        return route.fulfill({ json: {
+            number,
+            state: 'open',
+            draft: false,
+            head: { sha: head }
+        } });
+    };
+    await page.route(
+        'https://api.github.com/repos/example/elementary-algebra-and-functions/pulls/7**',
+        pullRoute(7, deckHead)
+    );
+    await page.route(
+        'https://api.github.com/repos/example/elementary-algebra-and-functions/pulls/7/merge',
+        pullRoute(7, deckHead)
+    );
+    await page.route(
+        'https://api.github.com/repos/example/curricula/pulls/8**',
+        pullRoute(8, registryHead)
+    );
+    await page.route(
+        'https://api.github.com/repos/example/curricula/pulls/8/merge',
+        pullRoute(8, registryHead)
+    );
+    await page.route(
+        `https://api.github.com/repos/example/elementary-algebra-and-functions/contents/flashcards/01_variables_and_expressions.md?ref=${deckHead}`,
+        route => route.fulfill({
+            contentType: 'text/markdown',
+            body: `+++\norder = 1\nsubject = "mathematics"\ntags = ["algebra"]\nprerequisites = []\nprovides = []\n+++\n\n<!-- card-id: generated-variable-001 -->\nQ: What does a variable represent?\nA: A quantity whose value can vary.\n`
+        })
+    );
+    await page.route('**/api/**', async route => {
+        const request = route.request();
+        const path = new URL(request.url()).pathname;
+        if (path === '/api/users/ensure') return route.fulfill({ json: { success: true } });
+        if (path === '/api/reviews/test-user') return route.fulfill({ json: { reviews: [] } });
+        if (path === '/api/chapter-progress/test-user') return route.fulfill({ json: { chapters: [] } });
+        if (path === '/api/repos/test-user') return route.fulfill({ json: { repos: [] } });
+        if (path === '/api/settings/test-user') return route.fulfill({ json: { settings: {} } });
+        if (path === '/api/study-session/test-user') return route.fulfill({ json: { session: null } });
+        if (path === '/api/habit/test-user') {
+            return route.fulfill({ json: {
+                streak: 0,
+                today: { reviews: 0, newCards: 0, xp: 0, goalMet: false },
+                totalXp: 0,
+                settings: {}
+            } });
+        }
+        if (path === '/api/ai/providers') return route.fulfill({ json: { providers: [] } });
+        if (path === '/api/generation-requests/15' && request.method() === 'PATCH') {
+            const patch = request.postDataJSON();
+            patches.push(patch);
+            status = patch.status;
+            return route.fulfill({ json: { request: { id: 15, status } } });
+        }
+        if (path === '/api/generation-requests') {
+            return route.fulfill({ json: { requests: [{
+                id: 15,
+                status,
+                job_type: 'chapter-expand',
+                provider_id: 'openai',
+                model_id: 'gpt-test',
+                result_url: deckResultUrl,
+                result_json: JSON.stringify({ registryResultUrl }),
+                payload_json: JSON.stringify({
+                    deckId: 'mathematics/elementary-algebra-and-functions',
+                    chapterId: '01_variables_and_expressions',
+                    reasoningEffort: 'high'
+                })
+            }] } });
+        }
+        return route.fulfill({ json: {} });
+    });
+    await page.addInitScript(() => {
+        localStorage.setItem('github_user', JSON.stringify({
+            id: 'test-user', username: 'test-user', name: 'Test User'
+        }));
+        localStorage.setItem('github_token', 'test-token');
+    });
+    await page.reload();
+
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    await settings.getByRole('tab', { name: /Agents/ }).click();
+    await settings.getByRole('button', { name: 'Review flashcards' }).click();
+
+    const browser = page.getByRole('dialog', { name: 'Variables and expressions' });
+    await expect(browser).toBeVisible();
+    await expect(browser.getByText('What does a variable represent?', { exact: true })).toBeVisible();
+    await expect(browser.getByText('A quantity whose value can vary.', { exact: true })).toBeVisible();
+    await expect(browser.locator('#card-browser-summary')).toContainText('unmerged pull request #7');
+
+    await browser.getByRole('button', { name: 'Merge flashcards' }).click();
+    await expect(browser.getByRole('button', { name: 'Merged and published' })).toBeVisible();
+    await expect(browser.locator('#card-browser-summary')).toContainText('published');
+    expect(merged).toEqual([7, 8]);
+    expect(patches).toContainEqual({
+        status: 'published',
+        resultUrl: deckResultUrl,
+        result: { registryResultUrl }
+    });
+
+    await browser.getByRole('button', { name: 'Close chapter preview' }).click();
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const reopened = page.getByRole('dialog', { name: 'Settings' });
+    await expect(reopened.getByRole('tab', { name: /Agents/ })).toHaveText('Agents');
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {
@@ -1564,8 +1707,8 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     expect(Math.abs(selectedTop - unlockTop)).toBeLessThan(2);
 
     await page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'mathematics', exact: true }).click();
-    await expect(page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]')).toBeVisible();
-    await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="mathematics/precalculus-and-trigonometry"]')).toBeVisible();
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics/precalculus-and-trigonometry"]').click();
     await expect(page.getByRole('heading', { name: 'No chapter curriculum yet' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Prerequisites & unlocks' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create chapter curriculum' })).toBeDisabled();

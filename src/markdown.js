@@ -27,20 +27,13 @@ const renderer = new marked.Renderer();
 // Store current card context for image resolution
 let currentCardContext = null;
 
-// Custom image renderer to handle relative paths
-renderer.image = function(href, title, text) {
-    let src = href;
-
-    // Handle absolute URLs
-    if (href.startsWith('http')) {
-        src = href;
-    }
-    // Handle relative paths from flashcards
-    else if (currentCardContext) {
+export function resolveMarkdownImageSource(href, context = null) {
+    if (href.startsWith('http')) return href;
+    if (context) {
         // For local decks: collection/deck-name/figures/...
         // For GitHub repos: owner/repo/figures/...
-        const deckName = currentCardContext.deckName;
-        const filePath = currentCardContext.source?.file || '';
+        const deckName = context.deckName;
+        const filePath = context.source?.file || '';
 
         if (deckName.startsWith('local/')) {
             // Local deck: collection/deck-name/relative-path
@@ -54,7 +47,7 @@ renderer.image = function(href, title, text) {
             const fullPath = `collection/${localDeckName}/${fileDir}/${href}`;
 
             // Normalize path (resolve ../ and ./)
-            src = normalizePath(fullPath);
+            return normalizePath(fullPath);
         } else {
             // GitHub repo: use raw.githubusercontent.com URL
             // deckName is like "owner/repo", filePath is like "flashcards/file.md"
@@ -65,14 +58,18 @@ renderer.image = function(href, title, text) {
             const fullPath = `${fileDir}/${href}`;
             const normalizedPath = normalizePath(fullPath);
 
-            // Use raw.githubusercontent.com with HEAD (resolves to the repo's default branch)
-            src = `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${normalizedPath}`;
+            // Review previews pin assets to the exact pull-request commit;
+            // installed decks continue to resolve from the current default branch.
+            const ref = context.source?.ref || 'HEAD';
+            return `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(ref)}/${normalizedPath}`;
         }
     }
-    // Fallback to topics directory (legacy)
-    else {
-        src = `topics/${href}`;
-    }
+    return `topics/${href}`;
+}
+
+// Custom image renderer to handle relative paths
+renderer.image = function(href, title, text) {
+    const src = resolveMarkdownImageSource(href, currentCardContext);
 
     const titleAttr = title ? ` title="${title}"` : '';
     const altAttr = text ? ` alt="${text}"` : '';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { orderCardsForBrowsing } from './card-browser.js';
-import { renderMath } from './markdown.js';
+import { renderMath, resolveMarkdownImageSource } from './markdown.js';
 
 describe('orderCardsForBrowsing', () => {
     it('uses source order and keeps cloze siblings in stable numeric order', () => {
@@ -34,5 +34,17 @@ describe('orderCardsForBrowsing', () => {
         expect(html).toContain('class="katex"');
         expect(html).not.toContain('\\(\\vec A\\)');
         expect(html).not.toContain('\\[');
+    });
+
+    it('pins preview figures to the reviewed pull-request commit', () => {
+        const source = resolveMarkdownImageSource('../figures/01_foundations/shape.svg', {
+            deckName: 'example/geometry',
+            source: {
+                file: 'flashcards/01_foundations.md',
+                ref: 'abc123'
+            }
+        });
+
+        expect(source).toBe('https://raw.githubusercontent.com/example/geometry/abc123/figures/01_foundations/shape.svg');
     });
 });

@@ -92,6 +92,7 @@ import {
     generationPreviewDestination,
     generationRequestName,
     generationStatusLabel,
+    loadPullRequestChapter,
     loadPullRequestCurriculum,
     mergeGenerationPullRequest,
     normalizeGenerationRequest,
@@ -962,12 +963,47 @@ function hideReviewLoading() {
 let chapterBrowserLoading = false;
 let chapterBrowserReturnFocus = null;
 
+function showChapterBrowser({ title: chapterName, path: chapterPath, summary: chapterSummary, cards, actions = [] }) {
+    const modal = document.getElementById('card-browser-modal');
+    const title = document.getElementById('card-browser-title');
+    const path = document.getElementById('card-browser-path');
+    const summary = document.getElementById('card-browser-summary');
+    const body = document.getElementById('card-browser-body');
+    const actionBar = document.getElementById('card-browser-actions');
+    const error = document.getElementById('card-browser-error');
+    if (!modal || !title || !path || !summary || !body || !actionBar || !error) return;
+
+    title.textContent = chapterName;
+    path.textContent = chapterPath;
+    summary.textContent = chapterSummary;
+    body.innerHTML = renderBrowsableCards(cards);
+    error.textContent = '';
+    actionBar.replaceChildren();
+    for (const action of actions) {
+        const control = action.href ? document.createElement('a') : document.createElement('button');
+        if (action.href) {
+            control.href = action.href;
+            control.target = '_blank';
+            control.rel = 'noopener noreferrer';
+        } else {
+            control.type = 'button';
+            control.onclick = () => action.onClick(control, error);
+        }
+        control.textContent = action.label;
+        if (action.primary) control.className = 'btn-primary';
+        actionBar.appendChild(control);
+    }
+    actionBar.classList.toggle('hidden', actions.length === 0);
+    modal.classList.remove('hidden');
+    document.getElementById('card-browser-close')?.focus();
+}
+
 /**
  * Load one chapter and display every scheduled card with its answer. This is a
  * deliberately read-only path: it never starts a study session or saves an
  * FSRS review.
  */
-async function openChapterBrowser({ deckId, file, subject, deckName, chapterName }) {
+async function openChapterBrowser({ deckId, file, subject, deckName, chapterName, actions = [] }) {
     if (chapterBrowserLoading) return;
     chapterBrowserLoading = true;
     chapterBrowserReturnFocus = document.activeElement;
@@ -988,19 +1024,13 @@ async function openChapterBrowser({ deckId, file, subject, deckName, chapterName
             return;
         }
 
-        const modal = document.getElementById('card-browser-modal');
-        const title = document.getElementById('card-browser-title');
-        const path = document.getElementById('card-browser-path');
-        const summary = document.getElementById('card-browser-summary');
-        const body = document.getElementById('card-browser-body');
-        if (!modal || !title || !path || !summary || !body) return;
-
-        title.textContent = chapterName;
-        path.textContent = `~ / ${subject} / ${deckName} / ${chapterName}`;
-        summary.textContent = `${cards.length} card${cards.length === 1 ? '' : 's'} · read-only preview · review progress will not change`;
-        body.innerHTML = renderBrowsableCards(cards);
-        modal.classList.remove('hidden');
-        document.getElementById('card-browser-close')?.focus();
+        showChapterBrowser({
+            title: chapterName,
+            path: `~ / ${subject} / ${deckName} / ${chapterName}`,
+            summary: `${cards.length} card${cards.length === 1 ? '' : 's'} · read-only preview · review progress will not change`,
+            cards,
+            actions
+        });
     } catch (error) {
         console.error('[Main] Failed to browse chapter:', error);
         alert('The chapter preview could not be loaded. Check your connection and try again.');
@@ -1016,6 +1046,13 @@ function closeChapterBrowser() {
     modal.classList.add('hidden');
     const body = document.getElementById('card-browser-body');
     if (body) body.innerHTML = '';
+    const actions = document.getElementById('card-browser-actions');
+    if (actions) {
+        actions.replaceChildren();
+        actions.classList.add('hidden');
+    }
+    const error = document.getElementById('card-browser-error');
+    if (error) error.textContent = '';
     if (chapterBrowserReturnFocus?.isConnected) chapterBrowserReturnFocus.focus();
     chapterBrowserReturnFocus = null;
 }
@@ -2714,7 +2751,55 @@ function repositoryIdForCurriculumDeck(deck) {
 async function startCurriculumChapterDrill(chapter) {
     const deckId = chapter.deckId || chapter.id.split('#')[0];
     const chapterId = chapter.id.includes('#') ? chapter.id.split('#')[1] : chapter.id;
-    await openDependencyModal(deckId, chapterId);
+    if (Number(chapter.card_count || 0) <= 0) {
+        await openDependencyModal(deckId, chapterId);
+        return;
+    }
+    const curriculumDeck = curriculumMaps(curriculumIndex).decks.get(deckId);
+    const repositoryId = repositoryIdForCurriculumDeck(curriculumDeck);
+    if (!repositoryId || !chapter.file) {
+        await openDependencyModal(deckId, chapterId);
+        return;
+    }
+    try {
+        await loadRepositoryMetadata(repositoryId, { sync: true });
+        await openChapterBrowser({
+            deckId: repositoryId,
+            file: chapter.file,
+            subject: chapter.subject,
+            deckName: curriculumDeck.deck,
+            chapterName: chapter.title || chapter.deck || chapterId,
+            actions: [
+                {
+                    label: 'Study chapter',
+                    onClick: async () => {
+                        closeChapterBrowser();
+                        await drillCurriculumChapter(chapter);
+                    }
+                },
+                {
+                    label: 'Regenerate chapter content',
+                    primary: true,
+                    onClick: async button => {
+                        closeChapterBrowser();
+                        await queueTargetChapterGeneration(deckId, chapterId, button);
+                    }
+                },
+                {
+                    label: 'Prerequisites & generation',
+                    onClick: async () => {
+                        closeChapterBrowser();
+                        await openDependencyModal(deckId, chapterId);
+                    }
+                }
+            ]
+        });
+    } catch (error) {
+        console.error('[Curriculum] Could not browse chapter:', error);
+        await openDependencyModal(deckId, chapterId);
+        const message = document.querySelector('#dependency-body .dependency-generation-note');
+        if (message) message.textContent = `The published chapter could not be loaded: ${error.message}`;
+    }
 }
 
 async function drillCurriculumChapter(chapter) {
@@ -4564,6 +4649,104 @@ async function enterCurriculumPreview(request, close, trigger) {
     }
 }
 
+async function publishChapterGeneration(request, { expectedHead = '' } = {}) {
+    await mergeGenerationPullRequest(request, {
+        token: githubAuth.getToken(),
+        expectedHead
+    });
+    if (request.registryResultUrl) {
+        await mergeGenerationPullRequest({ resultUrl: request.registryResultUrl }, {
+            token: githubAuth.getToken()
+        });
+    }
+    await githubAuth.apiRequest(`/api/generation-requests/${request.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+            status: 'published',
+            resultUrl: request.resultUrl,
+            result: request.registryResultUrl
+                ? { registryResultUrl: request.registryResultUrl }
+                : null
+        })
+    });
+    curriculumIndex = await reloadCurriculumIndex();
+    await refreshGenerationActivity({ forceReconcile: true });
+    document.dispatchEvent(new CustomEvent('generationactivitychange'));
+}
+
+async function openChapterGenerationPreview(request, close, trigger) {
+    const originalText = trigger.textContent;
+    trigger.disabled = true;
+    trigger.textContent = 'Loading…';
+    try {
+        const preview = await loadPullRequestChapter(request, {
+            token: githubAuth.getToken()
+        });
+        const { cards, metadata } = parseDeck(preview.markdown, preview.file);
+        if (!cards.length) throw new Error('The generated chapter does not contain any flashcards.');
+        const cardsWithContext = cards.map(card => {
+            const identity = identifyCard(card, preview.repositoryId);
+            return {
+                ...card,
+                ...identity,
+                deckName: preview.repositoryId,
+                deckMetadata: metadata,
+                chapterMetadata: metadata,
+                source: {
+                    repo: preview.repositoryId,
+                    file: preview.file,
+                    ref: preview.commit
+                }
+            };
+        });
+        const publishedChapter = curriculumIndex && request.deckId
+            ? curriculumMaps(curriculumIndex).chapters.get(
+                `${request.deckId}#${request.payload?.chapterId || ''}`
+            )
+            : null;
+        const generatedTitle = publishedChapter?.title
+            || String(request.payload?.chapterId || 'Generated chapter')
+                .replace(/^\d+_/, '')
+                .replaceAll('_', ' ');
+        close();
+        chapterBrowserReturnFocus = trigger;
+        showChapterBrowser({
+            title: generatedTitle,
+            path: `~ / ${request.deckId} / ${request.payload?.chapterId || preview.file}`,
+            summary: `${cardsWithContext.length} card${cardsWithContext.length === 1 ? '' : 's'} · unmerged pull request #${preview.pull.number} · read-only preview`,
+            cards: cardsWithContext,
+            actions: [
+                {
+                    label: 'Merge flashcards',
+                    primary: true,
+                    onClick: async (button, error) => {
+                        button.disabled = true;
+                        button.textContent = 'Merging…';
+                        error.textContent = '';
+                        try {
+                            await publishChapterGeneration(request, { expectedHead: preview.commit });
+                            button.textContent = 'Merged and published';
+                            document.getElementById('card-browser-summary').textContent =
+                                `${cardsWithContext.length} card${cardsWithContext.length === 1 ? '' : 's'} · published · review progress will not change`;
+                        } catch (mergeError) {
+                            button.disabled = false;
+                            button.textContent = 'Merge flashcards';
+                            error.textContent = mergeError.message;
+                        }
+                    }
+                },
+                { label: 'Open pull request', href: request.resultUrl }
+            ]
+        });
+    } catch (error) {
+        trigger.disabled = false;
+        trigger.textContent = originalText;
+        const row = trigger.closest('.generation-activity-item');
+        const message = row?.querySelector('[data-preview-error]');
+        if (message) message.textContent = error.message;
+    }
+}
+
 async function exitCurriculumPreview() {
     if (!curriculumPreview) return;
     curriculumIndex = curriculumPreview.publishedIndex;
@@ -4621,7 +4804,15 @@ function appendGenerationRequestRow(list, request, close) {
         preview.onclick = () => enterCurriculumPreview(request, close, preview);
         actions.appendChild(preview);
     }
-    if (request.resultUrl) {
+    if (request.jobType === 'chapter-expand'
+        && request.status === 'needs-review'
+        && request.resultUrl) {
+        const preview = document.createElement('button');
+        preview.type = 'button';
+        preview.textContent = 'Review flashcards';
+        preview.onclick = () => openChapterGenerationPreview(request, close, preview);
+        actions.appendChild(preview);
+    } else if (request.resultUrl) {
         try {
             pullRequestCoordinates(request.resultUrl);
             const link = document.createElement('a');
@@ -4629,7 +4820,7 @@ function appendGenerationRequestRow(list, request, close) {
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
             link.textContent = request.jobType === 'chapter-expand'
-                ? request.status === 'needs-review' ? 'Review flashcards' : 'View flashcards pull request'
+                ? 'View flashcards pull request'
                 : generationPullRequestActionLabel(request.status);
             actions.appendChild(link);
         } catch { /* The worker result is not a pull request. */ }
@@ -4655,25 +4846,8 @@ function appendGenerationRequestRow(list, request, close) {
             merge.disabled = true;
             merge.textContent = 'Merging…';
             try {
-                await mergeGenerationPullRequest(request, { token: githubAuth.getToken() });
-                if (request.registryResultUrl) {
-                    await mergeGenerationPullRequest({ resultUrl: request.registryResultUrl }, {
-                        token: githubAuth.getToken()
-                    });
-                }
-                await githubAuth.apiRequest(`/api/generation-requests/${request.id}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({
-                        status: 'published',
-                        resultUrl: request.resultUrl,
-                        result: request.registryResultUrl
-                            ? { registryResultUrl: request.registryResultUrl }
-                            : null
-                    })
-                });
+                await publishChapterGeneration(request);
                 merge.textContent = 'Merged';
-                curriculumIndex = await reloadCurriculumIndex();
-                await refreshGenerationActivity({ forceReconcile: true });
                 renderGenerationActivitySettings();
             } catch (error) {
                 merge.disabled = false;
@@ -5190,14 +5364,11 @@ async function requestMissingGeneration() {
     }
 }
 
-async function requestTargetChapterGeneration() {
-    if (!activeDependencyTarget || !curriculumIndex || !githubAuth.isAuthenticated()) return;
+async function queueTargetChapterGeneration(deckId, chapterId, button) {
+    if (!curriculumIndex || !githubAuth.isAuthenticated()) return;
     const maps = curriculumMaps(curriculumIndex);
-    const deck = maps.decks.get(activeDependencyTarget.deckId);
-    const chapter = activeDependencyTarget.chapterId
-        ? maps.chapters.get(`${activeDependencyTarget.deckId}#${activeDependencyTarget.chapterId}`)
-        : null;
-    const button = document.getElementById('dependency-generate-deck');
+    const deck = maps.decks.get(deckId);
+    const chapter = chapterId ? maps.chapters.get(`${deckId}#${chapterId}`) : null;
     if (!deck || !chapter || !button) return;
     try {
         const registry = curriculumRegistryForView(curriculumIndex, {
@@ -5210,7 +5381,6 @@ async function requestTargetChapterGeneration() {
             await connectedWebsiteGenerationPreferences(),
             deckJobProvenance(registry)
         );
-        closeDependencyModal();
         await queueCurriculumAgentJob(job, button);
     } catch (error) {
         console.error('[Curriculum] Chapter content request failed:', error);
@@ -5220,6 +5390,15 @@ async function requestTargetChapterGeneration() {
             button.textContent = 'Generate chapter content';
         }
     }
+}
+
+async function requestTargetChapterGeneration() {
+    if (!activeDependencyTarget || !curriculumIndex || !githubAuth.isAuthenticated()) return;
+    const { deckId, chapterId } = activeDependencyTarget;
+    const button = document.getElementById('dependency-generate-deck');
+    if (!button) return;
+    closeDependencyModal();
+    await queueTargetChapterGeneration(deckId, chapterId, button);
 }
 
 async function studyActiveCurriculumChapter() {

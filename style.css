@@ -3235,6 +3235,26 @@ body.standalone-phone .mobile-sidebar-close {
     font-size: 0.68rem;
 }
 
+.card-browser-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.card-browser-actions a,
+.card-browser-actions button {
+    min-height: 40px;
+    padding: 8px 14px;
+}
+
+.card-browser-error {
+    min-height: 1em;
+    margin: 8px 0 0;
+    color: var(--danger);
+    font-size: 0.68rem;
+}
+
 .card-browser-body {
     flex: 1;
     min-height: 0;

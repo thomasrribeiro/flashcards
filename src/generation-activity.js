@@ -188,6 +188,14 @@ async function checkedJson(response, message) {
     return response.json();
 }
 
+async function checkedText(response, message) {
+    if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.message || `${message} (${response.status})`);
+    }
+    return response.text();
+}
+
 export async function loadPullRequestCurriculum(request, {
     fetchImpl = fetch,
     token = ''
@@ -231,6 +239,52 @@ export async function loadPullRequestCurriculum(request, {
         throw new Error(`The pull request does not contain the ${request.deckId} deck.`);
     }
     return { catalog, commit, pull };
+}
+
+export async function loadPullRequestChapter(request, {
+    fetchImpl = fetch,
+    token = ''
+} = {}) {
+    if (!token) throw new Error('Sign in with GitHub before reviewing generated flashcards.');
+    const pull = pullRequestCoordinates(request.resultUrl);
+    const headers = {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`
+    };
+    const details = await checkedJson(await fetchImpl(
+        `https://api.github.com/repos/${encodeURIComponent(pull.owner)}/${encodeURIComponent(pull.repository)}/pulls/${pull.number}`,
+        { headers }
+    ), 'Could not load the flashcards pull request');
+    const commit = details?.head?.sha;
+    if (!/^[a-f0-9]{40}$/i.test(commit || '')) {
+        throw new Error('The flashcards pull request does not expose a pinned head commit.');
+    }
+    const chapterId = String(request.payload?.chapterId || '').replace(/\.md$/i, '');
+    if (!/^\d{2}_[a-z0-9]+(?:_[a-z0-9]+)*$/.test(chapterId)) {
+        throw new Error('The generation request does not identify an ordered chapter file.');
+    }
+    const file = `flashcards/${chapterId}.md`;
+    const encodedFile = file.split('/').map(encodeURIComponent).join('/');
+    const markdown = await checkedText(await fetchImpl(
+        `https://api.github.com/repos/${encodeURIComponent(pull.owner)}/${encodeURIComponent(pull.repository)}/contents/${encodedFile}?ref=${encodeURIComponent(commit)}`,
+        {
+            cache: 'no-cache',
+            headers: {
+                Accept: 'application/vnd.github.raw+json',
+                Authorization: `Bearer ${token}`
+            }
+        }
+    ), 'Could not load the generated chapter');
+    if (typeof markdown !== 'string') {
+        throw new Error('GitHub returned an invalid generated chapter.');
+    }
+    return {
+        markdown,
+        commit,
+        pull,
+        file,
+        repositoryId: `${pull.owner}/${pull.repository}`
+    };
 }
 
 export function generationRequestName(request) {

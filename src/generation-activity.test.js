@@ -4,6 +4,7 @@ import {
     generationPullRequestActionLabel,
     generationPreviewDestination,
     mergeGenerationPullRequest,
+    loadPullRequestChapter,
     loadPullRequestCurriculum,
     normalizeGenerationRequest,
     pullRequestCoordinates,
@@ -164,6 +165,46 @@ describe('generation activity', () => {
         expect(fetchImpl.mock.calls[1][0]).toContain(`/${commit}/dist/curriculum.json`);
         expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe('Bearer test-token');
         expect(fetchImpl.mock.calls[1][1]).toEqual({ cache: 'no-cache' });
+    });
+
+    it('loads generated chapter Markdown at the exact pull request head commit', async () => {
+        const commit = 'a'.repeat(40);
+        const fetchImpl = vi.fn()
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ head: { sha: commit } }) })
+            .mockResolvedValueOnce({
+                ok: true,
+                text: async () => '+++\norder = 1\n+++\n\nQ: Generated?\nA: Yes.\n'
+            });
+        const result = await loadPullRequestChapter({
+            resultUrl: 'https://github.com/example/algebra/pull/4',
+            payload: { chapterId: '01_variables' }
+        }, { fetchImpl, token: 'test-token' });
+        expect(result).toMatchObject({
+            commit,
+            file: 'flashcards/01_variables.md',
+            repositoryId: 'example/algebra'
+        });
+        expect(result.markdown).toContain('Q: Generated?');
+        expect(fetchImpl.mock.calls[1][0]).toContain(`/flashcards/01_variables.md?ref=${commit}`);
+        expect(fetchImpl.mock.calls[1][1].headers.Accept).toBe('application/vnd.github.raw+json');
+    });
+
+    it('requires authentication and an ordered chapter ID for flashcard previews', async () => {
+        await expect(loadPullRequestChapter({
+            resultUrl: 'https://github.com/example/algebra/pull/4',
+            payload: { chapterId: '01_variables' }
+        }, { token: '' })).rejects.toThrow(/Sign in with GitHub/);
+
+        const commit = 'b'.repeat(40);
+        const fetchImpl = vi.fn().mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ head: { sha: commit } })
+        });
+        await expect(loadPullRequestChapter({
+            resultUrl: 'https://github.com/example/algebra/pull/4',
+            payload: { chapterId: '../deck.toml' }
+        }, { fetchImpl, token: 'test-token' })).rejects.toThrow(/ordered chapter file/);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
     });
 
     it('validates a deck-plan preview against its exact target deck', async () => {

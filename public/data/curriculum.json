@@ -2575,6 +2575,17 @@
           ]
         }
       ],
+      "chapter_curriculum_generation": {
+        "request_id": 12,
+        "provider_id": "openai",
+        "model_id": "gpt-5.6-sol",
+        "reasoning_effort": "high",
+        "workflow_version": "deck-plan-v2",
+        "workflow_commit": "b266ae33b01c3899f148b71caa5482750ffbe344",
+        "registry_base_commit": "28033a24111eab2a9967dcc0925a8cf4514ffea7",
+        "catalog_hash": "sha256:2e2ce5f8011b2b46f7be2bb3b0380e2075b0cdf24fd1d0abee3c731d3c892815",
+        "context_hash": "sha256:6b01eefecba36766a4243dd2290fe5a0554eeb735ed9c058175444ad210ffd1c"
+      },
       "generation_command": "flashcards curriculum materialize mathematics/number-sense-and-arithmetic"
     },
     {
@@ -2584,7 +2595,7 @@
       "order": 2,
       "tier": "core",
       "level": "foundational",
-      "status": "pilot-built",
+      "status": "chapter-planned",
       "description": "Manipulate symbolic expressions, solve equations, inequalities, and systems, and model with linear, quadratic, polynomial, rational, exponential, and logarithmic functions and their graphs.",
       "prerequisites": [
         "mathematics/number-sense-and-arithmetic"
@@ -2601,7 +2612,7 @@
           "order": 1,
           "title": "Variables and expressions",
           "file": "flashcards/01_variables_and_expressions.md",
-          "card_count": 18,
+          "card_count": 0,
           "prerequisites": [],
           "provides": [
             "variable",
@@ -2615,8 +2626,363 @@
             "verbal-expression-translation"
           ],
           "resolved_dependencies": []
+        },
+        {
+          "id": "02_equivalent_expressions",
+          "order": 2,
+          "title": "Equivalent expressions",
+          "file": "flashcards/02_equivalent_expressions.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:01_variables_and_expressions"
+          ],
+          "provides": [
+            "equivalent-expression",
+            "properties-of-operations",
+            "distributive-property",
+            "like-terms",
+            "expression-simplification"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:01_variables_and_expressions",
+              "kind": "chapter",
+              "resolved": "01_variables_and_expressions"
+            }
+          ]
+        },
+        {
+          "id": "03_equations_and_equality",
+          "order": 3,
+          "title": "Equations and equality",
+          "file": "flashcards/03_equations_and_equality.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:01_variables_and_expressions"
+          ],
+          "provides": [
+            "equation-solution",
+            "equality-properties",
+            "one-step-equation",
+            "equation-checking"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:01_variables_and_expressions",
+              "kind": "chapter",
+              "resolved": "01_variables_and_expressions"
+            }
+          ]
+        },
+        {
+          "id": "04_multi_step_equations_and_formulas",
+          "order": 4,
+          "title": "Multi-step equations and formulas",
+          "file": "flashcards/04_multi_step_equations_and_formulas.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:02_equivalent_expressions",
+            "chapter:03_equations_and_equality"
+          ],
+          "provides": [
+            "linear-equation",
+            "multi-step-equation",
+            "formula-rearrangement",
+            "identity-equation",
+            "contradiction-equation"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:02_equivalent_expressions",
+              "kind": "chapter",
+              "resolved": "02_equivalent_expressions"
+            },
+            {
+              "reference": "chapter:03_equations_and_equality",
+              "kind": "chapter",
+              "resolved": "03_equations_and_equality"
+            }
+          ]
+        },
+        {
+          "id": "05_inequalities_and_solution_sets",
+          "order": 5,
+          "title": "Inequalities and solution sets",
+          "file": "flashcards/05_inequalities_and_solution_sets.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:04_multi_step_equations_and_formulas"
+          ],
+          "provides": [
+            "inequality",
+            "inequality-solution-set",
+            "inequality-properties",
+            "one-variable-inequality",
+            "inequality-graph",
+            "interval-notation"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:04_multi_step_equations_and_formulas",
+              "kind": "chapter",
+              "resolved": "04_multi_step_equations_and_formulas"
+            }
+          ]
+        },
+        {
+          "id": "06_coordinate_plane_and_relations",
+          "order": 6,
+          "title": "Coordinate plane and relations",
+          "file": "flashcards/06_coordinate_plane_and_relations.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:03_equations_and_equality"
+          ],
+          "provides": [
+            "coordinate-plane",
+            "ordered-pair",
+            "relation",
+            "graph-of-relation",
+            "equation-graph"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:03_equations_and_equality",
+              "kind": "chapter",
+              "resolved": "03_equations_and_equality"
+            }
+          ]
+        },
+        {
+          "id": "07_functions_across_representations",
+          "order": 7,
+          "title": "Functions across representations",
+          "file": "flashcards/07_functions_across_representations.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:06_coordinate_plane_and_relations"
+          ],
+          "provides": [
+            "function",
+            "function-input-output",
+            "domain",
+            "range",
+            "function-notation",
+            "function-representation"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:06_coordinate_plane_and_relations",
+              "kind": "chapter",
+              "resolved": "06_coordinate_plane_and_relations"
+            }
+          ]
+        },
+        {
+          "id": "08_proportional_and_linear_functions",
+          "order": 8,
+          "title": "Proportional and linear functions",
+          "file": "flashcards/08_proportional_and_linear_functions.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:07_functions_across_representations"
+          ],
+          "provides": [
+            "linear-function",
+            "proportional-function",
+            "rate-of-change",
+            "initial-value",
+            "linear-model"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:07_functions_across_representations",
+              "kind": "chapter",
+              "resolved": "07_functions_across_representations"
+            }
+          ]
+        },
+        {
+          "id": "09_equations_of_lines",
+          "order": 9,
+          "title": "Equations of lines",
+          "file": "flashcards/09_equations_of_lines.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:08_proportional_and_linear_functions"
+          ],
+          "provides": [
+            "slope",
+            "slope-intercept-form",
+            "point-slope-form",
+            "standard-form-linear-equation",
+            "line-equation-construction"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:08_proportional_and_linear_functions",
+              "kind": "chapter",
+              "resolved": "08_proportional_and_linear_functions"
+            }
+          ]
+        },
+        {
+          "id": "10_systems_of_linear_equations",
+          "order": 10,
+          "title": "Systems of linear equations",
+          "file": "flashcards/10_systems_of_linear_equations.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:04_multi_step_equations_and_formulas",
+            "chapter:09_equations_of_lines"
+          ],
+          "provides": [
+            "linear-system",
+            "linear-system-solution",
+            "system-substitution-method",
+            "system-elimination-method",
+            "linear-system-solution-cases"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:04_multi_step_equations_and_formulas",
+              "kind": "chapter",
+              "resolved": "04_multi_step_equations_and_formulas"
+            },
+            {
+              "reference": "chapter:09_equations_of_lines",
+              "kind": "chapter",
+              "resolved": "09_equations_of_lines"
+            }
+          ]
+        },
+        {
+          "id": "11_exponents_and_polynomial_expressions",
+          "order": 11,
+          "title": "Exponents and polynomial expressions",
+          "file": "flashcards/11_exponents_and_polynomial_expressions.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:02_equivalent_expressions"
+          ],
+          "provides": [
+            "exponent-properties",
+            "monomial",
+            "polynomial",
+            "polynomial-degree",
+            "polynomial-operations"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:02_equivalent_expressions",
+              "kind": "chapter",
+              "resolved": "02_equivalent_expressions"
+            }
+          ]
+        },
+        {
+          "id": "12_factoring_and_quadratic_functions",
+          "order": 12,
+          "title": "Factoring and quadratic functions",
+          "file": "flashcards/12_factoring_and_quadratic_functions.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:07_functions_across_representations",
+            "chapter:11_exponents_and_polynomial_expressions"
+          ],
+          "provides": [
+            "polynomial-factoring",
+            "zero-product-property",
+            "square-root-operation",
+            "quadratic-equation",
+            "quadratic-function",
+            "parabola",
+            "quadratic-formula"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:07_functions_across_representations",
+              "kind": "chapter",
+              "resolved": "07_functions_across_representations"
+            },
+            {
+              "reference": "chapter:11_exponents_and_polynomial_expressions",
+              "kind": "chapter",
+              "resolved": "11_exponents_and_polynomial_expressions"
+            }
+          ]
+        },
+        {
+          "id": "13_rational_expressions_and_functions",
+          "order": 13,
+          "title": "Rational expressions and functions",
+          "file": "flashcards/13_rational_expressions_and_functions.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:12_factoring_and_quadratic_functions"
+          ],
+          "provides": [
+            "rational-expression",
+            "excluded-value",
+            "rational-expression-simplification",
+            "rational-equation",
+            "rational-function",
+            "rational-function-asymptote"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:12_factoring_and_quadratic_functions",
+              "kind": "chapter",
+              "resolved": "12_factoring_and_quadratic_functions"
+            }
+          ]
+        },
+        {
+          "id": "14_exponential_and_logarithmic_functions",
+          "order": 14,
+          "title": "Exponential and logarithmic functions",
+          "file": "flashcards/14_exponential_and_logarithmic_functions.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:08_proportional_and_linear_functions",
+            "chapter:11_exponents_and_polynomial_expressions"
+          ],
+          "provides": [
+            "exponential-function",
+            "exponential-growth",
+            "exponential-decay",
+            "logarithm",
+            "logarithmic-function",
+            "elementary-exponential-equation",
+            "elementary-logarithmic-equation"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:08_proportional_and_linear_functions",
+              "kind": "chapter",
+              "resolved": "08_proportional_and_linear_functions"
+            },
+            {
+              "reference": "chapter:11_exponents_and_polynomial_expressions",
+              "kind": "chapter",
+              "resolved": "11_exponents_and_polynomial_expressions"
+            }
+          ]
         }
       ],
+      "chapter_curriculum_generation": {
+        "request_id": 11,
+        "provider_id": "openai",
+        "model_id": "gpt-5.6-sol",
+        "reasoning_effort": "high",
+        "workflow_version": "deck-plan-v1",
+        "workflow_commit": "4fc129e6b83d5bcbb64d1eb9a25ed47bd83ffd53",
+        "registry_base_commit": "a4ebd63b99008756b511deecb27a8dab4cfae4c4",
+        "catalog_hash": "sha256:6c103132932d07364343436cb3dd0c99e2c2462da072899bbf2b4fd42e3badfb",
+        "context_hash": "sha256:aec13b0370eea4dc5f2fc7eb99dd5450cf043d02128dd6e253840d0b4954c4e1",
+        "publication_context_hash": "sha256:cd6d36f7574b394e6838d85e5a4c9737ac8e4e93d4976e4a6992a357dcdc35be",
+        "publication_note": "Backfilled from the validated local result produced before registry publication was implemented."
+      },
       "generation_command": "flashcards curriculum materialize mathematics/elementary-algebra-and-functions"
     },
     {
@@ -2626,18 +2992,272 @@
       "order": 3,
       "tier": "core",
       "level": "foundational",
-      "status": "proposed",
+      "status": "chapter-planned",
       "description": "Reason about congruence, similarity, transformations, circles, right-triangle trigonometry, coordinate geometry, area, volume, units, and short deductive geometric arguments.",
       "prerequisites": [
         "mathematics/elementary-algebra-and-functions"
       ],
       "recommended_after": [],
-      "materialized": false,
+      "materialized": true,
       "repository": {
         "url": "https://github.com/thomasrribeiro-flashcards/geometry-and-measurement",
         "configured": false
       },
-      "chapters": [],
+      "chapters": [
+        {
+          "id": "01_geometric_language_and_measurement",
+          "order": 1,
+          "title": "Geometric language and measurement",
+          "file": "flashcards/01_geometric_language_and_measurement.md",
+          "card_count": 0,
+          "prerequisites": [],
+          "provides": [
+            "geometric-object-and-notation",
+            "segment-and-angle-measure",
+            "basic-geometric-construction",
+            "geometric-diagram-convention"
+          ],
+          "resolved_dependencies": []
+        },
+        {
+          "id": "02_angle_relationships_and_parallel_lines",
+          "order": 2,
+          "title": "Angle relationships and parallel lines",
+          "file": "flashcards/02_angle_relationships_and_parallel_lines.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:01_geometric_language_and_measurement"
+          ],
+          "provides": [
+            "angle-relationship",
+            "parallel-and-perpendicular-lines",
+            "transversal-angle-relationship",
+            "short-geometric-argument"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:01_geometric_language_and_measurement",
+              "kind": "chapter",
+              "resolved": "01_geometric_language_and_measurement"
+            }
+          ]
+        },
+        {
+          "id": "03_transformations_and_symmetry",
+          "order": 3,
+          "title": "Transformations and symmetry",
+          "file": "flashcards/03_transformations_and_symmetry.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:01_geometric_language_and_measurement"
+          ],
+          "provides": [
+            "rigid-motion",
+            "translation-reflection-and-rotation",
+            "transformation-composition",
+            "line-and-rotational-symmetry"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:01_geometric_language_and_measurement",
+              "kind": "chapter",
+              "resolved": "01_geometric_language_and_measurement"
+            }
+          ]
+        },
+        {
+          "id": "04_triangle_congruence_and_reasoning",
+          "order": 4,
+          "title": "Triangle congruence and reasoning",
+          "file": "flashcards/04_triangle_congruence_and_reasoning.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:02_angle_relationships_and_parallel_lines",
+            "chapter:03_transformations_and_symmetry"
+          ],
+          "provides": [
+            "triangle-classification",
+            "triangle-congruence",
+            "triangle-congruence-criterion",
+            "triangle-deduction"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:02_angle_relationships_and_parallel_lines",
+              "kind": "chapter",
+              "resolved": "02_angle_relationships_and_parallel_lines"
+            },
+            {
+              "reference": "chapter:03_transformations_and_symmetry",
+              "kind": "chapter",
+              "resolved": "03_transformations_and_symmetry"
+            }
+          ]
+        },
+        {
+          "id": "05_similarity_dilations_and_scale",
+          "order": 5,
+          "title": "Similarity, dilations, and scale",
+          "file": "flashcards/05_similarity_dilations_and_scale.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:04_triangle_congruence_and_reasoning"
+          ],
+          "provides": [
+            "dilation",
+            "geometric-similarity",
+            "triangle-similarity",
+            "scale-drawing"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:04_triangle_congruence_and_reasoning",
+              "kind": "chapter",
+              "resolved": "04_triangle_congruence_and_reasoning"
+            }
+          ]
+        },
+        {
+          "id": "06_plane_measurement_and_area",
+          "order": 6,
+          "title": "Plane measurement and area",
+          "file": "flashcards/06_plane_measurement_and_area.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:05_similarity_dilations_and_scale"
+          ],
+          "provides": [
+            "perimeter",
+            "polygon-area",
+            "composite-area",
+            "linear-and-area-scale-factor"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:05_similarity_dilations_and_scale",
+              "kind": "chapter",
+              "resolved": "05_similarity_dilations_and_scale"
+            }
+          ]
+        },
+        {
+          "id": "07_circles_arcs_and_sectors",
+          "order": 7,
+          "title": "Circles, arcs, and sectors",
+          "file": "flashcards/07_circles_arcs_and_sectors.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:06_plane_measurement_and_area"
+          ],
+          "provides": [
+            "circle-measurement",
+            "circle-angle-relationship",
+            "arc-and-sector-measure",
+            "tangent-radius-relationship"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:06_plane_measurement_and_area",
+              "kind": "chapter",
+              "resolved": "06_plane_measurement_and_area"
+            }
+          ]
+        },
+        {
+          "id": "08_right_triangles_and_trigonometry",
+          "order": 8,
+          "title": "Right triangles and trigonometry",
+          "file": "flashcards/08_right_triangles_and_trigonometry.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:05_similarity_dilations_and_scale"
+          ],
+          "provides": [
+            "square-root-as-length",
+            "pythagorean-theorem",
+            "right-triangle-trigonometric-ratio",
+            "right-triangle-solution"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:05_similarity_dilations_and_scale",
+              "kind": "chapter",
+              "resolved": "05_similarity_dilations_and_scale"
+            }
+          ]
+        },
+        {
+          "id": "09_coordinate_geometry_and_geometric_proof",
+          "order": 9,
+          "title": "Coordinate geometry and geometric proof",
+          "file": "flashcards/09_coordinate_geometry_and_geometric_proof.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:04_triangle_congruence_and_reasoning",
+            "chapter:08_right_triangles_and_trigonometry"
+          ],
+          "provides": [
+            "coordinate-distance-and-midpoint",
+            "coordinate-transformation",
+            "slope-criterion",
+            "coordinate-geometric-argument"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:04_triangle_congruence_and_reasoning",
+              "kind": "chapter",
+              "resolved": "04_triangle_congruence_and_reasoning"
+            },
+            {
+              "reference": "chapter:08_right_triangles_and_trigonometry",
+              "kind": "chapter",
+              "resolved": "08_right_triangles_and_trigonometry"
+            }
+          ]
+        },
+        {
+          "id": "10_surface_area_volume_and_modeling",
+          "order": 10,
+          "title": "Surface area, volume, and modeling",
+          "file": "flashcards/10_surface_area_volume_and_modeling.md",
+          "card_count": 0,
+          "prerequisites": [
+            "chapter:07_circles_arcs_and_sectors",
+            "chapter:08_right_triangles_and_trigonometry"
+          ],
+          "provides": [
+            "net-and-cross-section",
+            "surface-area",
+            "solid-volume",
+            "geometric-modeling"
+          ],
+          "resolved_dependencies": [
+            {
+              "reference": "chapter:07_circles_arcs_and_sectors",
+              "kind": "chapter",
+              "resolved": "07_circles_arcs_and_sectors"
+            },
+            {
+              "reference": "chapter:08_right_triangles_and_trigonometry",
+              "kind": "chapter",
+              "resolved": "08_right_triangles_and_trigonometry"
+            }
+          ]
+        }
+      ],
+      "chapter_curriculum_generation": {
+        "request_id": 10,
+        "provider_id": "openai",
+        "model_id": "gpt-5.6-sol",
+        "reasoning_effort": "high",
+        "workflow_version": "deck-plan-v1",
+        "workflow_commit": "4fc129e6b83d5bcbb64d1eb9a25ed47bd83ffd53",
+        "registry_base_commit": "a4ebd63b99008756b511deecb27a8dab4cfae4c4",
+        "catalog_hash": "sha256:6c103132932d07364343436cb3dd0c99e2c2462da072899bbf2b4fd42e3badfb",
+        "context_hash": "sha256:7829de2f632235fa26d6abe0e28a11b4dd39beebdc93c128f662021e8d8ea931",
+        "publication_context_hash": "sha256:a4757a91aaa0ed809beea2361375a27e298b98e4c52662820052de6013689aef",
+        "publication_note": "Backfilled from the validated local result produced before registry publication was implemented."
+      },
       "generation_command": "flashcards curriculum materialize mathematics/geometry-and-measurement"
     },
     {
