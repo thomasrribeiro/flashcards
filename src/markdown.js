@@ -242,13 +242,20 @@ export function parseSolutionSteps(solution) {
         // Some durable decks also use an unstyled IPEE heading:
         //   IDENTIFY: content
         const boldMatch = line.match(/^\*\*([^*]+?)(?::\*\*|\*\*:)\s*(.*)$/);
+        const boldStandaloneMatch = line.match(/^\*\*(IDENTIFY|PLAN|EXECUTE|EVALUATE)\*\*[ \t]*$/i);
         const plainMatch = line.match(/^([A-Za-z]+):\s*(.*)$/);
+        const plainStandaloneMatch = line.match(/^(IDENTIFY|PLAN|EXECUTE|EVALUATE)[ \t]*$/i);
         const plainLabel = plainMatch?.[1]?.toUpperCase();
-        const match = boldMatch || (
-            plainStepLabels.has(plainLabel)
+        const match = boldMatch
+            || (boldStandaloneMatch
+                ? [boldStandaloneMatch[0], boldStandaloneMatch[1].toUpperCase(), '']
+                : null)
+            || (plainStepLabels.has(plainLabel)
                 ? [plainMatch[0], plainLabel, plainMatch[2]]
-                : null
-        );
+                : null)
+            || (plainStandaloneMatch
+                ? [plainStandaloneMatch[0], plainStandaloneMatch[1].toUpperCase(), '']
+                : null);
 
         if (match) {
             // Save previous step if exists
@@ -263,6 +270,7 @@ export function parseSolutionSteps(solution) {
             };
         } else if (currentStep) {
             // Continuation of current step
+            if (currentStep.content === '' && line.trim() === '') continue;
             currentStep.content += '\n' + line;
         } else {
             // Preserve a direct-answer prelude that appears before the first

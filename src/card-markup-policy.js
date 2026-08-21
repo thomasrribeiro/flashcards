@@ -1,5 +1,5 @@
 const IPEE_HEADING_RE =
-    /^(?:\*\*((IDENTIFY|PLAN|EXECUTE|EVALUATE))(?::\*\*|\*\*:)|((IDENTIFY|PLAN|EXECUTE|EVALUATE))(?::[ \t]*|[ \t]*(?=\r?$)))/gim;
+    /^(?:\*\*((IDENTIFY|PLAN|EXECUTE|EVALUATE))(?::\*\*|\*\*:|\*\*(?=[ \t]*\r?$))[ \t]*|((IDENTIFY|PLAN|EXECUTE|EVALUATE))(?::[ \t]*|[ \t]*(?=\r?$)))/gim;
 const COMPLETE_IPEE = ['IDENTIFY', 'PLAN', 'EXECUTE', 'EVALUATE'];
 
 function cardBack(card) {

@@ -47,6 +47,15 @@ describe('parseSolutionSteps', () => {
         ]);
     });
 
+    it('parses standalone plain and bold IPEE block headings', () => {
+        expect(parseSolutionSteps(
+            'IDENTIFY\n\nFind the target.\n\n**PLAN**\n\nChoose a method.'
+        )).toEqual([
+            { label: 'IDENTIFY', content: '\nFind the target.\n' },
+            { label: 'PLAN', content: '\nChoose a method.' }
+        ]);
+    });
+
     it('holds a direct answer until EXECUTE in a full IPEE solution', () => {
         expect(parseSolutionSteps(
             'The note should show 70.\n\nIDENTIFY: Round 73 to the nearest ten.\n\nPLAN: Compare 70 and 80.\n\nEXECUTE: Choose the closer ten.\n\nEVALUATE: Check the distances.'

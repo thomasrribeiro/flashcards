@@ -1819,8 +1819,18 @@ describe('flashcards CLI validation and Codex handoff', () => {
 
             await writeFile(
                 chapterPath,
+                (await readFile(chapterPath, 'utf8'))
+                    .replace(/^IDENTIFY$/m, '**IDENTIFY**')
+                    .replace(/^PLAN$/m, '**PLAN**')
+                    .replace(/^EXECUTE$/m, '**EXECUTE**')
+                    .replace(/^EVALUATE$/m, '**EVALUATE**')
+            );
+            expect(validateGeneratedChapterMarkup(prepared.workspacePath)).toEqual([]);
+
+            await writeFile(
+                chapterPath,
                 (await readFile(chapterPath, 'utf8')).replace(
-                    'IDENTIFY\n\nThis is addition.\n\nPLAN\n\nAdd the two counts.\n\n',
+                    '**IDENTIFY**\n\nThis is addition.\n\n**PLAN**\n\nAdd the two counts.\n\n',
                     ''
                 )
             );
