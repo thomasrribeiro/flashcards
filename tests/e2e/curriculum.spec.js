@@ -108,18 +108,18 @@ test.beforeEach(async ({ page }) => {
     ));
     expect(breadcrumbControlOrder).toEqual([
         'curriculum-breadcrumb',
-        'curriculum-history-controls',
-        'curriculum-breadcrumb-actions'
+        'curriculum-history-controls'
     ]);
     const [backBox, createBox] = await Promise.all([
         page.getByRole('button', { name: 'Back in curriculum' }).boundingBox(),
         page.getByRole('button', { name: 'Create subject' }).boundingBox()
     ]);
     const breadcrumbBox = await page.locator('.curriculum-breadcrumb').boundingBox();
-    expect(Math.abs(backBox.height - createBox.height)).toBeLessThan(1);
+    const graphHeaderBox = await page.locator('.curriculum-graph-controls').boundingBox();
     expect(Math.abs(backBox.x - breadcrumbBox.x)).toBeLessThan(1);
     expect(backBox.y).toBeGreaterThanOrEqual(breadcrumbBox.y + breadcrumbBox.height);
-    expect(createBox.x).toBeGreaterThan(backBox.x);
+    expect(Math.abs(createBox.x - (graphHeaderBox.x + 8))).toBeLessThanOrEqual(1);
+    await expect(page.getByRole('button', { name: 'Create subject' })).toHaveText('+');
 });
 
 test('keeps header controls on one row and exposes Agents inside Settings', async ({ page }) => {
@@ -305,8 +305,8 @@ test('queues a chapter-curriculum agent from an empty deck chapter viewer', asyn
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
-    await expect(page.getByRole('button', { name: 'Prerequisites & unlocks' })).toBeVisible();
-    const create = page.getByRole('button', { name: 'Create chapter curriculum' });
+    await expect(page.getByRole('button', { name: 'Prereqs & unlocks' })).toBeVisible();
+    const create = page.getByRole('button', { name: 'Generate curriculum' });
     await expect(create).toBeEnabled();
     await create.click();
 
@@ -338,10 +338,28 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
-    const regenerate = page.getByRole('button', { name: 'Regenerate chapter curriculum' });
+    const graphHeader = page.locator('.curriculum-graph-controls');
+    const headerActions = graphHeader.locator('.curriculum-graph-primary-actions');
+    await expect(headerActions.getByRole('button')).toHaveCount(2);
+    await expect(headerActions.getByRole('button').nth(0)).toHaveText('Prereqs & unlocks');
+    await expect(headerActions.getByRole('button').nth(1)).toHaveText('Generate curriculum');
+    const [headerBox, actionsBox, navigationBox] = await Promise.all([
+        graphHeader.boundingBox(),
+        headerActions.boundingBox(),
+        graphHeader.locator('.curriculum-graph-navigation').boundingBox()
+    ]);
+    expect(Math.abs(actionsBox.x - (headerBox.x + 8))).toBeLessThanOrEqual(1);
+    expect(Math.abs(
+        navigationBox.x + navigationBox.width / 2
+        - (headerBox.x + headerBox.width / 2)
+    )).toBeLessThan(2);
+    const regenerate = page.getByRole('button', { name: 'Generate curriculum' });
     await expect(regenerate).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Fit', exact: true })).toHaveCount(0);
     await regenerate.click();
+    const confirmation = page.getByRole('dialog', { name: 'Regenerate chapter curriculum?' });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole('button', { name: 'Regenerate', exact: true }).click();
 
     await expect.poll(() => queuedJob).not.toBeNull();
     expect(queuedJob).toMatchObject({
@@ -361,11 +379,11 @@ test('shows chapter generation as checking until AI access is verified', async (
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
-    const button = page.locator('.curriculum-breadcrumb-actions .curriculum-toolbar-action.is-primary');
+    const button = page.locator('.curriculum-graph-primary-actions .curriculum-toolbar-action.is-primary');
     await expect(button).toHaveText('Checking AI access…');
     await expect(button).toBeDisabled();
     await expect(button).toHaveClass(/is-checking/);
-    await expect(button).toHaveText('Create chapter curriculum', { timeout: 5_000 });
+    await expect(button).toHaveText('Generate curriculum', { timeout: 5_000 });
     await expect(button).toBeEnabled();
     await expect(button).not.toHaveClass(/is-checking/);
 });
@@ -413,14 +431,31 @@ test('opens generated chapter actions before starting its flashcards', async ({ 
         `.curriculum-graph-node[data-deck-id="${targetId}#${chapter.id}"]`
     );
     await expect(chapterNode).toHaveClass(/is-learning/);
+    const statusBorder = await chapterNode.evaluate(node => getComputedStyle(node).borderLeftColor);
+    await chapterNode.hover();
+    await expect.poll(() => chapterNode.evaluate(node => getComputedStyle(node).borderLeftColor))
+        .toBe(statusBorder);
     await chapterNode.click();
 
     await expect(page.locator('#card-browser-modal')).toBeVisible();
+    await expect(page.locator('#card-browser-body')).toBeHidden();
+    await expect(page.locator('#card-browser-summary')).toHaveText('1 card');
+    await expect(page.locator('#card-browser-summary')).not.toContainText('read-only preview');
+    await expect(page.locator('#card-browser-progress')).toContainText('0 of 1 reviewed');
+    const browser = page.getByRole('dialog', { name: 'Variables and expressions' });
+    await expect(browser.getByRole('button', { name: 'Study', exact: true })).toBeVisible();
+    await expect(browser.getByRole('button', { name: 'Generate content', exact: true })).toBeVisible();
+    await expect(browser.getByRole('button', { name: 'Prerequisites & generation' })).toHaveCount(0);
+    await browser.getByRole('button', { name: 'Generate content', exact: true }).click();
+    const regenerate = page.getByRole('dialog', { name: 'Regenerate chapter content?' });
+    await expect(regenerate).toBeVisible();
+    await regenerate.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(regenerate).toHaveCount(0);
+    const toggle = page.getByLabel('Show flashcards');
+    await expect(toggle).not.toBeChecked();
+    await toggle.check();
     await expect(page.locator('#card-browser-body')).toContainText('What does a variable represent?');
-    await expect(page.getByRole('button', { name: 'Study chapter' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Regenerate chapter content' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Prerequisites & generation' })).toBeVisible();
-    await page.getByRole('button', { name: 'Study chapter' }).click();
+    await browser.getByRole('button', { name: 'Study', exact: true }).click();
     await expect(page.locator('#study-area')).toBeVisible();
     await expect(page.getByText('What does a variable represent?', { exact: true })).toBeVisible();
     await expect(page.locator('#card-browser-modal')).toBeHidden();
@@ -444,7 +479,14 @@ test('queues content generation for one eligible chapter', async ({ page }) => {
     const chapterNode = page.locator(`.curriculum-graph-node[data-deck-id="${targetId}#${chapterId}"]`);
     await expect(chapterNode).toHaveClass(/is-unavailable/);
     await chapterNode.click();
-    const generate = page.getByRole('button', { name: 'Generate chapter content' });
+    await expect(page.locator('#card-browser-modal')).toBeVisible();
+    await expect(page.locator('#card-browser-body')).toBeHidden();
+    await expect(page.locator('.card-browser-modal-content')).toHaveClass(/is-summary-only/);
+    const browser = page.locator('#card-browser-modal');
+    await expect(browser.getByRole('button', { name: 'Study', exact: true })).toBeDisabled();
+    await expect(page.locator('#card-browser-modal')).not.toContainText('Required path');
+    await expect(page.locator('#card-browser-modal')).not.toContainText('Deck generation');
+    const generate = browser.getByRole('button', { name: 'Generate content', exact: true });
     await expect(generate).toBeEnabled();
     await generate.click();
 
@@ -789,8 +831,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toBeVisible();
     await expect(page.locator('.curriculum-graph-stage')).toHaveClass(/is-subject-overview/);
     await expect(page.locator('.curriculum-graph-stage')).not.toHaveClass(/is-layered/);
-    await expect(page.getByRole('button', { name: 'Zoom in' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Zoom out' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Zoom in' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Zoom out' })).toHaveCount(0);
     expect(await page.locator('.curriculum-graph-stage').evaluate(stage => getComputedStyle(stage).overflowX))
         .toBe('hidden');
     if (testInfo.project.name === 'desktop-chromium') {
@@ -827,7 +869,12 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         await expect.poll(async () => (await centered()).x).toBeLessThan(2);
         await expect.poll(async () => (await centered()).y).toBeLessThan(2);
         const initialNodeWidth = (await subjects.first().boundingBox()).width;
-        await page.getByRole('button', { name: 'Zoom in' }).click();
+        await stage.dispatchEvent('wheel', {
+            deltaY: -100,
+            ctrlKey: true,
+            clientX: stageBox.x + stageBox.width / 2,
+            clientY: stageBox.y + stageBox.height / 2
+        });
         await expect.poll(async () => (await subjects.first().boundingBox()).width)
             .toBeGreaterThan(initialNodeWidth);
         await page.getByRole('button', { name: 'Fit', exact: true }).click();
@@ -850,6 +897,19 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-graph-node-status')).not.toContainText(['in collection', 'available', 'planned']);
     await expect(page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]')).toHaveClass(/is-learning/);
     await expect(page.locator('.curriculum-graph-node[data-deck-id="physics/advanced-quantum-mechanics"]')).not.toHaveClass(/is-learning|is-complete/);
+    const longDeck = page.locator('.curriculum-graph-node[data-deck-id="physics/gravitational-wave-and-multimessenger-astrophysics"]');
+    await expect(longDeck.locator('.curriculum-graph-node-name'))
+        .toHaveText(/gravitational-wave-and-multimessenger-astrophysics/);
+    await expect(longDeck.locator('.curriculum-graph-node-name')).not.toContainText('…');
+    const nameLayout = await longDeck.locator('.curriculum-graph-node-name').evaluate(name => ({
+        whiteSpace: getComputedStyle(name).whiteSpace,
+        overflow: getComputedStyle(name).overflow,
+        scrollHeight: name.scrollHeight,
+        clientHeight: name.clientHeight
+    }));
+    expect(nameLayout.whiteSpace).toBe('normal');
+    expect(nameLayout.overflow).toBe('visible');
+    expect(nameLayout.scrollHeight).toBeLessThanOrEqual(nameLayout.clientHeight + 1);
     if (testInfo.project.name === 'desktop-chromium') {
         const viewportHeight = page.viewportSize().height;
         const initialGraphBox = await page.locator('.curriculum-graph-stage').boundingBox();
@@ -1486,7 +1546,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
 
     await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
-    await page.getByRole('button', { name: 'Prerequisites & unlocks' }).click();
+    await page.getByRole('button', { name: 'Prereqs & unlocks' }).click();
     await expect(page.locator('.curriculum-selected-item')).toHaveClass(/curriculum-explorer-item/);
     await expect(page.locator('.curriculum-neighborhood-column')).toHaveCount(3);
     await expect(page.locator('.curriculum-neighborhood-column.is-prerequisites')).toBeVisible();
@@ -1570,8 +1630,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     const secondFocusedDeck = await relatedDeck.locator('.curriculum-explorer-item-name').textContent();
     await relatedDeck.click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Prerequisites & unlocks' })).toBeVisible();
-    await page.getByRole('button', { name: 'Prerequisites & unlocks' }).click();
+    await expect(page.getByRole('button', { name: 'Prereqs & unlocks' })).toBeVisible();
+    await page.getByRole('button', { name: 'Prereqs & unlocks' }).click();
     await expect(selectedName).not.toHaveText(firstFocusedDeck);
     await expect(selectedName).toHaveText(secondFocusedDeck);
     await expect(historyBack).toBeEnabled();
@@ -1698,7 +1758,7 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     test.skip(testInfo.project.name !== 'desktop-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/elementary-algebra-and-functions"]').click();
-    await page.getByRole('button', { name: 'Prerequisites & unlocks' }).click();
+    await page.getByRole('button', { name: 'Prereqs & unlocks' }).click();
 
     const selectedTop = (await page.locator('.curriculum-selected-item').boundingBox()).y;
     const prerequisiteTop = (await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().boundingBox()).y;
@@ -1710,8 +1770,8 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     await expect(page.locator('.curriculum-graph-node[data-deck-id="mathematics/precalculus-and-trigonometry"]')).toBeVisible();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/precalculus-and-trigonometry"]').click();
     await expect(page.getByRole('heading', { name: 'No chapter curriculum yet' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Prerequisites & unlocks' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Create chapter curriculum' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Prereqs & unlocks' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Generate curriculum' })).toBeDisabled();
     await expect(page.locator('.curriculum-layer-label')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /selected deck/ })).toHaveCount(0);
 });
@@ -1757,7 +1817,7 @@ test('curriculum controls fit a phone viewport', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
-    await page.getByRole('button', { name: 'Prerequisites & unlocks' }).click();
+    await page.getByRole('button', { name: 'Prereqs & unlocks' }).click();
     const explorer = page.locator('.curriculum-neighborhood');
     await expect(explorer).toBeVisible();
     const box = await explorer.boundingBox();
