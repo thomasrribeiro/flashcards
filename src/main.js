@@ -4696,6 +4696,7 @@ async function renderCurriculumView(options = {}) {
         : subject
             ? decks.find(deck => subjectSlug(deck.subject) === subject)
             : null;
+    const studyRepositoryId = deckId ? repositoryIdForCurriculumDeck(activeChapterDeck) : '';
     if (installedStudyTarget && (hierarchy !== 'subject' || subject)) {
         const openStudy = document.createElement('button');
         openStudy.type = 'button';
@@ -4703,6 +4704,26 @@ async function renderCurriculumView(options = {}) {
         openStudy.textContent = 'Open in Study';
         openStudy.onclick = () => navigateMainView('decks');
         breadcrumbActions.append(openStudy);
+    } else if (studyRepositoryId && activeChapterDeck) {
+        const addStudy = document.createElement('button');
+        addStudy.type = 'button';
+        addStudy.className = 'curriculum-toolbar-action';
+        addStudy.textContent = 'Add to Study';
+        addStudy.onclick = async () => {
+            const originalText = addStudy.textContent;
+            addStudy.textContent = 'Adding…';
+            addStudy.disabled = true;
+            try {
+                await addRepositoryToStudy(studyRepositoryId);
+                await navigateMainView('decks');
+            } catch (error) {
+                console.error('[Curriculum] Could not add deck to Study:', error);
+                alert(`Failed to add deck to Study: ${error.message}`);
+                addStudy.textContent = originalText;
+                addStudy.disabled = false;
+            }
+        };
+        breadcrumbActions.append(addStudy);
     }
     if (hierarchy === 'chapter' && deckId) {
         const dependencies = document.createElement('button');
@@ -6071,6 +6092,43 @@ async function onCardSaved(deckId, filePath) {
 /**
  * Handle adding a new repository
  */
+async function addRepositoryToStudy(repoString) {
+    const installedBefore = new Set((await getAllRepos()).map(repo => repo.id.toLowerCase()));
+    // Adding a deck reads only repository metadata and the flashcards tree.
+    // Card bodies remain lazy until the first review.
+    const { deck: addedDeck } = await loadRepositoryMetadata(repoString, { sync: true });
+    console.log(`[Main] Added metadata-only deck ${repoString}`);
+
+    if (!installedBefore.has(addedDeck.id.toLowerCase())) {
+        await clearRepositoryScopes([addedDeck.id]);
+    }
+
+    const superseded = await getSupersededRepos();
+    if (superseded.length > 0) {
+        const { removeRepo } = await import('./storage.js');
+        const retiredRepoIds = [];
+        for (const repo of superseded) {
+            await removeRepo(repo.id, { preserveReviews: true });
+            retiredRepoIds.push(repo.id);
+        }
+        const activeDecks = scopesWithoutRepositories(
+            habitSettings?.activeDecks || [],
+            retiredRepoIds
+        );
+        if (activeDecks.length !== (habitSettings?.activeDecks || []).length) {
+            habitSettings = await saveSettings({ activeDecks });
+        }
+        if (pausedPrimaryStudySession
+            && !studySessionMatchesActiveScope(pausedPrimaryStudySession, activeDecks)) {
+            pausedPrimaryStudySession = null;
+            await clearStudySession();
+        }
+    }
+
+    await loadRepositories();
+    return addedDeck;
+}
+
 async function handleAddRepository() {
     const input = document.getElementById('github-repo-input');
     const addBtn = document.getElementById('add-repo-btn');
@@ -6093,44 +6151,8 @@ async function handleAddRepository() {
     input.disabled = true;
 
     try {
-        const installedBefore = new Set((await getAllRepos()).map(repo => repo.id.toLowerCase()));
-        // Adding a deck reads only repository metadata and the flashcards tree.
-        // Card bodies remain lazy until the first review.
-        const { deck: addedDeck } = await loadRepositoryMetadata(repoString, { sync: true });
-        console.log(`[Main] Added metadata-only deck ${repoString}`);
-
-        if (!installedBefore.has(addedDeck.id.toLowerCase())) {
-            await clearRepositoryScopes([addedDeck.id]);
-        }
-
-        const superseded = await getSupersededRepos();
-        if (superseded.length > 0) {
-            const { removeRepo } = await import('./storage.js');
-            const retiredRepoIds = [];
-            for (const repo of superseded) {
-                await removeRepo(repo.id, { preserveReviews: true });
-                retiredRepoIds.push(repo.id);
-            }
-            const activeDecks = scopesWithoutRepositories(
-                habitSettings?.activeDecks || [],
-                retiredRepoIds
-            );
-            if (activeDecks.length !== (habitSettings?.activeDecks || []).length) {
-                habitSettings = await saveSettings({ activeDecks });
-            }
-            if (pausedPrimaryStudySession
-                && !studySessionMatchesActiveScope(pausedPrimaryStudySession, activeDecks)) {
-                pausedPrimaryStudySession = null;
-                await clearStudySession();
-            }
-        }
-
-        // Clear input
+        await addRepositoryToStudy(repoString);
         input.value = '';
-
-        // Reload the display
-        await loadRepositories();
-
     } catch (error) {
         console.error('Error loading repository:', error);
         alert(`Failed to load repository: ${error.message}`);

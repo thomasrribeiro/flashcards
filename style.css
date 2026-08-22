@@ -4325,12 +4325,18 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-graph-primary-actions {
     grid-column: 1;
     justify-self: start;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
     gap: 6px;
 }
 
 .curriculum-graph-primary-actions .curriculum-toolbar-action {
+    max-width: 100%;
     min-height: 30px;
     padding: 5px 10px;
+    white-space: normal;
 }
 
 .curriculum-graph-legend {

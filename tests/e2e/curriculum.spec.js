@@ -379,9 +379,10 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
     await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
     const graphHeader = page.locator('.curriculum-graph-controls');
     const headerActions = graphHeader.locator('.curriculum-graph-primary-actions');
-    await expect(headerActions.getByRole('button')).toHaveCount(2);
-    await expect(headerActions.getByRole('button').nth(0)).toHaveText('Prereqs & unlocks');
-    await expect(headerActions.getByRole('button').nth(1)).toHaveText('Generate curriculum');
+    await expect(headerActions.getByRole('button')).toHaveCount(3);
+    await expect(headerActions.getByRole('button').nth(0)).toHaveText('Add to Study');
+    await expect(headerActions.getByRole('button').nth(1)).toHaveText('Prereqs & unlocks');
+    await expect(headerActions.getByRole('button').nth(2)).toHaveText('Generate curriculum');
     const [headerBox, actionsBox, navigationBox] = await Promise.all([
         graphHeader.boundingBox(),
         headerActions.boundingBox(),
@@ -392,6 +393,23 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
         navigationBox.x + navigationBox.width / 2
         - (headerBox.x + headerBox.width / 2)
     )).toBeLessThan(2);
+    const actionBoxes = await headerActions.getByRole('button').evaluateAll(buttons => (
+        buttons.map(button => {
+            const box = button.getBoundingClientRect();
+            return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+        })
+    ));
+    const navigationButtonsBox = await graphHeader.locator('.curriculum-graph-navigation')
+        .evaluate(navigation => {
+            const box = navigation.getBoundingClientRect();
+            return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+        });
+    expect(actionBoxes.every(box => (
+        box.right <= navigationButtonsBox.left
+        || box.left >= navigationButtonsBox.right
+        || box.bottom <= navigationButtonsBox.top
+        || box.top >= navigationButtonsBox.bottom
+    ))).toBe(true);
     const regenerate = page.getByRole('button', { name: 'Generate curriculum' });
     await expect(regenerate).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Fit', exact: true })).toHaveCount(0);
@@ -405,6 +423,49 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
         jobType: 'deck-plan',
         payload: { deckId: targetId, workflowVersion: 'deck-plan-v2' }
     });
+});
+
+test('adds a configured curriculum deck to Study from the graph header', async ({ page }) => {
+    const targetId = 'mathematics/elementary-algebra-and-functions';
+    const repositoryId = 'thomasrribeiro-flashcards/elementary-algebra-and-functions';
+    const target = bundledCurriculum.decks.find(deck => deck.id === targetId);
+    const chapter = target.chapters[0];
+    await page.route(`https://api.github.com/repos/${repositoryId}`, route => route.fulfill({ json: {
+        full_name: repositoryId,
+        name: 'elementary-algebra-and-functions',
+        owner: { login: 'thomasrribeiro-flashcards' },
+        default_branch: 'master',
+        description: 'Elementary algebra',
+        topics: ['mathematics'],
+        private: false
+    } }));
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/trees/master**`, route => (
+        route.fulfill({ json: { truncated: false, tree: [
+            { type: 'blob', path: chapter.file, sha: 'chapter-sha', size: 240 },
+            { type: 'blob', path: 'deck.toml', sha: 'manifest-sha', size: 120 }
+        ] } })
+    ));
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/blobs/manifest-sha`, route => (
+        route.fulfill({
+            contentType: 'text/plain',
+            body: 'subject = "mathematics"\ndeck = "elementary-algebra-and-functions"\n'
+        })
+    ));
+    await installGenerationAccount(page);
+
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
+    await expect(page.getByRole('button', { name: 'Open in Study' })).toHaveCount(0);
+    const add = page.getByRole('button', { name: 'Add to Study' });
+    await expect(add).toBeVisible();
+    await add.click();
+
+    await expect(page.locator('#tab-decks')).toHaveClass(/active/);
+    await expect(page.locator('.col-pane').nth(0).locator('.col-row.selected')).toContainText('mathematics');
+    await expect(page.locator('.col-pane').nth(1).locator('.col-row.selected'))
+        .toContainText('elementary-algebra-and-functions');
+    await expect(page).toHaveURL(/view=study/);
+    await expect(page).toHaveURL(/study-deck=thomasrribeiro-flashcards%2Felementary-algebra-and-functions/);
 });
 
 test('shows chapter generation as checking until AI access is verified', async ({ page }) => {
