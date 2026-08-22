@@ -260,6 +260,7 @@ async function init() {
         habitSettings = await habitSettingsPromise;
         pausedPrimaryStudySession = await pausedSessionPromise;
         curriculumIndex = await curriculumIndexPromise;
+        const initialStudyTarget = studyTargetFromUrl();
         const repositoryRenames = window.__repositoryRenames || [];
         const renameHashMapping = window.__repositoryRenameHashMapping || new Map();
         const remappedSession = remapStudySessionRepositories(
@@ -287,6 +288,8 @@ async function init() {
             pausedPrimaryStudySession = null;
             clearStudySession().catch(error => console.warn('[Main] Failed to retire stale study session:', error));
         }
+
+        if (initialStudyTarget) await applyStudyTarget(initialStudyTarget);
 
         console.log('About to load repositories...');
         await loadRepositories();
@@ -330,9 +333,11 @@ async function init() {
             Object.assign(curriculumViewState, restored || initialCurriculumState);
             await showMainView('curriculum');
             writeCurriculumHistory({ replace: true });
+        } else if (initialStudyTarget) {
+            writeStudyHistory({ replace: true });
         }
 
-        // Repo input is available in both states; data source differs.
+        // Study's deck finder uses a different data source by account state.
         // Logged-in: searches the user's own repos. Logged-out: searches the
         // thomasrribeiro-flashcards org's public decks.
         await setupRepoInput();
@@ -672,7 +677,7 @@ async function loadRepositories({ refreshCollection = true } = {}) {
 
         // Show message if no decks
         if (displayDecks.length === 0) {
-            controlsBar.classList.add('hidden');
+            controlsBar.classList.toggle('hidden', currentMainView !== 'decks');
             document.getElementById('view-tabs')?.classList.toggle('hidden', !curriculumIndex);
             if (isLoggedIn) {
                 grid.innerHTML = '<div class="loading">Search for a GitHub repository and click + to add it.</div>';
@@ -1694,6 +1699,169 @@ const curriculumViewState = {
 let curriculumNavigationHistory = [];
 let curriculumNavigationHistoryIndex = -1;
 
+function studySelectionTarget() {
+    return {
+        subjectId: columnsSel.subject || '',
+        repositoryId: columnsSel.deck || '',
+        chapterFile: columnsSel.chapter || ''
+    };
+}
+
+function studyTargetFromUrl(url = new URL(window.location.href)) {
+    if (url.searchParams.get('view') !== 'study') return null;
+    return {
+        subjectId: url.searchParams.get('study-subject') || '',
+        repositoryId: url.searchParams.get('study-deck') || '',
+        chapterFile: url.searchParams.get('study-chapter') || ''
+    };
+}
+
+function writeStudyHistory({ replace = false } = {}) {
+    const url = new URL(window.location.href);
+    const target = studySelectionTarget();
+    url.searchParams.set('view', 'study');
+    for (const key of [
+        'curriculum-mode', 'curriculum-level', 'curriculum-target',
+        'curriculum-parent', 'curriculum-subject', 'curriculum-layer', 'recommended'
+    ]) url.searchParams.delete(key);
+    const params = [
+        ['study-subject', target.subjectId],
+        ['study-deck', target.repositoryId],
+        ['study-chapter', target.chapterFile]
+    ];
+    for (const [key, value] of params) {
+        if (value) url.searchParams.set(key, value);
+        else url.searchParams.delete(key);
+    }
+    history[replace ? 'replaceState' : 'pushState'](
+        { mainView: 'decks', studyTarget: target },
+        '',
+        `${url.pathname}${url.search}${url.hash}`
+    );
+}
+
+async function applyStudyTarget(target) {
+    if (!target) return;
+    const decks = await getAllDecks();
+    const requestedRepository = target.repositoryId || '';
+    const deck = requestedRepository
+        ? decks.find(item => item.id === requestedRepository)
+        : null;
+    const subject = target.subjectId || subjectSlug(deck?.subject);
+    const chapter = deck && target.chapterFile
+        ? target.chapterFile
+        : null;
+    columnsSel = {
+        subject: subject || null,
+        deck: deck?.id || null,
+        chapter
+    };
+}
+
+function installedRepositoryForCurriculumDeck(decks, curriculumDeck) {
+    if (!curriculumDeck) return null;
+    const repositoryId = repositoryIdForCurriculumDeck(curriculumDeck);
+    return decks.find(deck => (
+        deck.curriculumId === curriculumDeck.id
+        || (repositoryId && deck.id === repositoryId)
+        || `${subjectSlug(deck.subject)}/${String(deck.id || '').split('/').pop()}` === curriculumDeck.id
+    )) || null;
+}
+
+function curriculumContextForStudySelection() {
+    if (!curriculumIndex) return null;
+    const target = studySelectionTarget();
+    const curriculumDeck = target.repositoryId
+        ? curriculumDeckForRepository(target.repositoryId, target.subjectId)
+        : null;
+    if (curriculumDeck) {
+        const chapter = target.chapterFile
+            ? chapterForFile(curriculumIndex, curriculumDeck.id, target.chapterFile)
+            : null;
+        const chapterTargetId = chapter ? `${curriculumDeck.id}#${chapter.id}` : '';
+        return {
+            mode: 'chapters',
+            hierarchy: 'chapter',
+            subject: curriculumDeck.subject,
+            parentId: curriculumDeck.id,
+            targetId: chapterTargetId,
+            query: '',
+            layerStart: 0,
+            anchorId: chapterTargetId
+        };
+    }
+    if (target.subjectId && curriculumIndex.decks.some(deck => deck.subject === target.subjectId)) {
+        return {
+            mode: 'subject', hierarchy: 'deck', subject: target.subjectId,
+            parentId: target.subjectId, targetId: '', query: '', layerStart: 0,
+            anchorId: ''
+        };
+    }
+    return {
+        mode: 'overview', hierarchy: 'subject', subject: '', parentId: '',
+        targetId: '', query: '', layerStart: 0, anchorId: ''
+    };
+}
+
+function applyCurriculumContextFromStudy() {
+    const next = curriculumContextForStudySelection();
+    if (!next) return;
+    const previous = curriculumStateSnapshot();
+    if (curriculumNavigationKey(previous) !== curriculumNavigationKey(next)) {
+        recordCurriculumNavigation(previous, next);
+    }
+    Object.assign(curriculumViewState, next, { position: null });
+}
+
+function studyTargetForCurriculumContext() {
+    if (!curriculumIndex) return null;
+    const { mode, hierarchy, subject, parentId, targetId } = curriculumViewState;
+    const deckId = hierarchy === 'chapter'
+        ? parentId
+        : hierarchy === 'deck' && mode === 'focus'
+            ? targetId
+            : '';
+    const curriculumDeck = deckId ? curriculumMaps(curriculumIndex).decks.get(deckId) : null;
+    const chapter = hierarchy === 'chapter' && targetId.includes('#')
+        ? curriculumMaps(curriculumIndex).chapters.get(targetId)
+        : null;
+    return {
+        subjectId: curriculumDeck?.subject || subject || '',
+        curriculumDeck,
+        chapterFile: chapter?.file || ''
+    };
+}
+
+async function applyStudyContextFromCurriculum() {
+    const target = studyTargetForCurriculumContext();
+    if (!target) return;
+    const decks = await getAllDecks();
+    const repository = installedRepositoryForCurriculumDeck(decks, target.curriculumDeck);
+    columnsSel = {
+        subject: target.subjectId || null,
+        deck: repository?.id || null,
+        chapter: repository && target.chapterFile ? target.chapterFile : null
+    };
+}
+
+function updateStudyRoadmapAction() {
+    const button = document.getElementById('study-view-curriculum');
+    if (!button) return;
+    const context = curriculumContextForStudySelection();
+    const hasContext = Boolean(
+        context
+        && (context.subject || context.parentId || context.targetId)
+    );
+    button.classList.toggle('hidden', !hasContext);
+    button.disabled = !hasContext;
+}
+
+async function navigateStudySelection(next, { replace = false } = {}) {
+    columnsSel = next;
+    writeStudyHistory({ replace });
+    await loadRepositories({ refreshCollection: false });
+}
+
 function curriculumDeckForRepository(deckId, subject = null) {
     if (!curriculumIndex) return null;
     const repoName = String(deckId || '').split('/').pop();
@@ -1948,10 +2116,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
                     { html: GAVEL_IMG, title: `Review ${subject} (due + new)`, onClick: () => startScopedReview(c => deckIds.includes(c.source?.repo || c.deckName), subject, ['home', subject], deckIds) }
                 ],
                 hasChildren: true, selected: columnsSel.subject === subject,
-                onClick: () => {
-                    columnsSel = { subject, deck: null, chapter: null };
-                    loadRepositories({ refreshCollection: false });
-                }
+                onClick: () => navigateStudySelection({ subject, deck: null, chapter: null })
             });
         });
     wrap.appendChild(makePane(p1, 'Subjects'));
@@ -1980,10 +2145,11 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
                     }, trigger)
                 }],
                 hasChildren: true, selected: columnsSel.deck === deckId,
-                onClick: () => {
-                    columnsSel = { subject: columnsSel.subject, deck: deckId, chapter: null };
-                    loadRepositories({ refreshCollection: false });
-                }
+                onClick: () => navigateStudySelection({
+                    subject: columnsSel.subject,
+                    deck: deckId,
+                    chapter: null
+                })
             });
         });
     }
@@ -2006,14 +2172,25 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
                 ? progress
                 : storedChapterProgress(deckId, file);
             const completed = savedProgress?.completionPct || 0;
-            const review = () => startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, ['home', columnsSel.subject, deckName, chName], [deckId], [{ repo: deckId, path: file }]);
-            const browse = () => openChapterBrowser({
-                deckId,
-                file,
-                subject: columnsSel.subject,
-                deckName,
-                chapterName: chName
-            });
+            const selectChapter = () => {
+                columnsSel = { subject: columnsSel.subject, deck: deckId, chapter: file };
+                writeStudyHistory();
+                updateStudyRoadmapAction();
+            };
+            const review = () => {
+                selectChapter();
+                return startScopedReview(c => (c.source?.repo || c.deckName) === deckId && c.source?.file === file, chName, ['home', columnsSel.subject, deckName, chName], [deckId], [{ repo: deckId, path: file }]);
+            };
+            const browse = () => {
+                selectChapter();
+                return openChapterBrowser({
+                    deckId,
+                    file,
+                    subject: columnsSel.subject,
+                    deckName,
+                    chapterName: chName
+                });
+            };
             const chActive = chapterIsActive(scopes, deckId, file);
             const chComplete = savedProgress?.total > 0 && savedProgress.fresh === 0;
             const progressPending = cards.length === 0
@@ -2026,7 +2203,10 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
                 ? [{
                     html: '↳',
                     title: 'View chapter prerequisites',
-                    onClick: () => openDependencyModal(curriculumDeck.id, curriculumChapter?.id || null)
+                    onClick: () => {
+                        selectChapter();
+                        openDependencyModal(curriculumDeck.id, curriculumChapter?.id || null);
+                    }
                 }]
                 : [];
             return colRow({
@@ -2068,6 +2248,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
     });
     for (const failed of (window.__failedRepos || [])) grid.appendChild(createFailedRepoCard(failed));
     renderEvictedNotice();
+    updateStudyRoadmapAction();
 
 }
 
@@ -2690,6 +2871,9 @@ function setupEventListeners() {
     if (tabDecks) tabDecks.addEventListener('click', () => navigateMainView('decks'));
     if (tabCurriculum) tabCurriculum.addEventListener('click', () => navigateMainView('curriculum'));
     if (tabProgress) tabProgress.addEventListener('click', () => navigateMainView('progress'));
+    document.getElementById('study-view-curriculum')?.addEventListener('click', () => (
+        navigateMainView('curriculum')
+    ));
 
     // Back-to-decks button shown during a study session
     const studyBackBtn = document.getElementById('study-back-btn');
@@ -2728,15 +2912,26 @@ function setDeckView(mode) {
 let currentMainView = 'decks';
 async function navigateMainView(view) {
     if (currentMainView === view) return;
+    const previousView = currentMainView;
+    if (view === 'curriculum' && previousView === 'decks') {
+        applyCurriculumContextFromStudy();
+    } else if (view === 'decks' && previousView === 'curriculum') {
+        await applyStudyContextFromCurriculum();
+    }
     await showMainView(view);
     if (view === 'curriculum') {
         writeCurriculumHistory();
         return;
     }
+    if (view === 'decks') {
+        writeStudyHistory();
+        return;
+    }
     const url = new URL(window.location.href);
     for (const key of [
         'view', 'curriculum-mode', 'curriculum-level', 'curriculum-target',
-        'curriculum-parent', 'curriculum-subject', 'recommended'
+        'curriculum-parent', 'curriculum-subject', 'curriculum-layer', 'recommended',
+        'study-subject', 'study-deck', 'study-chapter'
     ]) url.searchParams.delete(key);
     history.pushState({ mainView: view }, '', `${url.pathname}${url.search}${url.hash}`);
 }
@@ -3937,6 +4132,9 @@ function writeCurriculumHistory({ replace = false } = {}) {
     const url = new URL(window.location.href);
     const state = curriculumStateSnapshot();
     url.searchParams.set('view', 'curriculum');
+    for (const key of ['study-subject', 'study-deck', 'study-chapter']) {
+        url.searchParams.delete(key);
+    }
     url.searchParams.set('curriculum-mode', state.mode);
     url.searchParams.set('curriculum-level', state.hierarchy);
     const optional = [
@@ -4493,6 +4691,19 @@ async function renderCurriculumView(options = {}) {
             configureWebsiteGenerationButton(createSubject, { registry: activeRegistry });
         }
     }
+    const installedStudyTarget = deckId
+        ? installedRepositoryForCurriculumDeck(decks, activeChapterDeck)
+        : subject
+            ? decks.find(deck => subjectSlug(deck.subject) === subject)
+            : null;
+    if (installedStudyTarget && (hierarchy !== 'subject' || subject)) {
+        const openStudy = document.createElement('button');
+        openStudy.type = 'button';
+        openStudy.className = 'curriculum-toolbar-action';
+        openStudy.textContent = 'Open in Study';
+        openStudy.onclick = () => navigateMainView('decks');
+        breadcrumbActions.append(openStudy);
+    }
     if (hierarchy === 'chapter' && deckId) {
         const dependencies = document.createElement('button');
         dependencies.type = 'button';
@@ -4513,7 +4724,15 @@ async function renderCurriculumView(options = {}) {
     if (previewBanner) root.appendChild(previewBanner);
 
     const graphHeaderActions = [...breadcrumbActions.children];
-    if (mode === 'focus') renderCurriculumNeighborhood(root, progressStates);
+    if (mode === 'focus') {
+        if (graphHeaderActions.length) {
+            root.appendChild(curriculumGraphControls({
+                showFit: false,
+                headerActions: graphHeaderActions
+            }));
+        }
+        renderCurriculumNeighborhood(root, progressStates);
+    }
     else if (mode === 'overview') {
         await renderCurriculumGraph(root, progressStates, subjectOverviewGraph(curriculumIndex), {
             headerActions: graphHeaderActions
@@ -5666,7 +5885,7 @@ async function setupRepoInput() {
     let selectedIndex = -1;
 
     repoInput.value = '';
-    repoInput.placeholder = 'Add decks...';
+    repoInput.placeholder = 'Find a GitHub deck...';
 
     // Signed-in users see repositories available to their GitHub account
     // (including private repositories) alongside the public deck catalog.
@@ -6168,6 +6387,7 @@ async function handlePopState(event) {
         return;
     }
     if (state?.mainView === 'decks') {
+        await applyStudyTarget(state.studyTarget || studyTargetFromUrl());
         await showMainView('decks');
         return;
     }

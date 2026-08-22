@@ -135,11 +135,13 @@ class GitHubAuth {
 
     updateUI(isLoggedIn) {
         const loginBtn = document.getElementById('btn-github-login');
+        const userInfo = document.getElementById('user-info');
         const userInfoRow = document.getElementById('user-info-row-main');
         const userName = document.getElementById('user-name');
 
         if (isLoggedIn && this.user) {
             if (loginBtn) loginBtn.classList.add('hidden');
+            if (userInfo) userInfo.classList.remove('hidden');
             if (userInfoRow) userInfoRow.classList.remove('hidden');
             if (userName) {
                 // Show only first name
@@ -149,6 +151,7 @@ class GitHubAuth {
             }
         } else {
             if (loginBtn) loginBtn.classList.remove('hidden');
+            if (userInfo) userInfo.classList.add('hidden');
             if (userInfoRow) userInfoRow.classList.add('hidden');
         }
     }

@@ -166,7 +166,8 @@ a[href] {
     background: var(--white);
     padding: 8px 12px;
     border: 1px solid var(--black);
-    width: 320px;
+    width: auto;
+    min-width: 220px;
     box-sizing: border-box;
 }
 
@@ -1478,6 +1479,33 @@ kbd {
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+}
+
+.study-library-actions {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    min-width: min(100%, 340px);
+}
+
+.study-add-deck-control {
+    min-width: 210px;
+}
+
+.study-view-curriculum {
+    min-height: 28px;
+    margin-left: 10px;
+    padding: 5px 10px;
+    border: 1px solid var(--black);
+    background: var(--white);
+    color: var(--black);
+    font: inherit;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.study-view-curriculum:hover {
+    background: var(--yellow);
 }
 
 .review-row {
@@ -2822,6 +2850,16 @@ kbd {
 @media (max-width: 680px) {
     .search-input {
         width: 100%;
+    }
+
+    .study-library-actions {
+        width: 100%;
+        min-width: 0;
+        margin-left: 0;
+    }
+
+    .study-add-deck-control {
+        min-width: 0;
     }
 
     .review-row {

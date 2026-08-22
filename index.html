@@ -105,23 +105,10 @@
                     <button class="btn-github-login" id="btn-github-login">
                         Login with GitHub
                     </button>
-                    <div class="user-info" id="user-info">
+                    <div class="user-info hidden" id="user-info">
                         <div class="user-info-row hidden" id="user-info-row-main">
                             <span id="user-name"></span>
                             <button class="btn-logout" id="btn-logout">Logout</button>
-                        </div>
-                        <div class="user-info-row">
-                            <div class="repo-input-inline">
-                                <input
-                                    type="text"
-                                    id="github-repo-input"
-                                    class="repo-input-field"
-                                    placeholder="Add decks..."
-                                    autocomplete="off"
-                                />
-                                <div id="repo-suggestions" class="repo-suggestions hidden"></div>
-                            </div>
-                            <button id="add-repo-btn" class="add-repo-btn" title="Add repository">+</button>
                         </div>
                     </div>
                 </div>
@@ -148,6 +135,21 @@
                             placeholder="Search decks..."
                             autocomplete="off"
                         />
+                        <div class="study-library-actions">
+                            <div class="repo-input-inline study-add-deck-control">
+                                <input
+                                    type="text"
+                                    id="github-repo-input"
+                                    class="repo-input-field"
+                                    placeholder="Find a GitHub deck..."
+                                    aria-label="Find a GitHub deck"
+                                    autocomplete="off"
+                                />
+                                <div id="repo-suggestions" class="repo-suggestions hidden"></div>
+                            </div>
+                            <button id="add-repo-btn" class="add-repo-btn" type="button" aria-label="Add deck" title="Add deck">+</button>
+                            <button id="study-view-curriculum" class="study-view-curriculum hidden" type="button">View roadmap</button>
+                        </div>
                     </div>
                     <div id="pwa-install-prompt" class="pwa-install-prompt hidden">
                         <span>Install Flashcards for faster access, resilient sessions, and reminders.</span>

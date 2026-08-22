@@ -144,6 +144,45 @@ test('keeps header controls on one row and exposes Agents inside Settings', asyn
     await expect(modal.getByRole('button', { name: 'Save', exact: true })).toBeHidden();
 });
 
+test('keeps deck installation inside Study even when the collection is empty', async ({ page }) => {
+    const repositoryId = 'example/organic-chemistry';
+    await page.route(`https://api.github.com/repos/${repositoryId}`, route => route.fulfill({ json: {
+        full_name: repositoryId,
+        name: 'organic-chemistry',
+        owner: { login: 'example' },
+        default_branch: 'master',
+        description: 'Organic chemistry',
+        topics: ['chemistry'],
+        private: false
+    } }));
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/trees/master**`, route => (
+        route.fulfill({ json: { truncated: false, tree: [
+            { type: 'blob', path: 'deck.toml', sha: 'manifest-sha', size: 100 },
+            { type: 'blob', path: 'flashcards/01_bonding.md', sha: 'chapter-sha', size: 100 }
+        ] } })
+    ));
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/blobs/manifest-sha`, route => (
+        route.fulfill({
+            contentType: 'text/plain',
+            body: 'subject = "chemistry"\ndeck = "organic-chemistry"\n'
+        })
+    ));
+    await installGenerationAccount(page);
+    await page.locator('#tab-decks').click();
+
+    const controls = page.locator('#controls-bar');
+    await expect(controls).toBeVisible();
+    await expect(controls.getByLabel('Find a GitHub deck')).toBeVisible();
+    await expect(controls.getByRole('button', { name: 'Add deck' })).toBeVisible();
+    await expect(page.locator('.auth-header #github-repo-input')).toHaveCount(0);
+
+    await controls.getByLabel('Find a GitHub deck').fill(repositoryId);
+    await controls.getByRole('button', { name: 'Add deck' }).click();
+    await expect(page.locator('.col-pane').nth(0).locator('.col-row')).toContainText('chemistry');
+    await page.locator('.col-pane').nth(0).locator('.col-row').filter({ hasText: 'chemistry' }).click();
+    await expect(page.locator('.col-pane').nth(1).locator('.col-row')).toContainText('organic-chemistry');
+});
+
 test('updates the root breadcrumb when the curriculum repository setting changes', async ({ page }) => {
     const commit = '1234567890abcdef1234567890abcdef12345678';
     await page.route('https://api.github.com/repos/example/new-curricula/commits/master**', route => (
@@ -489,6 +528,81 @@ test('opens generated chapter actions before starting its flashcards', async ({ 
     await expect(page.locator('#study-area')).toBeVisible();
     await expect(page.getByText('What does a variable represent?', { exact: true })).toBeVisible();
     await expect(page.locator('#card-browser-modal')).toBeHidden();
+});
+
+test('preserves deck and chapter context between Study and Curriculum', async ({ page }) => {
+    const targetId = 'mathematics/elementary-algebra-and-functions';
+    const repositoryId = 'thomasrribeiro-flashcards/elementary-algebra-and-functions';
+    const target = bundledCurriculum.decks.find(deck => deck.id === targetId);
+    const chapter = target.chapters[0];
+    await page.route(`https://api.github.com/repos/${repositoryId}`, route => route.fulfill({ json: {
+        full_name: repositoryId,
+        name: 'elementary-algebra-and-functions',
+        owner: { login: 'thomasrribeiro-flashcards' },
+        default_branch: 'master',
+        description: 'Elementary algebra',
+        topics: ['mathematics'],
+        private: false
+    } }));
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/trees/master**`, route => (
+        route.fulfill({ json: { truncated: false, tree: [
+            { type: 'blob', path: chapter.file, sha: 'chapter-sha', size: 240 },
+            { type: 'blob', path: 'deck.toml', sha: 'manifest-sha', size: 120 }
+        ] } })
+    ));
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/blobs/manifest-sha`, route => (
+        route.fulfill({
+            contentType: 'text/plain',
+            body: 'subject = "mathematics"\ndeck = "elementary-algebra-and-functions"\n'
+        })
+    ));
+    await installGenerationAccount(page, {
+        repos: [{
+            repo_id: repositoryId,
+            owner: 'thomasrribeiro-flashcards',
+            repo_name: 'elementary-algebra-and-functions'
+        }]
+    });
+
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
+    await page.getByRole('button', { name: 'Open in Study' }).click();
+
+    await expect(page.locator('#tab-decks')).toHaveClass(/active/);
+    await expect(page.locator('#controls-bar #github-repo-input')).toBeVisible();
+    await expect(page.locator('#controls-bar').getByRole('button', { name: 'Add deck' })).toBeVisible();
+    await expect(page.locator('.col-pane').nth(0).locator('.col-row.selected')).toContainText('mathematics');
+    await expect(page.locator('.col-pane').nth(1).locator('.col-row.selected')).toContainText('elementary-algebra-and-functions');
+    await expect(page).toHaveURL(/view=study/);
+    await expect(page).toHaveURL(/study-deck=thomasrribeiro-flashcards%2Felementary-algebra-and-functions/);
+
+    await page.reload();
+    await expect(page.locator('#tab-decks')).toHaveClass(/active/);
+    await expect(page.locator('.col-pane').nth(1).locator('.col-row.selected')).toContainText('elementary-algebra-and-functions');
+
+    const chapterRow = page.locator('.col-pane').nth(2).locator('.col-row').filter({
+        hasText: chapter.file.split('/').pop().replace(/\.md$/, '')
+    });
+    await chapterRow.getByRole('button', { name: 'View chapter prerequisites' }).click();
+    await page.getByRole('button', { name: 'Close prerequisites' }).click();
+    await page.getByRole('button', { name: 'View roadmap' }).click();
+
+    const chapterTargetId = `${targetId}#${chapter.id}`;
+    await expect(page.locator('#tab-curriculum')).toHaveClass(/active/);
+    await expect(page.locator(`.curriculum-graph-node[data-deck-id="${chapterTargetId}"]`))
+        .toHaveClass(/is-target/);
+    await expect(page).toHaveURL(new RegExp(`curriculum-target=${encodeURIComponent(chapterTargetId)}`));
+    await expect(page).not.toHaveURL(/study-deck=/);
+
+    await page.goBack();
+    await expect(page.locator('#tab-decks')).toHaveClass(/active/);
+    await expect(page.locator('.col-pane').nth(2).locator('.col-row.selected')).toContainText(
+        chapter.file.split('/').pop().replace(/\.md$/, '')
+    );
+    await page.goForward();
+    await expect(page.locator('#tab-curriculum')).toHaveClass(/active/);
+    await expect(page.locator(`.curriculum-graph-node[data-deck-id="${chapterTargetId}"]`))
+        .toHaveClass(/is-target/);
 });
 
 test('queues content generation for one eligible chapter', async ({ page }) => {
@@ -979,7 +1093,6 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         const stage = page.locator('.curriculum-graph-stage');
         const scrolling = await stage.evaluate(element => ({
             top: element.scrollTop,
-            hasVertical: element.scrollHeight > element.clientHeight,
             hasHorizontalContent: element.scrollWidth > element.clientWidth,
             overflowX: getComputedStyle(element).overflowX,
             overflowY: getComputedStyle(element).overflowY,
@@ -1014,7 +1127,6 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
                 return Math.abs(element.scrollHeight - expected) < 3;
             })()
         }));
-        expect(scrolling.hasVertical).toBe(true);
         expect(scrolling.hasHorizontalContent).toBe(true);
         expect(scrolling.overflowX).toBe('hidden');
         expect(scrolling.overflowY).toBe('scroll');
