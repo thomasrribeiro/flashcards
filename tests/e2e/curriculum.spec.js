@@ -197,6 +197,7 @@ test('keeps deck installation inside Study even when the collection is empty', a
     await controls.getByRole('button', { name: 'Add deck' }).click();
     await expect(page.locator('.col-pane-label')).toHaveText(['Subjects', 'Decks', 'Chapters']);
     await expect(page.locator('.col-pane-label')).toHaveCount(3);
+    await expect(page.locator('.col-pane-scroll .col-pane-label')).toHaveCount(0);
     await expect(page.locator('.col-pane').nth(0).locator('.col-row')).toContainText('chemistry');
     await page.locator('.col-pane').nth(0).locator('.col-row').filter({ hasText: 'chemistry' }).click();
     await expect(page.locator('.col-pane').nth(1).locator('.col-row')).toContainText('organic-chemistry');

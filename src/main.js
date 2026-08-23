@@ -588,7 +588,7 @@ async function loadRepositories({ refreshCollection = true } = {}) {
     // Rebuilding the columns after a star change must not jump any of the
     // independently scrolling panes back to the top.
     const previousColumnScroll = grid
-        ? [...grid.querySelectorAll('.columns-view .col-pane')].map(pane => ({
+        ? [...grid.querySelectorAll('.columns-view .col-pane-scroll')].map(pane => ({
             top: pane.scrollTop,
             left: pane.scrollLeft
         }))
@@ -2199,8 +2199,11 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
         heading.className = 'col-pane-label';
         heading.textContent = label;
         pane.appendChild(heading);
-        if (rows.length === 0) { const e = document.createElement('div'); e.className = 'col-empty'; e.textContent = term ? 'No matches' : ''; pane.appendChild(e); }
-        rows.forEach(r => pane.appendChild(r));
+        const scroller = document.createElement('div');
+        scroller.className = 'col-pane-scroll';
+        pane.appendChild(scroller);
+        if (rows.length === 0) { const e = document.createElement('div'); e.className = 'col-empty'; e.textContent = term ? 'No matches' : ''; scroller.appendChild(e); }
+        rows.forEach(r => scroller.appendChild(r));
         return pane;
     };
 
@@ -2315,7 +2318,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
 
     grid.appendChild(wrap);
     wrap.scrollLeft = scroll.left || 0;
-    [...wrap.querySelectorAll('.col-pane')].forEach((pane, index) => {
+    [...wrap.querySelectorAll('.col-pane-scroll')].forEach((pane, index) => {
         const saved = scroll.panes?.[index];
         if (!saved) return;
         pane.scrollTop = saved.top;
