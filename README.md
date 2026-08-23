@@ -316,9 +316,13 @@ npm run runner:status
 ```
 
 The service runs one request at a time. `launchd` does not overlap another
-instance while an agent is active. Output is written to
-`~/.flashcards/runner/stdout.log` and `stderr.log`; uninstalling the service
-leaves those diagnostic logs in place.
+instance while an agent is active. Installation creates dedicated workflow and
+curriculum checkouts under `~/.flashcards/runner/`, so edits in a developer
+checkout cannot contaminate a production job. Before claiming work, the runner
+pins its workflow checkout to the most recent successful GitHub Pages
+deployment; the request provenance guard still verifies the exact commit.
+Output is written to `~/.flashcards/runner/stdout.log` and `stderr.log`;
+uninstalling the service leaves those diagnostic logs and checkouts in place.
 
 The runner needs the corresponding provider CLI on `PATH`: Codex CLI for
 OpenAI, Claude Code for Anthropic, or Gemini CLI for Google. Consumer chat

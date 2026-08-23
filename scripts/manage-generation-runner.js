@@ -14,9 +14,41 @@ import {
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, '..');
-const cliPath = path.join(repositoryRoot, 'bin', 'flashcards.js');
 const domain = `gui/${process.getuid()}`;
 const service = `${domain}/${GENERATION_RUNNER_LABEL}`;
+
+function captured(executable, args, cwd = repositoryRoot) {
+    const result = spawnSync(executable, args, { cwd, encoding: 'utf8' });
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+        throw new Error((result.stderr || result.stdout || `${executable} failed`).trim());
+    }
+    return result.stdout.trim();
+}
+
+function githubRepository(remote) {
+    const match = /github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?$/.exec(remote || '');
+    if (!match) throw new Error(`Runner source is not a GitHub repository: ${remote}`);
+    return match[1];
+}
+
+function ensureDedicatedClone(sourceRoot, destination) {
+    const sourceRemote = captured('git', ['remote', 'get-url', 'origin'], sourceRoot);
+    if (!existsSync(path.join(destination, '.git'))) {
+        if (existsSync(destination)) {
+            throw new Error(`Runner checkout exists but is not a Git clone: ${destination}`);
+        }
+        captured('git', ['clone', sourceRemote, destination], repositoryRoot);
+    }
+    const runtimeRemote = captured('git', ['remote', 'get-url', 'origin'], destination);
+    if (runtimeRemote !== sourceRemote) {
+        throw new Error(`Runner checkout origin does not match ${sourceRemote}: ${destination}`);
+    }
+    if (captured('git', ['status', '--porcelain', '--untracked-files=no'], destination)) {
+        throw new Error(`Runner checkout has unexpected tracked changes: ${destination}`);
+    }
+    return { remote: sourceRemote, repository: githubRepository(sourceRemote) };
+}
 
 function parseArguments(values) {
     const [command = 'status', ...rest] = values;
@@ -61,19 +93,35 @@ async function install(options) {
     assertRunnerCredential();
 
     const notesRoot = path.resolve(options.notesRoot || path.join(home, 'notes'));
-    const registryRoot = path.resolve(options.registryRoot || path.resolve(repositoryRoot, '..', 'curricula'));
-    for (const [label, target] of [['notes root', notesRoot], ['registry root', registryRoot]]) {
+    const registrySourceRoot = path.resolve(options.registryRoot || path.resolve(repositoryRoot, '..', 'curricula'));
+    for (const [label, target] of [['notes root', notesRoot], ['registry root', registrySourceRoot]]) {
         if (!existsSync(target)) throw new Error(`Runner ${label} does not exist: ${target}`);
     }
     await mkdir(path.dirname(paths.plistPath), { recursive: true });
     await mkdir(paths.stateDirectory, { recursive: true });
+    launchctl(['bootout', service], { allowFailure: true });
+
+    const workflowSource = ensureDedicatedClone(repositoryRoot, paths.workflowDirectory);
+    ensureDedicatedClone(registrySourceRoot, paths.registryDirectory);
+    const workflowCommit = captured('git', ['rev-parse', 'HEAD'], repositoryRoot);
+    captured('git', ['fetch', 'origin', workflowCommit], paths.workflowDirectory);
+    captured('git', ['switch', '--detach', workflowCommit], paths.workflowDirectory);
+    const npmInstall = spawnSync('npm', ['ci', '--omit=dev'], {
+        cwd: paths.workflowDirectory,
+        encoding: 'utf8',
+        stdio: 'inherit'
+    });
+    if (npmInstall.error) throw npmInstall.error;
+    if (npmInstall.status !== 0) throw new Error(`npm ci exited with status ${npmInstall.status}.`);
+
     const plist = generationRunnerPlist({
         nodePath: process.execPath,
-        cliPath,
-        workingDirectory: repositoryRoot,
+        runnerScriptPath: path.join(paths.workflowDirectory, 'scripts', 'run-generation-request.js'),
+        workingDirectory: paths.workflowDirectory,
         workerUrl: workerUrl.replace(/\/$/, ''),
         notesRoot,
-        registryRoot,
+        registryRoot: paths.registryDirectory,
+        deploymentRepository: workflowSource.repository,
         intervalSeconds: Number(options.interval || 60),
         executablePath: [
             path.dirname(process.execPath),
@@ -88,13 +136,14 @@ async function install(options) {
         stderrPath: paths.stderrPath
     });
 
-    launchctl(['bootout', service], { allowFailure: true });
     await writeFile(paths.plistPath, plist, { encoding: 'utf8', mode: 0o600 });
     launchctl(['bootstrap', domain, paths.plistPath]);
     launchctl(['enable', service]);
     launchctl(['kickstart', '-k', service]);
     console.log(`Installed production generation runner: ${GENERATION_RUNNER_LABEL}`);
     console.log(`Queue: ${workerUrl.replace(/\/$/, '')}`);
+    console.log(`Workflow checkout: ${paths.workflowDirectory}`);
+    console.log(`Registry checkout: ${paths.registryDirectory}`);
     console.log(`Logs: ${paths.stdoutPath} and ${paths.stderrPath}`);
 }
 
@@ -119,6 +168,8 @@ async function status() {
     const worker = /<string>(https?:\/\/[^<]+)<\/string>/.exec(configuration)?.[1] || 'unknown';
     console.log(`Generation runner is loaded: ${GENERATION_RUNNER_LABEL}`);
     console.log(`Queue: ${worker}`);
+    console.log(`Workflow checkout: ${paths.workflowDirectory}`);
+    console.log(`Registry checkout: ${paths.registryDirectory}`);
     console.log(`Logs: ${paths.stdoutPath} and ${paths.stderrPath}`);
     process.stdout.write(result.stdout);
 }

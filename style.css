@@ -3147,10 +3147,11 @@ body.standalone-phone .mobile-sidebar-close {
    the window. Height is capped to 7 rows; taller columns scroll vertically. */
 .columns-view {
     --col-row-h: 34px;
+    --col-header-h: 30px;
     display: flex;
     align-items: stretch;
     border: 1px solid var(--black);
-    height: calc(var(--col-row-h) * 7);
+    height: calc(var(--col-header-h) + var(--col-row-h) * 7);
     overflow: hidden;
 }
 
@@ -3163,7 +3164,22 @@ body.standalone-phone .mobile-sidebar-close {
 }
 .col-pane:last-child { border-right: none; }
 
-.col-pane-label { display: none; }
+.col-pane-label {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    height: var(--col-header-h);
+    box-sizing: border-box;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--black);
+    background: var(--light-gray);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
 
 .col-row {
     display: flex;
@@ -3551,24 +3567,9 @@ body.standalone-phone .mobile-sidebar-close {
         flex: none;
         border-right: none;
         border-bottom: 3px solid var(--black);
-        height: calc(var(--col-row-h) * 5);
+        height: calc(var(--col-header-h) + var(--col-row-h) * 5);
     }
     .col-pane:last-child { border-bottom: none; }
-    .col-pane-label {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        display: flex;
-        align-items: center;
-        height: 28px;
-        padding: 0 8px;
-        border-bottom: 2px solid var(--black);
-        background: #f2f2f2;
-        font-size: 0.7rem;
-        font-weight: 600;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-    }
 }
 
 /* ── Study session breadcrumb + scope info ── */
@@ -3766,23 +3767,11 @@ body.standalone-phone .mobile-sidebar-close {
     text-decoration: none;
 }
 
-.curriculum-breadcrumb .curriculum-deck-settings {
-    display: inline-grid;
-    width: 28px;
-    height: 28px;
-    flex: 0 0 28px;
-    place-items: center;
-    align-self: center;
-    border: 1px solid var(--black);
-    background: var(--white);
-    padding: 0;
-    text-decoration: none;
-}
-
-.curriculum-breadcrumb .curriculum-deck-settings:hover,
-.curriculum-breadcrumb .curriculum-deck-settings:focus-visible {
-    background: var(--light-gray);
+.curriculum-breadcrumb button[aria-current="page"].curriculum-deck-settings-trigger {
     color: var(--black);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
 .curriculum-breadcrumb-label {

@@ -195,6 +195,8 @@ test('keeps deck installation inside Study even when the collection is empty', a
 
     await controls.getByLabel('Find a GitHub deck').fill(repositoryId);
     await controls.getByRole('button', { name: 'Add deck' }).click();
+    await expect(page.locator('.col-pane-label')).toHaveText(['Subjects', 'Decks', 'Chapters']);
+    await expect(page.locator('.col-pane-label')).toHaveCount(3);
     await expect(page.locator('.col-pane').nth(0).locator('.col-row')).toContainText('chemistry');
     await page.locator('.col-pane').nth(0).locator('.col-row').filter({ hasText: 'chemistry' }).click();
     await expect(page.locator('.col-pane').nth(1).locator('.col-row')).toContainText('organic-chemistry');
@@ -397,6 +399,14 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
     await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
     const graphHeader = page.locator('.curriculum-graph-controls');
     await expect(page.locator('.curriculum-breadcrumb-actions')).toHaveCount(0);
+    const settingsTrigger = page.getByRole('button', {
+        name: 'Deck settings for elementary-algebra-and-functions'
+    });
+    await expect(settingsTrigger).toHaveText('elementary-algebra-and-functions');
+    await expect(settingsTrigger.locator('svg')).toHaveCount(0);
+    await expect.poll(() => settingsTrigger.evaluate(element => (
+        getComputedStyle(element).textDecorationLine
+    ))).toContain('underline');
     const deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
     await expect(deckSettings.getByRole('button', { name: /Add to Study/ })).toHaveCount(0);
     await expect(deckSettings.getByRole('button', { name: /Prereqs & unlocks/ })).toBeVisible();
@@ -425,7 +435,7 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
     });
 });
 
-test('adds only generated curriculum chapters to Study and then offers sync', async ({ page }) => {
+test('adds only generated curriculum chapters and refreshes them through Add to Study', async ({ page }) => {
     const targetId = 'mathematics/elementary-algebra-and-functions';
     const repositoryId = 'thomasrribeiro-flashcards/elementary-algebra-and-functions';
     const catalog = structuredClone(bundledCurriculum);
@@ -466,8 +476,10 @@ test('adds only generated curriculum chapters to Study and then offers sync', as
     await add.click();
 
     deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
-    await expect(deckSettings.getByRole('button', { name: /Add to Study/ })).toHaveCount(0);
-    await expect(deckSettings.getByRole('button', { name: /Sync latest version from GitHub/ })).toBeVisible();
+    const refreshStudy = deckSettings.getByRole('button', { name: /Add to Study/ });
+    await expect(refreshStudy).toBeVisible();
+    await refreshStudy.click();
+    deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
     await deckSettings.getByRole('button', { name: /Open in Study/ }).click();
     await expect(page.locator('#tab-decks')).toHaveClass(/active/);
     await expect(page.locator('.col-pane').nth(0).locator('.col-row.selected')).toContainText('mathematics');

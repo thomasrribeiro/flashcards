@@ -1492,8 +1492,8 @@ function openCurriculumDeckActionsModal({ deck, registry, installedRepository },
             }
         }));
         actions.push(appendDeckAction(body, {
-            label: 'Sync latest version from GitHub',
-            description: 'Refresh generated chapters in Study while preserving review history.',
+            label: 'Add to Study',
+            description: 'Add the latest generated chapters to Study while preserving review history.',
             onClick: async button => {
                 if (await syncDeckFromGitHub(installedRepository.id, button)) {
                     closeDeckActionsModal({ restoreFocus: false });
@@ -4774,13 +4774,10 @@ async function renderCurriculumView(options = {}) {
             mode: 'chapters', hierarchy: 'chapter', subject: subject || deckId.split('/')[0],
             parentId: deckId, targetId: '', query: '', layerStart: 0
         }, hierarchy === 'chapter' || (hierarchy === 'deck' && mode === 'focus'));
-        deckSettingsButton = document.createElement('button');
-        deckSettingsButton.type = 'button';
-        deckSettingsButton.className = 'curriculum-deck-settings';
-        deckSettingsButton.innerHTML = SETTINGS_IMG;
+        deckSettingsButton = breadcrumbs.lastElementChild;
+        deckSettingsButton.classList.add('curriculum-deck-settings-trigger');
         deckSettingsButton.setAttribute('aria-label', `Deck settings for ${deckId.split('/').pop()}`);
-        deckSettingsButton.title = 'Deck settings';
-        breadcrumbs.appendChild(deckSettingsButton);
+        deckSettingsButton.title = 'Open deck settings';
     }
     const historyControls = document.createElement('span');
     historyControls.className = 'curriculum-history-controls';

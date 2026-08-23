@@ -21,6 +21,8 @@ export function generationRunnerPaths(home = os.homedir()) {
     return {
         plistPath: path.join(home, 'Library', 'LaunchAgents', `${GENERATION_RUNNER_LABEL}.plist`),
         stateDirectory,
+        workflowDirectory: path.join(stateDirectory, 'flashcards-runtime'),
+        registryDirectory: path.join(stateDirectory, 'curricula-runtime'),
         stdoutPath: path.join(stateDirectory, 'stdout.log'),
         stderrPath: path.join(stateDirectory, 'stderr.log')
     };
@@ -28,11 +30,12 @@ export function generationRunnerPaths(home = os.homedir()) {
 
 export function generationRunnerPlist({
     nodePath,
-    cliPath,
+    runnerScriptPath,
     workingDirectory,
     workerUrl,
     notesRoot,
     registryRoot,
+    deploymentRepository,
     intervalSeconds = 60,
     executablePath = process.env.PATH || '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
     stdoutPath,
@@ -42,21 +45,31 @@ export function generationRunnerPlist({
     if (!Number.isInteger(interval) || interval < 15) {
         throw new Error('Runner interval must be an integer of at least 15 seconds.');
     }
-    const required = { nodePath, cliPath, workingDirectory, workerUrl, notesRoot, registryRoot, stdoutPath, stderrPath };
+    const required = {
+        nodePath,
+        runnerScriptPath,
+        workingDirectory,
+        workerUrl,
+        notesRoot,
+        registryRoot,
+        deploymentRepository,
+        stdoutPath,
+        stderrPath
+    };
     for (const [name, value] of Object.entries(required)) {
         if (!String(value || '').trim()) throw new Error(`Runner ${name} is required.`);
     }
     const argumentsList = [
         nodePath,
-        cliPath,
-        'requests',
-        'run',
+        runnerScriptPath,
         '--worker-url',
         workerUrl,
         '--notes-root',
         notesRoot,
         '--registry-root',
-        registryRoot
+        registryRoot,
+        '--deployment-repository',
+        deploymentRepository
     ];
 
     return `<?xml version="1.0" encoding="UTF-8"?>
