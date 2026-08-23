@@ -65,7 +65,7 @@
                             <li>Star subjects, decks, or chapters to set your learning scope.</li>
                             <li>Use <strong>Review</strong> to strengthen previously learned material before it fades.</li>
                             <li>Use <strong>Learn</strong> to introduce a manageable batch of new cards.</li>
-                            <li>Use <img src="./icons/gavel.png" alt="gavel" style="height: 1em; vertical-align: middle;"> to review any subject, deck, or chapter individually.</li>
+                            <li>Use <img src="./icons/gavel.png" alt="gavel" style="height: 1em; vertical-align: middle;"> to review a subject or deck individually. Select a chapter row to study that chapter.</li>
                         </ol>
                     </div>
 
@@ -92,12 +92,9 @@
             <main class="main-content">
                 <div class="main-utility-row">
                     <button id="mobile-sidebar-open" class="mobile-sidebar-open" type="button" aria-controls="info-sidebar" aria-expanded="false">About</button>
-                    <span id="connection-status" class="connection-status" role="status" aria-live="polite">
-                        <span class="connection-status-dot" aria-hidden="true"></span>
-                        <span class="connection-status-label">Checking…</span>
-                    </span>
-                    <button id="study-settings-btn" class="study-settings-btn" type="button" aria-expanded="false" aria-controls="study-settings-modal">Settings</button>
-                    <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+                    <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Switch to dark mode">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.2A8.5 8.5 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                    </button>
                 </div>
                 <!-- <h2 class="section-title">Collection</h2> -->
 
@@ -109,6 +106,13 @@
                         <div class="user-info-row hidden" id="user-info-row-main">
                             <span id="user-name"></span>
                             <button class="btn-logout" id="btn-logout">Logout</button>
+                        </div>
+                        <div class="user-info-row user-info-controls">
+                            <span id="connection-status" class="connection-status" role="status" aria-live="polite">
+                                <span class="connection-status-dot" aria-hidden="true"></span>
+                                <span class="connection-status-label">Checking…</span>
+                            </span>
+                            <button id="study-settings-btn" class="study-settings-btn" type="button" aria-expanded="false" aria-controls="study-settings-modal">Settings</button>
                         </div>
                     </div>
                 </div>

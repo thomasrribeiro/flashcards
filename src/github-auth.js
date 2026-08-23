@@ -151,7 +151,10 @@ class GitHubAuth {
             }
         } else {
             if (loginBtn) loginBtn.classList.remove('hidden');
-            if (userInfo) userInfo.classList.add('hidden');
+            // Connection and application settings remain available before
+            // authentication; signing in adds the identity/logout row to the
+            // same account block rather than relocating those controls.
+            if (userInfo) userInfo.classList.remove('hidden');
             if (userInfoRow) userInfoRow.classList.add('hidden');
         }
     }

@@ -78,6 +78,13 @@ async function installGenerationAccount(page, {
     await page.locator('#tab-curriculum').click();
 }
 
+async function openCurriculumDeckSettings(page, deckName) {
+    await page.getByRole('button', { name: `Deck settings for ${deckName}` }).click();
+    const modal = page.getByRole('dialog', { name: deckName });
+    await expect(modal).toBeVisible();
+    return modal;
+}
+
 test.beforeEach(async ({ page }) => {
     await page.route('https://api.github.com/repos/**', route => (
         route.fulfill({ status: 404, json: { message: 'Not Found' } })
@@ -108,32 +115,42 @@ test.beforeEach(async ({ page }) => {
     ));
     expect(breadcrumbControlOrder).toEqual([
         'curriculum-breadcrumb',
-        'curriculum-history-controls'
+        'curriculum-history-controls',
+        'curriculum-breadcrumb-actions'
     ]);
     const [backBox, createBox] = await Promise.all([
         page.getByRole('button', { name: 'Back in curriculum' }).boundingBox(),
         page.getByRole('button', { name: 'Create subject' }).boundingBox()
     ]);
     const breadcrumbBox = await page.locator('.curriculum-breadcrumb').boundingBox();
-    const graphHeaderBox = await page.locator('.curriculum-graph-controls').boundingBox();
     expect(Math.abs(backBox.x - breadcrumbBox.x)).toBeLessThan(1);
     expect(backBox.y).toBeGreaterThanOrEqual(breadcrumbBox.y + breadcrumbBox.height);
-    expect(Math.abs(createBox.x - (graphHeaderBox.x + 8))).toBeLessThanOrEqual(1);
+    expect(createBox.x).toBeGreaterThan(backBox.x + backBox.width);
+    expect(Math.abs(createBox.y - backBox.y)).toBeLessThan(1);
     await expect(page.getByRole('button', { name: 'Create subject' })).toHaveText('+');
 });
 
-test('keeps header controls on one row and exposes Agents inside Settings', async ({ page }) => {
+test('groups connection and settings with the user and uses an icon theme toggle', async ({ page }) => {
+    await installGenerationAccount(page);
     const status = page.locator('#connection-status');
     const settingsButton = page.getByRole('button', { name: 'Settings' });
-    const theme = page.getByRole('button', { name: 'Dark mode' });
+    const theme = page.getByRole('button', { name: 'Switch to dark mode' });
+    const user = page.locator('#user-info');
     await expect(status).toBeVisible();
     await expect(settingsButton).toBeVisible();
     await expect(theme).toBeVisible();
-    const [statusBox, settingsBox, themeBox] = await Promise.all([
-        status.boundingBox(), settingsButton.boundingBox(), theme.boundingBox()
+    await expect(user.locator('#connection-status')).toHaveCount(1);
+    await expect(user.locator('#study-settings-btn')).toHaveCount(1);
+    await expect(theme).toHaveText('');
+    await expect(theme.locator('svg')).toHaveCount(1);
+    const [statusBox, settingsBox] = await Promise.all([
+        status.boundingBox(), settingsButton.boundingBox()
     ]);
     expect(Math.abs(statusBox.y - settingsBox.y)).toBeLessThan(2);
-    expect(Math.abs(settingsBox.y - themeBox.y)).toBeLessThan(2);
+    await theme.click();
+    const lightTheme = page.getByRole('button', { name: 'Switch to light mode' });
+    await expect(lightTheme).toBeVisible();
+    await expect(lightTheme.locator('svg')).toHaveCount(1);
 
     await settingsButton.click();
     const modal = page.getByRole('dialog', { name: 'Settings' });
@@ -344,8 +361,9 @@ test('queues a chapter-curriculum agent from an empty deck chapter viewer', asyn
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
-    await expect(page.getByRole('button', { name: 'Prereqs & unlocks' })).toBeVisible();
-    const create = page.getByRole('button', { name: 'Generate curriculum' });
+    const deckSettings = await openCurriculumDeckSettings(page, 'geometry-and-measurement');
+    await expect(deckSettings.getByRole('button', { name: /Add to Study/ })).toHaveCount(0);
+    const create = deckSettings.getByRole('button', { name: 'Generate curriculum' });
     await expect(create).toBeEnabled();
     await create.click();
 
@@ -378,39 +396,21 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
     const graphHeader = page.locator('.curriculum-graph-controls');
-    const headerActions = graphHeader.locator('.curriculum-graph-primary-actions');
-    await expect(headerActions.getByRole('button')).toHaveCount(3);
-    await expect(headerActions.getByRole('button').nth(0)).toHaveText('Add to Study');
-    await expect(headerActions.getByRole('button').nth(1)).toHaveText('Prereqs & unlocks');
-    await expect(headerActions.getByRole('button').nth(2)).toHaveText('Generate curriculum');
-    const [headerBox, actionsBox, navigationBox] = await Promise.all([
+    await expect(page.locator('.curriculum-breadcrumb-actions')).toHaveCount(0);
+    const deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
+    await expect(deckSettings.getByRole('button', { name: /Add to Study/ })).toHaveCount(0);
+    await expect(deckSettings.getByRole('button', { name: /Prereqs & unlocks/ })).toBeVisible();
+    const [headerBox, navigationBox] = await Promise.all([
         graphHeader.boundingBox(),
-        headerActions.boundingBox(),
         graphHeader.locator('.curriculum-graph-navigation').boundingBox()
     ]);
-    expect(Math.abs(actionsBox.x - (headerBox.x + 8))).toBeLessThanOrEqual(1);
+    await expect(graphHeader.locator('.curriculum-graph-primary-actions').getByRole('button'))
+        .toHaveCount(0);
     expect(Math.abs(
         navigationBox.x + navigationBox.width / 2
         - (headerBox.x + headerBox.width / 2)
     )).toBeLessThan(2);
-    const actionBoxes = await headerActions.getByRole('button').evaluateAll(buttons => (
-        buttons.map(button => {
-            const box = button.getBoundingClientRect();
-            return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
-        })
-    ));
-    const navigationButtonsBox = await graphHeader.locator('.curriculum-graph-navigation')
-        .evaluate(navigation => {
-            const box = navigation.getBoundingClientRect();
-            return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
-        });
-    expect(actionBoxes.every(box => (
-        box.right <= navigationButtonsBox.left
-        || box.left >= navigationButtonsBox.right
-        || box.bottom <= navigationButtonsBox.top
-        || box.top >= navigationButtonsBox.bottom
-    ))).toBe(true);
-    const regenerate = page.getByRole('button', { name: 'Generate curriculum' });
+    const regenerate = deckSettings.getByRole('button', { name: 'Generate curriculum' });
     await expect(regenerate).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Fit', exact: true })).toHaveCount(0);
     await regenerate.click();
@@ -425,11 +425,14 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
     });
 });
 
-test('adds a configured curriculum deck to Study from the graph header', async ({ page }) => {
+test('adds only generated curriculum chapters to Study and then offers sync', async ({ page }) => {
     const targetId = 'mathematics/elementary-algebra-and-functions';
     const repositoryId = 'thomasrribeiro-flashcards/elementary-algebra-and-functions';
-    const target = bundledCurriculum.decks.find(deck => deck.id === targetId);
+    const catalog = structuredClone(bundledCurriculum);
+    const target = catalog.decks.find(deck => deck.id === targetId);
     const chapter = target.chapters[0];
+    chapter.card_count = 1;
+    const emptyChapter = target.chapters.find(item => Number(item.card_count || 0) === 0);
     await page.route(`https://api.github.com/repos/${repositoryId}`, route => route.fulfill({ json: {
         full_name: repositoryId,
         name: 'elementary-algebra-and-functions',
@@ -442,6 +445,7 @@ test('adds a configured curriculum deck to Study from the graph header', async (
     await page.route(`https://api.github.com/repos/${repositoryId}/git/trees/master**`, route => (
         route.fulfill({ json: { truncated: false, tree: [
             { type: 'blob', path: chapter.file, sha: 'chapter-sha', size: 240 },
+            { type: 'blob', path: emptyChapter.file, sha: 'empty-chapter-sha', size: 120 },
             { type: 'blob', path: 'deck.toml', sha: 'manifest-sha', size: 120 }
         ] } })
     ));
@@ -451,21 +455,31 @@ test('adds a configured curriculum deck to Study from the graph header', async (
             body: 'subject = "mathematics"\ndeck = "elementary-algebra-and-functions"\n'
         })
     ));
-    await installGenerationAccount(page);
+    await installGenerationAccount(page, { catalog });
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
-    await expect(page.getByRole('button', { name: 'Open in Study' })).toHaveCount(0);
-    const add = page.getByRole('button', { name: 'Add to Study' });
+    let deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
+    await expect(deckSettings.getByRole('button', { name: /Open in Study/ })).toHaveCount(0);
+    const add = deckSettings.getByRole('button', { name: /Add to Study/ });
     await expect(add).toBeVisible();
     await add.click();
 
+    deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
+    await expect(deckSettings.getByRole('button', { name: /Add to Study/ })).toHaveCount(0);
+    await expect(deckSettings.getByRole('button', { name: /Sync latest version from GitHub/ })).toBeVisible();
+    await deckSettings.getByRole('button', { name: /Open in Study/ }).click();
     await expect(page.locator('#tab-decks')).toHaveClass(/active/);
     await expect(page.locator('.col-pane').nth(0).locator('.col-row.selected')).toContainText('mathematics');
     await expect(page.locator('.col-pane').nth(1).locator('.col-row.selected'))
         .toContainText('elementary-algebra-and-functions');
     await expect(page).toHaveURL(/view=study/);
     await expect(page).toHaveURL(/study-deck=thomasrribeiro-flashcards%2Felementary-algebra-and-functions/);
+    const chapterRows = page.locator('.col-pane').nth(2).locator('.col-row');
+    await expect(chapterRows).toContainText(chapter.file.split('/').pop().replace(/\.md$/, ''));
+    await expect(chapterRows.filter({
+        hasText: emptyChapter.file.split('/').pop().replace(/\.md$/, '')
+    })).toHaveCount(0);
 });
 
 test('shows chapter generation as checking until AI access is verified', async ({ page }) => {
@@ -479,7 +493,8 @@ test('shows chapter generation as checking until AI access is verified', async (
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
-    const button = page.locator('.curriculum-graph-primary-actions .curriculum-toolbar-action.is-primary');
+    const deckSettings = await openCurriculumDeckSettings(page, 'geometry-and-measurement');
+    const button = deckSettings.locator('.curriculum-deck-generation-action');
     await expect(button).toHaveText('Checking AI access…');
     await expect(button).toBeDisabled();
     await expect(button).toHaveClass(/is-checking/);
@@ -523,6 +538,13 @@ test('opens generated chapter actions before starting its flashcards', async ({ 
             body: `+++\norder = 1\nsubject = "mathematics"\ntags = ["algebra"]\nprerequisites = []\nprovides = []\n+++\n\n<!-- card-id: variables-test-001 -->\nQ: What does a variable represent?\nA: A quantity that can vary.\n`
         })
     ));
+    await page.route(`https://api.github.com/repos/${repositoryId}/contents/${chapter.file}`, async route => {
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        await route.fulfill({
+            contentType: 'text/markdown',
+            body: `+++\norder = 1\nsubject = "mathematics"\ntags = ["algebra"]\nprerequisites = []\nprovides = []\n+++\n\n<!-- card-id: variables-test-001 -->\nQ: What does a variable represent?\nA: A quantity that can vary.\n`
+        });
+    });
     await installGenerationAccount(page, { catalog });
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
@@ -535,10 +557,14 @@ test('opens generated chapter actions before starting its flashcards', async ({ 
     await chapterNode.hover();
     await expect.poll(() => chapterNode.evaluate(node => getComputedStyle(node).borderLeftColor))
         .toBe(statusBorder);
+    const openedAt = Date.now();
     await chapterNode.click();
-
-    await expect(page.locator('#card-browser-modal')).toBeVisible();
+    await expect(page.locator('#card-browser-modal')).toBeVisible({ timeout: 500 });
+    expect(Date.now() - openedAt).toBeLessThan(800);
     const browser = page.getByRole('dialog', { name: 'Variables and expressions' });
+    await expect(browser.getByRole('button', { name: 'Generate content', exact: true })).toBeVisible();
+    await expect(page.getByLabel('Show flashcards')).toBeHidden();
+    await expect(page.getByLabel('Show flashcards')).toBeVisible({ timeout: 3_000 });
     const compactLayout = await browser.evaluate(modal => {
         const panel = modal.querySelector('.card-browser-modal-content');
         const controls = [...modal.querySelectorAll('.card-browser-actions button')];
@@ -594,8 +620,10 @@ test('opens generated chapter actions before starting its flashcards', async ({ 
 test('preserves deck and chapter context between Study and Curriculum', async ({ page }) => {
     const targetId = 'mathematics/elementary-algebra-and-functions';
     const repositoryId = 'thomasrribeiro-flashcards/elementary-algebra-and-functions';
-    const target = bundledCurriculum.decks.find(deck => deck.id === targetId);
+    const catalog = structuredClone(bundledCurriculum);
+    const target = catalog.decks.find(deck => deck.id === targetId);
     const chapter = target.chapters[0];
+    chapter.card_count = 1;
     await page.route(`https://api.github.com/repos/${repositoryId}`, route => route.fulfill({ json: {
         full_name: repositoryId,
         name: 'elementary-algebra-and-functions',
@@ -617,7 +645,14 @@ test('preserves deck and chapter context between Study and Curriculum', async ({
             body: 'subject = "mathematics"\ndeck = "elementary-algebra-and-functions"\n'
         })
     ));
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/blobs/chapter-sha`, route => (
+        route.fulfill({
+            contentType: 'text/markdown',
+            body: `+++\norder = 1\nsubject = "mathematics"\ntags = ["algebra"]\nprerequisites = []\nprovides = []\n+++\n\n<!-- card-id: variables-context-001 -->\nQ: What does a variable represent?\nA: A quantity that can vary.\n`
+        })
+    ));
     await installGenerationAccount(page, {
+        catalog,
         repos: [{
             repo_id: repositoryId,
             owner: 'thomasrribeiro-flashcards',
@@ -627,11 +662,15 @@ test('preserves deck and chapter context between Study and Curriculum', async ({
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator(`.curriculum-graph-node[data-deck-id="${targetId}"]`).click();
-    await page.getByRole('button', { name: 'Open in Study' }).click();
+    const deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
+    await deckSettings.getByRole('button', { name: /Open in Study/ }).click();
 
     await expect(page.locator('#tab-decks')).toHaveClass(/active/);
     await expect(page.locator('#controls-bar #github-repo-input')).toBeVisible();
     await expect(page.locator('#controls-bar').getByRole('button', { name: 'Add deck' })).toBeVisible();
+    await expect.poll(() => page.getByRole('button', { name: 'View roadmap' }).evaluate(button => (
+        Number.parseFloat(getComputedStyle(button).fontSize)
+    ))).toBeLessThanOrEqual(14);
     await expect(page.locator('.col-pane').nth(0).locator('.col-row.selected')).toContainText('mathematics');
     await expect(page.locator('.col-pane').nth(1).locator('.col-row.selected')).toContainText('elementary-algebra-and-functions');
     await expect(page).toHaveURL(/view=study/);
@@ -644,8 +683,14 @@ test('preserves deck and chapter context between Study and Curriculum', async ({
     const chapterRow = page.locator('.col-pane').nth(2).locator('.col-row').filter({
         hasText: chapter.file.split('/').pop().replace(/\.md$/, '')
     });
-    await chapterRow.getByRole('button', { name: 'View chapter prerequisites' }).click();
-    await page.getByRole('button', { name: 'Close prerequisites' }).click();
+    await expect(chapterRow.locator('.col-row-actions button')).toHaveCount(1);
+    await expect(chapterRow.getByRole('button', { name: 'Reset progress in this chapter' })).toBeVisible();
+    await chapterRow.click();
+    await expect(page.locator('#study-area')).toBeVisible();
+    await page.locator('#study-breadcrumb').getByRole('button', { name: 'home', exact: true }).click();
+    await expect(page.locator('.col-pane').nth(2).locator('.col-row.selected')).toContainText(
+        chapter.file.split('/').pop().replace(/\.md$/, '')
+    );
     await page.getByRole('button', { name: 'View roadmap' }).click();
 
     const chapterTargetId = `${targetId}#${chapter.id}`;
@@ -1757,7 +1802,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
 
     await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
-    await page.getByRole('button', { name: 'Prereqs & unlocks' }).click();
+    let deckSettings = await openCurriculumDeckSettings(page, 'measurement-and-physical-reasoning');
+    await deckSettings.getByRole('button', { name: /Prereqs & unlocks/ }).click();
     await expect(page.locator('.curriculum-selected-item')).toHaveClass(/curriculum-explorer-item/);
     await expect(page.locator('.curriculum-neighborhood-column')).toHaveCount(3);
     await expect(page.locator('.curriculum-neighborhood-column.is-prerequisites')).toBeVisible();
@@ -1841,8 +1887,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     const secondFocusedDeck = await relatedDeck.locator('.curriculum-explorer-item-name').textContent();
     await relatedDeck.click();
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Prereqs & unlocks' })).toBeVisible();
-    await page.getByRole('button', { name: 'Prereqs & unlocks' }).click();
+    deckSettings = await openCurriculumDeckSettings(page, secondFocusedDeck);
+    await deckSettings.getByRole('button', { name: /Prereqs & unlocks/ }).click();
     await expect(selectedName).not.toHaveText(firstFocusedDeck);
     await expect(selectedName).toHaveText(secondFocusedDeck);
     await expect(historyBack).toBeEnabled();
@@ -1969,7 +2015,8 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     test.skip(testInfo.project.name !== 'desktop-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/elementary-algebra-and-functions"]').click();
-    await page.getByRole('button', { name: 'Prereqs & unlocks' }).click();
+    let deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
+    await deckSettings.getByRole('button', { name: /Prereqs & unlocks/ }).click();
 
     const selectedTop = (await page.locator('.curriculum-selected-item').boundingBox()).y;
     const prerequisiteTop = (await page.locator('.curriculum-neighborhood-column.is-prerequisites .curriculum-explorer-item').first().boundingBox()).y;
@@ -1981,8 +2028,9 @@ test('aligns another focused deck and explains an unpublished chapter plan', asy
     await expect(page.locator('.curriculum-graph-node[data-deck-id="mathematics/precalculus-and-trigonometry"]')).toBeVisible();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/precalculus-and-trigonometry"]').click();
     await expect(page.getByRole('heading', { name: 'No chapter curriculum yet' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Prereqs & unlocks' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Generate curriculum' })).toBeDisabled();
+    deckSettings = await openCurriculumDeckSettings(page, 'precalculus-and-trigonometry');
+    await expect(deckSettings.getByRole('button', { name: /Add to Study/ })).toHaveCount(0);
+    await expect(deckSettings.getByRole('button', { name: 'Generate curriculum' })).toBeDisabled();
     await expect(page.locator('.curriculum-layer-label')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /selected deck/ })).toHaveCount(0);
 });
@@ -2028,7 +2076,8 @@ test('curriculum controls fit a phone viewport', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="physics/measurement-and-physical-reasoning"]').click();
-    await page.getByRole('button', { name: 'Prereqs & unlocks' }).click();
+    const deckSettings = await openCurriculumDeckSettings(page, 'measurement-and-physical-reasoning');
+    await deckSettings.getByRole('button', { name: /Prereqs & unlocks/ }).click();
     const explorer = page.locator('.curriculum-neighborhood');
     await expect(explorer).toBeVisible();
     const box = await explorer.boundingBox();
