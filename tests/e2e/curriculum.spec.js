@@ -476,19 +476,31 @@ test('adds only generated curriculum chapters and refreshes them through Add to 
     await expect(add).toBeVisible();
     await add.click();
 
-    deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
-    const refreshStudy = deckSettings.getByRole('button', { name: /Add to Study/ });
-    await expect(refreshStudy).toBeVisible();
-    await refreshStudy.click();
-    deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
-    await deckSettings.getByRole('button', { name: /Open in Study/ }).click();
     await expect(page.locator('#tab-decks')).toHaveClass(/active/);
     await expect(page.locator('.col-pane').nth(0).locator('.col-row.selected')).toContainText('mathematics');
     await expect(page.locator('.col-pane').nth(1).locator('.col-row.selected'))
         .toContainText('elementary-algebra-and-functions');
     await expect(page).toHaveURL(/view=study/);
     await expect(page).toHaveURL(/study-deck=thomasrribeiro-flashcards%2Felementary-algebra-and-functions/);
-    const chapterRows = page.locator('.col-pane').nth(2).locator('.col-row');
+    let chapterRows = page.locator('.col-pane').nth(2).locator('.col-row');
+    await expect(chapterRows).toContainText(chapter.file.split('/').pop().replace(/\.md$/, ''));
+    await expect(chapterRows.filter({
+        hasText: emptyChapter.file.split('/').pop().replace(/\.md$/, '')
+    })).toHaveCount(0);
+
+    await page.locator('#tab-curriculum').click();
+    deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
+    const refreshStudy = deckSettings.getByRole('button', { name: /Add to Study/ });
+    await expect(refreshStudy).toBeVisible();
+    await refreshStudy.click();
+
+    await expect(page.locator('#tab-decks')).toHaveClass(/active/);
+    await expect(page.locator('.col-pane').nth(0).locator('.col-row.selected')).toContainText('mathematics');
+    await expect(page.locator('.col-pane').nth(1).locator('.col-row.selected'))
+        .toContainText('elementary-algebra-and-functions');
+    await expect(page).toHaveURL(/view=study/);
+    await expect(page).toHaveURL(/study-deck=thomasrribeiro-flashcards%2Felementary-algebra-and-functions/);
+    chapterRows = page.locator('.col-pane').nth(2).locator('.col-row');
     await expect(chapterRows).toContainText(chapter.file.split('/').pop().replace(/\.md$/, ''));
     await expect(chapterRows.filter({
         hasText: emptyChapter.file.split('/').pop().replace(/\.md$/, '')

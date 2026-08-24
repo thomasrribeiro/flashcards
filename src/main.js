@@ -1466,6 +1466,16 @@ function curriculumDeckHasGeneratedCards(deck) {
     return (deck?.chapters || []).some(chapter => Number(chapter.card_count || 0) > 0);
 }
 
+async function openCurriculumRepositoryInStudy(deck, repositoryId) {
+    await applyStudyTarget({
+        subjectId: deck.subject,
+        repositoryId,
+        chapterFile: ''
+    });
+    await showMainView('decks');
+    writeStudyHistory();
+}
+
 function openCurriculumDeckActionsModal({ deck, registry, installedRepository }, trigger = null) {
     const modal = document.getElementById('deck-actions-modal');
     const title = document.getElementById('deck-actions-title');
@@ -1488,7 +1498,7 @@ function openCurriculumDeckActionsModal({ deck, registry, installedRepository },
             description: 'Open this installed deck in the Study view.',
             onClick: async () => {
                 closeDeckActionsModal({ restoreFocus: false });
-                await navigateMainView('decks');
+                await openCurriculumRepositoryInStudy(deck, installedRepository.id);
             }
         }));
         actions.push(appendDeckAction(body, {
@@ -1497,7 +1507,7 @@ function openCurriculumDeckActionsModal({ deck, registry, installedRepository },
             onClick: async button => {
                 if (await syncDeckFromGitHub(installedRepository.id, button)) {
                     closeDeckActionsModal({ restoreFocus: false });
-                    await renderCurriculumView();
+                    await openCurriculumRepositoryInStudy(deck, installedRepository.id);
                 }
             }
         }));
@@ -1508,9 +1518,9 @@ function openCurriculumDeckActionsModal({ deck, registry, installedRepository },
             onClick: async button => {
                 button.disabled = true;
                 try {
-                    await addRepositoryToStudy(repositoryId);
+                    const addedDeck = await addRepositoryToStudy(repositoryId);
                     closeDeckActionsModal({ restoreFocus: false });
-                    await renderCurriculumView();
+                    await openCurriculumRepositoryInStudy(deck, addedDeck.id);
                 } catch (error) {
                     console.error('[Curriculum] Could not add deck to Study:', error);
                     alert(`Failed to add deck to Study: ${error.message}`);
