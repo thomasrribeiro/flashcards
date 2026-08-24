@@ -836,6 +836,7 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
                 id: 4,
                 status: 'needs-review',
                 job_type: 'subject-design',
+                deck_id: 'chemistry/curriculum-design',
                 provider_id: 'openai',
                 model_id: 'gpt-test',
                 result_url: resultUrl,

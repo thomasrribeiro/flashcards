@@ -167,6 +167,27 @@ describe('generation activity', () => {
         expect(fetchImpl.mock.calls[1][1]).toEqual({ cache: 'no-cache' });
     });
 
+    it('ignores the synthetic curriculum-design deck when previewing a subject job', async () => {
+        const commit = 'd'.repeat(40);
+        const fetchImpl = vi.fn()
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ head: { sha: commit } }) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({
+                subjects: [{ id: 'computer-science' }],
+                decks: [{
+                    id: 'computer-science/programming-foundations',
+                    subject: 'computer-science'
+                }]
+            }) });
+        const result = await loadPullRequestCurriculum(normalizeGenerationRequest({
+            id: 19,
+            job_type: 'subject-design',
+            deck_id: 'computer-science/curriculum-design',
+            result_url: 'https://github.com/example/curricula/pull/9',
+            payload_json: JSON.stringify({ subject: 'computer-science' })
+        }), { fetchImpl, token: 'test-token' });
+        expect(result.catalog.subjects[0].id).toBe('computer-science');
+    });
+
     it('loads generated chapter Markdown at the exact pull request head commit', async () => {
         const commit = 'a'.repeat(40);
         const fetchImpl = vi.fn()
@@ -217,6 +238,7 @@ describe('generation activity', () => {
             }) });
         const result = await loadPullRequestCurriculum({
             resultUrl: 'https://github.com/example/curricula/pull/13',
+            jobType: 'deck-plan',
             deckId: 'mathematics/geometry-and-measurement'
         }, { fetchImpl });
         expect(result.catalog.decks[0].id).toBe('mathematics/geometry-and-measurement');

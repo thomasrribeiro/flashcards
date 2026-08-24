@@ -235,7 +235,12 @@ export async function loadPullRequestCurriculum(request, {
     if (request.subject && !catalog.subjects.some(subject => subject.id === request.subject)) {
         throw new Error(`The pull request does not contain the ${request.subject} subject.`);
     }
-    if (request.deckId && !catalog.decks.some(deck => deck.id === request.deckId)) {
+    // Subject-design requests use a synthetic `<subject>/curriculum-design`
+    // deck ID for worker serialization. It is not a catalog deck and must not
+    // be treated as the preview target; the subject check above is authoritative.
+    if (request.jobType !== 'subject-design'
+        && request.deckId
+        && !catalog.decks.some(deck => deck.id === request.deckId)) {
         throw new Error(`The pull request does not contain the ${request.deckId} deck.`);
     }
     return { catalog, commit, pull };
