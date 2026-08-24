@@ -321,6 +321,10 @@ curriculum checkouts under `~/.flashcards/runner/`, so edits in a developer
 checkout cannot contaminate a production job. Before claiming work, the runner
 pins its workflow checkout to the most recent successful GitHub Pages
 deployment; the request provenance guard still verifies the exact commit.
+Each curriculum request is authored in a disposable Git worktree, so a failed
+draft cannot leave files that block the next request. Subject drafts receive
+one bounded repair pass when deterministic subject, roadmap, or global-DAG
+validation rejects an otherwise completed agent run.
 Output is written to `~/.flashcards/runner/stdout.log` and `stderr.log`;
 uninstalling the service leaves those diagnostic logs and checkouts in place.
 

@@ -163,15 +163,23 @@ fi
         expect(assertRepositoryCommit(root, baseCommit)).toBe(baseCommit);
         expect(() => assertRepositoryCommit(root, 'f'.repeat(40))).toThrow(/requires/);
         const draft = beginRegistryDraft(root, 42, { baseCommit });
-        expect(draft).toEqual({
+        expect(draft).toMatchObject({
             base: 'master',
             prBase: 'master',
             baseCommit,
-            branch: 'flashcards/request-42'
+            branch: 'flashcards/request-42',
+            sourceRoot: root
         });
-        expect(spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim())
+        expect(draft.worktreeRoot).not.toBe(root);
+        expect(spawnSync('git', ['branch', '--show-current'], { cwd: draft.worktreeRoot, encoding: 'utf8' }).stdout.trim())
+            .toBe('flashcards/request-42');
+        expect(spawnSync('git', ['rev-parse', 'HEAD'], { cwd: draft.worktreeRoot, encoding: 'utf8' }).stdout.trim())
             .toBe(baseCommit);
-        abandonRegistryDraft(root, draft);
+        await writeFile(path.join(draft.worktreeRoot, 'generated.txt'), 'temporary\n');
+        abandonRegistryDraft(draft.worktreeRoot, draft);
+        await expect(readFile(path.join(draft.worktreeRoot, 'generated.txt'), 'utf8')).rejects.toThrow();
+        expect(spawnSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).stdout.trim())
+            .toBe('');
         await writeFile(path.join(root, 'README.md'), 'dirty\n');
         expect(() => assertCleanRegistryWorktree(root)).toThrow(/uncommitted changes/);
     });

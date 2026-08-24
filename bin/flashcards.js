@@ -22,6 +22,7 @@ import { materializeCurriculumDeck } from './lib/materialize.js';
 import { buildRegistry, formatRegistry, resolveRegistry } from './lib/registry.js';
 import { providerRunner, runExternalProviderJob } from './lib/agent-provider.js';
 import { executionOptionsForGenerationJob } from './lib/generation-job.js';
+import { subjectValidationRepairInstructions } from './lib/generation-repair.js';
 import {
     abandonDeckDraft,
     beginDeckDraft,
@@ -818,6 +819,7 @@ addAgentOptions(requests
                     baseCommit: provenance.registryBaseCommit,
                     baseRef: provenance.registryRef
                 });
+                registryRoot = registryDraft.worktreeRoot;
                 const registry = resolveRegistry(registryRoot);
                 if (registry.errors.length) throw new Error(`Invalid registry:\n- ${registry.errors.join('\n- ')}`);
                 if (queued.registry_id && registry.id !== queued.registry_id) {
@@ -847,31 +849,48 @@ addAgentOptions(requests
                     deckGranularity,
                     focus
                 });
+                const subjectInstructions = [
+                    payload.instructions,
+                    payload.proposedDecks?.length
+                        ? `The user supplied this ordered visual draft. Treat it as an explicit design constraint, preserve valid existing identities, and change an edge only when validation or a documented false prerequisite requires it:\n${JSON.stringify(payload.proposedDecks, null, 2)}`
+                        : null
+                ].filter(Boolean).join('\n\n');
+                const subjectAgentOptions = {
+                    subjectPath: subjectResult.subjectPath,
+                    model: queued.model_id || options.model,
+                    providerId: queued.provider_id,
+                    reasoningEffort: payload.reasoningEffort || options.reasoningEffort,
+                    operation: subjectOperation,
+                    destination,
+                    deckGranularity,
+                    focus,
+                    workflowVersion: provenance.workflowVersion,
+                    extraInstructions: subjectInstructions,
+                    isolated: options.isolated,
+                    agentEnv
+                };
                 agent = runner
                     ? runExternalProviderJob({ ...queued, payload }, {
                         workspacePath: subjectResult.subjectPath,
                         command: runner,
                         agentEnv
                     })
-                    : runSubjectAgent({
-                        subjectPath: subjectResult.subjectPath,
-                        model: queued.model_id || options.model,
-                        providerId: queued.provider_id,
-                        reasoningEffort: payload.reasoningEffort || options.reasoningEffort,
-                        operation: subjectOperation,
-                        destination,
-                        deckGranularity,
-                        focus,
-                        workflowVersion: provenance.workflowVersion,
-                        extraInstructions: [
-                            payload.instructions,
-                            payload.proposedDecks?.length
-                                ? `The user supplied this ordered visual draft. Treat it as an explicit design constraint, preserve valid existing identities, and change an edge only when validation or a documented false prerequisite requires it:\n${JSON.stringify(payload.proposedDecks, null, 2)}`
-                                : null
-                        ].filter(Boolean).join('\n\n'),
-                        isolated: options.isolated,
-                        agentEnv
-                    });
+                    : (() => {
+                        try {
+                            return runSubjectAgent(subjectAgentOptions);
+                        } catch (error) {
+                            const repairInstructions = subjectValidationRepairInstructions(error);
+                            if (!repairInstructions) throw error;
+                            console.warn(`Subject draft failed deterministic validation; starting one repair pass.\n${error.message}`);
+                            return runSubjectAgent({
+                                ...subjectAgentOptions,
+                                operation: 'audit',
+                                extraInstructions: [subjectInstructions, repairInstructions]
+                                    .filter(Boolean)
+                                    .join('\n\n')
+                            });
+                        }
+                    })();
                 if (agent.status !== 0) throw new Error(`Subject agent exited with status ${agent.status}`);
                 appendSubjectGenerationProvenance(subjectResult.subjectPath, {
                     requestId: queued.id,
@@ -910,6 +929,7 @@ addAgentOptions(requests
                         baseCommit: deckProvenance.registryBaseCommit,
                         baseRef: deckProvenance.registryRef
                     });
+                    registryRoot = registryDraft.worktreeRoot;
                     const pinnedRegistry = resolveRegistry(registryRoot);
                     if (pinnedRegistry.errors.length) {
                         throw new Error(`Invalid registry:\n- ${pinnedRegistry.errors.join('\n- ')}`);

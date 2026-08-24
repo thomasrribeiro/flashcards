@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 function git(cwd, args) {
@@ -50,8 +51,22 @@ export function beginRegistryDraft(registryRoot, requestId, {
         }
     }
     const branch = `flashcards/request-${requestId}`;
-    git(registryRoot, ['switch', '-c', branch, ...(baseCommit ? [baseCommit] : [])]);
-    return { base, prBase: baseRef || base, baseCommit, branch };
+    if (git(registryRoot, ['branch', '--list', branch])) {
+        throw new Error(`Curriculum generation branch already exists: ${branch}`);
+    }
+    const worktreeRoot = mkdtempSync(path.join(os.tmpdir(), 'flashcards-registry-draft-'));
+    git(registryRoot, [
+        'worktree', 'add', '-b', branch, worktreeRoot,
+        ...(baseCommit ? [baseCommit] : [base])
+    ]);
+    return {
+        base,
+        prBase: baseRef || base,
+        baseCommit,
+        branch,
+        sourceRoot: registryRoot,
+        worktreeRoot
+    };
 }
 
 export function registryCatalogHash(registryRoot, catalogPath = 'dist/curriculum.json') {
@@ -72,10 +87,11 @@ export function publishRegistryDraft(registryRoot, draft, { title, body }) {
         'pr', 'create', '--draft', '--base', draft.prBase || draft.base, '--head', draft.branch,
         '--title', title, '--body', body
     ]);
-    git(registryRoot, ['switch', draft.base]);
+    try { git(draft.sourceRoot, ['worktree', 'remove', registryRoot]); } catch { /* PR is already safely published */ }
     return url;
 }
 
 export function abandonRegistryDraft(registryRoot, draft) {
-    try { git(registryRoot, ['switch', draft.base]); } catch { /* keep original error */ }
+    try { git(draft.sourceRoot, ['worktree', 'remove', '--force', registryRoot]); } catch { /* keep original error */ }
+    try { git(draft.sourceRoot, ['branch', '-D', draft.branch]); } catch { /* keep original error */ }
 }
