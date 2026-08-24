@@ -1103,7 +1103,10 @@ test('reviews generated flashcards in-app and publishes both pull requests', asy
     await browser.getByRole('button', { name: 'Close chapter preview' }).click();
     await page.getByRole('button', { name: 'Settings' }).click();
     const reopened = page.getByRole('dialog', { name: 'Settings' });
-    await expect(reopened.getByRole('tab', { name: /Agents/ })).toHaveText('Agents');
+    const agents = reopened.getByRole('tab', { name: /Agents/ });
+    await expect(agents).toHaveText('Agents');
+    await agents.click();
+    await expect(reopened.getByRole('link', { name: 'Review curriculum metadata' })).toHaveCount(0);
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {

@@ -5355,17 +5355,6 @@ function appendGenerationRequestRow(list, request, close) {
             actions.appendChild(link);
         } catch { /* The worker result is not a pull request. */ }
     }
-    if (request.registryResultUrl) {
-        try {
-            pullRequestCoordinates(request.registryResultUrl);
-            const link = document.createElement('a');
-            link.href = request.registryResultUrl;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.textContent = 'Review curriculum metadata';
-            actions.appendChild(link);
-        } catch { /* Ignore malformed companion URLs. */ }
-    }
     if (request.jobType === 'chapter-expand'
         && request.status === 'needs-review'
         && request.resultUrl) {
