@@ -4785,8 +4785,8 @@ async function renderCurriculumView(options = {}) {
     const historyControls = document.createElement('span');
     historyControls.className = 'curriculum-history-controls';
     historyControls.innerHTML = `
-        <button type="button" aria-label="Back in curriculum" title="Back"${curriculumNavigationHistoryIndex <= 0 ? ' disabled' : ''}>←</button>
-        <button type="button" aria-label="Forward in curriculum" title="Forward"${curriculumNavigationHistoryIndex >= curriculumNavigationHistory.length - 1 ? ' disabled' : ''}>→</button>
+        <button type="button" aria-label="Back in curriculum" title="Back"${curriculumNavigationHistoryIndex <= 0 ? ' disabled' : ''}>↶</button>
+        <button type="button" aria-label="Forward in curriculum" title="Forward"${curriculumNavigationHistoryIndex >= curriculumNavigationHistory.length - 1 ? ' disabled' : ''}>↷</button>
     `;
     historyControls.firstElementChild.onclick = () => moveCurriculumNavigationHistory(-1);
     historyControls.lastElementChild.onclick = () => moveCurriculumNavigationHistory(1);

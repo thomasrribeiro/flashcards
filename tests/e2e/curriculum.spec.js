@@ -1828,6 +1828,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-selected-header button')).toHaveCount(0);
     const historyBack = page.getByRole('button', { name: 'Back in curriculum' });
     const historyForward = page.getByRole('button', { name: 'Forward in curriculum' });
+    await expect(historyBack).toHaveText('↶');
+    await expect(historyForward).toHaveText('↷');
     await expect(historyBack).toBeEnabled();
     await expect(historyForward).toBeDisabled();
     const breadcrumbBox = await page.locator('.curriculum-breadcrumb-row').boundingBox();

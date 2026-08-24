@@ -3743,6 +3743,8 @@ body.standalone-phone .mobile-sidebar-close {
     color: var(--black);
     padding: 0;
     font: inherit;
+    font-size: 1.15rem;
+    line-height: 1;
 }
 
 .curriculum-history-controls button:disabled {
