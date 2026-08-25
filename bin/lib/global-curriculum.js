@@ -7,6 +7,7 @@ import {
     writeFileSync
 } from 'node:fs';
 import path from 'node:path';
+import { validateGenerationProvenance } from './generation-provenance.js';
 import { resolvePath } from './paths.js';
 import { resolvePrerequisiteGraph } from './prerequisites.js';
 import {
@@ -65,8 +66,9 @@ export function resolveGlobalCurriculum(
     const errors = [];
     const warnings = [];
     const excluded = new Set(excludeSubjects);
-    const subjects = subjectDirectories(notesRoot)
-        .filter(subjectPath => !excluded.has(path.basename(subjectPath)))
+    const includedSubjectPaths = subjectDirectories(notesRoot)
+        .filter(subjectPath => !excluded.has(path.basename(subjectPath)));
+    const subjects = includedSubjectPaths
         .map(subjectPath => resolveSubjectCurriculum(subjectPath, { requireDecks: false }));
     if (requireSubjects && subjects.length === 0) {
         errors.push(`No subject.toml manifests found under ${notesRoot}`);
@@ -74,6 +76,10 @@ export function resolveGlobalCurriculum(
     for (const subject of subjects) {
         errors.push(...subject.errors);
         warnings.push(...subject.warnings);
+    }
+    for (const subjectPath of includedSubjectPaths) {
+        errors.push(...validateGenerationProvenance(subjectPath)
+            .map(error => `${path.basename(subjectPath)}/${error}`));
     }
 
     const decks = new Map();
@@ -230,6 +236,7 @@ function materializedDeck(graph, deck, options = {}) {
                 status: snapshot.status || deck.status,
                 repository: snapshot.repository || { url: conventionalUrl, configured: false },
                 chapters: Array.isArray(snapshot.chapters) ? snapshot.chapters : [],
+                generationRuns: snapshot.generation_runs || [],
                 chapterCurriculumGeneration: snapshot.chapter_curriculum_generation || null,
                 chapterContentGeneration: snapshot.chapter_content_generation || null
             };
@@ -300,6 +307,9 @@ export function globalCurriculumIndex(graph, options = {}) {
                 materialized: local.materialized,
                 repository: local.repository,
                 chapters: local.chapters,
+                ...(local.generationRuns?.length
+                    ? { generation_runs: local.generationRuns }
+                    : {}),
                 ...(local.chapterCurriculumGeneration
                     ? { chapter_curriculum_generation: local.chapterCurriculumGeneration }
                     : {}),

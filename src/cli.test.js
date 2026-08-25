@@ -133,7 +133,14 @@ description = "Reason about oscillations and waves."
         });
         await addChapter({ deckPath: materialized.deckPath, name: 'Motion foundations', independent: true });
         const result = updateRegistryDeckSnapshot(root, 'physics/mechanics', materialized.deckPath, {
-            model_id: 'gpt-example', reasoning_effort: 'high', context_hash: context.sha256
+            run_id: 'request-example',
+            operation: 'chapter-curriculum',
+            artifacts: ['chapter-curriculum'],
+            provider_id: 'openai',
+            model_id: 'gpt-example',
+            reasoning_effort: 'high',
+            context_hash: context.sha256,
+            generated_at: '2026-08-25T12:00:00.000Z'
         });
         expect(result.chapters).toHaveLength(1);
         buildRegistry(root);
@@ -143,7 +150,10 @@ description = "Reason about oscillations and waves."
             chapters: [{ id: '01_motion_foundations', card_count: 0 }],
             chapter_curriculum_generation: {
                 model_id: 'gpt-example', reasoning_effort: 'high', context_hash: context.sha256
-            }
+            },
+            generation_runs: [{
+                run_id: 'request-example', model_id: 'gpt-example', reasoning_effort: 'high', context_hash: context.sha256
+            }]
         });
         context.cleanup();
     });
@@ -2162,7 +2172,13 @@ describe('flashcards CLI validation and Codex handoff', () => {
             await writeFile(second, `${await readFile(second, 'utf8')}\n`);
             await writeFile(third, '+++\norder = 3\nsubject = "physics"\ntags = ["mechanics"]\nprerequisites = []\nprovides = []\n+++\n');
 
-            expect(stampChangedChapterAuthoringModel(prepared.workspacePath, 'claude-fable-5', 'high'))
+            expect(stampChangedChapterAuthoringModel(
+                prepared.workspacePath,
+                'claude-fable-5',
+                'high',
+                'authoring',
+                { providerId: 'anthropic', runId: 'local-test-run' }
+            ))
                 .toEqual([
                     'flashcards/01_foundations.md',
                     'flashcards/02_vectors.md',
@@ -2170,6 +2186,8 @@ describe('flashcards CLI validation and Codex handoff', () => {
                 ]);
             expect(await readFile(first, 'utf8')).toContain('authoring_model = "claude-fable-5"');
             expect(await readFile(first, 'utf8')).toContain('authoring_reasoning_effort = "high"');
+            expect(await readFile(first, 'utf8')).toContain('authoring_provider = "anthropic"');
+            expect(await readFile(first, 'utf8')).toContain('authoring_run_id = "local-test-run"');
             expect(await readFile(second, 'utf8')).toContain('authoring_model = "claude-fable-5"');
             expect(await readFile(second, 'utf8')).toContain('authoring_reasoning_effort = "high"');
             expect(await readFile(third, 'utf8')).toContain('authoring_model = "claude-fable-5"');
@@ -2190,10 +2208,13 @@ describe('flashcards CLI validation and Codex handoff', () => {
                 prepared.workspacePath,
                 'gpt-plan',
                 'high',
-                'curriculum'
+                'curriculum',
+                { providerId: 'openai', runId: 'request-plan' }
             )).toHaveLength(3);
             expect(await readFile(first, 'utf8')).toContain('curriculum_model = "gpt-plan"');
             expect(await readFile(first, 'utf8')).toContain('curriculum_reasoning_effort = "high"');
+            expect(await readFile(first, 'utf8')).toContain('curriculum_provider = "openai"');
+            expect(await readFile(first, 'utf8')).toContain('curriculum_run_id = "request-plan"');
         } finally {
             await rm(prepared.runPath, { recursive: true, force: true });
             discardIsolatedRun(prepared);

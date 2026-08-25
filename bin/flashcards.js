@@ -4,7 +4,13 @@ import { Command, Option } from 'commander';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { addChapter, createDeck, ensureSubject } from './lib/scaffold.js';
-import { codexDoctor, formatInvocation, runDeckAgent, runSubjectAgent } from './lib/codex.js';
+import {
+    codexDoctor,
+    formatInvocation,
+    runDeckAgent,
+    runSubjectAgent,
+    stampChangedChapterAuthoringModel
+} from './lib/codex.js';
 import { buildContextManifest, buildSubjectContextManifest, formatContextManifest } from './lib/context.js';
 import { approvePilot } from './lib/pilot.js';
 import {
@@ -54,6 +60,12 @@ import {
 } from './lib/subject-curriculum.js';
 import { validateSubjectDesignProvenance } from '../src/subject-generation-contract.js';
 import { appendSubjectGenerationProvenance } from './lib/subject-generation-provenance.js';
+import {
+    appendGenerationProvenance,
+    changedGenerationArtifacts,
+    createGenerationRunId,
+    generationProviderId
+} from './lib/generation-provenance.js';
 import {
     validateChapterContentProvenance,
     validateDeckPlanProvenance
@@ -134,6 +146,7 @@ function executeAgent(mode, deckPath, options) {
     }
     const chapterNumber = chapter || (freshPilot ? 1 : undefined);
     const buildScope = chapterCurriculum ? 'curriculum' : full ? 'full' : chapter ? 'chapter' : 'pilot';
+    const generationRunId = options.generationRunId || createGenerationRunId();
     const synced = syncDeckPrerequisitesFromSubject(deckPath, {
         allowMissing: true,
         subjectPath: options.subjectContextRoot
@@ -160,7 +173,8 @@ function executeAgent(mode, deckPath, options) {
         agentEnv: options.agentEnv || {},
         subjectContextRoot: options.subjectContextRoot,
         collectionContextRoot: options.collectionContextRoot,
-        curriculumSlicePath: options.curriculumSlicePath
+        curriculumSlicePath: options.curriculumSlicePath,
+        generationRunId
     });
     if (result.dryRun) {
         console.log('Preview only: a live isolated run replaces these source paths with hash-recorded staged copies.');
@@ -169,7 +183,44 @@ function executeAgent(mode, deckPath, options) {
         console.log(result.invocation.prompt);
     }
     if (result.status !== 0) process.exitCode = result.status;
+    if (result.status === 0
+        && !result.dryRun
+        && !options.reportOnly
+        && options.persistGenerationProvenance !== false) {
+        const record = options.generationProvenance || {};
+        const changedArtifacts = changedGenerationArtifacts(result.patch);
+        const provenanceArtifacts = Array.isArray(record.artifacts) && record.artifacts.length
+            ? record.artifacts
+            : changedArtifacts.length ? changedArtifacts : ['deck'];
+        appendGenerationProvenance(deckPath, {
+            ...record,
+            runId: generationRunId,
+            operation: record.operation || (mode === 'audit'
+                ? 'deck-audit'
+                : buildScope === 'curriculum' ? 'chapter-curriculum' : 'chapter-content'),
+            artifacts: provenanceArtifacts,
+            providerId: record.providerId || generationProviderId(options.providerId, result.invocation),
+            modelId: record.modelId || result.invocation?.model || options.model,
+            reasoningEffort: record.reasoningEffort || result.invocation?.reasoningEffort || options.reasoningEffort,
+            generationMode: record.generationMode || (freshChapter || freshPilot ? 'replace' : 'generate')
+        });
+    }
     return result;
+}
+
+function recordDirectSubjectGeneration(subjectPath, agent, operation, options = {}) {
+    if (agent.status !== 0 || agent.dryRun) return;
+    const artifacts = changedGenerationArtifacts(agent.patch);
+    appendGenerationProvenance(subjectPath, {
+        runId: createGenerationRunId(),
+        operation: `subject-${operation}`,
+        artifacts: artifacts.length ? artifacts : ['ROADMAP.md', 'SUBJECT_BRIEF.md', 'subject.toml'],
+        providerId: generationProviderId(options.providerId, agent.invocation),
+        modelId: agent.invocation?.model || options.model,
+        reasoningEffort: agent.invocation?.reasoningEffort || options.reasoningEffort,
+        workflowVersion: options.workflowVersion,
+        provenanceSource: 'direct-cli'
+    });
 }
 
 program
@@ -345,6 +396,9 @@ subject
                 }
                 if (agent.runPath) console.log(`Isolated run record: ${agent.runPath}`);
                 if (agent.status !== 0) process.exitCode = agent.status;
+                else if (!options.dryRun) {
+                    recordDirectSubjectGeneration(result.subjectPath, agent, 'create', options);
+                }
             }
             if (!process.exitCode) {
                 const curriculum = resolveSubjectCurriculum(result.subjectPath, {
@@ -403,6 +457,9 @@ subject
             if (agent.status !== 0) {
                 process.exitCode = agent.status;
                 return;
+            }
+            if (!options.dryRun) {
+                recordDirectSubjectGeneration(current.subjectPath, agent, 'extend', options);
             }
             if (!options.dryRun) {
                 const curriculum = resolveSubjectCurriculum(current.subjectPath, { requireDecks: true });
@@ -514,6 +571,9 @@ addAgentOptions(deck
                     if (subjectAgent.status !== 0) {
                         process.exitCode = subjectAgent.status;
                         return;
+                    }
+                    if (!options.dryRun) {
+                        recordDirectSubjectGeneration(result.subjectPath, subjectAgent, 'create', options);
                     }
                 }
                 const synced = syncDeckPrerequisitesFromSubject(result.deckPath, { requireEntry: !options.dryRun });
@@ -901,7 +961,8 @@ addAgentOptions(requests
                     workflowVersion: provenance.workflowVersion,
                     workflowCommit: provenance.workflowCommit,
                     registryBaseCommit: provenance.registryBaseCommit,
-                    catalogHash: provenance.catalogHash
+                    catalogHash: provenance.catalogHash,
+                    generatedAt: queued.started_at || queued.created_at
                 });
                 buildRegistry(registryRoot);
                 resultUrl = publishRegistryDraft(registryRoot, registryDraft, {
@@ -970,6 +1031,24 @@ addAgentOptions(requests
                 executionOptions.subjectContextRoot = deckContext?.subjectContextRoot;
                 executionOptions.collectionContextRoot = deckContext?.registry.root;
                 executionOptions.curriculumSlicePath = deckContext?.contextPath;
+                executionOptions.generationRunId = `request-${queued.id}`;
+                executionOptions.persistGenerationProvenance = jobType !== 'deck-plan';
+                executionOptions.generationProvenance = deckProvenance ? {
+                    requestId: queued.id,
+                    operation: jobType === 'deck-plan' ? 'chapter-curriculum' : 'chapter-content',
+                    providerId: queued.provider_id,
+                    modelId: queued.model_id || options.model,
+                    reasoningEffort: payload.reasoningEffort || options.reasoningEffort || 'high',
+                    workflowVersion: deckProvenance.workflowVersion,
+                    workflowCommit: deckProvenance.workflowCommit,
+                    registryBaseCommit: deckProvenance.registryBaseCommit,
+                    catalogHash: deckProvenance.catalogHash,
+                    contextHash: deckContext.sha256,
+                    baseCommit: deckDraft?.baseCommit,
+                    chapterId: payload.chapterId || queued.chapter_id,
+                    generationMode: payload.generationMode || 'generate',
+                    provenanceSource: 'website-generation-request'
+                } : null;
                 agent = runner
                     ? runExternalProviderJob({ ...queued, payload }, {
                         workspacePath: materialized.deckPath,
@@ -981,9 +1060,28 @@ addAgentOptions(requests
                         providerId: queued.provider_id,
                         agentEnv
                     });
+                if (agent.status === 0 && runner && ['deck-plan', 'chapter-expand'].includes(jobType)) {
+                    stampChangedChapterAuthoringModel(
+                        materialized.deckPath,
+                        queued.model_id || options.model,
+                        payload.reasoningEffort || options.reasoningEffort || 'high',
+                        jobType === 'deck-plan' ? 'curriculum' : 'authoring',
+                        { providerId: queued.provider_id, runId: `request-${queued.id}` }
+                    );
+                    if (jobType === 'chapter-expand') {
+                        appendGenerationProvenance(materialized.deckPath, {
+                            ...executionOptions.generationProvenance,
+                            runId: executionOptions.generationRunId,
+                            artifacts: [`flashcards/${payload.chapterId || queued.chapter_id}.md`]
+                        });
+                    }
+                }
                 if (agent.status === 0 && jobType === 'deck-plan') {
                     const generation = {
+                        run_id: `request-${queued.id}`,
                         request_id: queued.id,
+                        operation: 'chapter-curriculum',
+                        artifacts: ['chapter-curriculum'],
                         provider_id: queued.provider_id,
                         model_id: queued.model_id || options.model,
                         reasoning_effort: payload.reasoningEffort || options.reasoningEffort || 'high',
@@ -991,7 +1089,8 @@ addAgentOptions(requests
                         workflow_commit: deckProvenance.workflowCommit,
                         registry_base_commit: deckProvenance.registryBaseCommit,
                         catalog_hash: deckProvenance.catalogHash,
-                        context_hash: deckContext.sha256
+                        context_hash: deckContext.sha256,
+                        generated_at: queued.started_at || queued.created_at || new Date().toISOString()
                     };
                     const snapshot = updateRegistryDeckSnapshot(
                         registryRoot,
@@ -1024,8 +1123,11 @@ addAgentOptions(requests
                         approvePilot(materialized.deckPath);
                     }
                     const contentGeneration = {
+                        run_id: `request-${queued.id}`,
                         request_id: queued.id,
                         chapter_id: chapterId,
+                        operation: 'chapter-content',
+                        artifacts: [`flashcards/${chapterId}.md`],
                         provider_id: queued.provider_id,
                         model_id: queued.model_id || options.model,
                         reasoning_effort: payload.reasoningEffort || options.reasoningEffort || 'high',
@@ -1034,7 +1136,9 @@ addAgentOptions(requests
                         registry_base_commit: deckProvenance.registryBaseCommit,
                         catalog_hash: deckProvenance.catalogHash,
                         context_hash: deckContext.sha256,
-                        generation_mode: generationMode
+                        generation_mode: generationMode,
+                        base_commit: deckDraft?.baseCommit || null,
+                        generated_at: queued.started_at || queued.created_at || new Date().toISOString()
                     };
                     const snapshot = updateRegistryDeckSnapshot(
                         registryRoot,

@@ -30,6 +30,8 @@ describe('subject generation provenance', () => {
         });
         const content = await readFile(path.join(subjectPath, 'generation.toml'), 'utf8');
         expect(content.match(/\[\[runs\]\]/g)).toHaveLength(2);
+        expect(content).toContain('run_id = "request-7"');
+        expect(content).toContain('artifacts = ["ROADMAP.md", "SUBJECT_BRIEF.md", "subject.toml"]');
         expect(content).toContain('model_id = "gpt-test"');
         expect(content).toContain('model_id = "gpt-next"');
         expect(content).toContain('reasoning_effort = "xhigh"');

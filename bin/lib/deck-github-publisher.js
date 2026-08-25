@@ -106,7 +106,8 @@ export function beginDeckDraft(deckPath, repositoryUrl, requestId, {
         throw new Error(`Deck generation branch already exists: ${branch}`);
     }
     git(deckPath, ['switch', '-c', branch]);
-    return { ...coordinates, base, branch, createdRepository };
+    const baseCommit = git(deckPath, ['rev-parse', 'HEAD']).stdout.trim();
+    return { ...coordinates, base, baseCommit, branch, createdRepository };
 }
 
 export function publishDeckDraft(deckPath, draft, { title, body }) {

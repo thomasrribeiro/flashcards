@@ -15,6 +15,48 @@ function scalar(content, key, fallback = null) {
     return match ? (match[1] ?? Number(match[2])) : fallback;
 }
 
+function generationRunKey(run) {
+    return String(run?.run_id || (run?.request_id != null ? `request-${run.request_id}` : ''));
+}
+
+export function validateDeckGenerationMetadata(parsed) {
+    const errors = [];
+    for (const deck of parsed.decks || []) {
+        const latest = [
+            deck.chapter_curriculum_generation,
+            deck.chapter_content_generation
+        ].filter(Boolean);
+        if (!latest.length && deck.generation_runs == null) continue;
+        if (!Array.isArray(deck.generation_runs) || !deck.generation_runs.length) {
+            errors.push(`${deck.id}: generation_runs must retain every AI generation run`);
+            continue;
+        }
+        const runIds = new Set();
+        for (const [index, run] of deck.generation_runs.entries()) {
+            const label = `${deck.id}: generation_runs[${index}]`;
+            const runId = generationRunKey(run);
+            if (!runId) errors.push(`${label} requires run_id`);
+            else if (runIds.has(runId)) errors.push(`${label} duplicates ${runId}`);
+            else runIds.add(runId);
+            for (const field of [
+                'operation', 'provider_id', 'model_id', 'reasoning_effort', 'generated_at'
+            ]) {
+                if (!String(run?.[field] ?? '').trim()) errors.push(`${label} requires ${field}`);
+            }
+            if (!Array.isArray(run?.artifacts) || !run.artifacts.length) {
+                errors.push(`${label} requires at least one artifact`);
+            }
+        }
+        for (const run of latest) {
+            const runId = generationRunKey(run);
+            if (!runId || !runIds.has(runId)) {
+                errors.push(`${deck.id}: latest generation ${runId || '(missing run_id)'} is absent from generation_runs`);
+            }
+        }
+    }
+    return errors;
+}
+
 export function resolveRegistry(inputPath) {
     const root = resolvePath(inputPath);
     const manifestPath = path.join(root, 'registry.toml');
@@ -63,6 +105,7 @@ export function resolveRegistry(inputPath) {
                 if (!Array.isArray(parsed.decks)) throw new Error('expected a decks array');
                 deckMetadata = new Map(parsed.decks.map(deck => [deck.id, deck]));
                 if (deckMetadata.size !== parsed.decks.length) errors.push('deck metadata snapshot contains duplicate deck IDs');
+                errors.push(...validateDeckGenerationMetadata(parsed));
             } catch (error) {
                 errors.push(`Invalid deck metadata snapshot: ${error.message}`);
             }

@@ -185,7 +185,13 @@ export function compactStagedChapterContext(stagedContext, deckId, chapterNumber
     return compacted;
 }
 
-export function stampChangedChapterAuthoringModel(workspacePath, model, reasoningEffort, kind = 'authoring') {
+export function stampChangedChapterAuthoringModel(
+    workspacePath,
+    model,
+    reasoningEffort,
+    kind = 'authoring',
+    { providerId = null, runId = null } = {}
+) {
     if (!model) return [];
     const modified = spawnSync(
         'git',
@@ -218,6 +224,12 @@ export function stampChangedChapterAuthoringModel(workspacePath, model, reasonin
         const reasoningFieldName = kind === 'curriculum'
             ? 'curriculum_reasoning_effort'
             : 'authoring_reasoning_effort';
+        const providerFieldName = kind === 'curriculum'
+            ? 'curriculum_provider'
+            : 'authoring_provider';
+        const runFieldName = kind === 'curriculum'
+            ? 'curriculum_run_id'
+            : 'authoring_run_id';
         const fieldPattern = new RegExp(`^${fieldName}\\s*=`, 'm');
         const fieldLinePattern = new RegExp(`^${fieldName}\\s*=.*$`, 'm');
         const field = `${fieldName} = ${JSON.stringify(model)}`;
@@ -231,6 +243,15 @@ export function stampChangedChapterAuthoringModel(workspacePath, model, reasonin
             frontmatter = reasoningPattern.test(frontmatter)
                 ? frontmatter.replace(reasoningLinePattern, reasoningField)
                 : frontmatter.replace(fieldLinePattern, `$&\n${reasoningField}`);
+        }
+        for (const [name, value] of [[providerFieldName, providerId], [runFieldName, runId]]) {
+            if (!value) continue;
+            const pattern = new RegExp(`^${name}\\s*=`, 'm');
+            const linePattern = new RegExp(`^${name}\\s*=.*$`, 'm');
+            const line = `${name} = ${JSON.stringify(value)}`;
+            frontmatter = pattern.test(frontmatter)
+                ? frontmatter.replace(linePattern, line)
+                : frontmatter.replace(fieldLinePattern, `$&\n${line}`);
         }
         writeFileSync(
             chapterPath,
@@ -813,6 +834,9 @@ export function runSubjectAgent({
             metadata: {
                 operation: `subject-${operation}`,
                 codexVersion: version,
+                providerId: providerId || (invocation.provider === 'claude-cli'
+                    ? 'anthropic'
+                    : invocation.provider === 'gemini-cli' ? 'google' : 'openai'),
                 model: invocation.model,
                 reasoningEffort,
                 destination,
@@ -877,7 +901,8 @@ export function runDeckAgent({
     agentEnv = {},
     subjectContextRoot,
     collectionContextRoot,
-    curriculumSlicePath
+    curriculumSlicePath,
+    generationRunId = null
 }) {
     const deckPath = resolvePath(inputPath);
     let preflightPath;
@@ -1064,7 +1089,13 @@ export function runDeckAgent({
                             workspacePath,
                             invocation.model,
                             invocation.reasoningEffort,
-                            buildScope === 'curriculum' ? 'curriculum' : 'authoring'
+                            buildScope === 'curriculum' ? 'curriculum' : 'authoring',
+                            {
+                                providerId: providerId || (invocation.provider === 'claude-cli'
+                                    ? 'anthropic'
+                                    : invocation.provider === 'gemini-cli' ? 'google' : 'openai'),
+                                runId: generationRunId
+                            }
                         );
                         validateGeneratedChapterMarkup(workspacePath);
                         if (buildScope === 'curriculum') {
@@ -1103,6 +1134,10 @@ export function runDeckAgent({
                     codexVersion: version,
                     model: invocation.model,
                     reasoningEffort,
+                    providerId: providerId || (invocation.provider === 'claude-cli'
+                        ? 'anthropic'
+                        : invocation.provider === 'gemini-cli' ? 'google' : 'openai'),
+                    runId: generationRunId,
                     prerequisiteResolution: preview.prerequisiteResolution ? {
                         targetChapter: preview.prerequisiteResolution.chapter.id,
                         edgeMode: preview.prerequisiteResolution.mode,

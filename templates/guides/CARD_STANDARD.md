@@ -209,10 +209,12 @@ Severity:
 - **F1 — Canonical frontmatter.** Use TOML `+++` frontmatter with `order`,
   canonical lowercase kebab-case `subject`, kebab-case `tags`, explicit
   `prerequisites`, and `provides`. Agent-built chapters also record the exact
-  `authoring_model` and `authoring_reasoning_effort`; the isolated CLI stamps
-  these fields deterministically rather than trusting the model to self-report
-  them. Preserve supported provenance
-  tables. Remove the obsolete `name` field. Prerequisite references use
+  `authoring_provider`, `authoring_model`, `authoring_reasoning_effort`, and
+  `authoring_run_id`; chapter-curriculum runs use the corresponding
+  `curriculum_*` fields. The isolated CLI stamps these fields deterministically
+  rather than trusting the model to self-report them. Every modifying AI run is
+  also appended to the repository's `generation.toml`; preserve that ledger and
+  supported provenance tables. Remove the obsolete `name` field. Prerequisite references use
   `chapter:`, `concept:`, `deck:`, or `tool:` prefixes.
 - **F2 — Ordered filenames.** Chapter files use zero-padded
   `NN_snake_case.md` names whose prefix matches `order`.

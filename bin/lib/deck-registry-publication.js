@@ -21,6 +21,33 @@ function registryDeck(registry, deckId) {
     return deck;
 }
 
+function generationRunKey(generation) {
+    return String(generation?.run_id || (
+        generation?.request_id != null ? `request-${generation.request_id}` : ''
+    ));
+}
+
+function appendGenerationRun(snapshot, generation) {
+    const existing = [
+        ...(snapshot.generation_runs || []),
+        ...(!snapshot.generation_runs && snapshot.chapter_curriculum_generation
+            ? [snapshot.chapter_curriculum_generation]
+            : []),
+        ...(!snapshot.generation_runs && snapshot.chapter_content_generation
+            ? [snapshot.chapter_content_generation]
+            : [])
+    ].map(run => ({ ...run, run_id: generationRunKey(run) }));
+    const next = {
+        ...generation,
+        run_id: generationRunKey(generation)
+    };
+    const key = generationRunKey(next);
+    return [
+        ...existing.filter(run => generationRunKey(run) !== key),
+        next
+    ];
+}
+
 export function createPinnedDeckContext(registryRoot, deckId, provenance) {
     const registry = resolveRegistry(registryRoot);
     if (registry.errors.length) {
@@ -134,14 +161,16 @@ export function updateRegistryDeckSnapshot(registryRoot, deckId, deckPath, gener
             }))
         };
     });
+    const previous = metadata.decks[index];
     metadata.decks[index] = {
-        ...metadata.decks[index],
+        ...previous,
         materialized: true,
         status: deckStatus(deckPath, declared.status),
         ...(repositoryUrl ? {
             repository: { url: repositoryUrl, configured: true }
         } : {}),
         chapters,
+        generation_runs: appendGenerationRun(previous, generation),
         ...(generationKind === 'content'
             ? { chapter_content_generation: generation }
             : { chapter_curriculum_generation: generation })
