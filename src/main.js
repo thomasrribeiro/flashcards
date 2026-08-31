@@ -1493,6 +1493,20 @@ function openCurriculumDeckActionsModal({ deck, registry, installedRepository },
     const repositoryId = repositoryIdForCurriculumDeck(deck);
     const hasGeneratedCards = curriculumDeckHasGeneratedCards(deck);
 
+    actions.push(appendDeckAction(body, {
+        label: 'Chapter curriculum',
+        description: deck.chapters?.length
+            ? 'View the chapter dependency graph.'
+            : 'Open chapter curriculum generation.',
+        onClick: () => {
+            closeDeckActionsModal({ restoreFocus: false });
+            navigateCurriculum({
+                mode: 'chapters', hierarchy: 'chapter', subject: deck.subject,
+                parentId: deck.id, targetId: '', query: '', layerStart: 0
+            });
+        }
+    }));
+
     if (hasGeneratedCards && installedRepository?.id) {
         actions.push(appendDeckAction(body, {
             label: 'Open in Study',
@@ -1542,19 +1556,6 @@ function openCurriculumDeckActionsModal({ deck, registry, installedRepository },
             });
         }
     }));
-
-    if (!curriculumPreview) {
-        const generate = makeChapterCurriculumButton(deck, registry);
-        const invokeGeneration = generate.onclick;
-        generate.classList.remove('curriculum-toolbar-action', 'is-primary');
-        generate.classList.add('deck-action-button', 'curriculum-deck-generation-action');
-        generate.onclick = () => {
-            closeDeckActionsModal({ restoreFocus: false });
-            invokeGeneration();
-        };
-        body.appendChild(generate);
-        actions.push(generate);
-    }
 
     modal.classList.remove('hidden');
     actions[0]?.focus();
@@ -4654,14 +4655,17 @@ async function queueCurriculumAgentJob(job, button) {
     }
 }
 
-function renderEmptyChapterCurriculum(root, deck) {
+function renderEmptyChapterCurriculum(root, deck, registry) {
     const empty = document.createElement('section');
     empty.className = 'curriculum-chapter-empty';
     const title = document.createElement('h2');
-    title.textContent = 'No chapter curriculum yet';
-    const description = document.createElement('p');
-    description.textContent = 'Create an AI-authored ordered chapter plan and dependency graph before generating any chapter content.';
-    empty.append(title, description);
+    title.textContent = 'No chapter curriculum generated yet';
+    empty.appendChild(title);
+    if (!curriculumPreview) {
+        const generate = makeChapterCurriculumButton(deck, registry);
+        generate.classList.add('curriculum-chapter-empty-action');
+        empty.appendChild(generate);
+    }
     root.appendChild(empty);
 }
 
@@ -4669,7 +4673,7 @@ function makeChapterCurriculumButton(deck, registry) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'curriculum-toolbar-action is-primary';
-    button.textContent = 'Generate curriculum';
+    button.textContent = deck.chapters?.length ? 'Regenerate curriculum' : 'Generate curriculum';
     button.disabled = true;
     const jobFor = async (candidate, prerequisitePlanPolicy = null) => {
         const preferences = await connectedWebsiteGenerationPreferences();
@@ -4698,12 +4702,14 @@ function makeChapterCurriculumButton(deck, registry) {
     button.onclick = () => {
         const unplanned = unplannedPrerequisiteDecks(curriculumIndex, deck.id);
         if (unplanned.length) {
-            const order = unplanned.map(candidate => candidate.id).join(' → ');
+            const order = unplanned.map(candidate => (
+                candidate.subject === deck.subject ? candidate.deck || candidate.id.split('/').pop() : candidate.id
+            )).join(' → ');
             openGenerationConfirmation({
-                title: 'Generate prerequisite curricula first?',
-                message: `${deck.id} depends on prerequisite decks without chapter DAGs. Missing order: ${order}. Start with ${unplanned[0].id}? After each plan is reviewed and published, return here to generate the next prerequisite, then the requested deck.`,
-                confirmLabel: 'Start prerequisite sequence',
-                secondaryLabel: deck.chapters?.length ? 'Regenerate this deck only' : 'Generate this deck only',
+                title: 'Plan prerequisites first?',
+                message: `Missing chapter curricula: ${order}. Start with the first prerequisite?`,
+                confirmLabel: 'Start prerequisites',
+                secondaryLabel: deck.chapters?.length ? 'Regenerate this deck only' : 'Plan this deck only',
                 onConfirm: () => queue(unplanned[0]),
                 onSecondary: () => queue(deck, 'continue-target-only')
             });
@@ -4806,16 +4812,11 @@ async function renderCurriculumView(options = {}) {
             anchorId: subjectAnchor
         }, hierarchy === 'deck' && mode === 'subject');
     }
-    let deckSettingsButton = null;
     if (deckId) {
         addCrumb(deckId.split('/').pop(), {
             mode: 'chapters', hierarchy: 'chapter', subject: subject || deckId.split('/')[0],
             parentId: deckId, targetId: '', query: '', layerStart: 0
-        }, hierarchy === 'chapter' || (hierarchy === 'deck' && mode === 'focus'));
-        deckSettingsButton = breadcrumbs.lastElementChild;
-        deckSettingsButton.classList.add('curriculum-deck-settings-trigger');
-        deckSettingsButton.setAttribute('aria-label', `Deck settings for ${deckId.split('/').pop()}`);
-        deckSettingsButton.title = 'Open deck settings';
+        }, hierarchy === 'chapter');
     }
     const historyControls = document.createElement('span');
     historyControls.className = 'curriculum-history-controls';
@@ -4827,6 +4828,16 @@ async function renderCurriculumView(options = {}) {
     historyControls.lastElementChild.onclick = () => moveCurriculumNavigationHistory(1);
     const breadcrumbActions = document.createElement('span');
     breadcrumbActions.className = 'curriculum-breadcrumb-actions';
+    let deckSettingsButton = null;
+    if (deckId && activeChapterDeck) {
+        deckSettingsButton = document.createElement('button');
+        deckSettingsButton.type = 'button';
+        deckSettingsButton.className = 'curriculum-toolbar-action';
+        deckSettingsButton.textContent = 'Deck options';
+        deckSettingsButton.setAttribute('aria-label', `Deck settings for ${deckId.split('/').pop()}`);
+        deckSettingsButton.title = 'Open deck options';
+        breadcrumbActions.appendChild(deckSettingsButton);
+    }
     if (hierarchy === 'subject' && mode === 'overview') {
         if (!curriculumPreview) {
             const createSubject = document.createElement('button');
@@ -4870,10 +4881,14 @@ async function renderCurriculumView(options = {}) {
         const graph = chapterGraph(curriculumIndex, parentId);
         const deck = curriculumMaps(curriculumIndex).decks.get(parentId);
         if (!graph.nodes.length && deck) {
-            renderEmptyChapterCurriculum(root, deck);
+            renderEmptyChapterCurriculum(root, deck, activeRegistry);
         } else {
+            const headerActions = deck && !curriculumPreview
+                ? [makeChapterCurriculumButton(deck, activeRegistry)]
+                : [];
             await renderCurriculumGraph(root, progressStates, graph, {
-                layered: true
+                layered: true,
+                headerActions
             });
         }
     }

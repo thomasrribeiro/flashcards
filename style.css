@@ -3776,13 +3776,6 @@ body.standalone-phone .mobile-sidebar-close {
     text-decoration: none;
 }
 
-.curriculum-breadcrumb button[aria-current="page"].curriculum-deck-settings-trigger {
-    color: var(--black);
-    cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-}
-
 .curriculum-breadcrumb-label {
     color: var(--black);
 }
@@ -3876,19 +3869,32 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-builder-content { position: relative; padding: 18px; }
 
 .generation-confirmation {
-    max-width: 620px;
+    max-width: 480px;
 }
 
 .curriculum-builder-modal.generation-confirmation-modal {
-    width: min(620px, calc(100vw - 32px));
+    width: min(480px, calc(100vw - 32px));
     height: auto;
     max-height: calc(100vh - 32px);
 }
 
+.curriculum-builder-modal.generation-confirmation-modal > header {
+    padding: 10px 14px;
+}
+
+.curriculum-builder-modal.generation-confirmation-modal > header h2 {
+    font-size: 0.9rem;
+}
+
+.curriculum-builder-modal.generation-confirmation-modal .curriculum-builder-content {
+    padding: 14px;
+}
+
 .generation-confirmation p {
-    margin: 0 0 20px;
+    margin: 0 0 14px;
     color: var(--muted);
-    line-height: 1.6;
+    font-size: 0.66rem;
+    line-height: 1.5;
 }
 
 .generation-confirmation-actions {
@@ -3899,12 +3905,13 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .generation-confirmation-actions button {
-    min-height: 40px;
+    min-height: 34px;
     border: 1px solid var(--black);
     background: var(--white);
     color: var(--black);
-    padding: 8px 14px;
+    padding: 6px 10px;
     font: inherit;
+    font-size: 0.64rem;
 }
 
 .generation-confirmation-actions .btn-primary {
@@ -4659,16 +4666,12 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-chapter-empty h2 {
-    margin: 0 0 10px;
+    margin: 0 0 18px;
     font-size: 1rem;
 }
 
-.curriculum-chapter-empty p {
-    max-width: 680px;
-    margin: 0 0 18px;
-    color: var(--muted);
-    font-size: 0.68rem;
-    line-height: 1.6;
+.curriculum-chapter-empty-action {
+    display: inline-flex;
 }
 
 .curriculum-map {
@@ -4896,11 +4899,6 @@ body.standalone-phone .mobile-sidebar-close {
 
 .deck-action-button.danger .deck-action-label {
     color: #b00020;
-}
-
-.deck-action-button.curriculum-deck-generation-action {
-    background: var(--gold);
-    font-size: 0.78rem;
 }
 
 @media (max-width: 760px) {
