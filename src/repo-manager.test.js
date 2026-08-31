@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
     getRepositoryFileIndex: vi.fn(),
     getRepoMetadata: vi.fn(),
     getAllCards: vi.fn(),
+    getAllRepos: vi.fn(),
     invalidateRepositoryFiles: vi.fn(),
+    removeRepo: vi.fn(),
     replaceRepositoryFileCards: vi.fn(),
     saveCards: vi.fn(),
     saveRepoMetadata: vi.fn()
@@ -28,21 +30,38 @@ vi.mock('./github-client.js', () => ({
 vi.mock('./storage.js', () => ({
     getRepoMetadata: mocks.getRepoMetadata,
     getAllCards: mocks.getAllCards,
+    getAllRepos: mocks.getAllRepos,
     invalidateRepositoryFiles: mocks.invalidateRepositoryFiles,
+    removeRepo: mocks.removeRepo,
     replaceRepositoryFileCards: mocks.replaceRepositoryFileCards,
     saveCards: mocks.saveCards,
     saveRepoMetadata: mocks.saveRepoMetadata,
-    getAllRepos: vi.fn(),
     markRepoLoaded: vi.fn()
 }));
 
 import {
     loadRepositoryFiles,
     parseDeckManifest,
+    removeRepository,
     repositoryFileChanges,
     resolveRepositorySubject,
     syncRepository
 } from './repo-manager.js';
+
+describe('repository removal', () => {
+    it('removes collection membership while preserving study history', async () => {
+        mocks.getAllRepos.mockResolvedValue([]);
+        mocks.getAllCards.mockResolvedValue([]);
+        mocks.removeRepo.mockResolvedValue(undefined);
+
+        await removeRepository('owner/studied');
+
+        expect(mocks.removeRepo).toHaveBeenCalledWith(
+            'owner/studied',
+            { preserveReviews: true }
+        );
+    });
+});
 
 const markdown = `+++
 subject = "computer-science"

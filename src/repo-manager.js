@@ -447,7 +447,9 @@ export async function removeRepository(repoId) {
     const beforeRepos = await getAllRepos();
     console.log(`[RepoManager] Repos before removal:`, beforeRepos.map(r => r.id));
 
-    await removeRepo(repoId);
+    // Collection membership is reversible. Keep durable study history so
+    // reinstalling the same deck restores its review and chapter progress.
+    await removeRepo(repoId, { preserveReviews: true });
 
     const afterRepos = await getAllRepos();
     console.log(`[RepoManager] Repos after removal:`, afterRepos.map(r => r.id));

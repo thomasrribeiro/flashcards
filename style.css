@@ -4659,19 +4659,29 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-chapter-empty {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 14px;
     min-height: 220px;
     border: 1px solid var(--black);
     background: var(--white);
-    padding: 24px;
+    padding: 32px 24px;
+    text-align: center;
 }
 
 .curriculum-chapter-empty h2 {
-    margin: 0 0 18px;
-    font-size: 1rem;
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 500;
+    line-height: 1.4;
 }
 
 .curriculum-chapter-empty-action {
     display: inline-flex;
+    min-height: 34px;
+    padding: 6px 14px;
+    font-size: 0.64rem;
 }
 
 .curriculum-map {

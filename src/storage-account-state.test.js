@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     clearLocalStorage,
+    getAllChapterProgress,
     loadReposFromD1,
     removeRepo,
     saveRepoMetadata,
-    setCurrentUser
+    setCurrentUser,
+    syncChapterProgress
 } from './storage.js';
 
 afterEach(async () => {
@@ -38,7 +40,7 @@ describe('signed-in account state', () => {
         expect(fetch).toHaveBeenCalledTimes(2);
     });
 
-    it('can retire collection membership without deleting review history', async () => {
+    it('can retire collection membership without deleting study history', async () => {
         setCurrentUser({ id: 'user-1' });
         await saveRepoMetadata({
             id: 'owner/legacy',
@@ -50,10 +52,21 @@ describe('signed-in account state', () => {
             ok: true,
             json: () => Promise.resolve({ success: true, deleted: 1 })
         }));
+        const chapterProgress = {
+            repo: 'owner/legacy',
+            filepath: 'flashcards/01.md',
+            sourceSha: 'chapter-sha',
+            totalCards: 10,
+            reviewedCards: 10
+        };
+        await syncChapterProgress([chapterProgress]);
 
         await removeRepo('owner/legacy', { preserveReviews: true });
 
-        expect(fetch).toHaveBeenCalledTimes(1);
-        expect(fetch.mock.calls[0][0]).toContain('/api/repos/');
+        expect(fetch).toHaveBeenCalledTimes(3);
+        expect(fetch.mock.calls[1][0]).toContain('/api/repos/');
+        expect(fetch.mock.calls[2][0]).toContain('/api/chapter-progress');
+        expect(fetch.mock.calls.some(([url]) => url.includes('/api/deck/'))).toBe(false);
+        await expect(getAllChapterProgress()).resolves.toEqual([chapterProgress]);
     });
 });

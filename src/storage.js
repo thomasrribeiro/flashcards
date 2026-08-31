@@ -942,8 +942,14 @@ export async function removeCards(cardHashes) {
 /**
  * Remove repository - deletes from D1
  */
-export async function removeRepo(repoId, { preserveReviews = false } = {}) {
+export async function removeRepo(repoId, {
+    preserveReviews = false,
+    preserveChapterProgress = preserveReviews
+} = {}) {
     console.log(`[Storage] removeRepo called for: ${repoId}`);
+    const preservedChapterProgress = preserveChapterProgress
+        ? chapterProgressCache.filter(progress => progress.repo === repoId)
+        : [];
 
     // Delete from D1 (repos table and reviews)
     if (currentUser) {
@@ -961,6 +967,12 @@ export async function removeRepo(repoId, { preserveReviews = false } = {}) {
             }
             const result = await repoResponse.json();
             console.log('[Storage] Repo deleted from D1:', result);
+
+            // The repository-membership endpoint also clears chapter_progress.
+            // Restore the snapshot when this is a reversible collection removal.
+            if (preservedChapterProgress.length > 0) {
+                await syncChapterProgress(preservedChapterProgress);
+            }
 
             if (!preserveReviews) {
                 const reviewResponse = await fetch(`${WORKER_URL}/api/deck/${userId}/${encodeURIComponent(repoId)}`, {
@@ -981,7 +993,7 @@ export async function removeRepo(repoId, { preserveReviews = false } = {}) {
 
     // Remove from local caches
     reposCache = reposCache.filter(r => r.id !== repoId);
-    removeChapterProgressCache(repoId);
+    if (!preserveChapterProgress) removeChapterProgressCache(repoId);
 
     const cardsToRemove = cardsCache.filter(c =>
         c.deckName === repoId || c.source?.repo === repoId
