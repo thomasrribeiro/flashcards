@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     CHAPTER_CONTENT_WORKFLOW_VERSION,
     DECK_PLAN_WORKFLOW_VERSION,
+    unplannedPrerequisiteDecks,
     validateChapterContentProvenance,
     validateDeckPlanProvenance
 } from './deck-generation-contract.js';
@@ -15,7 +16,7 @@ describe('deck generation contract', () => {
             catalogHash: `sha256:${'c'.repeat(64)}`
         };
         expect(validateDeckPlanProvenance(valid)).toMatchObject(valid);
-        expect(() => validateDeckPlanProvenance({ ...valid, workflowVersion: 'deck-plan-v1' }))
+        expect(() => validateDeckPlanProvenance({ ...valid, workflowVersion: 'deck-plan-v2' }))
             .toThrow(/Unsupported deck-plan workflow/);
         expect(() => validateDeckPlanProvenance({ ...valid, registryBaseCommit: '' }))
             .toThrow(/pinned Git commit/);
@@ -27,5 +28,32 @@ describe('deck generation contract', () => {
         })).toMatchObject({ workflowVersion: CHAPTER_CONTENT_WORKFLOW_VERSION });
         expect(() => validateChapterContentProvenance(valid))
             .toThrow(/Unsupported chapter-content workflow/);
+    });
+
+    it('returns missing prerequisite DAGs in transitive dependency order', () => {
+        const decks = [
+            { id: 'mathematics/number-sense', prerequisites: [], chapters: [] },
+            {
+                id: 'mathematics/algebra',
+                prerequisites: ['mathematics/number-sense'],
+                chapters: []
+            },
+            {
+                id: 'mathematics/functions',
+                prerequisites: ['mathematics/number-sense'],
+                chapters: [{ id: '01_functions' }]
+            },
+            {
+                id: 'mathematics/linear-algebra',
+                prerequisites: ['mathematics/algebra', 'mathematics/functions'],
+                chapters: []
+            }
+        ];
+
+        expect(unplannedPrerequisiteDecks({ decks }, 'mathematics/linear-algebra')
+            .map(deck => deck.id))
+            .toEqual(['mathematics/number-sense', 'mathematics/algebra']);
+        expect(unplannedPrerequisiteDecks(decks, 'mathematics/number-sense')).toEqual([]);
+        expect(unplannedPrerequisiteDecks({ decks }, 'mathematics/missing')).toEqual([]);
     });
 });

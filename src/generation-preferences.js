@@ -87,7 +87,12 @@ function generationProviderFields(preferences) {
     };
 }
 
-export function generationJobForChapterCurriculum(deck, preferences = getGenerationPreferences(), provenance = {}) {
+export function generationJobForChapterCurriculum(
+    deck,
+    preferences = getGenerationPreferences(),
+    provenance = {},
+    { prerequisitePlanPolicy = null } = {}
+) {
     if (!deckCanPlanChapterCurriculum(deck)) {
         throw new Error('This deck is not ready for chapter curriculum planning.');
     }
@@ -103,7 +108,10 @@ export function generationJobForChapterCurriculum(deck, preferences = getGenerat
             workflowCommit: provenance.workflowCommit || null,
             registryBaseCommit: provenance.registryBaseCommit || null,
             catalogHash: provenance.catalogHash || null,
-            reasoningEffort: provider.reasoningEffort
+            reasoningEffort: provider.reasoningEffort,
+            ...(prerequisitePlanPolicy === 'continue-target-only'
+                ? { prerequisitePlanPolicy }
+                : {})
         }
     };
 }

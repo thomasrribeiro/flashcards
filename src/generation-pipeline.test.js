@@ -131,6 +131,9 @@ fi
         })).toThrow(/first ordered chapter/);
         expect(executionOptionsForGenerationJob({ job_type: 'deck-plan' }, {}))
             .toMatchObject({ chapterCurriculum: true, full: false });
+        expect(executionOptionsForGenerationJob({ job_type: 'deck-plan' }, {
+            prerequisitePlanPolicy: 'continue-target-only'
+        }).instructions).toContain('user explicitly chose to continue planning only the requested deck');
     });
 
     it('runs a generic provider with a temporary secret-free manifest', async () => {

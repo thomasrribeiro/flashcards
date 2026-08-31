@@ -3893,6 +3893,7 @@ body.standalone-phone .mobile-sidebar-close {
 
 .generation-confirmation-actions {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     gap: 8px;
 }

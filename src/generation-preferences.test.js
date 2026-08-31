@@ -78,7 +78,7 @@ describe('generation preferences', () => {
             modelId: 'gpt-example',
             payload: {
                 deckId: 'physics/mechanics',
-                workflowVersion: 'deck-plan-v2',
+                workflowVersion: 'deck-plan-v3',
                 workflowCommit: 'a'.repeat(40),
                 registryBaseCommit: 'b'.repeat(40),
                 catalogHash: 'sha256:test',
@@ -92,6 +92,15 @@ describe('generation preferences', () => {
         })).toMatchObject({
             jobType: 'deck-plan',
             payload: { deckId: 'physics/mechanics' }
+        });
+        expect(generationJobForChapterCurriculum({
+            id: 'physics/mechanics', status: 'proposed', chapters: []
+        }, {
+            providerId: 'openai', modelId: 'gpt-example', reasoningEffort: 'high'
+        }, {}, {
+            prerequisitePlanPolicy: 'continue-target-only'
+        })).toMatchObject({
+            payload: { prerequisitePlanPolicy: 'continue-target-only' }
         });
     });
 

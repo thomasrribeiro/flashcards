@@ -382,12 +382,48 @@ test('queues a chapter-curriculum agent from an empty deck chapter viewer', asyn
         modelId: 'gpt-test',
         payload: {
             deckId: 'mathematics/geometry-and-measurement',
-            workflowVersion: 'deck-plan-v2',
+            workflowVersion: 'deck-plan-v3',
             workflowCommit: '0'.repeat(40),
             registryBaseCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
             catalogHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
             reasoningEffort: 'high'
         }
+    });
+});
+
+test('offers missing prerequisite DAGs in transitive order before planning a deck', async ({ page }) => {
+    const queuedJobs = [];
+    const catalog = structuredClone(bundledCurriculum);
+    const target = catalog.decks.find(deck => deck.id === 'mathematics/linear-algebra');
+    const algebra = catalog.decks.find(deck => deck.id === 'mathematics/elementary-algebra-and-functions');
+    const arithmetic = catalog.decks.find(deck => deck.id === 'mathematics/number-sense-and-arithmetic');
+    target.chapters = [];
+    target.status = 'proposed';
+    algebra.chapters = [];
+    algebra.status = 'proposed';
+    arithmetic.chapters = [];
+    arithmetic.status = 'proposed';
+    await installGenerationAccount(page, {
+        catalog,
+        onPost: job => { queuedJobs.push(job); }
+    });
+
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics/linear-algebra"]').click();
+    const deckSettings = await openCurriculumDeckSettings(page, 'linear-algebra');
+    await deckSettings.getByRole('button', { name: 'Generate curriculum' }).click();
+
+    const confirmation = page.getByRole('dialog', { name: 'Generate prerequisite curricula first?' });
+    await expect(confirmation).toContainText(
+        'mathematics/number-sense-and-arithmetic → mathematics/elementary-algebra-and-functions'
+    );
+    await expect(confirmation.getByRole('button', { name: 'Generate this deck only' })).toBeVisible();
+    await confirmation.getByRole('button', { name: 'Start prerequisite sequence' }).click();
+
+    await expect.poll(() => queuedJobs.length).toBe(1);
+    expect(queuedJobs[0]).toMatchObject({
+        jobType: 'deck-plan',
+        payload: { deckId: 'mathematics/number-sense-and-arithmetic' }
     });
 });
 
@@ -432,7 +468,7 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
     await expect.poll(() => queuedJob).not.toBeNull();
     expect(queuedJob).toMatchObject({
         jobType: 'deck-plan',
-        payload: { deckId: targetId, workflowVersion: 'deck-plan-v2' }
+        payload: { deckId: targetId, workflowVersion: 'deck-plan-v3' }
     });
 });
 

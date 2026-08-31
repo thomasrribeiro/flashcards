@@ -1,10 +1,16 @@
+import { TARGET_ONLY_PREREQUISITE_PLAN_INSTRUCTION } from '../../src/deck-generation-contract.js';
+
 export function executionOptionsForGenerationJob(queued, payload, options = {}) {
     const jobType = queued?.job_type || 'deck-build';
+    const prerequisitePlanInstruction = jobType === 'deck-plan'
+        && payload?.prerequisitePlanPolicy === 'continue-target-only'
+        ? TARGET_ONLY_PREREQUISITE_PLAN_INSTRUCTION
+        : null;
     const executionOptions = {
         nonInteractive: options.nonInteractive,
         reportOnly: options.reportOnly,
         model: queued?.model_id || options.model,
-        instructions: options.instructions,
+        instructions: [options.instructions, prerequisitePlanInstruction].filter(Boolean).join('\n\n') || undefined,
         dryRun: options.dryRun,
         allowDirty: options.allowDirty,
         isolated: options.isolated,

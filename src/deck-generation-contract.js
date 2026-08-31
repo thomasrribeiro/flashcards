@@ -1,5 +1,7 @@
-export const DECK_PLAN_WORKFLOW_VERSION = 'deck-plan-v2';
+export const DECK_PLAN_WORKFLOW_VERSION = 'deck-plan-v3';
 export const CHAPTER_CONTENT_WORKFLOW_VERSION = 'chapter-content-v1';
+export const TARGET_ONLY_PREREQUISITE_PLAN_INSTRUCTION =
+    'The user explicitly chose to continue planning only the requested deck despite missing prerequisite chapter curricula. Honor that recorded choice without asking again, keep the declared prerequisite boundary explicit, and do not expand the write scope.';
 
 const GIT_COMMIT = /^[a-f0-9]{40}$/i;
 const SHA256 = /^sha256:[a-f0-9]{64}$/i;
@@ -16,6 +18,32 @@ export function deckNeedsChapterCurriculum(deck) {
 
 export function deckCanPlanChapterCurriculum(deck) {
     return Boolean(deck?.id);
+}
+
+export function unplannedPrerequisiteDecks(catalog, targetDeckId) {
+    const decks = Array.isArray(catalog) ? catalog : catalog?.decks;
+    if (!Array.isArray(decks) || !targetDeckId) return [];
+
+    const byId = new Map(decks.filter(deck => deck?.id).map(deck => [deck.id, deck]));
+    const target = byId.get(targetDeckId);
+    if (!target) return [];
+
+    const visited = new Set();
+    const visiting = new Set();
+    const ordered = [];
+    const visit = deckId => {
+        if (visited.has(deckId) || visiting.has(deckId)) return;
+        const deck = byId.get(deckId);
+        if (!deck) return;
+        visiting.add(deckId);
+        for (const prerequisite of deck.prerequisites || []) visit(prerequisite);
+        visiting.delete(deckId);
+        visited.add(deckId);
+        if (!Array.isArray(deck.chapters) || deck.chapters.length === 0) ordered.push(deck);
+    };
+
+    for (const prerequisite of target.prerequisites || []) visit(prerequisite);
+    return ordered;
 }
 
 function validateDeckWorkflowProvenance(input, expectedWorkflowVersion, label) {

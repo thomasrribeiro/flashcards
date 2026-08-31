@@ -3,6 +3,19 @@
 Use this workflow when the requested output is the chapter curriculum for one
 deck, without card or figure authoring.
 
+## 0. Check prerequisite planning readiness
+
+Before planning the target deck, inspect its complete hard-prerequisite deck
+closure. If any prerequisite deck lacks a chapter curriculum, ask whether to
+plan the missing prerequisite decks first in transitive dependency order or to
+continue with only the requested deck. Do not ask again when the invocation
+records that the user already chose the target-only path. Do not silently
+expand the write scope.
+
+When prerequisite plans are chosen, plan them one at a time in transitive
+order. Wait until each plan is reviewed and available in the pinned curriculum
+context before planning its consumer, including the original target.
+
 When regenerating an existing curriculum, treat every existing card block,
 stable card ID, alias, and figure as immutable. The workflow may revise chapter
 metadata and the deck blueprint or add empty chapter scaffolds, but it must not

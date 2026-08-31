@@ -3,6 +3,7 @@
 import { Command, Option } from 'commander';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { addChapter, createDeck, ensureSubject } from './lib/scaffold.js';
 import {
     codexDoctor,
@@ -67,6 +68,8 @@ import {
     generationProviderId
 } from './lib/generation-provenance.js';
 import {
+    TARGET_ONLY_PREREQUISITE_PLAN_INSTRUCTION,
+    unplannedPrerequisiteDecks,
     validateChapterContentProvenance,
     validateDeckPlanProvenance
 } from '../src/deck-generation-contract.js';
@@ -79,6 +82,52 @@ const program = new Command();
 
 function collect(value, previous) {
     return [...previous, value];
+}
+
+function unplannedLocalPrerequisiteDecks(deckPath) {
+    const graph = resolvePrerequisiteGraph(deckPath);
+    if (graph.errors.length) {
+        throw new Error(`Invalid prerequisite graph:\n- ${graph.errors.join('\n- ')}`);
+    }
+    const catalog = [
+        {
+            id: graph.root.id,
+            prerequisites: graph.root.deckDependencies,
+            chapters: graph.chapters
+        },
+        ...graph.externalDecks.map(deck => ({
+            ...deck,
+            prerequisites: deck.deckDependencies,
+            chapters: graph.externalChapters[deck.id] || []
+        }))
+    ];
+    return unplannedPrerequisiteDecks(catalog, graph.root.id);
+}
+
+async function prerequisitePlanPolicy(targetDeck, missing, requestedPolicy = 'ask') {
+    if (!missing.length) return 'ready';
+    if (requestedPolicy === 'generate') return 'generate';
+    if (requestedPolicy === 'target-only') return 'target';
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        throw new Error(
+            `Missing prerequisite chapter curricula: ${missing.map(deck => deck.id).join(', ')}. `
+            + 'Pass --prerequisite-plans generate or --prerequisite-plans target-only.'
+        );
+    }
+    const order = missing.map(deck => deck.id).join(' -> ');
+    const prompt = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+        const answer = (await prompt.question(
+            `${targetDeck} has prerequisite decks without chapter DAGs. `
+            + `Generate them first in transitive order (${order})? `
+            + '[Y]es / [t]arget only / [c]ancel: '
+        )).trim().toLowerCase();
+        if (answer === '' || answer === 'y' || answer === 'yes') return 'generate';
+        if (answer === 't' || answer === 'target' || answer === 'target-only') return 'target';
+        return 'cancel';
+    } finally {
+        prompt.close();
+    }
 }
 
 function positiveInteger(value) {
@@ -763,19 +812,46 @@ deck
         }
     });
 
-addAgentOptions(deck
+const deckPlan = addAgentOptions(deck
     .command('plan <deck-path>')
-    .description('Research and create the ordered chapter curriculum without authoring cards'))
-    .action((deckPath, options) => {
-        try {
-            executeAgent('build', resolvePath(deckPath), {
-                ...options,
-                chapterCurriculum: true
-            });
-        } catch (error) {
-            handleError(error);
+    .description('Research and create the ordered chapter curriculum without authoring cards')
+    .addOption(new Option(
+        '--prerequisite-plans <policy>',
+        'How to handle prerequisite decks without chapter DAGs'
+    ).choices(['ask', 'generate', 'target-only']).default('ask')));
+
+deckPlan.action(async (deckPath, options) => {
+    try {
+        const targetPath = resolvePath(deckPath);
+        const missing = unplannedLocalPrerequisiteDecks(targetPath);
+        const policy = await prerequisitePlanPolicy(targetPath, missing, options.prerequisitePlans);
+        if (policy === 'cancel') {
+            console.log('Chapter curriculum planning cancelled.');
+            return;
         }
-    });
+        if (policy === 'generate') {
+            for (const prerequisite of missing) {
+                console.log(`Planning prerequisite chapter curriculum: ${prerequisite.id}`);
+                const result = executeAgent('build', prerequisite.path, {
+                    ...options,
+                    chapterCurriculum: true
+                });
+                if (result?.status !== 0) return;
+            }
+        }
+        executeAgent('build', targetPath, {
+            ...options,
+            chapterCurriculum: true,
+            instructions: policy === 'target'
+                ? [options.instructions, TARGET_ONLY_PREREQUISITE_PLAN_INSTRUCTION]
+                    .filter(Boolean)
+                    .join('\n\n')
+                : options.instructions
+        });
+    } catch (error) {
+        handleError(error);
+    }
+});
 
 addAgentOptions(deck
     .command('build <deck-path>')

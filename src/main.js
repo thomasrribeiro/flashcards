@@ -113,7 +113,8 @@ import {
 } from './curriculum-progress.js';
 import {
     chapterContentGenerationScope,
-    deckNeedsChapterCurriculum
+    deckNeedsChapterCurriculum,
+    unplannedPrerequisiteDecks
 } from './deck-generation-contract.js';
 import {
     generationJobForChapterContent,
@@ -4670,20 +4671,44 @@ function makeChapterCurriculumButton(deck, registry) {
     button.className = 'curriculum-toolbar-action is-primary';
     button.textContent = 'Generate curriculum';
     button.disabled = true;
-    const queue = async () => {
+    const jobFor = async (candidate, prerequisitePlanPolicy = null) => {
+        const preferences = await connectedWebsiteGenerationPreferences();
+        const candidateRegistry = curriculumRegistryForView(curriculumIndex, {
+            subjectId: candidate.subject,
+            deckId: candidate.id
+        });
+        return generationJobForChapterCurriculum(
+            candidate,
+            preferences,
+            deckJobProvenance(candidateRegistry),
+            { prerequisitePlanPolicy }
+        );
+    };
+    const queue = async (candidate = deck, prerequisitePlanPolicy = null) => {
         try {
-            const job = generationJobForChapterCurriculum(
-                deck,
-                await connectedWebsiteGenerationPreferences(),
-                deckJobProvenance(registry)
+            await queueCurriculumAgentJob(
+                await jobFor(candidate, prerequisitePlanPolicy),
+                button
             );
-            await queueCurriculumAgentJob(job, button);
         } catch (error) {
             console.error('[Curriculum] Chapter curriculum request failed:', error);
             alert(`Could not queue chapter curriculum: ${error.message}`);
         }
     };
     button.onclick = () => {
+        const unplanned = unplannedPrerequisiteDecks(curriculumIndex, deck.id);
+        if (unplanned.length) {
+            const order = unplanned.map(candidate => candidate.id).join(' → ');
+            openGenerationConfirmation({
+                title: 'Generate prerequisite curricula first?',
+                message: `${deck.id} depends on prerequisite decks without chapter DAGs. Missing order: ${order}. Start with ${unplanned[0].id}? After each plan is reviewed and published, return here to generate the next prerequisite, then the requested deck.`,
+                confirmLabel: 'Start prerequisite sequence',
+                secondaryLabel: deck.chapters?.length ? 'Regenerate this deck only' : 'Generate this deck only',
+                onConfirm: () => queue(unplanned[0]),
+                onSecondary: () => queue(deck, 'continue-target-only')
+            });
+            return;
+        }
         if (!deck.chapters?.length) {
             queue();
             return;
@@ -5054,17 +5079,30 @@ function curriculumOverlay(title) {
     return { overlay, content: overlay.querySelector('.curriculum-builder-content'), close };
 }
 
-function openGenerationConfirmation({ title, message, confirmLabel, onConfirm }) {
+function openGenerationConfirmation({
+    title,
+    message,
+    confirmLabel,
+    secondaryLabel,
+    onConfirm,
+    onSecondary
+}) {
     const { content, close } = curriculumOverlay(title);
     content.closest('.curriculum-builder-modal')?.classList.add('generation-confirmation-modal');
     content.innerHTML = `<div class="generation-confirmation">
         <p>${escapeHtml(message)}</p>
         <div class="generation-confirmation-actions">
             <button type="button" data-cancel>Cancel</button>
+            ${secondaryLabel ? `<button type="button" data-secondary>${escapeHtml(secondaryLabel)}</button>` : ''}
             <button type="button" class="btn-primary" data-confirm>${escapeHtml(confirmLabel)}</button>
         </div>
     </div>`;
     content.querySelector('[data-cancel]').onclick = close;
+    const secondary = content.querySelector('[data-secondary]');
+    if (secondary) secondary.onclick = () => {
+        close();
+        onSecondary();
+    };
     content.querySelector('[data-confirm]').onclick = () => {
         close();
         onConfirm();
