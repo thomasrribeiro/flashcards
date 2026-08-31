@@ -453,7 +453,7 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
     await expect(deckSettings.getByRole('button', { name: /Add to Study/ })).toHaveCount(0);
     await expect(deckSettings.getByRole('button', { name: /Chapter curriculum/ })).toBeVisible();
     await expect(deckSettings.getByRole('button', { name: /Prereqs & unlocks/ })).toBeVisible();
-    await expect(deckSettings.getByRole('button', { name: /Generate curriculum/ })).toHaveCount(0);
+    await expect(deckSettings.getByRole('button', { name: /Regenerate curriculum/ })).toBeEnabled();
     await deckSettings.getByRole('button', { name: /Chapter curriculum/ }).click();
     const reopenedSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
     await reopenedSettings.getByRole('button', { name: /Prereqs & unlocks/ }).click();
@@ -469,12 +469,13 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
         graphHeader.locator('.curriculum-graph-navigation').boundingBox()
     ]);
     await expect(graphHeader.locator('.curriculum-graph-primary-actions').getByRole('button'))
-        .toHaveCount(1);
+        .toHaveCount(0);
     expect(Math.abs(
         navigationBox.x + navigationBox.width / 2
         - (headerBox.x + headerBox.width / 2)
     )).toBeLessThan(2);
-    const regenerate = graphHeader.getByRole('button', { name: 'Regenerate curriculum' });
+    const finalSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
+    const regenerate = finalSettings.getByRole('button', { name: /Regenerate curriculum/ });
     await expect(regenerate).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Fit', exact: true })).toHaveCount(0);
     await regenerate.click();

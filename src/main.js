@@ -1507,6 +1507,18 @@ function openCurriculumDeckActionsModal({ deck, registry, installedRepository },
         }
     }));
 
+    if (deck.chapters?.length && !curriculumPreview) {
+        const regenerate = appendDeckAction(body, {
+            label: 'Regenerate curriculum',
+            description: 'Create a new chapter plan using the current curriculum as its baseline.',
+            onClick: () => {}
+        });
+        configureChapterCurriculumButton(regenerate, deck, registry, {
+            onStart: () => closeDeckActionsModal({ restoreFocus: false })
+        });
+        actions.push(regenerate);
+    }
+
     if (hasGeneratedCards && installedRepository?.id) {
         actions.push(appendDeckAction(body, {
             label: 'Open in Study',
@@ -4669,11 +4681,7 @@ function renderEmptyChapterCurriculum(root, deck, registry) {
     root.appendChild(empty);
 }
 
-function makeChapterCurriculumButton(deck, registry) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'curriculum-toolbar-action is-primary';
-    button.textContent = deck.chapters?.length ? 'Regenerate curriculum' : 'Generate curriculum';
+function configureChapterCurriculumButton(button, deck, registry, { onStart = null } = {}) {
     button.disabled = true;
     const jobFor = async (candidate, prerequisitePlanPolicy = null) => {
         const preferences = await connectedWebsiteGenerationPreferences();
@@ -4700,6 +4708,7 @@ function makeChapterCurriculumButton(deck, registry) {
         }
     };
     button.onclick = () => {
+        onStart?.();
         const unplanned = unplannedPrerequisiteDecks(curriculumIndex, deck.id);
         if (unplanned.length) {
             const order = unplanned.map(candidate => (
@@ -4728,6 +4737,14 @@ function makeChapterCurriculumButton(deck, registry) {
     };
     configureWebsiteGenerationButton(button, { registry });
     return button;
+}
+
+function makeChapterCurriculumButton(deck, registry) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'curriculum-toolbar-action is-primary';
+    button.textContent = deck.chapters?.length ? 'Regenerate curriculum' : 'Generate curriculum';
+    return configureChapterCurriculumButton(button, deck, registry);
 }
 
 async function renderCurriculumView(options = {}) {
@@ -4883,13 +4900,7 @@ async function renderCurriculumView(options = {}) {
         if (!graph.nodes.length && deck) {
             renderEmptyChapterCurriculum(root, deck, activeRegistry);
         } else {
-            const headerActions = deck && !curriculumPreview
-                ? [makeChapterCurriculumButton(deck, activeRegistry)]
-                : [];
-            await renderCurriculumGraph(root, progressStates, graph, {
-                layered: true,
-                headerActions
-            });
+            await renderCurriculumGraph(root, progressStates, graph, { layered: true });
         }
     }
     requestAnimationFrame(() => requestAnimationFrame(restoreCurriculumPosition));
@@ -7177,7 +7188,7 @@ async function websiteGenerationAvailability() {
 }
 
 async function configureWebsiteGenerationButton(button, { registry = null } = {}) {
-    const readyLabel = button.textContent;
+    const readyContent = [...button.childNodes].map(node => node.cloneNode(true));
     button.disabled = true;
     button.classList.add('is-checking');
     button.textContent = 'Checking AI access…';
@@ -7190,7 +7201,7 @@ async function configureWebsiteGenerationButton(button, { registry = null } = {}
     }
     if (!button.isConnected) return availability;
     button.classList.remove('is-checking');
-    button.textContent = readyLabel;
+    button.replaceChildren(...readyContent);
     button.disabled = !availability.enabled;
     button.title = availability.reason;
     button.setAttribute('aria-disabled', String(!availability.enabled));
