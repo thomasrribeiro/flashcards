@@ -285,6 +285,10 @@ switch between the current loaded curriculum and the proposal, and inspect
 added/removed/changed nodes and prerequisite edges. Previewing does not apply
 changes. **Apply generated DAG** separately confirms and merges the exact
 previewed pull-request commit; completed historical jobs remain viewable.
+The subject viewer also exposes **Regenerate DAG**. Every website generation
+launch, including prerequisite batches, confirms the exact provider, model, and
+reasoning effort before queueing; cancelling creates no job. Change defaults
+under Settings → AI generation, then restart the launch flow.
 
 In the Curriculum view, select a planned deck and use **Generate pilot
 chapter** to enqueue that same isolated deck pipeline. After the pilot passes

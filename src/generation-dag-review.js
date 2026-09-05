@@ -6,6 +6,13 @@ export function generationJobCategory(request) {
     return { id: 'other', label: 'Other generation' };
 }
 
+export function generationModelSummary(job) {
+    const providers = { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google Gemini', codex: 'Codex', custom: 'Custom' };
+    const effort = job.payload?.reasoningEffort;
+    const reasoning = effort ? `${effort[0].toUpperCase()}${effort.slice(1)}` : 'Runner default (not specified)';
+    return `Model: ${job.modelId || 'Runner default (not pinned)'} · Reasoning: ${reasoning} · Provider: ${providers[job.providerId] || job.providerId || 'Runner default'}`;
+}
+
 export function canReviewGenerationDag(request) {
     return ['subject-dag', 'deck-dag'].includes(generationJobCategory(request).id)
         && ['needs-review', 'published', 'cancelled'].includes(request?.status)

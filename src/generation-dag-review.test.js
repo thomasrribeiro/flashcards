@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { canReviewGenerationDag, compareGenerationDag, generationJobCategory } from './generation-dag-review.js';
+import { canReviewGenerationDag, compareGenerationDag, generationJobCategory, generationModelSummary } from './generation-dag-review.js';
 
 describe('generation DAG review', () => {
+    it('discloses the exact queued model and reasoning without inventing missing values', () => {
+        expect(generationModelSummary({providerId:'openai',modelId:'gpt-6-astra',payload:{reasoningEffort:'high'}})).toBe('Model: gpt-6-astra · Reasoning: High · Provider: OpenAI');
+        expect(generationModelSummary({providerId:'openai',modelId:'gpt-6-astra',payload:{reasoningEffort:'max'}})).toContain('Reasoning: Max');
+        expect(generationModelSummary({})).toContain('Runner default (not pinned)');
+        expect(generationModelSummary({})).toContain('Runner default (not specified)');
+    });
     it('tags subject DAG, deck DAG, and flashcard jobs independently of lifecycle', () => {
         for (const status of ['queued', 'running', 'needs-review', 'published', 'failed', 'cancelled']) {
             expect(generationJobCategory({jobType:'subject-design', status}).label).toBe('Subject DAG');

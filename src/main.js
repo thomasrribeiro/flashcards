@@ -109,7 +109,7 @@ import {
     sortGenerationRequestsByInitiatedAt,
     summarizeGenerationActivity
 } from './generation-activity.js';
-import { canReviewGenerationDag, compareGenerationDag, generationJobCategory } from './generation-dag-review.js';
+import { canReviewGenerationDag, compareGenerationDag, generationJobCategory, generationModelSummary } from './generation-dag-review.js';
 import {
     curriculumChapterProgressStates,
     curriculumDeckProgressStates
@@ -4647,11 +4647,18 @@ function deckJobProvenance(registry) {
     };
 }
 
-async function queueCurriculumAgentJob(job, button) {
+async function queueCurriculumAgentJob(inputJob, button, { onQueued = null } = {}) {
+    const job = structuredClone(inputJob);
     const originalText = button.textContent;
     button.disabled = true;
-    button.textContent = 'Queueing…';
+    button.textContent = 'Reviewing settings…';
     try {
+        if (!await confirmGenerationJobs([job])) {
+            button.disabled = false;
+            button.textContent = originalText;
+            return null;
+        }
+        button.textContent = 'Queueing…';
         const result = await githubAuth.apiRequest('/api/generation-requests', {
             method: 'POST',
             body: JSON.stringify(job)
@@ -4660,11 +4667,13 @@ async function queueCurriculumAgentJob(job, button) {
             ...result.request,
             job_type: job.jobType,
             registry_id: job.registryId,
+            target_repository: job.targetRepository,
             provider_id: job.providerId,
             model_id: job.modelId,
             payload: job.payload
         };
         button.textContent = result.existing ? 'Already queued' : 'Agent queued';
+        onQueued?.();
         openGenerationActivity({
             focusRequestId: result.request.id,
             initialRequest
@@ -4878,6 +4887,16 @@ async function renderCurriculumView(options = {}) {
             breadcrumbActions.append(createSubject);
             configureWebsiteGenerationButton(createSubject, { registry: activeRegistry });
         }
+    }
+    if (mode === 'subject' && hierarchy === 'deck' && subject && !curriculumPreview) {
+        const regenerate = document.createElement('button');
+        regenerate.type = 'button';
+        regenerate.className = 'curriculum-toolbar-action';
+        regenerate.textContent = 'Regenerate DAG';
+        regenerate.setAttribute('aria-label', `Regenerate ${subject} DAG`);
+        regenerate.onclick = () => openCurriculumBuilder(subject, activeRegistry);
+        breadcrumbActions.appendChild(regenerate);
+        configureWebsiteGenerationButton(regenerate, { registry: activeRegistry });
     }
     const installedStudyTarget = deckId
         ? installedRepositoryForCurriculumDeck(decks, activeChapterDeck)
@@ -5144,6 +5163,48 @@ function openGenerationConfirmation({
         onConfirm();
     };
     content.querySelector('[data-confirm]').focus();
+}
+
+function confirmGenerationJobs(jobs) {
+    return new Promise(resolve => {
+        const { overlay, content, close } = curriculumOverlay('Confirm AI generation');
+        let settled = false;
+        const finish = value => {
+            if (settled) return;
+            settled = true;
+            resolve(value);
+            close();
+        };
+        overlay.addEventListener('close', () => finish(false));
+        const introduction = document.createElement('p');
+        introduction.textContent = `Review the settings for ${jobs.length === 1 ? 'this job' : `these ${jobs.length} jobs`} before starting. Provider usage may incur charges. Results will be drafts for review. To change these settings, cancel and open Settings → AI generation.`;
+        const list = document.createElement('div');
+        list.className = 'generation-launch-list';
+        for (const job of jobs) {
+            const item = document.createElement('section');
+            const title = document.createElement('h3');
+            title.textContent = `${generationJobCategory(job).label}: ${job.payload?.subject || job.payload?.deckId || 'Generation'}${job.payload?.chapterId ? ` / ${job.payload.chapterId}` : ''}`;
+            const settings = document.createElement('p');
+            settings.className = 'generation-launch-settings';
+            settings.textContent = generationModelSummary(job);
+            item.append(title, settings);
+            list.appendChild(item);
+        }
+        const actions = document.createElement('div');
+        actions.className = 'generation-confirmation-actions';
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.textContent = 'Cancel';
+        cancel.onclick = () => finish(false);
+        const confirm = document.createElement('button');
+        confirm.type = 'button';
+        confirm.className = 'btn-primary';
+        confirm.textContent = jobs.length === 1 ? 'Start AI job' : `Start ${jobs.length} AI jobs`;
+        confirm.onclick = () => finish(true);
+        actions.append(cancel, confirm);
+        content.append(introduction, list, actions);
+        confirm.focus();
+    });
 }
 
 function generationActivityButtonText() {
@@ -5725,7 +5786,7 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
                 prerequisites: (deck.prerequisites || []).map(id => id.startsWith(`${subjectId}/`) ? id.split('/')[1] : id)
             }))
     };
-    const { content, close } = curriculumOverlay(subjectId ? `Edit ${subjectId}` : 'Create subject');
+    const { content, close } = curriculumOverlay(subjectId ? `Regenerate ${subjectId} DAG` : 'Create subject');
     content.innerHTML = `<form class="curriculum-builder-form">
             <div class="curriculum-builder-grid">
                 <div class="curriculum-builder-field">
@@ -5819,11 +5880,8 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
                 catalogPath: targetRegistry?.path
             });
             const button = form.querySelector('[type="submit"]');
-            button.disabled = true;
-            button.textContent = 'Queueing…';
-            const result = await githubAuth.apiRequest('/api/generation-requests', {
-                method: 'POST', body: JSON.stringify(job)
-            });
+            const result = await queueCurriculumAgentJob(job, button, { onQueued: close });
+            if (!result) return;
             console.info('[Curriculum] Subject-design request queued', {
                 requestId: result.request.id,
                 subject: job.payload.subject,
@@ -5834,19 +5892,6 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
                 workflowVersion: job.payload.workflowVersion,
                 registryBaseCommit: job.payload.registryBaseCommit,
                 catalogHash: job.payload.catalogHash
-            });
-            close();
-            openGenerationActivity({
-                focusRequestId: result.request.id,
-                initialRequest: {
-                    ...result.request,
-                    job_type: job.jobType,
-                    registry_id: job.registryId,
-                    target_repository: job.targetRepository,
-                    provider_id: job.providerId,
-                    model_id: job.modelId,
-                    payload: job.payload
-                }
             });
         } catch (error) {
             content.querySelector('[data-errors]').textContent = error.message;
@@ -6003,14 +6048,20 @@ async function requestMissingGeneration() {
     }
     try {
         const preferences = await connectedWebsiteGenerationPreferences();
-        for (const deck of plan.missingDecks) {
+        const jobs = plan.missingDecks.map(deck => {
             const registry = curriculumRegistryForView(curriculumIndex, {
                 subjectId: deck.subject,
                 deckId: deck.id
             });
-            const job = deckNeedsChapterCurriculum(deck)
+            return deckNeedsChapterCurriculum(deck)
                 ? generationJobForChapterCurriculum(deck, preferences, deckJobProvenance(registry))
                 : generationJobForDeck(deck, preferences);
+        });
+        if (!jobs.length || !await confirmGenerationJobs(jobs)) {
+            if (button) button.textContent = 'Request generation';
+            return;
+        }
+        for (const job of jobs) {
             await githubAuth.apiRequest('/api/generation-requests', {
                 method: 'POST',
                 body: JSON.stringify(job)

@@ -4044,6 +4044,10 @@ body.standalone-phone .mobile-sidebar-close {
 }
 .generation-job-tag.is-deck-dag { background: #e8f3ea; }
 .generation-job-tag.is-flashcards { background: #fff5c7; }
+.generation-launch-list { display: grid; gap: 12px; margin: 16px 0; }
+.generation-launch-list section { padding: 12px; border: 1px solid var(--subtle-border); overflow-wrap: anywhere; }
+.generation-launch-list h3 { margin: 0 0 8px; font-size: 0.85rem; }
+.generation-launch-settings { margin: 0; font-size: 0.78rem; }
 .curriculum-graph-node.is-dag-added { box-shadow: inset 0 0 0 3px #27804b; }
 .curriculum-graph-node.is-dag-removed { box-shadow: inset 0 0 0 3px #b83a3a; }
 .curriculum-graph-node.is-dag-changed { box-shadow: inset 0 0 0 3px #886b13; }
