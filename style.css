@@ -4034,6 +4034,19 @@ body.standalone-phone .mobile-sidebar-close {
     justify-content: space-between;
     gap: 14px;
 }
+.generation-job-tag {
+    display: inline-block;
+    margin-bottom: 6px;
+    border: 1px solid var(--black);
+    padding: 3px 6px;
+    font-size: 0.58rem;
+    background: #e8edf8;
+}
+.generation-job-tag.is-deck-dag { background: #e8f3ea; }
+.generation-job-tag.is-flashcards { background: #fff5c7; }
+.curriculum-graph-node.is-dag-added { box-shadow: inset 0 0 0 3px #27804b; }
+.curriculum-graph-node.is-dag-removed { box-shadow: inset 0 0 0 3px #b83a3a; }
+.curriculum-graph-node.is-dag-changed { box-shadow: inset 0 0 0 3px #886b13; }
 .generation-activity-item h3 {
     font-size: 0.82rem;
 }
@@ -4092,6 +4105,7 @@ body.standalone-phone .mobile-sidebar-close {
 .generation-activity-error:empty { display: none; }
 .curriculum-preview-banner {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 14px;
@@ -4105,6 +4119,12 @@ body.standalone-phone .mobile-sidebar-close {
     font-size: 0.66rem;
 }
 .curriculum-preview-banner > div { margin: 0; }
+.curriculum-preview-banner > section { flex: 1 1 320px; min-width: 0; }
+.curriculum-preview-banner > section p + p { margin-top: 6px; }
+.curriculum-preview-banner button[aria-pressed="true"] { background: var(--black); color: var(--white); }
+.curriculum-preview-banner details { flex: 1 0 100%; min-width: 0; font-size: 0.64rem; }
+.curriculum-preview-banner summary { cursor: pointer; }
+.curriculum-preview-banner details ul { max-height: 240px; overflow: auto; overflow-wrap: anywhere; padding-left: 20px; }
 .curriculum-source-row {
     display: grid;
     grid-template-columns: auto 1fr 180px auto;
@@ -4118,6 +4138,7 @@ body.standalone-phone .mobile-sidebar-close {
     .generation-activity-refresh { justify-self: start; }
     .generation-activity-list { grid-column: 1; }
     .curriculum-preview-banner { align-items: flex-start; flex-direction: column; }
+    .curriculum-preview-banner > section { flex: none; width: 100%; }
     .curriculum-builder-grid { grid-template-columns: 1fr; }
     .curriculum-builder-deck { grid-template-columns: 28px 1fr auto; }
     .curriculum-builder-deck > input:nth-of-type(2),

@@ -279,6 +279,13 @@ and compiled catalog on a draft pull request. The Agents tab previews that
 unmerged catalog; the production DAG changes only after the pull request is
 merged.
 
+Agents labels each job as **Subject DAG**, **Deck DAG**, or **Flashcards**.
+Use **Review subject DAG** or **Review deck DAG** to open its generated canvas,
+switch between the current loaded curriculum and the proposal, and inspect
+added/removed/changed nodes and prerequisite edges. Previewing does not apply
+changes. **Apply generated DAG** separately confirms and merges the exact
+previewed pull-request commit; completed historical jobs remain viewable.
+
 In the Curriculum view, select a planned deck and use **Generate pilot
 chapter** to enqueue that same isolated deck pipeline. After the pilot passes
 human review and is explicitly approved, the action becomes **Generate

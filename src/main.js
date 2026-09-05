@@ -109,6 +109,7 @@ import {
     sortGenerationRequestsByInitiatedAt,
     summarizeGenerationActivity
 } from './generation-activity.js';
+import { canReviewGenerationDag, compareGenerationDag, generationJobCategory } from './generation-dag-review.js';
 import {
     curriculumChapterProgressStates,
     curriculumDeckProgressStates
@@ -3760,11 +3761,18 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             : deck.nodeType === 'chapter'
                 ? `${deck.order}. ${deck.deck}`
                 : `${deck.order}. ${deck.deck}`;
-        const nodeMeta = deck.nodeType === 'subject'
+        const dagChange = curriculumPreview?.diff && (
+            (curriculumPreview.showing === 'generated' ? curriculumPreview.diff.added : curriculumPreview.diff.removed)
+                .some(item => item.id === deck.id)
+                ? curriculumPreview.showing === 'generated' ? 'Added' : 'Removed'
+                : curriculumPreview.diff.changed.some(item => item.id === deck.id) ? 'Changed' : ''
+        );
+        if (dagChange) node.classList.add(`is-dag-${dagChange.toLowerCase()}`);
+        const nodeMeta = [dagChange, deck.nodeType === 'subject'
             ? `${deck.deck_count} decks`
             : deck.nodeType === 'chapter'
                 ? `${deck.card_count || 0} cards`
-                : '';
+                : ''].filter(Boolean).join(' · ');
         node.setAttribute('aria-label', [deck.nodeType, nodeName, nodeMeta].filter(Boolean).join(' '));
         node.innerHTML = `
             <span class="curriculum-graph-node-subject">${escapeHtml(deck.nodeType === 'subject' ? 'subject' : deck.subject)}</span>
@@ -5225,8 +5233,11 @@ async function enterCurriculumPreview(request, close, trigger) {
         const { catalog, commit, pull } = await loadPullRequestCurriculum(request, {
             token: githubAuth.getToken()
         });
-        const publishedIndex = curriculumPreview?.publishedIndex || curriculumIndex;
-        curriculumPreview = { publishedIndex, request, commit, pull };
+        const publishedIndex = curriculumPreview?.publishedIndex || curriculumIndex || await loadCurriculumIndex();
+        curriculumPreview = {
+            publishedIndex, generatedIndex: catalog, request, commit, pull,
+            showing: 'generated', diff: compareGenerationDag(publishedIndex, catalog, request)
+        };
         curriculumIndex = catalog;
         curriculumNavigationHistory = [];
         curriculumNavigationHistoryIndex = -1;
@@ -5365,9 +5376,14 @@ function appendGenerationRequestRow(list, request, close) {
     const identity = document.createElement('div');
     const title = document.createElement('h3');
     title.textContent = generationRequestName(request);
+    const category = generationJobCategory(request);
+    const tag = document.createElement('span');
+    tag.className = `generation-job-tag is-${category.id}`;
+    tag.textContent = category.label;
+    tag.setAttribute('aria-label', `Job type: ${category.label}`);
     const meta = document.createElement('p');
     meta.textContent = generationRequestMeta(request);
-    identity.append(title, meta);
+    identity.append(tag, title, meta);
     const status = document.createElement('span');
     status.className = `generation-activity-status is-${request.status}`;
     status.textContent = generationStatusLabel(request.status);
@@ -5412,12 +5428,10 @@ function appendGenerationRequestRow(list, request, close) {
         };
         actions.appendChild(cancel);
     }
-    if (['subject-design', 'deck-plan'].includes(request.jobType)
-        && request.status === 'needs-review'
-        && request.resultUrl) {
+    if (canReviewGenerationDag(request)) {
         const preview = document.createElement('button');
         preview.type = 'button';
-        preview.textContent = 'Preview curriculum';
+        preview.textContent = request.jobType === 'subject-design' ? 'Review subject DAG' : 'Review deck DAG';
         preview.onclick = () => enterCurriculumPreview(request, close, preview);
         actions.appendChild(preview);
     }
@@ -5523,17 +5537,36 @@ function curriculumPreviewBanner() {
     if (!curriculumPreview) return null;
     const banner = document.createElement('aside');
     banner.className = 'curriculum-preview-banner';
+    const description = document.createElement('section');
     const text = document.createElement('p');
     const target = curriculumPreview.request.jobType === 'deck-plan'
         ? `${curriculumPreview.request.deckId} chapter curriculum`
         : `${curriculumPreview.request.subject} curriculum`;
-    text.textContent = `Previewing unmerged ${target} from pull request #${curriculumPreview.pull.number} at ${curriculumPreview.commit.slice(0, 12)}.`;
+    const { diff, showing, request } = curriculumPreview;
+    text.textContent = `${showing === 'generated' ? 'Generated DAG' : 'Current DAG (loaded snapshot)'} · ${target} · ${request.modelId || 'model not recorded'} · PR #${curriculumPreview.pull.number} at ${curriculumPreview.commit.slice(0, 12)}. Nothing is applied by previewing.`;
+    const summary = document.createElement('p');
+    summary.textContent = `Nodes: ${diff.beforeCount} → ${diff.afterCount}. ${diff.added.length} added, ${diff.removed.length} removed, ${diff.changed.length} changed. Prerequisite edges: +${diff.addedEdges.length} / −${diff.removedEdges.length} (required and recommended).`;
+    description.append(text, summary);
     const actions = document.createElement('div');
+    for (const [value, label] of [['published', 'Current DAG'], ['generated', 'Generated DAG']]) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.setAttribute('aria-pressed', String(showing === value));
+        button.onclick = async () => {
+            button.disabled = true;
+            curriculumPreview.showing = value;
+            curriculumIndex = value === 'generated' ? curriculumPreview.generatedIndex : curriculumPreview.publishedIndex;
+            await navigateCurriculum(generationPreviewDestination(request), { replace: true, trackHistory: false });
+        };
+        actions.appendChild(button);
+    }
     const merge = document.createElement('button');
     merge.type = 'button';
-    merge.textContent = 'Merge curriculum';
+    merge.textContent = 'Apply generated DAG';
     merge.onclick = async () => {
         const preview = curriculumPreview;
+        if (!window.confirm(`Apply this generated DAG by merging pull request #${preview.pull.number}? This changes the published curriculum. Previewing alone does not change it.`)) return;
         merge.disabled = true;
         merge.textContent = 'Merging…';
         try {
@@ -5562,7 +5595,7 @@ function curriculumPreviewBanner() {
             );
         } catch (error) {
             merge.disabled = false;
-            merge.textContent = 'Merge curriculum';
+            merge.textContent = 'Apply generated DAG';
             const message = document.createElement('p');
             message.className = 'generation-activity-error';
             message.setAttribute('aria-live', 'polite');
@@ -5575,8 +5608,31 @@ function curriculumPreviewBanner() {
     exit.type = 'button';
     exit.textContent = 'Exit preview';
     exit.onclick = exitCurriculumPreview;
-    actions.append(merge, exit);
-    banner.append(text, actions);
+    if (request.status === 'needs-review' && showing === 'generated') actions.appendChild(merge);
+    const github = document.createElement('a');
+    github.href = request.resultUrl;
+    github.target = '_blank';
+    github.rel = 'noopener noreferrer';
+    github.textContent = 'View pull request';
+    actions.append(github, exit);
+    const details = document.createElement('details');
+    const heading = document.createElement('summary');
+    heading.textContent = 'Inspect DAG changes';
+    const changes = document.createElement('ul');
+    const entries = [
+        ...diff.added.map(node => `Added: ${node.id}`),
+        ...diff.removed.map(node => `Removed: ${node.id}`),
+        ...diff.changed.map(node => `Changed: ${node.id} (${node.fields.join(', ')})`),
+        ...diff.addedEdges.map(edge => `Added ${edge.type} prerequisite: ${edge.source} → ${edge.target}`),
+        ...diff.removedEdges.map(edge => `Removed ${edge.type} prerequisite: ${edge.source} → ${edge.target}`)
+    ];
+    for (const entry of entries.length ? entries : ['No curriculum differences in this target.']) {
+        const line = document.createElement('li');
+        line.textContent = entry;
+        changes.appendChild(line);
+    }
+    details.append(heading, changes);
+    banner.append(description, actions, details);
     return banner;
 }
 

@@ -931,11 +931,13 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
     const activity = settings.locator('#study-settings-pane-agents');
     await expect(activity.getByText('No agents currently running. 1 result awaiting review.')).toBeVisible();
     await expect(activity.getByRole('heading', { name: 'Chemistry curriculum' })).toBeVisible();
-    await activity.getByRole('button', { name: 'Preview curriculum' }).click();
+    await expect(activity.getByLabel('Job type: Subject DAG')).toBeVisible();
+    await activity.getByRole('button', { name: 'Review subject DAG' }).click();
 
     await expect(page.locator('#tab-curriculum')).toHaveClass(/active/);
-    await expect(page.locator('.curriculum-preview-banner')).toContainText('Previewing unmerged chemistry curriculum from pull request #12');
-    await expect(page.locator('.curriculum-preview-banner').getByRole('button', { name: 'Merge curriculum' })).toBeVisible();
+    await expect(page.locator('.curriculum-preview-banner')).toContainText('Generated DAG · chemistry curriculum · gpt-test · PR #12');
+    await expect(page.locator('.curriculum-preview-banner')).toContainText('2 added');
+    await expect(page.locator('.curriculum-preview-banner').getByRole('button', { name: 'Apply generated DAG' })).toBeVisible();
     await expect(page.locator('.curriculum-preview-banner').getByRole('link', { name: 'Review pull request' })).toHaveCount(0);
     await expect(page.locator('.curriculum-breadcrumb-label')).toHaveText('example');
     await expect(page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'curricula' })).toBeVisible();
@@ -943,10 +945,60 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-reactions"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create subject' })).toHaveCount(0);
 
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toHaveClass(/is-dag-added/);
+    await page.getByRole('button', { name: 'Current DAG', exact: true }).click();
+    await expect(page.locator('.curriculum-preview-banner')).toContainText('Current DAG (loaded snapshot)');
+    await expect(page.getByRole('button', { name: 'Apply generated DAG' })).toHaveCount(0);
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Generated DAG', exact: true }).click();
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toBeVisible();
+
     await page.getByRole('button', { name: 'Exit preview' }).click();
     await expect(page.locator('.curriculum-preview-banner')).toHaveCount(0);
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Create subject' })).toBeVisible();
+});
+
+test('reviews a generated deck DAG on the chapter canvas without applying it', async ({ page }, testInfo) => {
+    const deckId = 'mathematics/linear-algebra';
+    const commit = 'b'.repeat(40);
+    const first = { id: '01_start', order: 1, title: 'Starting ideas', provides: ['start'], prerequisites: [], resolved_dependencies: [] };
+    const second = { id: '02_next', order: 2, title: 'Next ideas', provides: ['next'], prerequisites: ['chapter:01_start'], resolved_dependencies: [{ kind: 'chapter', reference: 'chapter:01_start', resolved: '01_start' }] };
+    const catalog = { ...bundledCurriculum, decks: bundledCurriculum.decks.map(deck => deck.id === deckId ? { ...deck, chapters: [first] } : deck) };
+    const generated = { ...catalog, decks: catalog.decks.map(deck => deck.id === deckId ? { ...deck, chapters: [first, second] } : deck) };
+    await installGenerationAccount(page, { catalog });
+    const mutations = [];
+    page.on('request', request => {
+        if (request.method() !== 'GET' && /pulls\/23|graphql/.test(request.url())) mutations.push(request.url());
+    });
+    await page.route('**/api/generation-requests', route => route.fulfill({ json: { requests: [{
+        id: 23, job_type: 'deck-plan', status: 'needs-review', model_id: 'gpt-6-astra',
+        result_url: 'https://github.com/example/curricula/pull/23',
+        payload_json: JSON.stringify({ deckId, reasoningEffort: 'high' })
+    }] } }));
+    await page.route('https://api.github.com/repos/example/curricula/pulls/23**', route => route.fulfill({ json: { state: 'open', merged: false, head: { sha: commit } } }));
+    await page.route(`https://raw.githubusercontent.com/example/curricula/${commit}/dist/curriculum.json`, route => route.fulfill({ json: generated }));
+    await page.reload();
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    await settings.getByRole('tab', { name: /Agents/ }).click();
+    await expect(settings.getByLabel('Job type: Deck DAG')).toBeVisible();
+    await settings.getByRole('button', { name: 'Review deck DAG' }).click();
+    const banner = page.locator('.curriculum-preview-banner');
+    await expect(banner).toContainText('Nodes: 1 → 2. 1 added');
+    await expect(banner).toContainText('Prerequisite edges: +1 / −0');
+    await expect(page.locator(`[data-deck-id="${deckId}#02_next"]`)).toBeVisible();
+    await banner.getByText('Inspect DAG changes', { exact: true }).click();
+    await expect(banner).toContainText(`Added required prerequisite: ${deckId}#01_start → ${deckId}#02_next`);
+    const screenshotPath = testInfo.outputPath('generated-deck-dag.png');
+    await page.screenshot({ path: screenshotPath });
+    await testInfo.attach('generated-deck-dag', { path: screenshotPath, contentType: 'image/png' });
+    await banner.getByRole('button', { name: 'Current DAG', exact: true }).click();
+    await expect(page.locator(`[data-deck-id="${deckId}#02_next"]`)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Apply generated DAG' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Exit preview' }).click();
+    await expect(banner).toHaveCount(0);
+    expect(mutations).toEqual([]);
 });
 
 test('publishes merged review requests and clears the Agents review count', async ({ page }, testInfo) => {
@@ -1012,7 +1064,7 @@ test('publishes merged review requests and clears the Agents review count', asyn
     const activity = settings.locator('#study-settings-pane-agents');
     await expect(activity.getByText('No agents currently running. 0 results awaiting review.')).toBeVisible();
     await expect(activity.getByText('Published', { exact: true })).toBeVisible();
-    await expect(activity.getByRole('button', { name: 'Preview curriculum' })).toHaveCount(0);
+    await expect(activity.getByRole('button', { name: 'Review subject DAG' })).toBeVisible();
     await expect(activity.getByRole('link', { name: 'View merged pull request' })).toHaveAttribute('href', resultUrl);
     const [summaryBox, refreshBox, listBox] = await Promise.all([
         activity.locator('.generation-activity-summary').boundingBox(),
@@ -1127,6 +1179,7 @@ test('reviews generated flashcards in-app and publishes both pull requests', asy
     await page.getByRole('button', { name: 'Settings' }).click();
     const settings = page.getByRole('dialog', { name: 'Settings' });
     await settings.getByRole('tab', { name: /Agents/ }).click();
+    await expect(settings.getByLabel('Job type: Flashcards')).toBeVisible();
     await settings.getByRole('button', { name: 'Review flashcards' }).click();
 
     const browser = page.getByRole('dialog', { name: 'Variables and expressions' });
