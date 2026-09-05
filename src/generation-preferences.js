@@ -7,7 +7,7 @@ import {
 
 const STORAGE_KEY = 'flashcards_generation_preferences_v1';
 const PROVIDERS = new Set(['none', 'codex', 'custom', 'anthropic', 'openai', 'google']);
-const REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh']);
+const REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
 export const DEFAULT_GENERATION_PREFERENCES = Object.freeze({
     providerId: 'codex',

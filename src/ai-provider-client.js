@@ -5,6 +5,13 @@ export const AI_PROVIDER_DEFINITIONS = Object.freeze([
 ]);
 
 const PROVIDER_IDS = new Set(AI_PROVIDER_DEFINITIONS.map(provider => provider.id));
+const REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+
+function modelReasoningEfforts(model) {
+    return Array.isArray(model?.reasoningEfforts)
+        ? [...new Set(model.reasoningEfforts.filter(effort => REASONING_EFFORTS.has(effort)))]
+        : [];
+}
 
 export function normalizeAIProviders(input = []) {
     const records = new Map((input || []).map(record => [record.id, record]));
@@ -29,6 +36,7 @@ export function generationEligibleModels(models = []) {
             name: String(model.name || model.id),
             description: String(model.description || ''),
             supportsReasoning: model.supportsReasoning !== false,
+            reasoningEfforts: modelReasoningEfforts(model),
             contextWindow: model.contextWindow || model.inputTokenLimit || null,
             outputTokenLimit: model.outputTokenLimit || null
         }))
@@ -38,6 +46,8 @@ export function generationEligibleModels(models = []) {
 export function reasoningEffortsForProvider(providerId, model = null) {
     if (model?.supportsReasoning === false) return ['medium'];
     if (providerId === 'google') return ['medium'];
+    const modelChoices = modelReasoningEfforts(model);
+    if (modelChoices.length) return modelChoices;
     if (providerId === 'openai' || providerId === 'codex') {
         return ['low', 'medium', 'high', 'xhigh'];
     }

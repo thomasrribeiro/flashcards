@@ -7,6 +7,27 @@ import {
 } from './ai-provider-client.js';
 
 describe('AI provider client', () => {
+    it('preserves model-specific Astra efforts through catalog normalization', () => {
+        const efforts = ['low', 'medium', 'high', 'xhigh', 'max'];
+        const [model] = generationEligibleModels([{
+            id: 'gpt-6-astra', supportsReasoning: true, reasoningEfforts: efforts
+        }]);
+        expect(reasoningEffortsForProvider('openai', model)).toEqual(efforts);
+        expect(reasoningEffortsForProvider('openai', {
+            id: 'gpt-4.1', supportsReasoning: false
+        })).toEqual(['medium']);
+        expect(reasoningEffortsForProvider('openai', {
+            id: 'gpt-5.1', supportsReasoning: true
+        })).not.toContain('max');
+    });
+
+    it('filters unknown and duplicate model effort values', () => {
+        const [model] = generationEligibleModels([{
+            id: 'example', reasoningEfforts: ['high', 'invalid', 'high', 'max']
+        }]);
+        expect(reasoningEffortsForProvider('openai', model)).toEqual(['high', 'max']);
+    });
+
     it('renders every supported provider without inventing a connection', () => {
         const providers = normalizeAIProviders([
             { id: 'anthropic', connected: true, keyHint: '••••abcd', status: 'verified' }

@@ -17,6 +17,20 @@ function memoryStorage() {
 }
 
 describe('generation preferences', () => {
+    it('retains Astra max effort when saving and creating a chapter job', () => {
+        const storage = memoryStorage();
+        const preferences = { providerId: 'openai', modelId: 'gpt-6-astra', reasoningEffort: 'max' };
+        saveGenerationPreferences(preferences, storage);
+        expect(getGenerationPreferences(storage)).toEqual(preferences);
+        expect(generationJobForChapterContent({
+            id: 'mathematics/linear-algebra', status: 'active'
+        }, {
+            id: '04_subspaces_and_fundamental_spaces', order: 4, card_count: 30
+        }, getGenerationPreferences(storage))).toMatchObject({
+            modelId: 'gpt-6-astra', payload: { reasoningEffort: 'max' }
+        });
+    });
+
     it('persists provider, model, and reasoning without accepting a credential', () => {
         const storage = memoryStorage();
         saveGenerationPreferences({ providerId: 'codex', modelId: 'gpt-example', reasoningEffort: 'xhigh' }, storage);
