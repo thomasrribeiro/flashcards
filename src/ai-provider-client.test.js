@@ -2,11 +2,21 @@ import { describe, expect, it, vi } from 'vitest';
 import {
     connectAIProvider,
     generationEligibleModels,
+    loadAIProviderModels,
     normalizeAIProviders,
     reasoningEffortsForProvider
 } from './ai-provider-client.js';
 
 describe('AI provider client', () => {
+    it('reloads capabilities without reusing an HTTP-cached model catalog', async () => {
+        const api = vi.fn(async () => ({ models: [{
+            id: 'gpt-6-astra', supportsReasoning: true,
+            reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max']
+        }] }));
+        const [model] = await loadAIProviderModels(api, 'openai');
+        expect(api).toHaveBeenCalledWith('/api/ai/providers/openai/models', { method: 'GET', cache: 'no-store' });
+        expect(reasoningEffortsForProvider('openai', model)).toHaveLength(5);
+    });
     it('preserves model-specific Astra efforts through catalog normalization', () => {
         const efforts = ['low', 'medium', 'high', 'xhigh', 'max'];
         const [model] = generationEligibleModels([{

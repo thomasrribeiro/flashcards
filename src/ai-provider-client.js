@@ -74,6 +74,6 @@ export async function disconnectAIProvider(apiRequest, providerId) {
 
 export async function loadAIProviderModels(apiRequest, providerId) {
     if (!PROVIDER_IDS.has(providerId)) return [];
-    const result = await apiRequest(`/api/ai/providers/${providerId}/models`, { method: 'GET' });
+    const result = await apiRequest(`/api/ai/providers/${providerId}/models`, { method: 'GET', cache: 'no-store' });
     return generationEligibleModels(result.models);
 }

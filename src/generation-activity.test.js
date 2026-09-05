@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+    canCancelGenerationRequest,
+    cancelGenerationRequest,
     generationEffectiveCommand,
     generationPullRequestActionLabel,
     generationPreviewDestination,
@@ -14,6 +16,24 @@ import {
 } from './generation-activity.js';
 
 describe('generation activity', () => {
+    it('only offers cancellation for queued and running jobs', () => {
+        for (const status of ['queued', 'running']) expect(canCancelGenerationRequest({ status })).toBe(true);
+        for (const status of ['needs-review', 'published', 'failed', 'cancelled']) {
+            expect(canCancelGenerationRequest({ status })).toBe(false);
+        }
+    });
+
+    it('cancels the exact request and uses the server-confirmed status', async () => {
+        const api = vi.fn(async () => ({ request: { id: 32, status: 'cancelled' } }));
+        expect(await cancelGenerationRequest({ id: 32, status: 'running' }, api))
+            .toMatchObject({ id: 32, status: 'cancelled' });
+        expect(api).toHaveBeenCalledWith('/api/generation-requests/32', {
+            method: 'PATCH', body: JSON.stringify({ status: 'cancelled' })
+        });
+        await expect(cancelGenerationRequest({ id: 31, status: 'published' }, api)).rejects.toThrow(/Only queued/);
+        api.mockRejectedValueOnce(new Error('Network unavailable'));
+        await expect(cancelGenerationRequest({ id: 33, status: 'queued' }, api)).rejects.toThrow('Network unavailable');
+    });
     it('shows the exact CLI-equivalent chapter command', () => {
         expect(generationEffectiveCommand({
             jobType: 'chapter-expand',

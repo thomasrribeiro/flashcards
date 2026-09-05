@@ -40,6 +40,7 @@ export function hasGenerationRunnerToken(explicit) {
 async function request(endpoint, { method = 'GET', body, token, url } = {}) {
     const response = await fetch(`${workerUrl(url)}${endpoint}`, {
         method,
+        signal: AbortSignal.timeout(15_000),
         headers: {
             Authorization: `Bearer ${githubToken(token)}`,
             'Content-Type': 'application/json'
@@ -87,6 +88,7 @@ async function runnerRequest(endpoint, { method = 'POST', body, token, url } = {
         try {
             response = await fetch(`${workerUrl(url)}${endpoint}`, {
                 method,
+                signal: AbortSignal.timeout(15_000),
                 headers: {
                     'X-Flashcards-Runner-Token': runnerToken(token),
                     'Content-Type': 'application/json'
@@ -115,6 +117,12 @@ export function claimGenerationRequest(options = {}) {
     return runnerRequest('/api/generation-runner/claim', {
         token: options.runnerToken,
         url: options.workerUrl
+    });
+}
+
+export function getClaimedGenerationRequest(id, options = {}) {
+    return runnerRequest(`/api/generation-runner/requests/${id}`, {
+        method: 'GET', token: options.runnerToken, url: options.workerUrl
     });
 }
 

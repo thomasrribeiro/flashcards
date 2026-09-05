@@ -93,6 +93,8 @@ import {
 } from './curriculum-registry.js';
 import { generationJobForDraft, titleForSubject, validateCurriculumDraft } from './curriculum-builder.js';
 import {
+    canCancelGenerationRequest,
+    cancelGenerationRequest,
     generationPullRequestActionLabel,
     generationEffectiveCommand,
     generationPreviewDestination,
@@ -5389,6 +5391,27 @@ function appendGenerationRequestRow(list, request, close) {
 
     const actions = document.createElement('div');
     actions.className = 'generation-activity-actions';
+    if (canCancelGenerationRequest(request)) {
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.textContent = 'Cancel job';
+        cancel.setAttribute('aria-label', `Cancel job ${request.id}`);
+        cancel.onclick = async () => {
+            if (!window.confirm(`Cancel job ${request.id}? Active generation will stop when the runner receives the cancellation. Published cards will not be changed.`)) return;
+            cancel.disabled = true;
+            cancel.textContent = 'Cancelling…';
+            try {
+                const updated = await cancelGenerationRequest(request, (endpoint, options) => githubAuth.apiRequest(endpoint, options));
+                upsertGenerationRequest(updated);
+                renderGenerationActivitySettings({ focusRequestId: request.id });
+            } catch (error) {
+                cancel.disabled = false;
+                cancel.textContent = 'Cancel job';
+                previewError.textContent = error.message;
+            }
+        };
+        actions.appendChild(cancel);
+    }
     if (['subject-design', 'deck-plan'].includes(request.jobType)
         && request.status === 'needs-review'
         && request.resultUrl) {
@@ -7367,6 +7390,8 @@ async function updateGenerationModelChoices() {
 }
 
 async function loadAIProviderConnections(preferredProvider) {
+    // Reopening settings must refresh capabilities after a backend/model update.
+    aiProviderModelCatalogs.clear();
     if (!githubAuth.isAuthenticated()) {
         aiProviderConnections = AI_PROVIDER_DEFINITIONS.map(provider => ({ ...provider, connected: false }));
         rebuildGenerationProviderOptions(preferredProvider);

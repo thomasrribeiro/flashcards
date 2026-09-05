@@ -29,6 +29,7 @@ import { materializeCurriculumDeck } from './lib/materialize.js';
 import { buildRegistry, formatRegistry, resolveRegistry } from './lib/registry.js';
 import { providerRunner, runExternalProviderJob } from './lib/agent-provider.js';
 import { executionOptionsForGenerationJob } from './lib/generation-job.js';
+import { startGenerationCancellationMonitor } from './lib/generation-cancellation.js';
 import { subjectValidationRepairInstructions } from './lib/generation-repair.js';
 import {
     abandonDeckDraft,
@@ -911,6 +912,7 @@ addAgentOptions(requests
         let deckContext = null;
         let deckDraft = null;
         let deckPath = null;
+        let stopCancellationMonitor = null;
         const trustedRunner = hasGenerationRunnerToken(options.runnerToken);
         try {
             const result = trustedRunner
@@ -942,6 +944,11 @@ addAgentOptions(requests
                 });
             }
             const jobType = queued.job_type || 'deck-build';
+            stopCancellationMonitor = startGenerationCancellationMonitor(queued.id, {
+                workerUrl: options.workerUrl,
+                runnerToken: options.runnerToken,
+                trustedRunner
+            });
             const payload = queued.payload || {};
             const runner = providerRunner(queued.provider_id, options.agentRunner);
             let agent;
@@ -1283,6 +1290,7 @@ addAgentOptions(requests
             }
             handleError(error);
         } finally {
+            stopCancellationMonitor?.();
             deckContext?.cleanup();
         }
     });

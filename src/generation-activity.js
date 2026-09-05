@@ -1,6 +1,19 @@
 const ACTIVE_STATUSES = new Set(['queued', 'running']);
 const REVIEW_STATUSES = new Set(['needs-review']);
 
+export function canCancelGenerationRequest(request) {
+    return ACTIVE_STATUSES.has(request?.status);
+}
+
+export async function cancelGenerationRequest(request, apiRequest) {
+    if (!canCancelGenerationRequest(request)) throw new Error('Only queued or running jobs can be cancelled.');
+    const result = await apiRequest(`/api/generation-requests/${request.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'cancelled' })
+    });
+    return normalizeGenerationRequest(result.request);
+}
+
 function parsePayload(value) {
     if (value && typeof value === 'object') return value;
     if (!value) return {};
