@@ -42,6 +42,7 @@ export function normalizeGenerationRequest(input) {
         requestedAt: input?.requestedAt || input?.requested_at || '',
         updatedAt: input?.updatedAt || input?.updated_at || '',
         payload,
+        result,
         subject: payload.subject || '',
         deckId: payload.deckId || input?.deck_id || ''
     };
@@ -251,7 +252,7 @@ export async function loadPullRequestCurriculum(request, {
     // Subject-design requests use a synthetic `<subject>/curriculum-design`
     // deck ID for worker serialization. It is not a catalog deck and must not
     // be treated as the preview target; the subject check above is authoritative.
-    if (request.jobType !== 'subject-design'
+    if (!['subject-design', 'curriculum-design'].includes(request.jobType)
         && request.deckId
         && !catalog.decks.some(deck => deck.id === request.deckId)) {
         throw new Error(`The pull request does not contain the ${request.deckId} deck.`);
@@ -278,7 +279,7 @@ export async function loadPullRequestChapter(request, {
         throw new Error('The flashcards pull request does not expose a pinned head commit.');
     }
     const chapterId = String(request.payload?.chapterId || '').replace(/\.md$/i, '');
-    if (!/^\d{2}_[a-z0-9]+(?:_[a-z0-9]+)*$/.test(chapterId)) {
+    if (!/^\d{2,}_[a-z0-9]+(?:_[a-z0-9]+)*$/.test(chapterId)) {
         throw new Error('The generation request does not identify an ordered chapter file.');
     }
     const file = `flashcards/${chapterId}.md`;
@@ -306,6 +307,7 @@ export async function loadPullRequestChapter(request, {
 }
 
 export function generationRequestName(request) {
+    if (request.jobType === 'curriculum-design') return 'Global curriculum';
     if (request.jobType === 'subject-design') {
         const subject = request.payload?.title || String(request.subject || 'Subject')
             .split('-')
@@ -324,6 +326,7 @@ export function generationRequestName(request) {
 }
 
 export function generationEffectiveCommand(request) {
+    if (request.payload?.workflowVersion === 'fresh-generation-v1') return '';
     if (request.jobType !== 'chapter-expand') return '';
     const chapter = Number.parseInt(String(request.payload?.chapterId || '').slice(0, 2), 10);
     if (!Number.isInteger(chapter)) return '';
@@ -353,6 +356,7 @@ export function generationPullRequestActionLabel(status) {
 }
 
 export function generationPreviewDestination(request) {
+    if (request.jobType === 'curriculum-design') return { mode: 'overview', hierarchy: 'subject', subject: '', parentId: '', targetId: '', query: '', layerStart: 0 };
     if (request.jobType === 'deck-plan') {
         const deckId = String(request.deckId || request.payload?.deckId || '');
         const subject = deckId.split('/')[0];

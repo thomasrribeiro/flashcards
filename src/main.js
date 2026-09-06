@@ -2,6 +2,8 @@
  * Main entry point for topic listing page
  */
 
+import { freshGenerationJob } from './fresh-generation-contract.js';
+import { buildFreshGenerationContext, FRESH_GENERATION_VERSION } from './fresh-generation.js';
 import {
     clearReviewsByDeck,
     getAllCards,
@@ -91,7 +93,7 @@ import {
     getCurriculumRegistrySources,
     saveCurriculumRegistrySources
 } from './curriculum-registry.js';
-import { generationJobForDraft, titleForSubject, validateCurriculumDraft } from './curriculum-builder.js';
+import { validateCurriculumDraft } from './curriculum-builder.js';
 import {
     canCancelGenerationRequest,
     cancelGenerationRequest,
@@ -116,13 +118,11 @@ import {
 } from './curriculum-progress.js';
 import {
     chapterContentGenerationScope,
-    deckNeedsChapterCurriculum,
-    unplannedPrerequisiteDecks
+    deckNeedsChapterCurriculum
 } from './deck-generation-contract.js';
 import {
     generationJobForChapterContent,
     generationJobForChapterCurriculum,
-    generationJobForDeck,
     getGenerationPreferences,
     saveGenerationPreferences
 } from './generation-preferences.js';
@@ -1502,21 +1502,6 @@ function openCurriculumSubjectActionsModal({ subject, registry }, trigger = null
                 targetId: '', query: '', layerStart: 0
             });
         }
-    });
-    const regenerate = appendDeckAction(body, {
-        label: 'Regenerate curriculum',
-        description: 'Create a new subject curriculum draft to review before applying.',
-        onClick: () => {
-            closeDeckActionsModal({ restoreFocus: false });
-            openCurriculumBuilder(subject, registry);
-        }
-    });
-    const availabilityMessage = document.createElement('p');
-    availabilityMessage.className = 'study-settings-help';
-    availabilityMessage.setAttribute('role', 'status');
-    body.appendChild(availabilityMessage);
-    configureWebsiteGenerationButton(regenerate, { registry }).then(availability => {
-        if (availabilityMessage.isConnected) availabilityMessage.textContent = availability.reason;
     });
     modal.classList.remove('hidden');
     view.focus();
@@ -3633,13 +3618,13 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     if (compact && ranked) {
         // Fit three phone columns without shrinking their text.
         const nodeWidth = Math.max(60, (root.clientWidth - 2 - 24 - 24) / 3);
-        const charactersPerLine = Math.max(1, Math.floor((nodeWidth - 18) / 7.2));
+        const charactersPerLine = Math.max(1, Math.floor((nodeWidth - 18) / 6.6));
         const longestLabel = Math.max(...graph.nodes.map(node => String(node.deck || node.id).length + 5));
         Object.assign(nodeSizing, {
             nodeWidth,
             // Leave a line of headroom for wrapping at hyphens instead of at
             // an exact character count in these narrower cards.
-            nodeHeight: Math.max(104, 64 + Math.ceil(longestLabel / charactersPerLine) * 14.4),
+            nodeHeight: Math.max(104, 64 + Math.ceil(longestLabel / charactersPerLine) * 13.2),
             columnGap: 12
         });
     }
@@ -4760,8 +4745,24 @@ function deckJobProvenance(registry) {
     };
 }
 
+function websiteFreshGenerationJob(inputJob) {
+    const type = inputJob.jobType;
+    const registry = curriculumIndex.registries?.find(registry => registry.id === inputJob.registryId)
+        || curriculumRegistryForView(curriculumIndex, { deckId: inputJob.payload?.deckId });
+    const target = type === 'curriculum-design' ? {
+        subjects: (curriculumIndex.subjects || []).filter(subject => !subject.registry_id || subject.registry_id === registry.id).map(subject => subject.id),
+        ...(inputJob.payload.newSubject ? { newSubject: inputJob.payload.newSubject } : {})
+    } : { deckId: inputJob.payload.deckId, chapterId: inputJob.payload.chapterId };
+    if (target.newSubject) target.subjects.push(target.newSubject);
+    if (type !== 'curriculum-design') {
+        try { buildFreshGenerationContext({ jobType: type, catalog: curriculumIndex, ...target }); }
+        catch { throw new Error('Regenerate the global curriculum first, then plan this deck.'); }
+    }
+    return freshGenerationJob(type, target, { providerId: inputJob.providerId, modelId: inputJob.modelId, reasoningEffort: inputJob.payload.reasoningEffort }, registry, WORKFLOW_COMMIT);
+}
+
 async function queueCurriculumAgentJob(inputJob, button, { onQueued = null } = {}) {
-    const job = structuredClone(inputJob);
+    const job = websiteFreshGenerationJob(inputJob);
     const originalText = button.textContent;
     button.disabled = true;
     button.textContent = 'Reviewing settings…';
@@ -4841,28 +4842,13 @@ function configureChapterCurriculumButton(button, deck, registry, { onStart = nu
     };
     button.onclick = () => {
         onStart?.();
-        const unplanned = unplannedPrerequisiteDecks(curriculumIndex, deck.id);
-        if (unplanned.length) {
-            const order = unplanned.map(candidate => (
-                candidate.subject === deck.subject ? candidate.deck || candidate.id.split('/').pop() : candidate.id
-            )).join(' → ');
-            openGenerationConfirmation({
-                title: 'Plan prerequisites first?',
-                message: `Missing chapter curricula: ${order}. Start with the first prerequisite?`,
-                confirmLabel: 'Start prerequisites',
-                secondaryLabel: deck.chapters?.length ? 'Regenerate this deck only' : 'Plan this deck only',
-                onConfirm: () => queue(unplanned[0]),
-                onSecondary: () => queue(deck, 'continue-target-only')
-            });
-            return;
-        }
         if (!deck.chapters?.length) {
             queue();
             return;
         }
         openGenerationConfirmation({
             title: 'Regenerate chapter curriculum?',
-            message: 'This starts a new agent job using the current chapter curriculum as its baseline. Continue?',
+            message: 'Create a fresh chapter plan. Existing cards stay saved.',
             confirmLabel: 'Regenerate',
             onConfirm: queue
         });
@@ -4992,8 +4978,21 @@ async function renderCurriculumView(options = {}) {
         if (!curriculumPreview) {
             const createSubject = document.createElement('div');
             createSubject.className = 'curriculum-subject-create';
-            openCurriculumBuilder('', activeRegistry, createSubject);
+            renderSubjectCreation(activeRegistry, createSubject);
             breadcrumbActions.append(createSubject);
+            const regenerate = document.createElement('button');
+            regenerate.type = 'button';
+            regenerate.className = 'curriculum-toolbar-action';
+            regenerate.textContent = 'Regenerate curriculum';
+            regenerate.onclick = async () => {
+                try {
+                    const preferences = await connectedWebsiteGenerationPreferences();
+                    await queueCurriculumAgentJob({ jobType: 'curriculum-design', registryId: activeRegistry.id,
+                        providerId: preferences.providerId, modelId: preferences.modelId, payload: { reasoningEffort: preferences.reasoningEffort } }, regenerate);
+                } catch (error) { alert(error.message); }
+            };
+            configureWebsiteGenerationButton(regenerate, { registry: activeRegistry });
+            breadcrumbActions.append(regenerate);
         }
     }
     if (mode === 'subject' && hierarchy === 'deck' && subject && !curriculumPreview) {
@@ -5288,19 +5287,25 @@ function confirmGenerationJobs(jobs) {
         };
         overlay.addEventListener('close', () => finish(false));
         const introduction = document.createElement('p');
-        introduction.textContent = `Review the model and reasoning for ${jobs.length === 1 ? 'this job' : `these ${jobs.length} jobs`}. Change AI settings to edit them and return here before starting. Results remain drafts for review. Provider charges may apply.`;
+        introduction.textContent = 'Results are drafts. API charges apply.';
         const list = document.createElement('div');
         list.className = 'generation-launch-list';
         const settingLabels = [];
         for (const job of jobs) {
             const item = document.createElement('section');
             const title = document.createElement('h3');
-            title.textContent = `${generationJobCategory(job).label}: ${job.payload?.subject || job.payload?.deckId || 'Generation'}${job.payload?.chapterId ? ` / ${job.payload.chapterId}` : ''}`;
+            title.textContent = job.jobType === 'curriculum-design' ? 'Global curriculum'
+                : `${generationJobCategory(job).label}: ${job.payload?.subject || job.payload?.deckId || 'Generation'}${job.payload?.chapterId ? ` / ${job.payload.chapterId}` : ''}`;
             const settings = document.createElement('p');
             settings.className = 'generation-launch-settings';
             settings.textContent = generationModelSummary(job);
             settingLabels.push(settings);
             item.append(title, settings);
+            if (job.jobType === 'curriculum-design') {
+                const scope = document.createElement('p');
+                scope.textContent = `Fresh curriculum for ${job.payload.subjects.join(', ')}.`;
+                item.append(scope);
+            }
             list.appendChild(item);
         }
         const actions = document.createElement('div');
@@ -5330,7 +5335,7 @@ function confirmGenerationJobs(jobs) {
                 if (settled) return;
                 const preferences = event.detail?.generationPreferences;
                 if (preferences) {
-                    const available = Boolean(providerDefinition(preferences.providerId) && preferences.modelId);
+                    const available = Boolean(preferences.providerId === 'openai' && preferences.modelId);
                     confirm.disabled = !available;
                     if (available) {
                         jobs.forEach((job, index) => {
@@ -5465,6 +5470,10 @@ async function enterCurriculumPreview(request, close, trigger) {
 }
 
 async function publishChapterGeneration(request, { expectedHead = '' } = {}) {
+    if (request.payload?.workflowVersion === FRESH_GENERATION_VERSION) {
+        if (!expectedHead) expectedHead = (await loadPullRequestChapter(request, { token: githubAuth.getToken() })).commit;
+        return githubAuth.apiRequest(`/api/generation-requests/${request.id}/accept`, { method: 'POST', body: JSON.stringify({ expectedHead }) });
+    }
     await mergeGenerationPullRequest(request, {
         token: githubAuth.getToken(),
         expectedHead
@@ -5639,7 +5648,8 @@ function appendGenerationRequestRow(list, request, close) {
     if (canReviewGenerationDag(request)) {
         const preview = document.createElement('button');
         preview.type = 'button';
-        preview.textContent = request.jobType === 'subject-design' ? 'Review subject curriculum' : 'Review deck curriculum';
+        preview.textContent = request.jobType === 'curriculum-design' ? 'Review global curriculum'
+            : request.jobType === 'subject-design' ? 'Review subject curriculum' : 'Review deck curriculum';
         preview.onclick = () => enterCurriculumPreview(request, close, preview);
         actions.appendChild(preview);
     }
@@ -5747,14 +5757,37 @@ function curriculumPreviewBanner() {
     banner.className = 'curriculum-preview-banner';
     const description = document.createElement('section');
     const text = document.createElement('p');
+    const { diff, showing, request } = curriculumPreview;
     const target = curriculumPreview.request.jobType === 'deck-plan'
         ? `${curriculumPreview.request.deckId} chapter curriculum`
-        : `${curriculumPreview.request.subject} curriculum`;
-    const { diff, showing, request } = curriculumPreview;
+        : request?.jobType === 'curriculum-design' ? 'Global curriculum' : `${curriculumPreview.request.subject} curriculum`;
     text.textContent = `${showing === 'generated' ? 'Generated curriculum' : 'Current curriculum (loaded snapshot)'} · ${target} · ${request.modelId || 'model not recorded'} · PR #${curriculumPreview.pull.number} at ${curriculumPreview.commit.slice(0, 12)}. Nothing is applied by previewing.`;
     const summary = document.createElement('p');
     summary.textContent = `Nodes: ${diff.beforeCount} → ${diff.afterCount}. ${diff.added.length} added, ${diff.removed.length} removed, ${diff.changed.length} changed. Prerequisite edges: +${diff.addedEdges.length} / −${diff.removedEdges.length} (required and recommended).`;
     description.append(text, summary);
+    const details = document.createElement('details');
+    const detailLabel = document.createElement('summary');
+    detailLabel.textContent = 'Inspect curriculum changes';
+    details.append(detailLabel);
+    const line = (title, value) => {
+        const heading = document.createElement('h4');
+        heading.textContent = title;
+        const content = document.createElement('pre');
+        content.className = 'curriculum-diff-value';
+        content.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+        details.append(heading, content);
+    };
+    for (const [label, nodes] of [['Added', diff.added], ['Removed', diff.removed]]) {
+        if (nodes.length) line(label, nodes.map(node => `${node.id}${node.description ? ` — ${node.description}` : ''}`).join('\n'));
+    }
+    for (const node of diff.changed) for (const change of node.changes || []) {
+        line(`${node.id} · ${change.field.replaceAll('_', ' ')}`, { before: change.before, after: change.after });
+    }
+    if (diff.addedEdges.length) line('Prerequisites added', diff.addedEdges.map(edge => `Added ${edge.type} prerequisite: ${edge.source} → ${edge.target}`).join('\n'));
+    if (diff.removedEdges.length) line('Prerequisites removed', diff.removedEdges.map(edge => `Removed ${edge.type} prerequisite: ${edge.source} → ${edge.target}`).join('\n'));
+    if (diff.affectedContent?.length) line('Plans needing review', diff.affectedContent.map(item => `${item.id}: ${item.chapterCount} chapters · ${item.cardCount} cards — ${item.reason}`).join('\n'));
+    if (request.payload?.workflowVersion === FRESH_GENERATION_VERSION) line('Existing content', 'Previous plans are archived. Card repositories and review history stay saved. Changed decks need new chapter plans. Renames, splits and merges are not automatically matched.');
+    description.append(details);
     const actions = document.createElement('div');
     for (const [value, label] of [['published', 'Current curriculum'], ['generated', 'Generated curriculum']]) {
         const button = document.createElement('button');
@@ -5778,12 +5811,14 @@ function curriculumPreviewBanner() {
         merge.disabled = true;
         merge.textContent = 'Merging…';
         try {
-            await mergeGenerationPullRequest(preview.request, {
+            if (preview.request.payload?.workflowVersion === FRESH_GENERATION_VERSION) {
+                await githubAuth.apiRequest(`/api/generation-requests/${preview.request.id}/accept`, { method: 'POST', body: JSON.stringify({ expectedHead: preview.commit }) });
+            } else await mergeGenerationPullRequest(preview.request, {
                 token: githubAuth.getToken(),
                 expectedHead: preview.commit
             });
             merge.textContent = 'Merged';
-            await githubAuth.apiRequest(`/api/generation-requests/${preview.request.id}`, {
+            if (preview.request.payload?.workflowVersion !== FRESH_GENERATION_VERSION) await githubAuth.apiRequest(`/api/generation-requests/${preview.request.id}`, {
                 method: 'PATCH',
                 body: JSON.stringify({
                     status: 'published',
@@ -5823,24 +5858,7 @@ function curriculumPreviewBanner() {
     github.rel = 'noopener noreferrer';
     github.textContent = 'View pull request';
     actions.append(github, exit);
-    const details = document.createElement('details');
-    const heading = document.createElement('summary');
-    heading.textContent = 'Inspect curriculum changes';
-    const changes = document.createElement('ul');
-    const entries = [
-        ...diff.added.map(node => `Added: ${node.id}`),
-        ...diff.removed.map(node => `Removed: ${node.id}`),
-        ...diff.changed.map(node => `Changed: ${node.id} (${node.fields.join(', ')})`),
-        ...diff.addedEdges.map(edge => `Added ${edge.type} prerequisite: ${edge.source} → ${edge.target}`),
-        ...diff.removedEdges.map(edge => `Removed ${edge.type} prerequisite: ${edge.source} → ${edge.target}`)
-    ];
-    for (const entry of entries.length ? entries : ['No curriculum differences in this target.']) {
-        const line = document.createElement('li');
-        line.textContent = entry;
-        changes.appendChild(line);
-    }
-    details.append(heading, changes);
-    banner.append(description, actions, details);
+    banner.append(description, actions);
     return banner;
 }
 
@@ -5912,20 +5930,13 @@ function renderCurriculumSettingsSources() {
     });
 }
 
-function openCurriculumBuilder(subjectId = '', registry = null, inlineContainer = null) {
-    const targetRegistry = registry || curriculumRegistryForView(curriculumIndex, { subjectId });
-    const draft = {
-        subject: subjectId,
-        destination: 'whole-field'
+function renderSubjectCreation(targetRegistry, content) {
+    const close = () => {
+        form.reset();
+        form.querySelector('[type="submit"]').textContent = '+';
+        validate(false);
     };
-    const { overlay, content, close } = inlineContainer
-        ? { overlay: inlineContainer, content: inlineContainer, close: () => {
-            form.reset();
-            form.querySelector('[type="submit"]').textContent = '+';
-            validate(false);
-        } }
-        : curriculumOverlay(subjectId ? `Regenerate ${subjectId} curriculum` : 'Create subject');
-    content.innerHTML = inlineContainer ? `<form aria-label="Create subject" novalidate>
+    content.innerHTML = `<form aria-label="Create subject" novalidate>
             <div class="curriculum-subject-input-row">
                 <div class="repo-input-inline">
                     <input class="repo-input-field" name="subject" placeholder="Add a new subject..." aria-label="Subject name" aria-describedby="curriculum-subject-name-hint curriculum-launch-model" autocomplete="off">
@@ -5935,19 +5946,6 @@ function openCurriculumBuilder(subjectId = '', registry = null, inlineContainer 
             <p id="curriculum-launch-model" class="curriculum-launch-model" aria-live="polite"></p>
             <p id="curriculum-subject-name-hint" class="curriculum-builder-field-error" data-subject-errors aria-live="polite"></p>
             <div data-errors class="curriculum-builder-errors" aria-live="polite"></div>
-        </form>` : `<form class="curriculum-builder-form">
-            ${subjectId ? `<p class="study-settings-help">Create a revised curriculum draft using the existing curriculum as reference, without prescribing its current deck outline. Nothing changes until you review and apply the draft.</p>` : ''}
-            <div>
-                <div class="curriculum-builder-field">
-                    <label>Subject name<input name="subject" value="${escapeHtml(draft.subject)}" placeholder="earth-science" aria-describedby="curriculum-subject-name-hint" ${subjectId ? 'readonly' : ''}></label>
-                    <p id="curriculum-subject-name-hint" class="curriculum-builder-field-error" data-subject-errors aria-live="polite"></p>
-                </div>
-            </div>
-            <div data-errors class="curriculum-builder-errors" aria-live="polite"></div>
-            <div class="curriculum-builder-launch">
-                <div class="curriculum-builder-actions"><button type="submit" aria-describedby="curriculum-launch-model">Queue AI job</button></div>
-                <p id="curriculum-launch-model" class="curriculum-launch-model" aria-live="polite"></p>
-            </div>
         </form>`;
     const form = content.querySelector('form');
     const field = name => form.elements.namedItem(name);
@@ -5961,26 +5959,18 @@ function openCurriculumBuilder(subjectId = '', registry = null, inlineContainer 
     settingsModal?.addEventListener('settings-closed', renderLaunchSettings);
     window.addEventListener('storage', renderLaunchSettings);
     window.addEventListener('focus', renderLaunchSettings);
-    overlay.addEventListener('close', () => {
+    content.addEventListener('close', () => {
         settingsModal?.removeEventListener('settings-closed', renderLaunchSettings);
         window.removeEventListener('storage', renderLaunchSettings);
         window.removeEventListener('focus', renderLaunchSettings);
     }, { once: true });
     renderLaunchSettings();
-    const readDraft = () => ({
-        subject: field('subject').value,
-        title: titleForSubject(field('subject').value),
-        destination: draft.destination,
-        focus: [],
-        instructions: '',
-        proposedDecks: []
-    });
-    let launchAvailable = !inlineContainer;
+    const readDraft = () => ({ subject: field('subject').value });
+    let launchAvailable = false;
     let submitting = false;
     const validate = (showErrors = true) => {
         const result = validateCurriculumDraft(readDraft(), {
-            existingSubjects: curriculumIndex.subjects || [],
-            allowExistingSubject: Boolean(subjectId)
+            existingSubjects: curriculumIndex.subjects || []
         });
         const subjectErrorMessages = new Set([
             'Use kebab-case: earth-science.',
@@ -6007,33 +5997,24 @@ function openCurriculumBuilder(subjectId = '', registry = null, inlineContainer 
         validate();
         try {
             const generationPreferences = await connectedWebsiteGenerationPreferences();
-            const job = generationJobForDraft(readDraft(), {
-                operation: subjectId ? 'regenerate' : 'create',
-                existingSubjects: curriculumIndex.subjects || [],
+            const job = {
+                jobType: 'curriculum-design',
                 registryId: targetRegistry?.id,
                 targetRepository: targetRegistry?.repository,
                 providerId: generationPreferences.providerId,
                 modelId: generationPreferences.modelId,
-                reasoningEffort: generationPreferences.reasoningEffort,
-                workflowCommit: WORKFLOW_COMMIT,
-                registryBaseCommit: targetRegistry?.resolved_commit,
-                catalogHash: targetRegistry?.catalog_hash,
-                registryRef: targetRegistry?.ref,
-                catalogPath: targetRegistry?.path
-            });
+                payload: { newSubject: field('subject').value.trim(), reasoningEffort: generationPreferences.reasoningEffort }
+            };
             const button = form.querySelector('[type="submit"]');
             const result = await queueCurriculumAgentJob(job, button, { onQueued: close });
             if (!result) return;
-            console.info('[Curriculum] Subject-design request queued', {
+            console.info('[Curriculum] Global curriculum request queued', {
                 requestId: result.request.id,
-                subject: job.payload.subject,
+                subject: job.payload.newSubject,
                 registryId: job.registryId,
                 targetRepository: job.targetRepository,
                 providerId: job.providerId,
-                modelId: job.modelId,
-                workflowVersion: job.payload.workflowVersion,
-                registryBaseCommit: job.payload.registryBaseCommit,
-                catalogHash: job.payload.catalogHash
+                modelId: job.modelId
             });
         } catch (error) {
             content.querySelector('[data-errors]').textContent = error.message;
@@ -6041,20 +6022,17 @@ function openCurriculumBuilder(subjectId = '', registry = null, inlineContainer 
             submitting = false;
             const submit = form.querySelector('[type="submit"]');
             submit.disabled = !launchAvailable || validateCurriculumDraft(readDraft(), {
-                existingSubjects: curriculumIndex.subjects || [],
-                allowExistingSubject: Boolean(subjectId)
+                existingSubjects: curriculumIndex.subjects || []
             }).errors.length > 0;
             submit.setAttribute('aria-disabled', String(submit.disabled));
         }
     };
-    validate(!inlineContainer);
-    if (inlineContainer) {
-        configureWebsiteGenerationButton(form.querySelector('[type="submit"]'), { registry: targetRegistry })
+    validate(false);
+    configureWebsiteGenerationButton(form.querySelector('[type="submit"]'), { registry: targetRegistry })
             .then(availability => {
                 launchAvailable = availability.enabled;
                 validate(Boolean(field('subject').value));
             });
-    }
 }
 
 function dependencyItemMarkup(name, meta, command = null) {
@@ -6091,7 +6069,10 @@ async function renderDependencyModal() {
     )).join('');
     const whole = plan.wholeDecks.map(deck => dependencyItemMarkup(
         deck.id,
-        installed.has(deck.id) ? 'in collection' : 'not in collection',
+        [installed.has(deck.id) ? 'in collection' : 'not in collection',
+            ...(plan.target.required_outcomes || []).filter(edge => edge.deck_id === deck.id)
+                .flatMap(edge => edge.outcome_ids.map(id => (deck.outcomes || []).find(outcome => outcome.id === id)?.description || id))
+        ].join(' · '),
         !deck.repository?.configured ? deck.generation_command : null
     )).join('');
     const recommended = plan.recommendedDecks.map(deck => dependencyItemMarkup(
@@ -6107,7 +6088,7 @@ async function renderDependencyModal() {
     try { repositoryLabel = new URL(repositoryUrl).pathname.replace(/^\//, ''); } catch { /* display raw value */ }
     const generationNote = targetChapter
         ? hasGeneratedContent && generationScope
-            ? `This chapter has ${targetChapter.card_count} generated cards. Regeneration uses the current chapter as its baseline and preserves stable identities when retrieval targets remain valid.`
+            ? `Create fresh cards without old content. Existing cards stay saved until acceptance.`
             : generationScope === 'pilot'
             ? 'This first chapter is the novice-first pilot. Merging its validated pull request explicitly approves the pilot and unlocks later chapters.'
             : generationScope === 'chapter'
@@ -6205,14 +6186,16 @@ async function requestMissingGeneration() {
     }
     try {
         const preferences = await connectedWebsiteGenerationPreferences();
-        const jobs = plan.missingDecks.map(deck => {
+        const jobs = plan.missingDecks.flatMap(deck => {
             const registry = curriculumRegistryForView(curriculumIndex, {
                 subjectId: deck.subject,
                 deckId: deck.id
             });
-            return deckNeedsChapterCurriculum(deck)
+            const chapter = deck.chapters?.find(chapter => !chapter.card_count);
+            if (deck.chapters?.length && !chapter) return [];
+            return [websiteFreshGenerationJob(!deck.chapters?.length
                 ? generationJobForChapterCurriculum(deck, preferences, deckJobProvenance(registry))
-                : generationJobForDeck(deck, preferences);
+                : generationJobForChapterContent(deck, chapter, preferences, deckJobProvenance(registry)))];
         });
         if (!jobs.length || !await confirmGenerationJobs(jobs)) {
             if (button) button.textContent = 'Request generation';

@@ -110,15 +110,17 @@ export function beginDeckDraft(deckPath, repositoryUrl, requestId, {
     return { ...coordinates, base, baseCommit, branch, createdRepository };
 }
 
-export function publishDeckDraft(deckPath, draft, { title, body }) {
+export function publishDeckDraft(deckPath, draft, { title, body, returnProposal = false }) {
     if (!commit(deckPath, title)) throw new Error('Generation produced no deck changes.');
+    const headCommit = git(deckPath, ['rev-parse', 'HEAD']).stdout.trim();
     git(deckPath, ['push', '-u', 'origin', draft.branch]);
     const result = gh(deckPath, [
         'pr', 'create', '--draft', '--base', draft.base, '--head', draft.branch,
         '--title', title, '--body', body
     ]);
     git(deckPath, ['switch', draft.base]);
-    return result.stdout.trim();
+    const url = result.stdout.trim();
+    return returnProposal ? { url, headCommit, baseCommit: draft.baseCommit, baseRef: draft.base } : url;
 }
 
 export function abandonDeckDraft(deckPath, draft) {

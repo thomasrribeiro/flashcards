@@ -317,7 +317,7 @@ function localChapterDependencies(chapter, deckId) {
         .filter(detail => detail.kind === 'chapter' || detail.kind === 'concept')
         .map(detail => detail.resolved)
         .filter(Boolean)
-        .map(chapterId => `${deckId}#${chapterId}`);
+        .map(chapterId => chapterId.includes('#') ? chapterId : `${deckId}#${chapterId}`);
 }
 
 export function chapterPrerequisiteClosure(index, targetDeckId, targetChapterId) {

@@ -76,19 +76,21 @@ export function registryCatalogHash(registryRoot, catalogPath = 'dist/curriculum
     return `sha256:${createHash('sha256').update(readFileSync(path.join(registryRoot, catalogPath))).digest('hex')}`;
 }
 
-export function publishRegistryDraft(registryRoot, draft, { title, body }) {
+export function publishRegistryDraft(registryRoot, draft, { title, body, returnProposal = false }) {
     const paths = ['subjects', 'dist/curriculum.json'];
     if (existsSync(path.join(registryRoot, 'deck-metadata.json'))) paths.push('deck-metadata.json');
+    for (const file of ['fresh-curriculum.json', 'generation-archive']) if (existsSync(path.join(registryRoot, file))) paths.push(file);
     git(registryRoot, ['add', '--', ...paths]);
     if (!git(registryRoot, ['status', '--porcelain'])) throw new Error('Generation produced no registry changes.');
     git(registryRoot, ['commit', '-m', title]);
+    const headCommit = git(registryRoot, ['rev-parse', 'HEAD']);
     git(registryRoot, ['push', '-u', 'origin', draft.branch]);
     const url = gh(registryRoot, [
         'pr', 'create', '--draft', '--base', draft.prBase || draft.base, '--head', draft.branch,
         '--title', title, '--body', body
     ]);
     try { git(draft.sourceRoot, ['worktree', 'remove', registryRoot]); } catch { /* PR is already safely published */ }
-    return url;
+    return returnProposal ? { url, headCommit, baseCommit: draft.baseCommit, baseRef: draft.prBase || draft.base } : url;
 }
 
 export function abandonRegistryDraft(registryRoot, draft) {

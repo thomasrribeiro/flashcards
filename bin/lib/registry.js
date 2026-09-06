@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { FRESH_CATALOG, readFreshCatalog } from './fresh-generation-output.js';
 import path from 'node:path';
 import { resolvePath } from './paths.js';
 import {
@@ -116,7 +117,18 @@ export function resolveRegistry(inputPath) {
         errors.push('registry.toml: deck_visibility must be "private" or "public"');
     }
     const subjectsRoot = path.join(root, registry.subjectsDir);
-    const graph = errors.length
+    let freshCatalog = null;
+    if (!errors.length && existsSync(path.join(root, FRESH_CATALOG))) {
+        try { freshCatalog = readFreshCatalog(path.join(root, FRESH_CATALOG)); }
+        catch (error) { errors.push(error.message); }
+    }
+    const graph = freshCatalog ? {
+        notesRoot: subjectsRoot, errors: [], warnings: [],
+        subjects: freshCatalog.subjects.map(subject => ({ subject: subject.id || subject })),
+        decks: freshCatalog.decks.map(deck => ({ ...deck, recommendedAfter: [] })),
+        crossSubjectHardEdges: freshCatalog.decks.flatMap(deck => deck.prerequisites.filter(id => !id.startsWith(`${deck.subject}/`)).map(id => ({ from: deck.id, to: id, kind: 'required' }))),
+        crossSubjectRecommendedEdges: []
+    } : errors.length
         ? null
         : resolveGlobalCurriculum(subjectsRoot, { requireSubjects: true });
     if (graph) errors.push(...graph.errors);
@@ -128,6 +140,7 @@ export function resolveRegistry(inputPath) {
         outputPath: path.join(root, registry.output),
         graph,
         deckMetadata,
+        freshCatalog,
         errors: [...new Set(errors)],
         warnings: graph?.warnings || []
     };
@@ -155,6 +168,11 @@ export function buildRegistry(inputPath) {
         repository: registry.repository,
         ref: registry.defaultRef
     };
+    if (registry.freshCatalog) {
+        mkdirSync(path.dirname(registry.outputPath), { recursive: true });
+        writeFileSync(registry.outputPath, `${JSON.stringify({ ...registry.freshCatalog, registry: source }, null, 2)}\n`);
+        return { registry, outputPath: registry.outputPath };
+    }
     writeGlobalCurriculumIndex(registry.graph, registry.outputPath, {
         deckOwner: registry.deckOwner,
         deckMetadata: registry.deckMetadata,

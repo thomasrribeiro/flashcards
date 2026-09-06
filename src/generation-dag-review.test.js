@@ -2,6 +2,30 @@ import { describe, expect, it } from 'vitest';
 import { canReviewGenerationDag, compareGenerationDag, generationJobCategory, generationModelSummary } from './generation-dag-review.js';
 
 describe('generation curriculum review', () => {
+    it('compares the whole deck graph and reports downstream content without altering it', () => {
+        const a = { id: 'math/a', subject: 'math', description: 'Old scope', prerequisites: [], chapters: [{ card_count: 12 }] };
+        const b = { id: 'physics/b', subject: 'physics', prerequisites: ['math/a'], chapters: [{ card_count: 7 }] };
+        const before = { decks: [a, b] }, snapshot = structuredClone(before);
+        const after = { decks: [{ ...a, description: 'New scope', chapters: [] }, b, { id: 'biology/c', subject: 'biology', prerequisites: [] }] };
+        const diff = compareGenerationDag(before, after, { jobType: 'curriculum-design' });
+        expect(diff.beforeCount).toBe(2);
+        expect(diff.afterCount).toBe(3);
+        expect(diff.changed[0].changes).toEqual([{ field: 'description', before: 'Old scope', after: 'New scope' }]);
+        expect(diff.affectedContent).toEqual([
+            { id: 'math/a', reason: 'Deck specification changed', chapterCount: 1, cardCount: 12 },
+            { id: 'physics/b', reason: 'Prerequisite changed', chapterCount: 1, cardCount: 7 }
+        ]);
+        expect(before).toEqual(snapshot);
+        expect(canReviewGenerationDag({ jobType: 'curriculum-design', status: 'needs-review', resultUrl: 'https://github.com/o/r/pull/1' })).toBe(true);
+    });
+    it('treats required outcome changes as curriculum changes even when the deck edge stays the same', () => {
+        const node = { id: 'physics/b', prerequisites: ['math/a'], required_outcomes: [{ deck_id: 'math/a', outcome_ids: ['addition'] }] };
+        const next = { ...node, required_outcomes: [{ deck_id: 'math/a', outcome_ids: ['multiplication'] }] };
+        const diff = compareGenerationDag({ decks: [node] }, { decks: [next] }, { jobType: 'curriculum-design' });
+        expect(diff.changed[0].fields).toEqual(['required_outcomes']);
+        expect(diff.addedEdges).toEqual([]);
+        expect(diff.removedEdges).toEqual([]);
+    });
     it('discloses the exact queued model and reasoning without inventing missing values', () => {
         expect(generationModelSummary({providerId:'openai',modelId:'gpt-6-astra',payload:{reasoningEffort:'high'}})).toBe('Model: gpt-6-astra · Reasoning: High · Provider: OpenAI');
         expect(generationModelSummary({providerId:'openai',modelId:'gpt-6-astra',payload:{reasoningEffort:'max'}})).toContain('Reasoning: Max');

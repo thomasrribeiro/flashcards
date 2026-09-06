@@ -10,6 +10,12 @@ stable-ID implementation, and validator as executable truth.
 
 ## Establish the operation
 
+For an explicitly versioned `fresh-generation-v1` job, use
+[references/fresh-generation-workflow.md](references/fresh-generation-workflow.md)
+instead of the legacy context-loading and existing-content workflows below.
+Its input allowlist is mandatory. Missing context is a reported scope issue,
+not permission to retrieve the existing repository or previous generations.
+
 Infer one mode from the request and CLI prompt:
 
 - **subject-design**: research a layered subject roadmap and executable

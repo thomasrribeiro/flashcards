@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { Command, Option } from 'commander';
+import { runFreshGenerationJob } from './lib/fresh-generation-runner.js';
+import { FRESH_GENERATION_VERSION } from '../src/fresh-generation.js';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
@@ -45,6 +47,7 @@ import {
 } from './lib/github-publisher.js';
 import {
     claimGenerationRequest,
+    getClaimedGenerationRequest,
     hasGenerationRunnerToken,
     listGenerationRequests,
     updateClaimedGenerationRequest,
@@ -950,6 +953,20 @@ addAgentOptions(requests
                 trustedRunner
             });
             const payload = queued.payload || {};
+            if (payload.workflowVersion === FRESH_GENERATION_VERSION || jobType === 'curriculum-design') {
+                const result = await runFreshGenerationJob(queued, { registryRoot: resolvePath(options.registryRoot || '.'), credential,
+                    beforePublish: async () => {
+                        const current = trustedRunner
+                            ? (await getClaimedGenerationRequest(queued.id, { workerUrl: options.workerUrl, runnerToken: options.runnerToken })).request
+                            : (await listGenerationRequests({ workerUrl: options.workerUrl })).requests.find(item => item.id === queued.id);
+                        if (!current || current.status !== 'running') throw new Error('Job is no longer running.');
+                    }
+                });
+                const update = trustedRunner ? updateClaimedGenerationRequest : updateGenerationRequest;
+                await update(queued.id, result, { workerUrl: options.workerUrl, runnerToken: options.runnerToken });
+                console.log(`Request ${queued.id} is ready for review: ${result.resultUrl}`);
+                return;
+            }
             const runner = providerRunner(queued.provider_id, options.agentRunner);
             let agent;
             let resultUrl = null;

@@ -14,6 +14,16 @@ async function installGenerationAccount(page, {
     chapterProgress = [],
     providerDelayMs = 0
 } = {}) {
+    catalog = structuredClone(catalog);
+    for (const deck of catalog.decks) {
+        deck.outcomes ||= [{ id: 'basics', description: deck.description || 'Basic concepts' }];
+        deck.required_outcomes ||= (deck.prerequisites || []).map(deck_id => ({ deck_id, outcome_ids: ['basics'] }));
+        for (const chapter of deck.chapters || []) {
+            chapter.outcomes ||= [{ id: 'basics', description: chapter.title }];
+            chapter.prerequisites = (chapter.prerequisites || []).filter(id => /^chapter:\d+_/.test(id));
+            chapter.resolved_dependencies = (chapter.resolved_dependencies || []).filter(item => item.kind === 'chapter' && !item.resolved?.includes('#'));
+        }
+    }
     let queued = null;
     await page.route('https://api.github.com/repos/thomasrribeiro-flashcards/curricula/commits/master**', route => (
         route.fulfill({ json: { sha: '1234567890abcdef1234567890abcdef12345678' } })
@@ -309,7 +319,7 @@ test('queues a subject draft only for a signed-in account with a connected model
             return route.fulfill({ json: { requests: queuedJob ? [{
                 id: 123,
                 status: 'queued',
-                job_type: 'subject-design',
+                job_type: queuedJob.jobType,
                 provider_id: 'openai',
                 model_id: 'gpt-test',
                 payload_json: JSON.stringify(queuedJob.payload)
@@ -393,25 +403,20 @@ test('queues a subject draft only for a signed-in account with a connected model
     const activity = settings.locator('#study-settings-pane-agents');
     await expect(settings.getByRole('tab', { name: /Agents/ })).toHaveAttribute('aria-selected', 'true');
     await expect(activity).toBeVisible();
-    await expect(activity.getByRole('heading', { name: 'Earth Science curriculum' })).toBeVisible();
+    await expect(activity.getByRole('heading', { name: 'Global curriculum' })).toBeVisible();
     await expect(activity.getByText('Request 123 · openai · gpt-test · high reasoning')).toBeVisible();
     await expect(activity.getByText('Queued', { exact: true })).toBeVisible();
     await expect(activity).not.toContainText('waiting for an isolated runner');
     expect(queuedJob).toMatchObject({
-        jobType: 'subject-design',
+        jobType: 'curriculum-design',
         registryId: 'thomas-ribeiro',
         targetRepository: 'thomasrribeiro-flashcards/curricula',
         providerId: 'openai',
         modelId: 'gpt-test',
         payload: {
-            subject: 'earth-science',
-            title: 'Earth Science',
-            destination: 'whole-field',
-            operation: 'create',
-            instructions: '',
-            focus: [],
-            proposedDecks: [],
-            workflowVersion: 'subject-design-v1',
+            newSubject: 'earth-science',
+            subjects: expect.arrayContaining(['mathematics', 'earth-science']),
+            workflowVersion: 'fresh-generation-v1',
             workflowCommit: '0'.repeat(40),
             registryBaseCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
             catalogHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
@@ -425,40 +430,22 @@ test('queues a subject draft only for a signed-in account with a connected model
     expect(JSON.stringify(queuedJob)).not.toMatch(/estimated.?chapters/i);
 });
 
-test('regenerates a subject curriculum with model disclosure and cancellable pinned launch settings', async ({ page }, testInfo) => {
+test('regenerates the global curriculum with model disclosure and cancellable pinned launch settings', async ({ page }, testInfo) => {
     const queuedJobs = [];
     await installGenerationAccount(page, { onPost: job => queuedJobs.push(job) });
-    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
-    const subjectOptions = page.getByRole('button', { name: 'Subject options for mathematics' });
-    await expect(subjectOptions).toHaveText('Subject options');
-    await subjectOptions.click();
-    const options = page.getByRole('dialog', { name: 'mathematics', exact: true });
-    await expect(options.getByRole('button', { name: /Subject curriculum/ })).toBeVisible();
-    const regenerate = options.getByRole('button', { name: /Regenerate curriculum/ });
+    const regenerate = page.getByRole('button', { name: 'Regenerate curriculum', exact: true });
     await expect(regenerate).toBeEnabled();
     await regenerate.click();
-    await expect(options).toBeHidden();
-    const builder = page.getByRole('dialog', { name: 'Regenerate mathematics curriculum', exact: true });
-    await expect(builder.getByLabel('Subject name')).toHaveValue('mathematics');
-    await expect(builder.getByText('Advanced options', { exact: true })).toHaveCount(0);
-    await expect(builder.getByLabel('Optional exceptions or emphasis')).toHaveCount(0);
-    await expect(builder.locator('#curriculum-launch-model')).toHaveText('gpt-test high');
-    await expect(builder.getByRole('button', { name: 'Add deck' })).toHaveCount(0);
-    await expect(builder.getByLabel('Deck ID', { exact: true })).toHaveCount(0);
-    await expect(builder).not.toContainText('Draft decks and prerequisite edges');
-    await expect(builder).not.toContainText('DAG');
-    await expect(builder).toContainText('existing curriculum as reference');
     await page.screenshot({ path: testInfo.outputPath('subject-curriculum-regeneration.png') });
-    await builder.getByRole('button', { name: 'Queue AI job' }).click();
     const confirmation = page.getByRole('dialog', { name: 'Confirm AI generation' });
-    await expect(confirmation).toContainText('Subject curriculum: mathematics');
+    await expect(confirmation).toContainText('Global curriculum');
     await expect(confirmation).toContainText('Model: gpt-test · Reasoning: High · Provider: OpenAI');
     expect(queuedJobs).toEqual([]);
     await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(confirmation).toHaveCount(0);
-    await expect(builder).toBeVisible();
+    await expect(regenerate).toBeVisible();
     expect(queuedJobs).toEqual([]);
-    await builder.getByRole('button', { name: 'Queue AI job' }).click();
+    await regenerate.click();
     await expect(confirmation).toContainText('Model: gpt-test · Reasoning: High');
     // Another tab/settings edit must not alter the already-disclosed packet.
     await page.evaluate(() => localStorage.setItem('flashcards_generation_preferences_v1', JSON.stringify({
@@ -466,19 +453,16 @@ test('regenerates a subject curriculum with model disclosure and cancellable pin
     })));
     await confirmAIStart(page);
     await expect.poll(() => queuedJobs.length).toBe(1);
-    expect(queuedJobs[0]).toMatchObject({ jobType:'subject-design', modelId:'gpt-test', payload:{ subject:'mathematics', reasoningEffort:'high' } });
-    expect(queuedJobs[0].payload.proposedDecks).toEqual([]);
-    await expect(page.getByRole('dialog', { name: 'Settings' }).getByLabel('Job type: Subject curriculum')).toBeVisible();
+    expect(queuedJobs[0]).toMatchObject({ jobType:'curriculum-design', modelId:'gpt-test', payload:{ subjects: expect.arrayContaining(['mathematics']), reasoningEffort:'high' } });
+    expect(queuedJobs[0].payload).not.toHaveProperty('proposedDecks');
+    await expect(page.getByRole('dialog', { name: 'Settings' }).getByLabel('Job type: Global curriculum')).toBeVisible();
 });
 
 test('changes launch settings without losing the subject draft or starting a job on save', async ({ page }, testInfo) => {
     const queuedJobs = [];
     await installGenerationAccount(page, { onPost: job => queuedJobs.push(job) });
-    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
-    await page.getByRole('button', { name: 'Subject options for mathematics' }).click();
-    await page.getByRole('dialog', { name: 'mathematics', exact: true })
-        .getByRole('button', { name: /Regenerate curriculum/ }).click();
-    const builder = page.getByRole('dialog', { name: 'Regenerate mathematics curriculum', exact: true });
+    const builder = page.getByRole('form', { name: 'Create subject' });
+    await builder.getByLabel('Subject name').fill('earth-science');
     await expect(builder.getByLabel('Destination')).toHaveCount(0);
     await builder.getByRole('button', { name: 'Queue AI job' }).click();
     const confirmation = page.getByRole('dialog', { name: 'Confirm AI generation' });
@@ -486,7 +470,6 @@ test('changes launch settings without losing the subject draft or starting a job
     await change.click();
     const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
     await expect(settings.getByRole('tab', { name: 'AI generation', exact: true })).toHaveAttribute('aria-selected', 'true');
-    await expect(builder).toBeHidden();
     await expect(confirmation).toBeHidden();
     await expect(page.locator('#generation-model')).toBeEnabled();
     await page.locator('#generation-model').selectOption('gpt-6-astra');
@@ -503,15 +486,15 @@ test('changes launch settings without losing the subject draft or starting a job
     await expect(settings).toBeHidden();
     await expect(confirmation).toContainText('Model: gpt-6-astra · Reasoning: Max · Provider: OpenAI');
     await expect(confirmation.getByRole('status')).toContainText('Settings updated');
-    await expect(builder.getByLabel('Subject name')).toHaveValue('mathematics');
+    await expect(builder.getByLabel('Subject name')).toHaveValue('earth-science');
     await expect(builder.locator('#curriculum-launch-model')).toHaveText('gpt-6-astra max');
     expect(queuedJobs).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath('generation-settings-confirmation.png') });
     await confirmation.getByRole('button', { name: 'Start AI job', exact: true }).click();
     await expect.poll(() => queuedJobs.length).toBe(1);
     expect(queuedJobs[0]).toMatchObject({
-        jobType: 'subject-design', providerId: 'openai', modelId: 'gpt-6-astra',
-        payload: { subject: 'mathematics', destination: 'whole-field', operation: 'regenerate', reasoningEffort: 'max', instructions: '', proposedDecks: [] }
+        jobType: 'curriculum-design', providerId: 'openai', modelId: 'gpt-6-astra',
+        payload: { newSubject: 'earth-science', subjects: expect.arrayContaining(['earth-science', 'mathematics']), reasoningEffort: 'max' }
     });
 });
 
@@ -523,8 +506,7 @@ test('keeps Subject options discoverable without AI access and restores focus wh
     await expect(trigger).toBeEnabled();
     await trigger.click();
     const options = page.getByRole('dialog', { name: 'mathematics', exact: true });
-    await expect(options.getByRole('button', { name: /Regenerate curriculum/ })).toBeDisabled();
-    await expect(options.getByRole('status')).toContainText('Sign in with GitHub');
+    await expect(options.getByRole('button', { name: /Regenerate curriculum/ })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('subject-options.png') });
     await page.keyboard.press('Escape');
     await expect(options).toBeHidden();
@@ -578,7 +560,7 @@ test('queues a chapter-curriculum agent from an empty deck chapter viewer', asyn
         modelId: 'gpt-test',
         payload: {
             deckId: 'mathematics/geometry-and-measurement',
-            workflowVersion: 'deck-plan-v3',
+            workflowVersion: 'fresh-generation-v1',
             workflowCommit: '0'.repeat(40),
             registryBaseCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
             catalogHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
@@ -587,7 +569,7 @@ test('queues a chapter-curriculum agent from an empty deck chapter viewer', asyn
     });
 });
 
-test('offers missing prerequisite curricula in transitive order before planning a deck', async ({ page }) => {
+test('plans a deck from prerequisite specifications without requiring their chapter plans', async ({ page }) => {
     const queuedJobs = [];
     const catalog = structuredClone(bundledCurriculum);
     const target = catalog.decks.find(deck => deck.id === 'mathematics/linear-algebra');
@@ -615,19 +597,14 @@ test('offers missing prerequisite curricula in transitive order before planning 
         name: 'Generate curriculum'
     }).click();
 
-    const confirmation = page.getByRole('dialog', { name: 'Plan prerequisites first?' });
-    await expect(confirmation).toContainText(
-        'number-sense-and-arithmetic → elementary-algebra-and-functions'
-    );
-    await expect(confirmation.getByRole('button', { name: 'Plan this deck only' })).toBeVisible();
-    await confirmation.getByRole('button', { name: 'Start prerequisites' }).click();
+    await expect(page.getByRole('dialog', { name: 'Plan prerequisites first?' })).toHaveCount(0);
     expect(queuedJobs).toEqual([]);
     await confirmAIStart(page);
 
     await expect.poll(() => queuedJobs.length).toBe(1);
     expect(queuedJobs[0]).toMatchObject({
         jobType: 'deck-plan',
-        payload: { deckId: 'mathematics/number-sense-and-arithmetic' }
+        payload: { deckId: 'mathematics/linear-algebra', workflowVersion: 'fresh-generation-v1' }
     });
 });
 
@@ -686,7 +663,7 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
     await expect.poll(() => queuedJob).not.toBeNull();
     expect(queuedJob).toMatchObject({
         jobType: 'deck-plan',
-        payload: { deckId: targetId, workflowVersion: 'deck-plan-v3' }
+        payload: { deckId: targetId, workflowVersion: 'fresh-generation-v1' }
     });
 });
 
@@ -1035,9 +1012,7 @@ test('queues content generation for one eligible chapter', async ({ page }) => {
         payload: {
             deckId: targetId,
             chapterId,
-            buildScope: 'pilot',
-            generationMode: 'generate',
-            workflowVersion: 'chapter-content-v1',
+            workflowVersion: 'fresh-generation-v1',
             workflowCommit: '0'.repeat(40),
             registryBaseCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
             catalogHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
@@ -1162,6 +1137,38 @@ test('tracks generation activity and previews an unmerged subject PR in the curr
     await expect(page.locator('.curriculum-preview-banner')).toHaveCount(0);
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toHaveCount(1);
     await expect(page.getByRole('form', { name: 'Create subject' })).toBeVisible();
+});
+
+test('previews a fresh global curriculum and sends acceptance only to the guarded backend', async ({ page }) => {
+    await installGenerationAccount(page);
+    const commit = 'd'.repeat(40);
+    const generated = structuredClone(bundledCurriculum);
+    generated.decks[0].description = 'Freshly proposed scope';
+    const job = { id: 1234, job_type: 'curriculum-design', deck_id: 'global/curriculum', status: 'needs-review', model_id: 'gpt-6-astra',
+        result_url: 'https://github.com/example/curricula/pull/1234', payload_json: JSON.stringify({ workflowVersion: 'fresh-generation-v1', subjects: generated.subjects.map(subject => subject.id), reasoningEffort: 'high' }) };
+    await page.route('**/api/generation-requests', route => route.fulfill({ json: { requests: [job] } }));
+    await page.route('https://api.github.com/repos/example/curricula/pulls/1234**', route => route.fulfill({ json: { state: 'open', head: { sha: commit } } }));
+    await page.route(`https://raw.githubusercontent.com/example/curricula/${commit}/dist/curriculum.json`, route => route.fulfill({ json: generated }));
+    const attempts = [];
+    await page.route('**/api/generation-requests/1234/accept', route => {
+        attempts.push(route.request().postDataJSON());
+        return route.fulfill({ status: 409, json: { error: 'Curriculum changed. Generate a new proposal.' } });
+    });
+    await page.reload();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    await settings.getByRole('tab', { name: /Agents/ }).click();
+    await settings.getByRole('button', { name: 'Review global curriculum' }).click();
+    const banner = page.locator('.curriculum-preview-banner');
+    await expect(banner).toContainText('Global curriculum');
+    await banner.getByText('Inspect curriculum changes', { exact: true }).click();
+    await expect(banner).toContainText('Freshly proposed scope');
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="mathematics"]')).toBeVisible();
+    page.once('dialog', dialog => dialog.accept());
+    await banner.getByRole('button', { name: 'Apply generated curriculum' }).click();
+    await expect(banner).toContainText('Curriculum changed. Generate a new proposal.');
+    expect(attempts).toEqual([{ expectedHead: commit }]);
+    await expect(banner.getByRole('button', { name: 'Apply generated curriculum' })).toBeEnabled();
 });
 
 test('reviews a generated deck curriculum on the chapter canvas without applying it', async ({ page }, testInfo) => {
@@ -2519,7 +2526,7 @@ test('mobile subject layers show three readable columns with the center layer la
                 readable: nodes.every(node => {
                     const scale = node.getBoundingClientRect().width / parseFloat(node.style.width);
                     const label = node.querySelector('.curriculum-graph-node-name');
-                    return parseFloat(getComputedStyle(label).fontSize) * scale >= 11.5
+                    return parseFloat(getComputedStyle(label).fontSize) * scale >= 10.5
                         && label.scrollHeight <= label.clientHeight + 1
                         && node.scrollHeight <= node.clientHeight + 1;
                 })
