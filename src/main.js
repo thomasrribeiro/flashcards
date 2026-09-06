@@ -5855,11 +5855,9 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
         title: subjectId ? subjectId.replaceAll('-', ' ').replace(/\b\w/g, value => value.toUpperCase()) : '',
         destination: subjectMeta.destination || 'whole-field',
         deckGranularity: subjectMeta.deck_granularity || 'course',
-        focus: Array.isArray(subjectMeta.focus) ? subjectMeta.focus.join(', ') : (subjectMeta.focus || ''),
-        instructions: '',
-        proposedDecks: []
+        focus: Array.isArray(subjectMeta.focus) ? subjectMeta.focus : []
     };
-    const { content, close } = curriculumOverlay(subjectId ? `Regenerate ${subjectId} curriculum` : 'Create subject');
+    const { overlay, content, close } = curriculumOverlay(subjectId ? `Regenerate ${subjectId} curriculum` : 'Create subject');
     content.innerHTML = `<form class="curriculum-builder-form">
             ${subjectId ? `<p class="study-settings-help">Create a revised curriculum draft using the existing curriculum as reference, without prescribing its current deck outline. Nothing changes until you review and apply the draft.</p>` : ''}
             <div class="curriculum-builder-grid">
@@ -5867,34 +5865,44 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
                     <label>Subject name<input name="subject" value="${escapeHtml(draft.subject)}" placeholder="earth-science" aria-describedby="curriculum-subject-name-hint" ${subjectId ? 'readonly' : ''}></label>
                     <p id="curriculum-subject-name-hint" class="curriculum-builder-field-error" data-subject-errors aria-live="polite"></p>
                 </div>
-                <label>Destination<select name="destination"><option>literacy</option><option>undergraduate-core</option><option>graduate-core</option><option>whole-field</option><option>research-specialization</option></select></label>
+                <label>Destination<select name="destination"><option>literacy</option><option>undergraduate-core</option><option>graduate-core</option><option>whole-field</option><option value="research-specialization" ${draft.focus.length ? '' : 'disabled'}>research-specialization${draft.focus.length ? '' : ' (requires a saved focus)'}</option></select></label>
                 <label>Deck size<select name="deckGranularity"><option value="module">module</option><option value="course">course</option><option value="broad-area">broad-area</option></select></label>
             </div>
-            <details class="curriculum-builder-advanced">
-                <summary>Advanced options</summary>
-                <div class="curriculum-builder-grid">
-                    <label>Focus areas<input name="focus" value="${escapeHtml(draft.focus)}" placeholder="Optional comma-separated focus areas"></label>
-                </div>
-                <label>Optional exceptions or emphasis<textarea name="instructions" rows="3" placeholder="Leave blank for the versioned workflow"></textarea></label>
-                ${!subjectId ? `<div class="curriculum-builder-decks-head"><h3>Optional deck outline</h3><button type="button" data-add-deck>Add deck</button></div>
-                <div data-decks class="curriculum-builder-decks"></div>` : ''}
-            </details>
             <div data-errors class="curriculum-builder-errors" aria-live="polite"></div>
-            <div class="curriculum-builder-actions"><button type="submit">Queue AI draft</button></div>
+            <div class="curriculum-builder-launch">
+                <div class="curriculum-builder-actions"><button type="submit" aria-describedby="curriculum-launch-model curriculum-launch-settings-hint">Queue AI job</button></div>
+                <p id="curriculum-launch-model" class="curriculum-launch-model" aria-live="polite"></p>
+                <p id="curriculum-launch-settings-hint" class="study-settings-help">Change in Settings → AI generation.</p>
+            </div>
         </form>`;
     const form = content.querySelector('form');
     const field = name => form.elements.namedItem(name);
     field('destination').value = draft.destination;
     field('deckGranularity').value = draft.deckGranularity;
-    const deckList = content.querySelector('[data-decks]');
+    const renderLaunchSettings = () => {
+        const preferences = getGenerationPreferences();
+        content.querySelector('#curriculum-launch-model').textContent = preferences.modelId
+            ? `(${preferences.modelId} ${preferences.reasoningEffort})`
+            : 'No model selected';
+    };
+    const settingsModal = document.getElementById('study-settings-modal');
+    settingsModal?.addEventListener('settings-closed', renderLaunchSettings);
+    window.addEventListener('storage', renderLaunchSettings);
+    window.addEventListener('focus', renderLaunchSettings);
+    overlay.addEventListener('close', () => {
+        settingsModal?.removeEventListener('settings-closed', renderLaunchSettings);
+        window.removeEventListener('storage', renderLaunchSettings);
+        window.removeEventListener('focus', renderLaunchSettings);
+    }, { once: true });
+    renderLaunchSettings();
     const readDraft = () => ({
         subject: field('subject').value,
         title: titleForSubject(field('subject').value),
         destination: field('destination').value,
         deckGranularity: field('deckGranularity').value,
-        focus: field('focus').value,
-        instructions: field('instructions').value,
-        proposedDecks: draft.proposedDecks
+        focus: draft.focus,
+        instructions: '',
+        proposedDecks: []
     });
     const validate = () => {
         const result = validateCurriculumDraft(readDraft());
@@ -5909,33 +5917,6 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
             .filter(error => !subjectErrorMessages.has(error))
             .join(' ');
         return result;
-    };
-    const renderDecks = () => {
-        if (!deckList) return validate();
-        deckList.innerHTML = '';
-        draft.proposedDecks.forEach((deck, index) => {
-            const row = document.createElement('div');
-            row.className = 'curriculum-builder-deck';
-            row.innerHTML = `<span class="curriculum-builder-order">${index + 1}</span>
-                <input value="${escapeHtml(deck.id)}" placeholder="deck-id" aria-label="Deck ID">
-                <input value="${escapeHtml(deck.description)}" placeholder="Purpose" aria-label="Deck purpose">
-                <input value="${escapeHtml((deck.prerequisites || []).join(', '))}" placeholder="requires: earlier-deck" aria-label="Prerequisites">
-                <span class="curriculum-builder-row-actions"><button type="button" data-up aria-label="Move up">↑</button><button type="button" data-down aria-label="Move down">↓</button><button type="button" data-remove aria-label="Remove">×</button></span>`;
-            const inputs = row.querySelectorAll('input');
-            inputs[0].oninput = () => { deck.id = inputs[0].value; validate(); };
-            inputs[1].oninput = () => { deck.description = inputs[1].value; };
-            inputs[2].oninput = () => { deck.prerequisites = inputs[2].value.split(',').map(value => value.trim()).filter(Boolean); validate(); };
-            row.querySelector('[data-up]').onclick = () => { if (index) [draft.proposedDecks[index - 1], draft.proposedDecks[index]] = [deck, draft.proposedDecks[index - 1]]; renderDecks(); };
-            row.querySelector('[data-down]').onclick = () => { if (index < draft.proposedDecks.length - 1) [draft.proposedDecks[index + 1], draft.proposedDecks[index]] = [deck, draft.proposedDecks[index + 1]]; renderDecks(); };
-            row.querySelector('[data-remove]').onclick = () => { draft.proposedDecks.splice(index, 1); renderDecks(); };
-            deckList.appendChild(row);
-        });
-        validate();
-    };
-    const addDeck = content.querySelector('[data-add-deck]');
-    if (addDeck) addDeck.onclick = () => {
-        draft.proposedDecks.push({ id: '', description: '', prerequisites: [] });
-        renderDecks();
     };
     form.addEventListener('input', validate);
     form.onsubmit = async event => {
@@ -5973,7 +5954,7 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
             content.querySelector('[data-errors]').textContent = error.message;
         }
     };
-    renderDecks();
+    validate();
 }
 
 function dependencyItemMarkup(name, meta, command = null) {

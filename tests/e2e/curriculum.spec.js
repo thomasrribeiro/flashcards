@@ -310,7 +310,16 @@ test('queues a subject draft only for a signed-in account with a connected model
     await expect(dialog).not.toContainText('Enter the structured subject intent');
     await expect(dialog).not.toContainText('subject-design-v1');
     await expect(dialog.getByLabel('Local provider')).toHaveCount(0);
-    await expect(dialog.getByLabel('Optional exceptions or emphasis')).toBeHidden();
+    await expect(dialog.locator('.curriculum-builder-advanced')).toHaveCount(0);
+    await expect(dialog.getByLabel('Optional exceptions or emphasis')).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Add deck' })).toHaveCount(0);
+    await expect(dialog.getByLabel('Destination').locator('option[value="research-specialization"]')).toHaveJSProperty('disabled', true);
+    const launchModel = dialog.locator('#curriculum-launch-model');
+    await expect(launchModel).toHaveText('(gpt-test high)');
+    await expect(dialog).toContainText('Change in Settings → AI generation.');
+    const launchBox = await dialog.getByRole('button', { name: 'Queue AI job' }).boundingBox();
+    const modelBox = await launchModel.boundingBox();
+    expect(modelBox.y).toBeGreaterThanOrEqual(launchBox.y + launchBox.height);
     await expect(dialog.getByLabel('Title')).toHaveCount(0);
     const subjectError = dialog.getByText('Subject must use lowercase kebab-case. Subject title is required.');
     await expect(subjectError).toHaveCount(1);
@@ -328,7 +337,8 @@ test('queues a subject draft only for a signed-in account with a connected model
     expect(Math.abs(subjectBox.height - deckSizeBox.height)).toBeLessThan(1);
     await dialog.getByLabel('Subject name').fill('earth-science');
     await expect(subjectError).toBeHidden();
-    await dialog.getByRole('button', { name: 'Queue AI draft' }).click();
+    await page.screenshot({ path: testInfo.outputPath('subject-generation-form.png') });
+    await dialog.getByRole('button', { name: 'Queue AI job' }).click();
     expect(queuedJob).toBeNull();
     await confirmAIStart(page);
     const settings = page.getByRole('dialog', { name: 'Settings' });
@@ -351,6 +361,8 @@ test('queues a subject draft only for a signed-in account with a connected model
             destination: 'whole-field',
             deckGranularity: 'course',
             instructions: '',
+            focus: [],
+            proposedDecks: [],
             workflowVersion: 'subject-design-v1',
             workflowCommit: '0'.repeat(40),
             registryBaseCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
@@ -378,15 +390,16 @@ test('regenerates a subject curriculum with model disclosure and cancellable pin
     await expect(options).toBeHidden();
     const builder = page.getByRole('dialog', { name: 'Regenerate mathematics curriculum', exact: true });
     await expect(builder.getByLabel('Subject name')).toHaveValue('mathematics');
-    await builder.getByText('Advanced options', { exact: true }).click();
-    await expect(builder.getByLabel('Optional exceptions or emphasis')).toBeVisible();
+    await expect(builder.getByText('Advanced options', { exact: true })).toHaveCount(0);
+    await expect(builder.getByLabel('Optional exceptions or emphasis')).toHaveCount(0);
+    await expect(builder.locator('#curriculum-launch-model')).toHaveText('(gpt-test high)');
     await expect(builder.getByRole('button', { name: 'Add deck' })).toHaveCount(0);
     await expect(builder.getByLabel('Deck ID', { exact: true })).toHaveCount(0);
     await expect(builder).not.toContainText('Draft decks and prerequisite edges');
     await expect(builder).not.toContainText('DAG');
     await expect(builder).toContainText('existing curriculum as reference');
     await page.screenshot({ path: testInfo.outputPath('subject-curriculum-regeneration.png') });
-    await builder.getByRole('button', { name: 'Queue AI draft' }).click();
+    await builder.getByRole('button', { name: 'Queue AI job' }).click();
     const confirmation = page.getByRole('dialog', { name: 'Confirm AI generation' });
     await expect(confirmation).toContainText('Subject curriculum: mathematics');
     await expect(confirmation).toContainText('Model: gpt-test · Reasoning: High · Provider: OpenAI');
@@ -395,7 +408,7 @@ test('regenerates a subject curriculum with model disclosure and cancellable pin
     await expect(confirmation).toHaveCount(0);
     await expect(builder).toBeVisible();
     expect(queuedJobs).toEqual([]);
-    await builder.getByRole('button', { name: 'Queue AI draft' }).click();
+    await builder.getByRole('button', { name: 'Queue AI job' }).click();
     await expect(confirmation).toContainText('Model: gpt-test · Reasoning: High');
     // Another tab/settings edit must not alter the already-disclosed packet.
     await page.evaluate(() => localStorage.setItem('flashcards_generation_preferences_v1', JSON.stringify({
@@ -416,9 +429,8 @@ test('changes launch settings without losing the subject draft or starting a job
     await page.getByRole('dialog', { name: 'mathematics', exact: true })
         .getByRole('button', { name: /Regenerate curriculum/ }).click();
     const builder = page.getByRole('dialog', { name: 'Regenerate mathematics curriculum', exact: true });
-    await builder.getByText('Advanced options', { exact: true }).click();
-    await builder.getByLabel('Optional exceptions or emphasis').fill('Keep prerequisite bridges explicit.');
-    await builder.getByRole('button', { name: 'Queue AI draft' }).click();
+    await builder.getByLabel('Destination').selectOption('graduate-core');
+    await builder.getByRole('button', { name: 'Queue AI job' }).click();
     const confirmation = page.getByRole('dialog', { name: 'Confirm AI generation' });
     const change = confirmation.getByRole('button', { name: 'Change AI settings' });
     await change.click();
@@ -441,16 +453,16 @@ test('changes launch settings without losing the subject draft or starting a job
     await expect(settings).toBeHidden();
     await expect(confirmation).toContainText('Model: gpt-6-astra · Reasoning: Max · Provider: OpenAI');
     await expect(confirmation.getByRole('status')).toContainText('Settings updated');
-    await expect(builder.getByLabel('Optional exceptions or emphasis')).toHaveValue('Keep prerequisite bridges explicit.');
+    await expect(builder.getByLabel('Destination')).toHaveValue('graduate-core');
+    await expect(builder.locator('#curriculum-launch-model')).toHaveText('(gpt-6-astra max)');
     expect(queuedJobs).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath('generation-settings-confirmation.png') });
     await confirmation.getByRole('button', { name: 'Start AI job', exact: true }).click();
     await expect.poll(() => queuedJobs.length).toBe(1);
     expect(queuedJobs[0]).toMatchObject({
         jobType: 'subject-design', providerId: 'openai', modelId: 'gpt-6-astra',
-        payload: { subject: 'mathematics', reasoningEffort: 'max' }
+        payload: { subject: 'mathematics', destination: 'graduate-core', reasoningEffort: 'max', instructions: '', proposedDecks: [] }
     });
-    expect(JSON.stringify(queuedJobs[0])).toContain('Keep prerequisite bridges explicit.');
 });
 
 test('keeps Subject options discoverable without AI access and restores focus when closed', async ({ page }, testInfo) => {

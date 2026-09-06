@@ -290,8 +290,11 @@ The subject viewer exposes **Subject options**, matching the deck viewer's
 subject curriculum draft. The menu stays available without AI access and
 explains any unmet generation requirements. Regeneration uses the current
 curriculum as reference but does not submit its existing decks as a manually
-prescribed outline. Advanced options let you specify focus and emphasis;
-an optional manual deck outline is available only when creating a new subject.
+prescribed outline. The subject form contains no advanced options or manual deck
+outline. **Queue AI job** shows the selected model and reasoning beneath it,
+with a reminder to change them in Settings → AI generation.
+Research specialization requires a saved subject focus; it is disabled in this
+simplified form when no focus is available.
 Every website generation
 launch, including prerequisite batches, confirms the exact provider, model, and
 reasoning effort before queueing; cancelling creates no job. Use **Change AI
