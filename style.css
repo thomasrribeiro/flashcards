@@ -4522,6 +4522,7 @@ body.standalone-phone .mobile-sidebar-close {
     overflow-x: hidden;
     overflow-y: scroll;
     touch-action: pan-y;
+    overscroll-behavior-y: contain;
 }
 
 .curriculum-graph-stage.is-subject-overview {
@@ -4545,7 +4546,8 @@ body.standalone-phone .mobile-sidebar-close {
 }
 
 .curriculum-graph-stage.is-layered .curriculum-graph-scroll-canvas {
-    overflow: hidden;
+    /* Clip off-window content without creating a nested scroll container. */
+    overflow: clip;
 }
 
 .curriculum-graph-viewport {
@@ -4699,6 +4701,9 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-graph-stage.is-compact .curriculum-graph-node-name { font-size: 14px; }
 .curriculum-graph-stage.is-compact .curriculum-graph-node-subject,
 .curriculum-graph-stage.is-compact .curriculum-graph-node-status { font-size: 11px; }
+.curriculum-graph-stage.is-compact.is-layered .curriculum-graph-node-name { font-size: 12px; }
+.curriculum-graph-stage.is-compact.is-layered .curriculum-graph-node-subject,
+.curriculum-graph-stage.is-compact.is-layered .curriculum-graph-node-status { font-size: 9px; }
 
 .curriculum-graph-empty {
     min-height: 220px;

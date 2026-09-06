@@ -3630,6 +3630,17 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
 } = {}) {
     const compact = useCompactCurriculumCanvas();
     const nodeSizing = compact ? { nodeHeight: 112 } : {};
+    if (compact && ranked) {
+        // Size the cards themselves, not their text, to fit two phone columns.
+        const nodeWidth = Math.max(80, (root.clientWidth - 2 - 32 - 24) / 2);
+        const charactersPerLine = Math.max(1, Math.floor((nodeWidth - 24) / 7.2));
+        const longestLabel = Math.max(...graph.nodes.map(node => String(node.deck || node.id).length + 5));
+        Object.assign(nodeSizing, {
+            nodeWidth,
+            nodeHeight: Math.max(104, 48 + Math.ceil(longestLabel / charactersPerLine) * 14.4),
+            columnGap: 24
+        });
+    }
     const isSubjectOverview = !ranked && graph.nodes.every(node => node.nodeType === 'subject');
     const layout = ranked
         ? layoutCurriculumGraph(graph, nodeSizing)
@@ -4032,10 +4043,10 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const columnStep = layout.nodeWidth + (layout.columnGap || 0);
         const focalX = focalNodes.length ? Math.min(...focalNodes.map(node => node.x)) : minX;
         return {
-            x: Number.isInteger(range.layer) ? compact ? focalX : focalX - columnStep : minX,
+            x: compact ? minX : Number.isInteger(range.layer) ? focalX - columnStep : minX,
             y: minY,
-            width: Number.isInteger(range.layer)
-                ? layout.nodeWidth + (compact ? 0 : columnStep * 2)
+            width: Number.isInteger(range.layer) && !compact
+                ? layout.nodeWidth + columnStep * 2
                 : Math.max(1, maxX - minX),
             height: Math.max(1, maxY - minY)
         };
@@ -4198,7 +4209,8 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             window.removeEventListener('resize', onViewportResize);
             return;
         }
-        if (compact !== useCompactCurriculumCanvas() && onResponsiveChange) {
+        if (onResponsiveChange && (compact !== useCompactCurriculumCanvas()
+            || (compact && ranked && previousStageWidth && previousStageWidth !== stage.clientWidth))) {
             window.removeEventListener('resize', onViewportResize);
             onResponsiveChange();
             return;
@@ -4659,7 +4671,7 @@ function curriculumGraphControls({ windowState = null, showFit = true, headerAct
     const layerNavigation = windowState ? `
         <span class="curriculum-graph-navigation">
             <button type="button" data-action="previous-layer" aria-label="Show previous dependency layer"${windowState.layer <= windowState.minLayer ? ' disabled' : ''}>←</button>
-            <span class="curriculum-layer-label">Layer ${windowState.layer + 1} of ${windowState.layerCount}</span>
+            <span class="curriculum-layer-label">${windowState.width === 2 ? `Layers ${windowState.start + 1}–${windowState.end}` : `Layer ${windowState.layer + 1}`} of ${windowState.layerCount}</span>
             <button type="button" data-action="next-layer" aria-label="Show next dependency layer"${windowState.layer >= windowState.maxLayer ? ' disabled' : ''}>→</button>
         </span>` : '';
     controls.innerHTML = `
@@ -4699,7 +4711,7 @@ async function renderCurriculumGraph(root, progressStates, graph, {
         return;
     }
     const windowState = layered
-        ? curriculumLayerWindow(graph, curriculumViewState.layerStart, useCompactCurriculumCanvas() ? 1 : 3)
+        ? curriculumLayerWindow(graph, curriculumViewState.layerStart, useCompactCurriculumCanvas() ? 2 : 3)
         : null;
     if (windowState) curriculumViewState.layerStart = windowState.layer;
     const subjectOverview = !layered && graph.nodes.every(node => node.nodeType === 'subject');

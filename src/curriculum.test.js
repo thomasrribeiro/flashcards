@@ -284,13 +284,13 @@ describe('curriculum dependency planning', () => {
         expect(lastBoundary).toMatchObject({ start: 1, end: 4, layer: 2 });
     });
 
-    it('allows every dependency rank in the single-column mobile window', () => {
+    it('includes every dependency rank in two-column mobile windows', () => {
         const graph = curriculumGraph(index);
-        expect(curriculumLayerWindow(graph, 0, 1)).toMatchObject({
-            start: 0, end: 1, layer: 0, minLayer: 0, maxLayer: 2, width: 1
+        expect(curriculumLayerWindow(graph, 0, 2)).toMatchObject({
+            start: 0, end: 2, layer: 1, minLayer: 1, maxLayer: 2, width: 2
         });
-        expect(curriculumLayerWindow(graph, 99, 1)).toMatchObject({
-            start: 2, end: 3, layer: 2, minLayer: 0, maxLayer: 2, width: 1
+        expect(curriculumLayerWindow(graph, 99, 2)).toMatchObject({
+            start: 1, end: 3, layer: 2, minLayer: 1, maxLayer: 2, width: 2
         });
     });
 

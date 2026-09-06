@@ -589,7 +589,12 @@ test('offers missing prerequisite curricula in transitive order before planning 
     });
 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
-    await page.locator('.curriculum-graph-node[data-deck-id="mathematics/linear-algebra"]').click();
+    const linearAlgebra = page.locator('.curriculum-graph-node[data-deck-id="mathematics/linear-algebra"]');
+    const targetRank = Number(await linearAlgebra.getAttribute('data-rank'));
+    while (targetRank >= Number(await page.locator('.curriculum-graph-stage').getAttribute('data-scroll-rank-end'))) {
+        await page.getByRole('button', { name: 'Show next dependency layer' }).click();
+    }
+    await linearAlgebra.click();
     await page.locator('.curriculum-chapter-empty').getByRole('button', {
         name: 'Generate curriculum'
     }).click();
@@ -1400,7 +1405,7 @@ test('reviews generated flashcards in-app and publishes both pull requests', asy
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name === 'mobile-chromium', 'Three-column geometry; mobile single-column navigation has dedicated coverage.');
+    test.skip(testInfo.project.name === 'mobile-chromium', 'Three-column geometry; mobile two-column navigation has dedicated coverage.');
     if (testInfo.project.name === 'desktop-chromium') {
         await page.setViewportSize({ width: 2000, height: 1100 });
     }
@@ -2470,17 +2475,17 @@ test('mobile overview starts fitted and centered and preserves zoom on rotation'
     await expect.poll(scale).toBeGreaterThan(fitted);
     await page.getByRole('button', { name: 'Fit', exact: true }).click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').tap();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–2 of');
 });
 
-test('mobile subject layers show one readable column including first and last layers', async ({ page }, testInfo) => {
+test('mobile subject layers show two readable columns including first and last layers', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     const stage = page.locator('.curriculum-graph-stage');
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–2 of');
     await expect(page.getByRole('button', { name: 'Show previous dependency layer' })).toBeDisabled();
     const count = Number((await page.locator('.curriculum-layer-label').textContent()).split(' of ')[1]);
-    for (let rank = 0; rank < count; rank += 1) {
+    for (let rank = 1; rank < count; rank += 1) {
         await expect(stage).toHaveAttribute('data-scroll-layer', String(rank));
         const metrics = await stage.evaluate(element => {
             const bounds = element.getBoundingClientRect();
@@ -2497,13 +2502,13 @@ test('mobile subject layers show one readable column including first and last la
                 readable: nodes.every(node => {
                     const scale = node.getBoundingClientRect().width / parseFloat(node.style.width);
                     const label = node.querySelector('.curriculum-graph-node-name');
-                    return parseFloat(getComputedStyle(label).fontSize) * scale >= 13
+                    return parseFloat(getComputedStyle(label).fontSize) * scale >= 11.5
                         && label.scrollHeight <= label.clientHeight + 1
                         && node.scrollHeight <= node.clientHeight + 1;
                 })
             };
         });
-        expect(metrics).toEqual({ ranks: [rank], wholeNodes: true, readable: true });
+        expect(metrics).toEqual({ ranks: [rank - 1, rank], wholeNodes: true, readable: true });
         if (rank === 2) {
             await page.locator('#curriculum-view').screenshot({ path: testInfo.outputPath('mobile-subject-column.png') });
             const focal = stage.locator(`.curriculum-graph-node[data-rank="${rank}"]`).last();
@@ -2518,6 +2523,50 @@ test('mobile subject layers show one readable column including first and last la
     await page.setViewportSize({ width: 844, height: 390 });
     await expect(stage).toHaveClass(/is-compact/);
     await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 2));
+});
+
+test('mobile tall columns scroll with touch through the last node', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile-chromium');
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').tap();
+    const stage = page.locator('.curriculum-graph-stage');
+    const tallRank = await stage.evaluate(element => {
+        const nodes = [...element.querySelectorAll('.curriculum-graph-node')];
+        return Number(nodes.sort((a, b) => parseFloat(b.style.top) - parseFloat(a.style.top))[0].dataset.rank);
+    });
+    while (Number(await stage.getAttribute('data-scroll-layer')) < tallRank) {
+        await page.getByRole('button', { name: 'Show next dependency layer' }).click();
+    }
+    await stage.scrollIntoViewIfNeeded();
+    await expect.poll(() => stage.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(100);
+    const initialTop = await stage.evaluate(element => element.scrollTop);
+    const client = await page.context().newCDPSession(page);
+    const swipe = async () => {
+        const box = await stage.boundingBox();
+        const nodeBox = await stage.locator(`.curriculum-graph-node[data-rank="${tallRank}"]`).first().boundingBox();
+        const x = nodeBox.x + nodeBox.width / 2;
+        const bottom = Math.min(box.y + box.height - 24, page.viewportSize().height - 24);
+        const top = Math.max(box.y + 24, bottom - 180);
+        await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: bottom, id: 1 }] });
+        for (let i = 1; i <= 6; i += 1) {
+            await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: bottom + (top - bottom) * i / 6, id: 1 }] });
+            await page.waitForTimeout(20);
+        }
+        await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+    await swipe();
+    await expect.poll(() => stage.evaluate(element => element.scrollTop)).toBeGreaterThan(initialTop + 30);
+    const lastNode = stage.locator(`.curriculum-graph-node[data-rank="${tallRank}"]`).last();
+    for (let i = 0; i < 15; i += 1) {
+        const visible = await lastNode.evaluate(node => {
+            const rect = node.getBoundingClientRect();
+            const stage = node.closest('.curriculum-graph-stage').getBoundingClientRect();
+            return rect.bottom <= stage.bottom && rect.top >= stage.top;
+        });
+        if (visible) break;
+        await swipe();
+    }
+    await expect(lastNode).toBeInViewport({ ratio: 0.95 });
+    await stage.screenshot({ path: testInfo.outputPath('mobile-column-scrolled.png') });
 });
 
 test('curriculum controls fit a phone viewport', async ({ page }, testInfo) => {
