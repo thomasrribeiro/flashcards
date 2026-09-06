@@ -357,7 +357,7 @@ test('queues a subject draft only for a signed-in account with a connected model
     expect(JSON.stringify(queuedJob)).not.toMatch(/api.?key|secret/i);
 });
 
-test('regenerates a subject DAG with model disclosure and cancellable pinned launch settings', async ({ page }) => {
+test('regenerates a subject curriculum with model disclosure and cancellable pinned launch settings', async ({ page }, testInfo) => {
     const queuedJobs = [];
     await installGenerationAccount(page, { onPost: job => queuedJobs.push(job) });
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
@@ -366,15 +366,23 @@ test('regenerates a subject DAG with model disclosure and cancellable pinned lau
     await subjectOptions.click();
     const options = page.getByRole('dialog', { name: 'mathematics', exact: true });
     await expect(options.getByRole('button', { name: /Subject curriculum/ })).toBeVisible();
-    const regenerate = options.getByRole('button', { name: /Regenerate DAG/ });
+    const regenerate = options.getByRole('button', { name: /Regenerate curriculum/ });
     await expect(regenerate).toBeEnabled();
     await regenerate.click();
     await expect(options).toBeHidden();
-    const builder = page.getByRole('dialog', { name: 'Regenerate mathematics DAG', exact: true });
+    const builder = page.getByRole('dialog', { name: 'Regenerate mathematics curriculum', exact: true });
     await expect(builder.getByLabel('Subject name')).toHaveValue('mathematics');
+    await builder.getByText('Advanced options', { exact: true }).click();
+    await expect(builder.getByLabel('Optional exceptions or emphasis')).toBeVisible();
+    await expect(builder.getByRole('button', { name: 'Add deck' })).toHaveCount(0);
+    await expect(builder.getByLabel('Deck ID', { exact: true })).toHaveCount(0);
+    await expect(builder).not.toContainText('Draft decks and prerequisite edges');
+    await expect(builder).not.toContainText('DAG');
+    await expect(builder).toContainText('existing curriculum as reference');
+    await page.screenshot({ path: testInfo.outputPath('subject-curriculum-regeneration.png') });
     await builder.getByRole('button', { name: 'Queue AI draft' }).click();
     const confirmation = page.getByRole('dialog', { name: 'Confirm AI generation' });
-    await expect(confirmation).toContainText('Subject DAG: mathematics');
+    await expect(confirmation).toContainText('Subject curriculum: mathematics');
     await expect(confirmation).toContainText('Model: gpt-test · Reasoning: High · Provider: OpenAI');
     expect(queuedJobs).toEqual([]);
     await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -390,7 +398,8 @@ test('regenerates a subject DAG with model disclosure and cancellable pinned lau
     await confirmAIStart(page);
     await expect.poll(() => queuedJobs.length).toBe(1);
     expect(queuedJobs[0]).toMatchObject({ jobType:'subject-design', modelId:'gpt-test', payload:{ subject:'mathematics', reasoningEffort:'high' } });
-    await expect(page.getByRole('dialog', { name: 'Settings' }).getByLabel('Job type: Subject DAG')).toBeVisible();
+    expect(queuedJobs[0].payload.proposedDecks).toEqual([]);
+    await expect(page.getByRole('dialog', { name: 'Settings' }).getByLabel('Job type: Subject curriculum')).toBeVisible();
 });
 
 test('keeps Subject options discoverable without AI access and restores focus when closed', async ({ page }, testInfo) => {
@@ -401,7 +410,7 @@ test('keeps Subject options discoverable without AI access and restores focus wh
     await expect(trigger).toBeEnabled();
     await trigger.click();
     const options = page.getByRole('dialog', { name: 'mathematics', exact: true });
-    await expect(options.getByRole('button', { name: /Regenerate DAG/ })).toBeDisabled();
+    await expect(options.getByRole('button', { name: /Regenerate curriculum/ })).toBeDisabled();
     await expect(options.getByRole('status')).toContainText('Sign in with GitHub');
     await page.screenshot({ path: testInfo.outputPath('subject-options.png') });
     await page.keyboard.press('Escape');
@@ -465,7 +474,7 @@ test('queues a chapter-curriculum agent from an empty deck chapter viewer', asyn
     });
 });
 
-test('offers missing prerequisite DAGs in transitive order before planning a deck', async ({ page }) => {
+test('offers missing prerequisite curricula in transitive order before planning a deck', async ({ page }) => {
     const queuedJobs = [];
     const catalog = structuredClone(bundledCurriculum);
     const target = catalog.decks.find(deck => deck.id === 'mathematics/linear-algebra');
@@ -917,7 +926,7 @@ test('queues content generation for one eligible chapter', async ({ page }) => {
     });
 });
 
-test('tracks generation activity and previews an unmerged subject PR in the DAG', async ({ page }) => {
+test('tracks generation activity and previews an unmerged subject PR in the curriculum', async ({ page }) => {
     const commit = 'a'.repeat(40);
     const resultUrl = 'https://github.com/example/curricula/pull/12';
     const previewCatalog = {
@@ -1007,13 +1016,13 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
     const activity = settings.locator('#study-settings-pane-agents');
     await expect(activity.getByText('No agents currently running. 1 result awaiting review.')).toBeVisible();
     await expect(activity.getByRole('heading', { name: 'Chemistry curriculum' })).toBeVisible();
-    await expect(activity.getByLabel('Job type: Subject DAG')).toBeVisible();
-    await activity.getByRole('button', { name: 'Review subject DAG' }).click();
+    await expect(activity.getByLabel('Job type: Subject curriculum')).toBeVisible();
+    await activity.getByRole('button', { name: 'Review subject curriculum' }).click();
 
     await expect(page.locator('#tab-curriculum')).toHaveClass(/active/);
-    await expect(page.locator('.curriculum-preview-banner')).toContainText('Generated DAG · chemistry curriculum · gpt-test · PR #12');
+    await expect(page.locator('.curriculum-preview-banner')).toContainText('Generated curriculum · chemistry curriculum · gpt-test · PR #12');
     await expect(page.locator('.curriculum-preview-banner')).toContainText('2 added');
-    await expect(page.locator('.curriculum-preview-banner').getByRole('button', { name: 'Apply generated DAG' })).toBeVisible();
+    await expect(page.locator('.curriculum-preview-banner').getByRole('button', { name: 'Apply generated curriculum' })).toBeVisible();
     await expect(page.locator('.curriculum-preview-banner').getByRole('link', { name: 'Review pull request' })).toHaveCount(0);
     await expect(page.locator('.curriculum-breadcrumb-label')).toHaveText('example');
     await expect(page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'curricula' })).toBeVisible();
@@ -1022,11 +1031,11 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
     await expect(page.getByRole('button', { name: 'Create subject' })).toHaveCount(0);
 
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toHaveClass(/is-dag-added/);
-    await page.getByRole('button', { name: 'Current DAG', exact: true }).click();
-    await expect(page.locator('.curriculum-preview-banner')).toContainText('Current DAG (loaded snapshot)');
-    await expect(page.getByRole('button', { name: 'Apply generated DAG' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Current curriculum', exact: true }).click();
+    await expect(page.locator('.curriculum-preview-banner')).toContainText('Current curriculum (loaded snapshot)');
+    await expect(page.getByRole('button', { name: 'Apply generated curriculum' })).toHaveCount(0);
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Generated DAG', exact: true }).click();
+    await page.getByRole('button', { name: 'Generated curriculum', exact: true }).click();
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toBeVisible();
 
     await page.getByRole('button', { name: 'Exit preview' }).click();
@@ -1035,7 +1044,7 @@ test('tracks generation activity and previews an unmerged subject PR in the DAG'
     await expect(page.getByRole('button', { name: 'Create subject' })).toBeVisible();
 });
 
-test('reviews a generated deck DAG on the chapter canvas without applying it', async ({ page }, testInfo) => {
+test('reviews a generated deck curriculum on the chapter canvas without applying it', async ({ page }, testInfo) => {
     const deckId = 'mathematics/linear-algebra';
     const commit = 'b'.repeat(40);
     const first = { id: '01_start', order: 1, title: 'Starting ideas', provides: ['start'], prerequisites: [], resolved_dependencies: [] };
@@ -1058,20 +1067,20 @@ test('reviews a generated deck DAG on the chapter canvas without applying it', a
     await page.getByRole('button', { name: 'Settings' }).click();
     const settings = page.getByRole('dialog', { name: 'Settings' });
     await settings.getByRole('tab', { name: /Agents/ }).click();
-    await expect(settings.getByLabel('Job type: Deck DAG')).toBeVisible();
-    await settings.getByRole('button', { name: 'Review deck DAG' }).click();
+    await expect(settings.getByLabel('Job type: Deck curriculum')).toBeVisible();
+    await settings.getByRole('button', { name: 'Review deck curriculum' }).click();
     const banner = page.locator('.curriculum-preview-banner');
     await expect(banner).toContainText('Nodes: 1 → 2. 1 added');
     await expect(banner).toContainText('Prerequisite edges: +1 / −0');
     await expect(page.locator(`[data-deck-id="${deckId}#02_next"]`)).toBeVisible();
-    await banner.getByText('Inspect DAG changes', { exact: true }).click();
+    await banner.getByText('Inspect curriculum changes', { exact: true }).click();
     await expect(banner).toContainText(`Added required prerequisite: ${deckId}#01_start → ${deckId}#02_next`);
     const screenshotPath = testInfo.outputPath('generated-deck-dag.png');
     await page.screenshot({ path: screenshotPath });
     await testInfo.attach('generated-deck-dag', { path: screenshotPath, contentType: 'image/png' });
-    await banner.getByRole('button', { name: 'Current DAG', exact: true }).click();
+    await banner.getByRole('button', { name: 'Current curriculum', exact: true }).click();
     await expect(page.locator(`[data-deck-id="${deckId}#02_next"]`)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Apply generated DAG' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Apply generated curriculum' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Exit preview' }).click();
     await expect(banner).toHaveCount(0);
     expect(mutations).toEqual([]);
@@ -1140,7 +1149,7 @@ test('publishes merged review requests and clears the Agents review count', asyn
     const activity = settings.locator('#study-settings-pane-agents');
     await expect(activity.getByText('No agents currently running. 0 results awaiting review.')).toBeVisible();
     await expect(activity.getByText('Published', { exact: true })).toBeVisible();
-    await expect(activity.getByRole('button', { name: 'Review subject DAG' })).toBeVisible();
+    await expect(activity.getByRole('button', { name: 'Review subject curriculum' })).toBeVisible();
     await expect(activity.getByRole('link', { name: 'View merged pull request' })).toHaveAttribute('href', resultUrl);
     const [summaryBox, refreshBox, listBox] = await Promise.all([
         activity.locator('.generation-activity-summary').boundingBox(),

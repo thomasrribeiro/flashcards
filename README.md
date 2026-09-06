@@ -198,7 +198,7 @@ flashcards subject prerequisites ~/notes/biology
 flashcards subject prerequisites ~/notes/biology --deck molecular-biology
 flashcards subject validate ~/notes/biology
 
-# Validate and inspect every subject as one cross-subject DAG
+# Validate and inspect every subject as one cross-subject curriculum
 flashcards curriculum validate ~/notes
 flashcards curriculum audit ~/notes
 
@@ -217,7 +217,7 @@ learning level and priority tier. They separate hard `prerequisites` from
 field domain to an included deck or deliberate deferral. Local references use
 `deck-id`; cross-subject references use `subject/deck-id`. Deck orders must be
 topological within a subject, and `curriculum validate` checks the entire
-collection as one DAG. Cycles, missing or redundant references, later-level hard edges,
+collection as one curriculum. Cycles, missing or redundant references, later-level hard edges,
 duplicate ids/orders, out-of-range deck estimates, and incomplete coverage are
 rejected. `subject validate` additionally rejects missing or drifted roadmap
 deck rows, including omitted chapter estimates or mismatched prerequisites.
@@ -233,7 +233,7 @@ Chapter prerequisites can target an exact provider in another deck with
 preserves those exact chapter edges, repository availability, card counts, and
 the materialization command used by the PWA's Curriculum view. From that view,
 users begin with a subject-level map, zoom into one subject, focus one deck's
-ancestor path, or inspect its chapter DAG. They can add the smallest available
+ancestor path, or inspect its chapter curriculum. They can add the smallest available
 prerequisite path to their study scope, copy commands for missing decks, or
 submit a generation request while signed in.
 
@@ -276,19 +276,23 @@ bounded catalog slice containing the target deck, direct prerequisite chapter
 capabilities, compact transitive prerequisites, and direct or recommended
 downstream consumers. A successful plan updates the registry's deck snapshot
 and compiled catalog on a draft pull request. The Agents tab previews that
-unmerged catalog; the production DAG changes only after the pull request is
+unmerged catalog; the production curriculum changes only after the pull request is
 merged.
 
-Agents labels each job as **Subject DAG**, **Deck DAG**, or **Flashcards**.
-Use **Review subject DAG** or **Review deck DAG** to open its generated canvas,
+Agents labels each job as **Subject curriculum**, **Deck curriculum**, or **Flashcards**.
+Use **Review subject curriculum** or **Review deck curriculum** to open its generated canvas,
 switch between the current loaded curriculum and the proposal, and inspect
 added/removed/changed nodes and prerequisite edges. Previewing does not apply
-changes. **Apply generated DAG** separately confirms and merges the exact
+changes. **Apply generated curriculum** separately confirms and merges the exact
 previewed pull-request commit; completed historical jobs remain viewable.
 The subject viewer exposes **Subject options**, matching the deck viewer's
-**Deck options** menu. Choose **Regenerate DAG** there to create a reviewable
+**Deck options** menu. Choose **Regenerate curriculum** there to create a reviewable
 subject curriculum draft. The menu stays available without AI access and
-explains any unmet generation requirements. Every website generation
+explains any unmet generation requirements. Regeneration uses the current
+curriculum as reference but does not submit its existing decks as a manually
+prescribed outline. Advanced options let you specify focus and emphasis;
+an optional manual deck outline is available only when creating a new subject.
+Every website generation
 launch, including prerequisite batches, confirms the exact provider, model, and
 reasoning effort before queueing; cancelling creates no job. Change defaults
 under Settings → AI generation, then restart the launch flow.
@@ -337,7 +341,7 @@ pins its workflow checkout to the most recent successful GitHub Pages
 deployment; the request provenance guard still verifies the exact commit.
 Each curriculum request is authored in a disposable Git worktree, so a failed
 draft cannot leave files that block the next request. Subject drafts receive
-one bounded repair pass when deterministic subject, roadmap, or global-DAG
+one bounded repair pass when deterministic subject, roadmap, or global-curriculum
 validation rejects an otherwise completed agent run.
 Output is written to `~/.flashcards/runner/stdout.log` and `stderr.log`;
 uninstalling the service leaves those diagnostic logs and checkouts in place.
@@ -362,7 +366,7 @@ repository from the pinned
 curriculum registry, create it under the registry's `deck_owner` when absent,
 and publish one review pull request for the chapter plus a companion registry
 snapshot pull request. Merging both from Agents publishes the cards and keeps
-the curriculum DAG's repository, status, card count, model, reasoning effort,
+the curriculum curriculum's repository, status, card count, model, reasoning effort,
 and workflow provenance synchronized. The first chapter remains the pilot;
 merging its validated pull request is the explicit approval that unlocks later
 chapter jobs.

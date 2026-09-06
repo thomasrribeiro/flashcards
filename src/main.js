@@ -1504,7 +1504,7 @@ function openCurriculumSubjectActionsModal({ subject, registry }, trigger = null
         }
     });
     const regenerate = appendDeckAction(body, {
-        label: 'Regenerate DAG',
+        label: 'Regenerate curriculum',
         description: 'Create a new subject curriculum draft to review before applying.',
         onClick: () => {
             closeDeckActionsModal({ restoreFocus: false });
@@ -5537,7 +5537,7 @@ function appendGenerationRequestRow(list, request, close) {
     if (canReviewGenerationDag(request)) {
         const preview = document.createElement('button');
         preview.type = 'button';
-        preview.textContent = request.jobType === 'subject-design' ? 'Review subject DAG' : 'Review deck DAG';
+        preview.textContent = request.jobType === 'subject-design' ? 'Review subject curriculum' : 'Review deck curriculum';
         preview.onclick = () => enterCurriculumPreview(request, close, preview);
         actions.appendChild(preview);
     }
@@ -5649,12 +5649,12 @@ function curriculumPreviewBanner() {
         ? `${curriculumPreview.request.deckId} chapter curriculum`
         : `${curriculumPreview.request.subject} curriculum`;
     const { diff, showing, request } = curriculumPreview;
-    text.textContent = `${showing === 'generated' ? 'Generated DAG' : 'Current DAG (loaded snapshot)'} · ${target} · ${request.modelId || 'model not recorded'} · PR #${curriculumPreview.pull.number} at ${curriculumPreview.commit.slice(0, 12)}. Nothing is applied by previewing.`;
+    text.textContent = `${showing === 'generated' ? 'Generated curriculum' : 'Current curriculum (loaded snapshot)'} · ${target} · ${request.modelId || 'model not recorded'} · PR #${curriculumPreview.pull.number} at ${curriculumPreview.commit.slice(0, 12)}. Nothing is applied by previewing.`;
     const summary = document.createElement('p');
     summary.textContent = `Nodes: ${diff.beforeCount} → ${diff.afterCount}. ${diff.added.length} added, ${diff.removed.length} removed, ${diff.changed.length} changed. Prerequisite edges: +${diff.addedEdges.length} / −${diff.removedEdges.length} (required and recommended).`;
     description.append(text, summary);
     const actions = document.createElement('div');
-    for (const [value, label] of [['published', 'Current DAG'], ['generated', 'Generated DAG']]) {
+    for (const [value, label] of [['published', 'Current curriculum'], ['generated', 'Generated curriculum']]) {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = label;
@@ -5669,10 +5669,10 @@ function curriculumPreviewBanner() {
     }
     const merge = document.createElement('button');
     merge.type = 'button';
-    merge.textContent = 'Apply generated DAG';
+    merge.textContent = 'Apply generated curriculum';
     merge.onclick = async () => {
         const preview = curriculumPreview;
-        if (!window.confirm(`Apply this generated DAG by merging pull request #${preview.pull.number}? This changes the published curriculum. Previewing alone does not change it.`)) return;
+        if (!window.confirm(`Apply this generated curriculum by merging pull request #${preview.pull.number}? This changes the published curriculum. Previewing alone does not change it.`)) return;
         merge.disabled = true;
         merge.textContent = 'Merging…';
         try {
@@ -5701,7 +5701,7 @@ function curriculumPreviewBanner() {
             );
         } catch (error) {
             merge.disabled = false;
-            merge.textContent = 'Apply generated DAG';
+            merge.textContent = 'Apply generated curriculum';
             const message = document.createElement('p');
             message.className = 'generation-activity-error';
             message.setAttribute('aria-live', 'polite');
@@ -5723,7 +5723,7 @@ function curriculumPreviewBanner() {
     actions.append(github, exit);
     const details = document.createElement('details');
     const heading = document.createElement('summary');
-    heading.textContent = 'Inspect DAG changes';
+    heading.textContent = 'Inspect curriculum changes';
     const changes = document.createElement('ul');
     const entries = [
         ...diff.added.map(node => `Added: ${node.id}`),
@@ -5813,7 +5813,6 @@ function renderCurriculumSettingsSources() {
 function openCurriculumBuilder(subjectId = '', registry = null) {
     const targetRegistry = registry || curriculumRegistryForView(curriculumIndex, { subjectId });
     const targetRepository = targetRegistry?.repository || 'the active curriculum registry';
-    const existing = subjectId ? curriculumMaps(curriculumIndex).decks : new Map();
     const subjectMeta = curriculumIndex.subjects?.find(item => item.id === subjectId) || {};
     const draft = {
         subject: subjectId,
@@ -5822,17 +5821,11 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
         deckGranularity: subjectMeta.deck_granularity || 'course',
         focus: Array.isArray(subjectMeta.focus) ? subjectMeta.focus.join(', ') : (subjectMeta.focus || ''),
         instructions: '',
-        proposedDecks: [...existing.values()]
-            .filter(deck => deck.subject === subjectId)
-            .sort((a, b) => a.order - b.order)
-            .map(deck => ({
-                id: deck.deck,
-                description: deck.description || '',
-                prerequisites: (deck.prerequisites || []).map(id => id.startsWith(`${subjectId}/`) ? id.split('/')[1] : id)
-            }))
+        proposedDecks: []
     };
-    const { content, close } = curriculumOverlay(subjectId ? `Regenerate ${subjectId} DAG` : 'Create subject');
+    const { content, close } = curriculumOverlay(subjectId ? `Regenerate ${subjectId} curriculum` : 'Create subject');
     content.innerHTML = `<form class="curriculum-builder-form">
+            ${subjectId ? `<p class="study-settings-help">Create a revised curriculum draft using the existing curriculum as reference, without prescribing its current deck outline. Nothing changes until you review and apply the draft.</p>` : ''}
             <div class="curriculum-builder-grid">
                 <div class="curriculum-builder-field">
                     <label>Subject name<input name="subject" value="${escapeHtml(draft.subject)}" placeholder="earth-science" aria-describedby="curriculum-subject-name-hint" ${subjectId ? 'readonly' : ''}></label>
@@ -5844,11 +5837,11 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
             <details class="curriculum-builder-advanced">
                 <summary>Advanced options</summary>
                 <div class="curriculum-builder-grid">
-                    <label>Focus areas<input name="focus" value="${escapeHtml(draft.focus)}" placeholder="neuroscience, genomics"></label>
+                    <label>Focus areas<input name="focus" value="${escapeHtml(draft.focus)}" placeholder="Optional comma-separated focus areas"></label>
                 </div>
                 <label>Optional exceptions or emphasis<textarea name="instructions" rows="3" placeholder="Leave blank for the versioned workflow"></textarea></label>
-                <div class="curriculum-builder-decks-head"><h3>Draft decks and prerequisite edges</h3><button type="button" data-add-deck>Add deck</button></div>
-                <div data-decks class="curriculum-builder-decks"></div>
+                ${!subjectId ? `<div class="curriculum-builder-decks-head"><h3>Optional deck outline</h3><button type="button" data-add-deck>Add deck</button></div>
+                <div data-decks class="curriculum-builder-decks"></div>` : ''}
             </details>
             <div data-errors class="curriculum-builder-errors" aria-live="polite"></div>
             <div class="curriculum-builder-actions"><button type="submit">Queue AI draft</button></div>
@@ -5882,6 +5875,7 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
         return result;
     };
     const renderDecks = () => {
+        if (!deckList) return validate();
         deckList.innerHTML = '';
         draft.proposedDecks.forEach((deck, index) => {
             const row = document.createElement('div');
@@ -5902,7 +5896,8 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
         });
         validate();
     };
-    content.querySelector('[data-add-deck]').onclick = () => {
+    const addDeck = content.querySelector('[data-add-deck]');
+    if (addDeck) addDeck.onclick = () => {
         draft.proposedDecks.push({ id: '', description: '', prerequisites: [] });
         renderDecks();
     };

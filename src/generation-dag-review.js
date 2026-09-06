@@ -1,7 +1,7 @@
 export function generationJobCategory(request) {
     const type = request?.jobType || request?.job_type;
-    if (type === 'subject-design') return { id: 'subject-dag', label: 'Subject DAG' };
-    if (type === 'deck-plan') return { id: 'deck-dag', label: 'Deck DAG' };
+    if (type === 'subject-design') return { id: 'subject-dag', label: 'Subject curriculum' };
+    if (type === 'deck-plan') return { id: 'deck-dag', label: 'Deck curriculum' };
     if (['chapter-expand', 'deck-build', 'deck-audit'].includes(type)) return { id: 'flashcards', label: 'Flashcards' };
     return { id: 'other', label: 'Other generation' };
 }
@@ -36,7 +36,7 @@ function normalized(value) {
 }
 
 // Only authored curriculum fields count: publication/card counts/provenance are
-// not DAG edits. Keep dependency declarations as well as resolved graph edges.
+// not curriculum edits. Keep dependency declarations as well as resolved graph edges.
 const FIELDS = ['title', 'description', 'order', 'level', 'tier', 'estimated_chapters',
     'prerequisites', 'recommended_after', 'provides', 'resolved_dependencies'];
 
