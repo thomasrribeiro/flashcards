@@ -137,7 +137,20 @@ test.beforeEach(async ({ page }) => {
     const breadcrumbBox = await page.locator('.curriculum-breadcrumb').boundingBox();
     expect(Math.abs(backBox.x - breadcrumbBox.x)).toBeLessThan(1);
     expect(backBox.y).toBeGreaterThanOrEqual(breadcrumbBox.y + breadcrumbBox.height);
-    expect(createBox.y).toBeGreaterThanOrEqual(backBox.y);
+    expect(createBox.y).toBeCloseTo(backBox.y, 0);
+    expect(createBox.height).toBeCloseTo(backBox.height, 0);
+    const inputBox = await page.getByRole('textbox', { name: 'Subject name' }).boundingBox();
+    expect(inputBox.y).toBeCloseTo(backBox.y, 0);
+    expect(inputBox.height).toBeCloseTo(backBox.height, 0);
+    const forwardBox = await page.getByRole('button', { name: 'Forward in curriculum' }).boundingBox();
+    expect(inputBox.x).toBeGreaterThan(forwardBox.x + forwardBox.width);
+    const canvasBox = await page.locator('.curriculum-graph-stage').boundingBox();
+    if (page.viewportSize().width <= 600) {
+        expect(backBox.x).toBeCloseTo(canvasBox.x, 0);
+        expect(createBox.x + createBox.width).toBeCloseTo(canvasBox.x + canvasBox.width, 0);
+    } else {
+        expect(createBox.x + createBox.width - inputBox.x).toBeCloseTo(320, 0);
+    }
     expect(createBox.x + createBox.width).toBeLessThanOrEqual(page.viewportSize().width);
     await expect(page.getByRole('button', { name: 'Queue AI job' })).toHaveText('+');
 });
@@ -349,7 +362,7 @@ test('queues a subject draft only for a signed-in account with a connected model
     await dialog.getByLabel('Subject name').fill('earth-science');
     await expect(dialog.getByLabel('Subject name')).toHaveAttribute('aria-invalid', 'false');
     await expect(subjectError).toBeHidden();
-    await dialog.screenshot({ path: testInfo.outputPath('subject-generation-form.png') });
+    await page.locator('.curriculum-breadcrumb-row').screenshot({ path: testInfo.outputPath('subject-generation-form.png') });
     await dialog.getByRole('button', { name: 'Queue AI job' }).click();
     expect(queuedJob).toBeNull();
     await page.getByRole('dialog', { name: 'Confirm AI generation' }).getByRole('button', { name: 'Cancel', exact: true }).click();
