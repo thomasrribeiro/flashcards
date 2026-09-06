@@ -37,10 +37,13 @@ export function normalizeCurriculumDraft(draft) {
 export function validateCurriculumDraft(input, { existingSubjects = [], allowExistingSubject = false } = {}) {
     const draft = normalizeCurriculumDraft(input);
     const errors = [];
-    if (!SLUG.test(draft.subject)) errors.push('Subject must use lowercase kebab-case.');
-    if (!allowExistingSubject && existingSubjects.some(subject =>
+    const duplicate = !allowExistingSubject && existingSubjects.some(subject =>
         String(typeof subject === 'string' ? subject : subject.id).trim().toLowerCase() === draft.subject
-    )) errors.push(`Subject "${draft.subject}" already exists. Use Subject options to regenerate its curriculum.`);
+    );
+    if (duplicate) errors.push('Subject already exists.');
+    else if (!SLUG.test(allowExistingSubject ? draft.subject : String(input.subject || '').trim())) {
+        errors.push('Use kebab-case: earth-science.');
+    }
     if (!DESTINATIONS.has(draft.destination)) errors.push(`Invalid curriculum destination: ${draft.destination}`);
     if (draft.deckGranularity && !GRANULARITIES.has(draft.deckGranularity)) errors.push(`Invalid deck granularity: ${draft.deckGranularity}`);
     for (const focus of draft.focus) if (!SLUG.test(focus)) errors.push(`Invalid focus slug: ${focus}`);

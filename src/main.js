@@ -5912,7 +5912,8 @@ function openCurriculumBuilder(subjectId = '', registry = null, inlineContainer 
             allowExistingSubject: Boolean(subjectId)
         });
         const subjectErrorMessages = new Set([
-            'Subject must use lowercase kebab-case.'
+            'Use kebab-case: earth-science.',
+            'Subject already exists.'
         ]);
         content.querySelector('[data-subject-errors]').textContent = (showErrors ? result.errors : [])
             .filter(error => subjectErrorMessages.has(error))
@@ -5920,6 +5921,7 @@ function openCurriculumBuilder(subjectId = '', registry = null, inlineContainer 
         content.querySelector('[data-errors]').textContent = (showErrors ? result.errors : [])
             .filter(error => !subjectErrorMessages.has(error))
             .join(' ');
+        field('subject').setAttribute('aria-invalid', String(result.errors.some(error => subjectErrorMessages.has(error))));
         const submit = form.querySelector('[type="submit"]');
         submit.disabled = submitting || !launchAvailable || result.errors.length > 0;
         submit.setAttribute('aria-disabled', String(submit.disabled));

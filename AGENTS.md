@@ -4,6 +4,11 @@ This repository contains the browser application, deterministic deck CLI,
 card parser and identity model, validation scripts, authoring standards, and
 the repo-scoped `$manage-flashcard-decks` skill.
 
+## UI wording
+
+Prioritize concise UI copy. Keep labels, hints, and validation messages short;
+avoid redundant explanations and multi-sentence warnings.
+
 ## Required checks
 
 For application or CLI changes, run:

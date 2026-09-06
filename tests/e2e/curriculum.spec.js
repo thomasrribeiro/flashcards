@@ -330,18 +330,24 @@ test('queues a subject draft only for a signed-in account with a connected model
     expect(modelBox.y).toBeGreaterThanOrEqual(launchBox.y + launchBox.height);
     await expect(dialog.getByLabel('Title')).toHaveCount(0);
     await expect(dialog).not.toContainText('Subject title is required.');
-    const subjectError = dialog.getByText('Subject must use lowercase kebab-case.');
+    const subjectError = dialog.getByText('Use kebab-case: earth-science.');
     await expect(subjectError).toHaveCount(0);
     await dialog.getByLabel('Subject name').fill('not a slug');
     await expect(subjectError).toBeVisible();
+    await dialog.getByLabel('Subject name').fill('earthScience');
+    await expect(subjectError).toBeVisible();
+    await expect(dialog.getByLabel('Subject name')).toHaveAttribute('aria-invalid', 'true');
+    await expect(dialog.getByRole('button', { name: 'Queue AI job' })).toBeDisabled();
     await dialog.getByLabel('Subject name').fill(' MATHEMATICS ');
-    await expect(dialog).toContainText('Subject "mathematics" already exists.');
+    await expect(dialog.locator('[data-subject-errors]')).toHaveText('Subject already exists.');
+    await expect(dialog.locator('[data-errors]')).toBeEmpty();
     await expect(dialog.getByRole('button', { name: 'Queue AI job' })).toBeDisabled();
     // Submitting with Enter must not bypass duplicate-name validation.
     await dialog.getByLabel('Subject name').press('Enter');
     await expect(page.getByRole('dialog', { name: 'Confirm AI generation' })).toHaveCount(0);
     expect(queuedJob).toBeNull();
     await dialog.getByLabel('Subject name').fill('earth-science');
+    await expect(dialog.getByLabel('Subject name')).toHaveAttribute('aria-invalid', 'false');
     await expect(subjectError).toBeHidden();
     await dialog.screenshot({ path: testInfo.outputPath('subject-generation-form.png') });
     await dialog.getByRole('button', { name: 'Queue AI job' }).click();
