@@ -46,6 +46,11 @@ async function installGenerationAccount(page, {
                 id: 'openai', connected: true, status: 'connected', keyHint: '••••test'
             }] } });
         }
+        if (path === '/api/ai/providers/openai/models') {
+            return route.fulfill({ json: { models: ['gpt-test', 'gpt-6-astra'].map(id => ({
+                id, reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max']
+            })) } });
+        }
         if (path === '/api/generation-requests' && request.method() === 'POST') {
             queued = request.postDataJSON();
             onPost(queued);
@@ -88,6 +93,7 @@ async function openCurriculumDeckSettings(page, deckName) {
 async function confirmAIStart(page) {
     const confirmation = page.getByRole('dialog', { name: 'Confirm AI generation' });
     await expect(confirmation).toContainText('Model: gpt-test · Reasoning: High · Provider: OpenAI');
+    await expect(confirmation.getByRole('button', { name: 'Change AI settings' })).toBeVisible();
     await confirmation.getByRole('button', { name: 'Start AI job', exact: true }).click();
 }
 
@@ -400,6 +406,51 @@ test('regenerates a subject curriculum with model disclosure and cancellable pin
     expect(queuedJobs[0]).toMatchObject({ jobType:'subject-design', modelId:'gpt-test', payload:{ subject:'mathematics', reasoningEffort:'high' } });
     expect(queuedJobs[0].payload.proposedDecks).toEqual([]);
     await expect(page.getByRole('dialog', { name: 'Settings' }).getByLabel('Job type: Subject curriculum')).toBeVisible();
+});
+
+test('changes launch settings without losing the subject draft or starting a job on save', async ({ page }, testInfo) => {
+    const queuedJobs = [];
+    await installGenerationAccount(page, { onPost: job => queuedJobs.push(job) });
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    await page.getByRole('button', { name: 'Subject options for mathematics' }).click();
+    await page.getByRole('dialog', { name: 'mathematics', exact: true })
+        .getByRole('button', { name: /Regenerate curriculum/ }).click();
+    const builder = page.getByRole('dialog', { name: 'Regenerate mathematics curriculum', exact: true });
+    await builder.getByText('Advanced options', { exact: true }).click();
+    await builder.getByLabel('Optional exceptions or emphasis').fill('Keep prerequisite bridges explicit.');
+    await builder.getByRole('button', { name: 'Queue AI draft' }).click();
+    const confirmation = page.getByRole('dialog', { name: 'Confirm AI generation' });
+    const change = confirmation.getByRole('button', { name: 'Change AI settings' });
+    await change.click();
+    const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+    await expect(settings.getByRole('tab', { name: 'AI generation', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(builder).toBeHidden();
+    await expect(confirmation).toBeHidden();
+    await expect(page.locator('#generation-model')).toBeEnabled();
+    await page.locator('#generation-model').selectOption('gpt-6-astra');
+    await page.locator('#generation-reasoning').selectOption('max');
+    await settings.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(confirmation).toContainText('Model: gpt-test · Reasoning: High');
+    await expect(change).toBeFocused();
+    expect(queuedJobs).toEqual([]);
+    await change.click();
+    await expect(page.locator('#generation-model')).toHaveValue('gpt-test');
+    await page.locator('#generation-model').selectOption('gpt-6-astra');
+    await page.locator('#generation-reasoning').selectOption('max');
+    await settings.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(settings).toBeHidden();
+    await expect(confirmation).toContainText('Model: gpt-6-astra · Reasoning: Max · Provider: OpenAI');
+    await expect(confirmation.getByRole('status')).toContainText('Settings updated');
+    await expect(builder.getByLabel('Optional exceptions or emphasis')).toHaveValue('Keep prerequisite bridges explicit.');
+    expect(queuedJobs).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath('generation-settings-confirmation.png') });
+    await confirmation.getByRole('button', { name: 'Start AI job', exact: true }).click();
+    await expect.poll(() => queuedJobs.length).toBe(1);
+    expect(queuedJobs[0]).toMatchObject({
+        jobType: 'subject-design', providerId: 'openai', modelId: 'gpt-6-astra',
+        payload: { subject: 'mathematics', reasoningEffort: 'max' }
+    });
+    expect(JSON.stringify(queuedJobs[0])).toContain('Keep prerequisite bridges explicit.');
 });
 
 test('keeps Subject options discoverable without AI access and restores focus when closed', async ({ page }, testInfo) => {

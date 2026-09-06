@@ -5222,9 +5222,10 @@ function confirmGenerationJobs(jobs) {
         };
         overlay.addEventListener('close', () => finish(false));
         const introduction = document.createElement('p');
-        introduction.textContent = `Review the settings for ${jobs.length === 1 ? 'this job' : `these ${jobs.length} jobs`} before starting. Provider usage may incur charges. Results will be drafts for review. To change these settings, cancel and open Settings → AI generation.`;
+        introduction.textContent = `Review the model and reasoning for ${jobs.length === 1 ? 'this job' : `these ${jobs.length} jobs`}. Change AI settings to edit them and return here before starting. Results remain drafts for review. Provider charges may apply.`;
         const list = document.createElement('div');
         list.className = 'generation-launch-list';
+        const settingLabels = [];
         for (const job of jobs) {
             const item = document.createElement('section');
             const title = document.createElement('h3');
@@ -5232,6 +5233,7 @@ function confirmGenerationJobs(jobs) {
             const settings = document.createElement('p');
             settings.className = 'generation-launch-settings';
             settings.textContent = generationModelSummary(job);
+            settingLabels.push(settings);
             item.append(title, settings);
             list.appendChild(item);
         }
@@ -5246,8 +5248,42 @@ function confirmGenerationJobs(jobs) {
         confirm.className = 'btn-primary';
         confirm.textContent = jobs.length === 1 ? 'Start AI job' : `Start ${jobs.length} AI jobs`;
         confirm.onclick = () => finish(true);
-        actions.append(cancel, confirm);
-        content.append(introduction, list, actions);
+        const status = document.createElement('p');
+        status.setAttribute('role', 'status');
+        const changeSettings = document.createElement('button');
+        changeSettings.type = 'button';
+        changeSettings.textContent = 'Change AI settings';
+        changeSettings.onclick = () => {
+            const settingsModal = document.getElementById('study-settings-modal');
+            // Keep every underlying draft intact, but remove its overlay while
+            // Settings is active so it cannot intercept clicks or keyboard focus.
+            const suspended = [...document.querySelectorAll('.curriculum-builder-overlay:not(.hidden)')];
+            suspended.forEach(element => element.classList.add('hidden'));
+            settingsModal.addEventListener('settings-closed', event => {
+                suspended.forEach(element => element.classList.remove('hidden'));
+                if (settled) return;
+                const preferences = event.detail?.generationPreferences;
+                if (preferences) {
+                    const available = Boolean(providerDefinition(preferences.providerId) && preferences.modelId);
+                    confirm.disabled = !available;
+                    if (available) {
+                        jobs.forEach((job, index) => {
+                            job.providerId = preferences.providerId;
+                            job.modelId = preferences.modelId;
+                            job.payload.reasoningEffort = preferences.reasoningEffort;
+                            settingLabels[index].textContent = generationModelSummary(job);
+                        });
+                    }
+                    status.textContent = available
+                        ? 'Settings updated. Review the model and reasoning above, then start when ready.'
+                        : 'AI generation is disabled. Choose a connected provider and model in AI settings before starting.';
+                }
+                changeSettings.focus();
+            }, { once: true });
+            openStudySettings({ tab: 'generation' });
+        };
+        actions.append(cancel, changeSettings, confirm);
+        content.append(introduction, list, status, actions);
         confirm.focus();
     });
 }
@@ -7298,10 +7334,15 @@ function discardPausedPrimaryStudySession() {
     clearStudySession();
 }
 
-function closeStudySettings() {
-    document.getElementById('study-settings-modal')?.classList.add('hidden');
+function closeStudySettings({ generationPreferences = null } = {}) {
+    const modal = document.getElementById('study-settings-modal');
+    const wasOpen = modal && !modal.classList.contains('hidden');
+    modal?.classList.add('hidden');
     document.getElementById('study-settings-btn')?.setAttribute('aria-expanded', 'false');
     closeAIProviderConnectPanel();
+    if (wasOpen) modal.dispatchEvent(new CustomEvent('settings-closed', {
+        detail: { generationPreferences }
+    }));
 }
 
 function activateStudySettingsTab(name, { focus = false } = {}) {
@@ -7684,6 +7725,7 @@ async function openStudySettings({ tab = 'study', focusRequestId = null } = {}) 
     button.setAttribute('aria-expanded', 'true');
     activateStudySettingsTab(tab);
     if (tab === 'agents') renderGenerationActivitySettings({ focusRequestId });
+    else if (tab === 'generation') generationProvider.focus();
     else target.focus();
 
     loadAIProviderConnections(generation.providerId).catch(error => {
@@ -7767,7 +7809,7 @@ async function saveStudySettingsFromForm(event) {
     const wantsReminder = reminderEnabled.value === 'true';
     // Keep settings responsive even when the service-worker readiness promise
     // takes time (notably in a fresh browser or an iOS standalone launch).
-    closeStudySettings();
+    closeStudySettings({ generationPreferences: getGenerationPreferences() });
     if (curriculumSourcesChanged) {
         curriculumIndex = await reloadCurriculumIndex().catch(error => {
             console.warn('[Curriculum] Updated sources could not be loaded:', error);

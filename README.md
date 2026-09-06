@@ -294,8 +294,10 @@ prescribed outline. Advanced options let you specify focus and emphasis;
 an optional manual deck outline is available only when creating a new subject.
 Every website generation
 launch, including prerequisite batches, confirms the exact provider, model, and
-reasoning effort before queueing; cancelling creates no job. Change defaults
-under Settings → AI generation, then restart the launch flow.
+reasoning effort before queueing; cancelling creates no job. Use **Change AI
+settings** in that confirmation to edit the defaults in Settings → AI generation.
+Saving returns to the preserved draft and updated confirmation; a separate Start
+action is still required. Cancelling Settings keeps the disclosed launch settings.
 
 In the Curriculum view, select a planned deck and use **Generate pilot
 chapter** to enqueue that same isolated deck pipeline. After the pilot passes
