@@ -2491,18 +2491,19 @@ test('mobile overview starts fitted and centered and preserves zoom on rotation'
     await expect.poll(scale).toBeGreaterThan(fitted);
     await page.getByRole('button', { name: 'Fit', exact: true }).click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').tap();
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–2 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
 });
 
-test('mobile subject layers show two readable columns including first and last layers', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'mobile-chromium');
+test('mobile subject layers show three readable columns with the center layer labeled', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'desktop-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     const stage = page.locator('.curriculum-graph-stage');
-    await expect(page.locator('.curriculum-layer-label')).toContainText('Layers 1–2 of');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
     await expect(page.getByRole('button', { name: 'Show previous dependency layer' })).toBeDisabled();
     const count = Number((await page.locator('.curriculum-layer-label').textContent()).split(' of ')[1]);
-    for (let rank = 1; rank < count; rank += 1) {
+    for (let rank = 1; rank < count - 1; rank += 1) {
         await expect(stage).toHaveAttribute('data-scroll-layer', String(rank));
+        await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer ${rank + 1} of ${count}`);
         const metrics = await stage.evaluate(element => {
             const bounds = element.getBoundingClientRect();
             const nodes = [...element.querySelectorAll('.curriculum-graph-node')].filter(node => {
@@ -2524,21 +2525,32 @@ test('mobile subject layers show two readable columns including first and last l
                 })
             };
         });
-        expect(metrics).toEqual({ ranks: [rank - 1, rank], wholeNodes: true, readable: true });
+        expect(metrics).toEqual({ ranks: [rank - 1, rank, rank + 1], wholeNodes: true, readable: true });
+        const centered = await stage.locator(`.curriculum-graph-node[data-rank="${rank}"]`).first().evaluate(node => {
+            const box = node.getBoundingClientRect();
+            const canvas = node.closest('.curriculum-graph-stage').getBoundingClientRect();
+            return Math.abs(box.left + box.width / 2 - (canvas.left + canvas.width / 2)) < 1;
+        });
+        expect(centered).toBe(true);
         if (rank === 2) {
             await page.locator('#curriculum-view').screenshot({ path: testInfo.outputPath('mobile-subject-column.png') });
             const focal = stage.locator(`.curriculum-graph-node[data-rank="${rank}"]`).last();
             await focal.scrollIntoViewIfNeeded();
             await expect(focal).toBeInViewport();
         }
-        if (rank < count - 1) await page.getByRole('button', { name: 'Show next dependency layer' }).click();
+        if (rank < count - 2) await page.getByRole('button', { name: 'Show next dependency layer' }).click();
     }
     await expect(page.getByRole('button', { name: 'Show next dependency layer' })).toBeDisabled();
     await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
-    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 2));
+    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 3));
+    await page.setViewportSize({ width: 320, height: 700 });
+    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 3));
+    await expect.poll(() => stage.locator('.curriculum-graph-node-name').evaluateAll(labels =>
+        labels.every(label => label.scrollHeight <= label.clientHeight + 1)
+    )).toBe(true);
     await page.setViewportSize({ width: 844, height: 390 });
     await expect(stage).toHaveClass(/is-compact/);
-    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 2));
+    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 3));
 });
 
 test('subject overview emphasizes names without redundant labels', async ({ page }, testInfo) => {
@@ -2584,7 +2596,7 @@ test('mobile layered scrolling keeps later columns fixed through resize and focu
                     return rect.left >= box.left && rect.right <= box.right;
                 }).map(node => Number(node.dataset.rank)));
             return [...ranks].sort((a, b) => a - b);
-        })).toEqual([tallRank - 1, tallRank]);
+        })).toEqual([tallRank - 1, tallRank, tallRank + 1]);
     };
     await assertColumns();
     // Mobile browser bars change viewport height during a vertical gesture.
@@ -2620,20 +2632,28 @@ test(`mobile ${column} columns scroll with touch through the last node`, async (
         await page.getByRole('button', { name: 'Show next dependency layer' }).click();
     }
     await stage.scrollIntoViewIfNeeded();
+    // Simulate the browser bars collapsing once the canvas is on screen.
+    await page.setViewportSize({ width: 390, height: 900 });
+    await stage.scrollIntoViewIfNeeded();
     await expect.poll(() => stage.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(100);
     const initialTop = await stage.evaluate(element => element.scrollTop);
     const client = await page.context().newCDPSession(page);
-    const swipe = async () => {
+    const swipe = async (distance = 180) => {
         const box = await stage.boundingBox();
         const nodeBox = await stage.locator(`.curriculum-graph-node[data-rank="${tallRank}"]`).first().boundingBox();
         const x = nodeBox.x + nodeBox.width / 2;
         const bottom = Math.min(box.y + box.height - 24, page.viewportSize().height - 24);
-        const top = Math.max(box.y + 24, bottom - 180);
-        await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: bottom, id: 1 }] });
+        const top = Math.max(box.y + 24, bottom - Math.min(180, Math.max(24, Math.abs(distance))));
+        const start = distance >= 0 ? bottom : top;
+        const end = distance >= 0 ? top : bottom;
+        await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: start, id: 1 }] });
         for (let i = 1; i <= 6; i += 1) {
-            await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: bottom + (top - bottom) * i / 6, id: 1 }] });
+            await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: start + (end - start) * i / 6, id: 1 }] });
             await page.waitForTimeout(20);
         }
+        // A controlled drag, not a fling that can skip the target now that a
+        // taller neighboring column may extend beyond it.
+        await page.waitForTimeout(120);
         await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
         await expect(stage).toHaveAttribute('data-scroll-layer', String(tallRank));
         expect(await stage.evaluate(element => element.scrollLeft)).toBe(0);
@@ -2646,13 +2666,15 @@ test(`mobile ${column} columns scroll with touch through the last node`, async (
     await expect.poll(() => stage.evaluate(element => element.scrollTop)).toBeGreaterThan(initialTop + 30);
     const lastNode = stage.locator(`.curriculum-graph-node[data-rank="${tallRank}"]`).last();
     for (let i = 0; i < 15; i += 1) {
-        const visible = await lastNode.evaluate(node => {
+        const remaining = await lastNode.evaluate(node => {
             const rect = node.getBoundingClientRect();
             const stage = node.closest('.curriculum-graph-stage').getBoundingClientRect();
-            return rect.bottom <= stage.bottom && rect.top >= stage.top;
+            if (rect.top < stage.top) return rect.top - stage.top - 12;
+            if (rect.bottom > stage.bottom) return rect.bottom - stage.bottom + 12;
+            return 0;
         });
-        if (visible) break;
-        await swipe();
+        if (!remaining) break;
+        await swipe(remaining);
     }
     await expect(lastNode).toBeInViewport({ ratio: 0.95 });
     await stage.screenshot({ path: testInfo.outputPath('mobile-column-scrolled.png') });

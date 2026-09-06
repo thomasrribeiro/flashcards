@@ -4702,6 +4702,11 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-graph-stage.is-compact .curriculum-graph-node-subject,
 .curriculum-graph-stage.is-compact .curriculum-graph-node-status { font-size: 11px; }
 .curriculum-graph-stage.is-compact.is-layered .curriculum-graph-node-name { font-size: 12px; }
+.curriculum-graph-stage.is-compact.is-layered .curriculum-graph-node { padding-inline: 6px; }
+.curriculum-graph-stage.is-compact.is-layered .curriculum-graph-node-subject {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
 .curriculum-graph-stage.is-compact.is-layered .curriculum-graph-node-subject,
 .curriculum-graph-stage.is-compact.is-layered .curriculum-graph-node-status { font-size: 9px; }
 
