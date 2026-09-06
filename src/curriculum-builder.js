@@ -16,9 +16,9 @@ export function titleForSubject(subject) {
 export function normalizeCurriculumDraft(draft) {
     return {
         subject: String(draft.subject || '').trim().toLowerCase(),
-        title: String(draft.title || '').trim(),
+        title: String(draft.title || titleForSubject(draft.subject)).trim(),
         destination: draft.destination || 'whole-field',
-        deckGranularity: draft.deckGranularity || 'course',
+        ...(draft.deckGranularity ? { deckGranularity: draft.deckGranularity } : {}),
         focus: Array.isArray(draft.focus)
             ? draft.focus
             : String(draft.focus || '').split(',').map(value => value.trim()).filter(Boolean),
@@ -34,13 +34,15 @@ export function normalizeCurriculumDraft(draft) {
     };
 }
 
-export function validateCurriculumDraft(input) {
+export function validateCurriculumDraft(input, { existingSubjects = [], allowExistingSubject = false } = {}) {
     const draft = normalizeCurriculumDraft(input);
     const errors = [];
     if (!SLUG.test(draft.subject)) errors.push('Subject must use lowercase kebab-case.');
-    if (!draft.title) errors.push('Subject title is required.');
+    if (!allowExistingSubject && existingSubjects.some(subject =>
+        String(typeof subject === 'string' ? subject : subject.id).trim().toLowerCase() === draft.subject
+    )) errors.push(`Subject "${draft.subject}" already exists. Use Subject options to regenerate its curriculum.`);
     if (!DESTINATIONS.has(draft.destination)) errors.push(`Invalid curriculum destination: ${draft.destination}`);
-    if (!GRANULARITIES.has(draft.deckGranularity)) errors.push(`Invalid deck granularity: ${draft.deckGranularity}`);
+    if (draft.deckGranularity && !GRANULARITIES.has(draft.deckGranularity)) errors.push(`Invalid deck granularity: ${draft.deckGranularity}`);
     for (const focus of draft.focus) if (!SLUG.test(focus)) errors.push(`Invalid focus slug: ${focus}`);
     const ids = new Set();
     for (const deck of draft.proposedDecks) {
@@ -68,6 +70,8 @@ export function validateCurriculumDraft(input) {
 }
 
 export function generationJobForDraft(input, {
+    operation = 'create',
+    existingSubjects = [],
     registryId = 'thomas-ribeiro',
     targetRepository = 'thomasrribeiro-flashcards/curricula',
     providerId = 'codex',
@@ -79,7 +83,8 @@ export function generationJobForDraft(input, {
     registryRef,
     catalogPath
 } = {}) {
-    const { draft, errors } = validateCurriculumDraft(input);
+    if (!['create', 'regenerate'].includes(operation)) throw new Error('Invalid subject generation operation.');
+    const { draft, errors } = validateCurriculumDraft(input, { existingSubjects, allowExistingSubject: operation === 'regenerate' });
     if (errors.length) throw new Error(errors.join('\n'));
     if (!modelId) throw new Error('Choose an exact model before generating a reproducible curriculum.');
     const provenance = subjectDesignProvenance({
@@ -95,6 +100,6 @@ export function generationJobForDraft(input, {
         targetRepository,
         providerId,
         modelId: modelId || null,
-        payload: { ...draft, ...provenance, reasoningEffort }
+        payload: { ...draft, ...provenance, reasoningEffort, operation }
     };
 }

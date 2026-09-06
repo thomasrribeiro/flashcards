@@ -8,7 +8,6 @@ convention decisions there.
 - Long-term capabilities: TODO
 - Requested destination: TODO
 - Focus branches: TODO
-- Deck granularity: TODO
 
 ## Field coverage
 
@@ -29,9 +28,9 @@ Each created deck then records its inherited direct edges in `deck.toml`.
 Hard prerequisites are required inbound knowledge; recommended sequencing is
 helpful but is not inherited as a prerequisite.
 
-| Order | Deck | Level | Tier | Hard prerequisites | Recommended after | Est. chapters | Durable capabilities | Status |
-|---:|---|---|---|---|---|---:|---|---|
-| 1 | TODO | foundational | core | None | None | TODO | TODO | proposed |
+| Order | Deck | Level | Tier | Hard prerequisites | Recommended after | Durable capabilities | Status |
+|---:|---|---|---|---|---|---|---|
+| 1 | TODO | foundational | core | None | None | TODO | proposed |
 
 ## Cross-deck concepts
 

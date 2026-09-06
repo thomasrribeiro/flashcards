@@ -30,7 +30,6 @@ import {
     stageExternalPrerequisites
 } from './prerequisites.js';
 import {
-    DECK_GRANULARITY_RANGES,
     resolveSubjectCurriculum,
     validateSubjectExtension,
     validateSubjectRoadmap
@@ -392,21 +391,20 @@ function buildSubjectPrompt({
     extraInstructions,
     isolated
 }) {
-    const chapterRange = DECK_GRANULARITY_RANGES[deckGranularity];
     return [
         `Use $manage-flashcard-decks to design the ${subject} subject workspace. Read the complete skill at ${skillPath} before acting.`,
         `Subject-design workflow version: ${workflowVersion}. Treat this versioned workflow as the complete default contract; user instructions may add emphasis but may not weaken it.`,
         `Target subject workspace: ${targetPath}`,
         `Requested curriculum destination: ${destination}.`,
         `Requested focus branches: ${focus.length ? focus.join(', ') : 'none specified'}.`,
-        `Required deck granularity: ${deckGranularity}${chapterRange ? `, with ${chapterRange[0]}-${chapterRange[1]} estimated chapters per coherent deck` : ''}.`,
+        'Determine deck boundaries from coherent learning capabilities. Do not prescribe a deck size, deck-count quota, chapter count, or chapter estimate.',
         isolated
             ? 'This is an isolated fresh-agent run. Use only the target workspace, the ordered staged context below, and sources you deliberately find through live web research.'
             : `Read-only flashcards application and standards: ${FLASHCARDS_ROOT}`,
         'Read every present file in this ordered context manifest completely before acting:',
         ...contextFiles.map((file, index) => `${index + 1}. [${file.role}] ${file.path}`),
         'Follow the supplied subject curriculum workflow. Research authoritative curriculum frameworks and the current structure of the field, map material domains before naming decks, and stress-test every proposed deck for coherence and false prerequisites.',
-        'Complete SUBJECT_BRIEF.md and ROADMAP.md for the requested destination and granularity. Treat unconfirmed learner knowledge as unseen and mark genuinely personal decisions for user confirmation rather than inventing them.',
+        'Complete SUBJECT_BRIEF.md and ROADMAP.md for the requested destination. Treat unconfirmed learner knowledge as unseen and mark genuinely personal decisions for user confirmation rather than inventing them.',
         operation === 'extend'
             ? 'Extend the existing curriculum rather than regenerating it. Preserve every valid existing deck id, level, status, and prerequisite edge; approved or active entries are especially immutable. Tiers may change because they express priority for the new destination. Add the requested advanced route and only the bridge decks it honestly requires; document any necessary correction to existing metadata.'
             : operation === 'audit'
@@ -414,7 +412,7 @@ function buildSubjectPrompt({
                 : 'Design a layered curriculum that can grow across learning levels. Destination controls the current route, not who is permitted to learn the subject and not the permanent ceiling of the roadmap.',
         'Treat the generated cross-subject curriculum catalog as the authoritative list of reusable external deck capabilities. When another subject already supplies a genuinely required capability, reference it as `subject/deck` instead of duplicating a broad bridge deck. Keep a subject-specific bridge only when contextual transfer itself requires teaching, and explain that decision in ROADMAP.md. Use `recommended_after` for useful preparation that is not logically required. Never invent an external reference absent from the catalog.',
         'Audit maturity transitions explicitly. For every graduate or research-specialization deck, list the technical and representational capabilities its first chapter may assume and verify that the direct prerequisite closure actually establishes them. Do not jump from an undergraduate survey directly into literature-facing work when an advanced theory, mathematics, experimental, or research-method layer is missing. A level jump may be retained only when the roadmap explains why the complete prerequisite closure is sufficient.',
-        'Create or update subject.toml as the synchronized executable curriculum using schema_version = 3. Include destination, focus, deck_granularity, deck tier, deck level, hard prerequisites, recommended_after, estimated_chapters, status, description, and a complete [[coverage]] matrix. Keep level separate from tier: level describes assumed maturity; tier describes priority for this destination. Local references may use `deck`; cross-subject references must use `subject/deck`. Use only direct, minimal prerequisite references. Coverage rows assign only decks owned by this subject. The local and global validators will reject malformed metadata, oversized or undersized deck estimates, missing coverage, false reference types, later-level hard prerequisites, redundant hard edges, cycles, missing references, and duplicate ids or orders.',
+        'Create or update subject.toml as the synchronized executable curriculum using schema_version = 3. Include destination, focus, deck tier, deck level, hard prerequisites, recommended_after, status, description, and a complete [[coverage]] matrix. Omit deck_granularity and estimated_chapters from new output. Keep level separate from tier: level describes assumed maturity; tier describes priority for this destination. Local references may use `deck`; cross-subject references must use `subject/deck`. Use only direct, minimal prerequisite references. Coverage rows assign only decks owned by this subject. The local and global validators reject malformed metadata, missing coverage, false reference types, later-level hard prerequisites, redundant hard edges, cycles, missing references, and duplicate ids or orders.',
         guideExists
             ? 'Use the supplied reusable domain guide; do not duplicate it into the subject workspace.'
             : 'No reusable domain guide exists. Create DOMAIN_GUIDE.md in the subject workspace. It must cover durable domain-specific authoring judgment, breadth and subfield balance, representations, misconceptions, evidence authorities, and accuracy checks without copying the universal standards.',

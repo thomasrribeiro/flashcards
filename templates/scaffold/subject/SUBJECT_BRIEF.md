@@ -13,7 +13,6 @@ curriculum belongs in `subject.toml`.
 - Current domain mastery: none unless explicitly confirmed here
 - Requested destination and use horizon: TODO
 - Graduate or research focus branches: TODO
-- Deck granularity: TODO
 - Durable capabilities: TODO
 - Deliberate exclusions: TODO
 

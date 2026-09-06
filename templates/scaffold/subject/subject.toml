@@ -1,14 +1,13 @@
 schema_version = 3
 subject = "{{SUBJECT}}"
 destination = "{{DESTINATION}}"
-deck_granularity = "{{DECK_GRANULARITY}}"
 focus = [{{FOCUS}}]
 
 # The subject agent replaces this empty scaffold with a topologically ordered
 # curriculum. Local prerequisite references name earlier deck ids in this
 # subject; cross-subject references use "subject/deck" and must exist in the
-# collection-wide catalog. The default course granularity expects a coherent
-# deck estimated at 6-14 ordered chapters.
+# collection-wide catalog. Determine deck boundaries from coherent learning
+# capabilities without deck-count quotas or chapter estimates.
 #
 # [[decks]]
 # id = "foundations"
@@ -17,7 +16,6 @@ focus = [{{FOCUS}}]
 # level = "foundational"
 # prerequisites = []
 # recommended_after = []
-# estimated_chapters = 8
 # status = "proposed"
 # description = "Durable capabilities established by this deck."
 #

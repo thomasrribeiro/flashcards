@@ -3991,8 +3991,7 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-builder-actions { justify-content: flex-end; }
 .curriculum-builder-actions button { background: var(--gold); }
 .curriculum-builder-launch { text-align: right; }
-.curriculum-launch-model { margin: 8px 0 0; font-size: 0.72rem; overflow-wrap: anywhere; }
-.curriculum-builder-launch .study-settings-help { margin: 4px 0 0; }
+.curriculum-launch-model { margin: 8px 0 0; font-size: 0.6rem; color: var(--muted); overflow-wrap: anywhere; }
 .curriculum-builder-deck {
     display: grid;
     grid-template-columns: 32px minmax(150px, .8fr) minmax(220px, 1.4fr) minmax(210px, 1fr) auto;

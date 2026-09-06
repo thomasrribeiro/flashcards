@@ -453,6 +453,42 @@ rationale = "The destination is biology rather than clinical practice."
         expect(graph.coverage).toHaveLength(4);
     });
 
+    it('validates whole-field curricula without deck sizes or chapter estimates', async () => {
+        const notesRoot = await temporaryRoot();
+        const { subjectPath } = await ensureSubject({ subject: 'physics', notesRoot });
+        const manifestPath = path.join(subjectPath, 'subject.toml');
+        const scaffold = await readFile(manifestPath, 'utf8');
+        expect(scaffold).not.toContain('deck_granularity');
+        expect(scaffold).not.toContain('estimated_chapters');
+        const ids = Array.from({ length: 75 }, (_, index) => `capability-${index + 1}`);
+        const manifest = `schema_version = 3\nsubject = "physics"\ndestination = "whole-field"\nfocus = []\n` + ids.map((id, index) => `
+[[decks]]
+id = "${id}"
+order = ${index + 1}
+tier = "core"
+level = "foundational"
+prerequisites = []
+recommended_after = []
+status = "proposed"
+description = "Test capability."
+`).join('') + `\n[[coverage]]\ndomain = "physics"\ndisposition = "included"\ndecks = ${JSON.stringify(ids)}\nrationale = "Test coverage."\n`;
+        await writeFile(manifestPath, manifest);
+        await writeFile(path.join(subjectPath, 'ROADMAP.md'), '# Physics\n\n## Deck sequence\n\n' +
+            '| Order | Deck | Level | Tier | Hard prerequisites | Recommended after | Durable capabilities | Status |\n' +
+            '|---|---|---|---|---|---|---|---|\n' + ids.map((id, index) =>
+                `| ${index + 1} | ${id} | foundational | core | None | None | Test capability. | proposed |`
+            ).join('\n'));
+        const graph = resolveSubjectCurriculum(subjectPath, { requireDecks: true });
+        expect(graph.errors).toEqual([]);
+        expect(graph.decks).toHaveLength(75);
+        expect(graph.decks.every(deck => deck.estimatedChapters === undefined)).toBe(true);
+        expect(validateSubjectRoadmap(subjectPath, graph)).toEqual([]);
+        // Legacy metadata is accepted without reinstating its former size cap.
+        await writeFile(manifestPath, manifest.replace('focus = []', 'focus = []\ndeck_granularity = "course"')
+            .replace('order = 1\n', 'order = 1\nestimated_chapters = 1000\n'));
+        expect(resolveSubjectCurriculum(subjectPath, { requireDecks: true }).errors).toEqual([]);
+    });
+
     it('rejects incoherent schema-v2 curriculum metadata', async () => {
         const notesRoot = await temporaryRoot();
         const { subjectPath } = await ensureSubject({ subject: 'physics', notesRoot });
@@ -495,7 +531,7 @@ rationale = "Later."
 `);
 
         const errors = resolveSubjectCurriculum(subjectPath, { requireDecks: true }).errors.join('\n');
-        expect(errors).toContain('outside the course range 6-14');
+        expect(errors).not.toContain('outside the course range');
         expect(errors).toContain('tier must be one of core, recommended, specialization');
         expect(errors).toContain('cannot be both a prerequisite and recommended_after');
         expect(errors).toContain('included coverage must name at least one deck');
@@ -699,8 +735,12 @@ rationale = "Test fixture."
             '| mathematics/linear-algebra | 10 | Apply advanced physical models. |',
             '| mathematics/linear-algebra | Apply advanced physical models. |'
         ));
-        expect(validateSubjectRoadmap(subjectPath, graph).join('\n'))
-            .toContain('deck row must have 9 cells');
+        expect(validateSubjectRoadmap(subjectPath, graph)).toEqual([]);
+        await writeFile(roadmapPath, (await readFile(roadmapPath, 'utf8')).replace(
+            '| mathematics/linear-algebra | Apply advanced physical models. |',
+            '| mathematics/linear-algebra |'
+        ));
+        expect(validateSubjectRoadmap(subjectPath, graph).join('\n')).toContain('deck row must have 8 cells');
     });
 
     it('rejects missing, later, duplicate, and cyclic subject deck edges', async () => {
@@ -1910,7 +1950,9 @@ describe('flashcards CLI validation and Codex handoff', () => {
         expect(invocation.prompt).toContain('Create DOMAIN_GUIDE.md');
         expect(invocation.prompt).toContain('subject.toml');
         expect(invocation.prompt).toContain('Requested curriculum destination: whole-field');
-        expect(invocation.prompt).toContain('Required deck granularity: module, with 3-7 estimated chapters');
+        expect(invocation.prompt).toContain('Do not prescribe a deck size, deck-count quota, chapter count, or chapter estimate.');
+        expect(invocation.prompt).not.toContain('3-7');
+        expect(invocation.prompt).toContain('Omit deck_granularity and estimated_chapters from new output.');
         expect(invocation.prompt).toContain('schema_version = 3');
         expect(invocation.prompt).toContain('deck level');
         expect(invocation.prompt).toContain('complete [[coverage]] matrix');

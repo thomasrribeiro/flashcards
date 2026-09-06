@@ -5848,41 +5848,32 @@ function renderCurriculumSettingsSources() {
 
 function openCurriculumBuilder(subjectId = '', registry = null) {
     const targetRegistry = registry || curriculumRegistryForView(curriculumIndex, { subjectId });
-    const targetRepository = targetRegistry?.repository || 'the active curriculum registry';
-    const subjectMeta = curriculumIndex.subjects?.find(item => item.id === subjectId) || {};
     const draft = {
         subject: subjectId,
-        title: subjectId ? subjectId.replaceAll('-', ' ').replace(/\b\w/g, value => value.toUpperCase()) : '',
-        destination: subjectMeta.destination || 'whole-field',
-        deckGranularity: subjectMeta.deck_granularity || 'course',
-        focus: Array.isArray(subjectMeta.focus) ? subjectMeta.focus : []
+        destination: 'whole-field'
     };
     const { overlay, content, close } = curriculumOverlay(subjectId ? `Regenerate ${subjectId} curriculum` : 'Create subject');
     content.innerHTML = `<form class="curriculum-builder-form">
             ${subjectId ? `<p class="study-settings-help">Create a revised curriculum draft using the existing curriculum as reference, without prescribing its current deck outline. Nothing changes until you review and apply the draft.</p>` : ''}
-            <div class="curriculum-builder-grid">
+            <div>
                 <div class="curriculum-builder-field">
                     <label>Subject name<input name="subject" value="${escapeHtml(draft.subject)}" placeholder="earth-science" aria-describedby="curriculum-subject-name-hint" ${subjectId ? 'readonly' : ''}></label>
                     <p id="curriculum-subject-name-hint" class="curriculum-builder-field-error" data-subject-errors aria-live="polite"></p>
                 </div>
-                <label>Destination<select name="destination"><option>literacy</option><option>undergraduate-core</option><option>graduate-core</option><option>whole-field</option><option value="research-specialization" ${draft.focus.length ? '' : 'disabled'}>research-specialization${draft.focus.length ? '' : ' (requires a saved focus)'}</option></select></label>
-                <label>Deck size<select name="deckGranularity"><option value="module">module</option><option value="course">course</option><option value="broad-area">broad-area</option></select></label>
             </div>
+            <p class="study-settings-help">Whole-field curriculum: foundations, undergraduate, graduate, and advanced topics as needed.</p>
             <div data-errors class="curriculum-builder-errors" aria-live="polite"></div>
             <div class="curriculum-builder-launch">
-                <div class="curriculum-builder-actions"><button type="submit" aria-describedby="curriculum-launch-model curriculum-launch-settings-hint">Queue AI job</button></div>
+                <div class="curriculum-builder-actions"><button type="submit" aria-describedby="curriculum-launch-model">Queue AI job</button></div>
                 <p id="curriculum-launch-model" class="curriculum-launch-model" aria-live="polite"></p>
-                <p id="curriculum-launch-settings-hint" class="study-settings-help">Change in Settings → AI generation.</p>
             </div>
         </form>`;
     const form = content.querySelector('form');
     const field = name => form.elements.namedItem(name);
-    field('destination').value = draft.destination;
-    field('deckGranularity').value = draft.deckGranularity;
     const renderLaunchSettings = () => {
         const preferences = getGenerationPreferences();
         content.querySelector('#curriculum-launch-model').textContent = preferences.modelId
-            ? `(${preferences.modelId} ${preferences.reasoningEffort})`
+            ? `${preferences.modelId} ${preferences.reasoningEffort}`
             : 'No model selected';
     };
     const settingsModal = document.getElementById('study-settings-modal');
@@ -5898,17 +5889,18 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
     const readDraft = () => ({
         subject: field('subject').value,
         title: titleForSubject(field('subject').value),
-        destination: field('destination').value,
-        deckGranularity: field('deckGranularity').value,
-        focus: draft.focus,
+        destination: draft.destination,
+        focus: [],
         instructions: '',
         proposedDecks: []
     });
     const validate = () => {
-        const result = validateCurriculumDraft(readDraft());
+        const result = validateCurriculumDraft(readDraft(), {
+            existingSubjects: curriculumIndex.subjects || [],
+            allowExistingSubject: Boolean(subjectId)
+        });
         const subjectErrorMessages = new Set([
-            'Subject must use lowercase kebab-case.',
-            'Subject title is required.'
+            'Subject must use lowercase kebab-case.'
         ]);
         content.querySelector('[data-subject-errors]').textContent = result.errors
             .filter(error => subjectErrorMessages.has(error))
@@ -5916,15 +5908,19 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
         content.querySelector('[data-errors]').textContent = result.errors
             .filter(error => !subjectErrorMessages.has(error))
             .join(' ');
+        form.querySelector('[type="submit"]').disabled = result.errors.length > 0;
         return result;
     };
     form.addEventListener('input', validate);
     form.onsubmit = async event => {
         event.preventDefault();
+        if (validate().errors.length) return;
         if (!githubAuth.isAuthenticated()) return alert('Sign in with GitHub to queue a curriculum draft.');
         try {
             const generationPreferences = await connectedWebsiteGenerationPreferences();
             const job = generationJobForDraft(readDraft(), {
+                operation: subjectId ? 'regenerate' : 'create',
+                existingSubjects: curriculumIndex.subjects || [],
                 registryId: targetRegistry?.id,
                 targetRepository: targetRegistry?.repository,
                 providerId: generationPreferences.providerId,

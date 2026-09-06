@@ -291,10 +291,14 @@ subject curriculum draft. The menu stays available without AI access and
 explains any unmet generation requirements. Regeneration uses the current
 curriculum as reference but does not submit its existing decks as a manually
 prescribed outline. The subject form contains no advanced options or manual deck
-outline. **Queue AI job** shows the selected model and reasoning beneath it,
-with a reminder to change them in Settings → AI generation.
-Research specialization requires a saved subject focus; it is disabled in this
-simplified form when no focus is available.
+outline. **Queue AI job** shows the selected model and reasoning beneath it
+in small, muted text.
+The browser always requests whole-field coverage: foundations, undergraduate,
+graduate, and advanced topics as needed. There are no Destination or Deck size
+dropdowns. Existing subject names cannot be created again; use regeneration.
+Subject generation selects coherent deck boundaries without deck-count quotas
+or chapter estimates. New scaffolds and roadmap tables omit estimates; legacy
+metadata remains readable without enforcing its old chapter-count ranges.
 Every website generation
 launch, including prerequisite batches, confirms the exact provider, model, and
 reasoning effort before queueing; cancelling creates no job. Use **Change AI

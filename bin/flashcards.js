@@ -53,7 +53,7 @@ import {
 import { FLASHCARDS_ROOT, resolveNotesRoot, resolvePath } from './lib/paths.js';
 import { preserveDeckNamespace, stabilizeDeck, validateDeck } from './lib/validation.js';
 import {
-    DECK_GRANULARITY_RANGES,
+    DECK_GRANULARITIES,
     formatSubjectCurriculum,
     resolveSubjectCurriculum,
     SUBJECT_DESTINATIONS,
@@ -407,8 +407,8 @@ subject
     .addOption(new Option('--destination <destination>', 'Curriculum destination')
         .choices(SUBJECT_DESTINATIONS)
         .default('whole-field'))
-    .addOption(new Option('--deck-granularity <granularity>', 'Target size for one deck repository')
-        .choices(Object.keys(DECK_GRANULARITY_RANGES))
+    .addOption(new Option('--deck-granularity <granularity>', 'Legacy compatibility option; does not constrain generated deck sizes')
+        .choices(DECK_GRANULARITIES)
         .default('course'))
     .option('--focus <area>', 'Graduate or research focus in lowercase kebab-case; repeat as needed', collect, [])
     .option('--instructions <text>', 'Append task-specific instructions')
@@ -467,8 +467,8 @@ subject
     .description('Extend an existing subject with graduate or research-level routes')
     .addOption(new Option('--destination <destination>', 'Destination for the extension')
         .choices(SUBJECT_DESTINATIONS))
-    .addOption(new Option('--deck-granularity <granularity>', 'Target size for new deck repositories')
-        .choices(Object.keys(DECK_GRANULARITY_RANGES)))
+    .addOption(new Option('--deck-granularity <granularity>', 'Legacy compatibility option; does not constrain generated deck sizes')
+        .choices(DECK_GRANULARITIES))
     .option('--focus <area>', 'Graduate or research focus in lowercase kebab-case; repeat as needed', collect, [])
     .option('--no-isolated', 'Use the legacy local workspace instead of a fresh staged run')
     .option('--model <model>', 'Override the model configured in Codex')
@@ -983,6 +983,9 @@ addAgentOptions(requests
                 const focus = Array.isArray(payload.focus) ? payload.focus : [];
                 validateSubjectOptions(destination, focus);
                 const existingSubject = existsSync(path.join(registry.subjectsRoot, payload.subject, 'subject.toml'));
+                if (payload.operation === 'create' && existingSubject) {
+                    throw new Error(`Subject "${payload.subject}" already exists. Use subject regeneration instead.`);
+                }
                 const subjectOperation = existingSubject ? 'audit' : 'create';
                 const subjectResult = await ensureSubject({
                     subject: payload.subject,

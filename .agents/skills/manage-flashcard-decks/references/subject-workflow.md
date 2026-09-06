@@ -5,8 +5,7 @@ The goal is a learnable curriculum, not merely a taxonomy of the field.
 
 ## Honor the requested destination
 
-The CLI supplies a destination and deck granularity. Treat them as design
-constraints:
+The CLI supplies a destination. Treat it as a design constraint:
 
 - `literacy`: durable conceptual and practical literacy without simulating a
   complete major;
@@ -33,7 +32,9 @@ allowed to study it.” Use `out-of-scope` only for material outside the subject
 or declared practice horizon.
 
 For `research-specialization`, honor every CLI-supplied focus slug. For
-`whole-field`, map representative advanced routes without pretending that
+`whole-field`, include basic concepts, undergraduate foundations, graduate study,
+and advanced routes as the field requires. Do not infer prior mastery from this
+broad destination. Map representative advanced routes without pretending that
 every active research microfield belongs in the initial roadmap.
 
 ## Map the field before naming decks
@@ -52,9 +53,12 @@ into equal-sized decks or equal card quotas.
 
 ## Make one deck a coherent learning unit
 
-The default `course` granularity means one repository should support one
-coherent course-scale capability, normally estimated at 6–14 ordered chapters.
-The estimate is a planning stress test, not a chapter quota.
+One repository should support one coherent learning capability. Determine deck
+boundaries and the number of decks from coverage, prerequisites, and learnable
+progression. There is no prescribed deck size, preferred deck count, or maximum.
+Do not include chapter estimates in subject curricula; chapter planning is a
+separate generation step. Ignore legacy deck-size and chapter-estimate metadata
+as design constraints.
 
 Split a candidate deck when it:
 
@@ -63,17 +67,13 @@ Split a candidate deck when it:
   or capstone performances;
 - creates a false prerequisite, where learning one internal topic forces
   completion of several unrelated topics;
-- cannot plausibly progress from foundations to independent application within
-  the requested chapter range; or
+- lacks a coherent progression from its foundations to independent application; or
 - is held together mainly by a broad institutional label such as “advanced
   topics,” “quantitative methods,” or “organismal biology.”
 
 Merge candidates when they share the same prerequisites, conceptual spine,
 authentic representations, practice portfolio, and culminating capability.
 Do not create tiny decks merely to mirror every framework heading.
-
-For other granularities, use the range supplied by the CLI and apply the same
-coherence test.
 
 ## Separate necessity from helpful order
 
@@ -161,7 +161,7 @@ conventions, evidence policy, and decisions needing confirmation.
 `ROADMAP.md` explains:
 
 - the field map and coverage decisions;
-- deck tier, estimated chapters, durable capability, and sequencing rationale;
+- deck tier, durable capability, and sequencing rationale;
 - hard prerequisites versus recommended order;
 - cross-deck concepts and practice outside SRS; and
 - deliberate exclusions and future extension points.
@@ -172,7 +172,6 @@ conventions, evidence policy, and decisions needing confirmation.
 schema_version = 3
 subject = "subject-slug"
 destination = "whole-field"
-deck_granularity = "course"
 focus = []
 
 [[decks]]
@@ -182,7 +181,6 @@ tier = "core"
 level = "foundational"
 prerequisites = []
 recommended_after = []
-estimated_chapters = 10
 status = "proposed"
 description = "One concise durable capability."
 
@@ -201,13 +199,13 @@ names at least one deck; deferred and out-of-scope rows name none. Every deck
 must appear in at least one included coverage row.
 
 Before handoff, validate schema, synchronization, minimal edges, deck
-coherence, chapter estimates, and coverage. A valid DAG can still be a poor
+coherence, and coverage. A valid DAG can still be a poor
 curriculum; perform the semantic stress tests above after deterministic checks.
 
 The `ROADMAP.md` deck table is an executable-facing projection of
-`subject.toml`, not an independent summary. Keep exactly these nine cells on
+`subject.toml`, not an independent summary. Keep exactly these eight cells on
 every deck row: order, deck, level, tier, hard prerequisites, recommended
-sequencing, estimated chapters, durable capability, and status. Spell out
+sequencing, durable capability, and status. Spell out
 canonical deck ids in prerequisite cells instead of using numeric order aliases;
 orders can change, while ids are stable. `flashcards subject validate` checks
 the table against the manifest and rejects missing cells or metadata drift.

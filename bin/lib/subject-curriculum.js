@@ -18,15 +18,12 @@ export const SUBJECT_LEVELS = Object.freeze([
     'graduate',
     'research-specialization'
 ]);
-export const DECK_GRANULARITY_RANGES = Object.freeze({
-    module: Object.freeze([3, 7]),
-    course: Object.freeze([6, 14]),
-    'broad-area': Object.freeze([10, 20])
-});
+// Accepted only for compatibility with existing curricula and CLI callers.
+export const DECK_GRANULARITIES = Object.freeze(['module', 'course', 'broad-area']);
 const DESTINATIONS = new Set(SUBJECT_DESTINATIONS);
 const LEVELS = new Set(SUBJECT_LEVELS);
 const LEVEL_RANK = new Map(SUBJECT_LEVELS.map((level, index) => [level, index]));
-const GRANULARITY_RANGES = new Map(Object.entries(DECK_GRANULARITY_RANGES));
+const GRANULARITIES = new Set(DECK_GRANULARITIES);
 const TIERS = new Set(['core', 'recommended', 'specialization']);
 const COVERAGE_DISPOSITIONS = new Set(['included', 'deferred', 'out-of-scope']);
 
@@ -197,13 +194,15 @@ export function validateSubjectRoadmap(inputPath, graph = resolveSubjectCurricul
         if (!/^\|\s*\d+\s*\|/.test(line)) return;
         const sourceName = `${roadmapPath}:${section.lineOffset + index + 1}`;
         const cells = markdownCells(line);
-        if (cells.length !== 9) {
+        if (![8, 9].includes(cells.length)) {
             errors.push(
-                `${sourceName}: deck row must have 9 cells (order, deck, level, tier, hard prerequisites, recommended after, estimated chapters, durable capabilities, status); found ${cells.length}`
+                `${sourceName}: deck row must have 8 cells (order, deck, level, tier, hard prerequisites, recommended after, durable capabilities, status), or 9 for a legacy chapter estimate; found ${cells.length}`
             );
             return;
         }
-        const [orderText, deckText, level, tier, hardText, recommendedText, chaptersText, , status] = cells;
+        const [orderText, deckText, level, tier, hardText, recommendedText] = cells;
+        const status = cells.at(-1);
+        const chaptersText = cells.length === 9 ? cells[6] : null;
         const order = Number(orderText);
         const id = unquoteMarkdown(deckText);
         const deck = byId.get(id);
@@ -216,7 +215,7 @@ export function validateSubjectRoadmap(inputPath, graph = resolveSubjectCurricul
         if (order !== deck.order) errors.push(`${sourceName}: ${id} order ${orderText} does not match subject.toml order ${deck.order}`);
         if (level !== deck.level) errors.push(`${sourceName}: ${id} level ${JSON.stringify(level)} does not match subject.toml ${JSON.stringify(deck.level)}`);
         if (tier !== deck.tier) errors.push(`${sourceName}: ${id} tier ${JSON.stringify(tier)} does not match subject.toml ${JSON.stringify(deck.tier)}`);
-        if (Number(chaptersText) !== deck.estimatedChapters) {
+        if (chaptersText !== null && Number(chaptersText) !== deck.estimatedChapters) {
             errors.push(`${sourceName}: ${id} estimated chapters ${JSON.stringify(chaptersText)} does not match subject.toml ${deck.estimatedChapters}`);
         }
         if (status !== deck.status) errors.push(`${sourceName}: ${id} status ${JSON.stringify(status)} does not match subject.toml ${JSON.stringify(deck.status)}`);
@@ -324,15 +323,15 @@ export function resolveSubjectCurriculum(inputPath, { requireDecks = false } = {
         if (subject !== path.basename(subjectPath)) errors.push(`${manifestPath}: subject ${JSON.stringify(subject)} must match directory ${JSON.stringify(path.basename(subjectPath))}`);
         if (schemaVersion >= 2) {
             destination = parseString(header, 'destination', { required: true, sourceName: manifestPath });
-            deckGranularity = parseString(header, 'deck_granularity', { required: true, sourceName: manifestPath });
+            deckGranularity = parseString(header, 'deck_granularity', { sourceName: manifestPath });
             focus = schemaVersion >= 3
                 ? parseStringArray(header, 'focus', { required: true, sourceName: manifestPath })
                 : [];
             if (!DESTINATIONS.has(destination)) {
                 errors.push(`${manifestPath}: destination must be one of ${[...DESTINATIONS].join(', ')}`);
             }
-            if (!GRANULARITY_RANGES.has(deckGranularity)) {
-                errors.push(`${manifestPath}: deck_granularity must be one of ${[...GRANULARITY_RANGES.keys()].join(', ')}`);
+            if (deckGranularity && !GRANULARITIES.has(deckGranularity)) {
+                errors.push(`${manifestPath}: deck_granularity must be one of ${[...GRANULARITIES].join(', ')}`);
             }
             unique(focus, `${manifestPath} focus`, errors);
             for (const item of focus) {
@@ -363,7 +362,6 @@ export function resolveSubjectCurriculum(inputPath, { requireDecks = false } = {
                 sourceName
             }) || null;
             const estimatedChapters = parseInteger(block, 'estimated_chapters', {
-                required: schemaVersion >= 2,
                 sourceName
             });
             const status = parseString(block, 'status', { sourceName }) || 'proposed';
@@ -378,12 +376,8 @@ export function resolveSubjectCurriculum(inputPath, { requireDecks = false } = {
                 errors.push(`${sourceName}: level must be one of ${[...LEVELS].join(', ')}`);
             }
             if (schemaVersion >= 2 && !description.trim()) errors.push(`${sourceName}: description must not be empty`);
-            if (schemaVersion >= 2 && (!Number.isInteger(estimatedChapters) || estimatedChapters < 1)) {
+            if (estimatedChapters !== undefined && (!Number.isInteger(estimatedChapters) || estimatedChapters < 1)) {
                 errors.push(`${sourceName}: estimated_chapters must be a positive integer`);
-            }
-            const range = GRANULARITY_RANGES.get(deckGranularity);
-            if (schemaVersion >= 2 && range && (estimatedChapters < range[0] || estimatedChapters > range[1])) {
-                errors.push(`${sourceName}: estimated_chapters ${estimatedChapters} is outside the ${deckGranularity} range ${range[0]}-${range[1]}`);
             }
             for (const dependency of [...prerequisites, ...recommendedAfter]) {
                 if (!DECK_REF.test(dependency)) {

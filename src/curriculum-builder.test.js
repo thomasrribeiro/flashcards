@@ -14,6 +14,20 @@ const provenance = {
 describe('curriculum builder', () => {
     it('derives the display title from the required subject name', () => {
         expect(titleForSubject('earth-science')).toBe('Earth Science');
+        expect(validateCurriculumDraft({ subject: 'earth-science' }).errors).toEqual([]);
+        expect(validateCurriculumDraft({ subject: '' }).errors).toEqual(['Subject must use lowercase kebab-case.']);
+    });
+
+    it('rejects duplicate creation but permits explicit regeneration', () => {
+        const draft = { subject: ' Mathematics ' };
+        const existingSubjects = [{ id: 'mathematics' }];
+        expect(validateCurriculumDraft(draft, { existingSubjects }).errors.join('\n')).toContain('already exists');
+        expect(() => generationJobForDraft(draft, { ...provenance, existingSubjects })).toThrow(/already exists/);
+        expect(generationJobForDraft(draft, { ...provenance, existingSubjects, operation: 'regenerate' }).payload)
+            .toMatchObject({ subject: 'mathematics', operation: 'regenerate', destination: 'whole-field' });
+        const fresh = generationJobForDraft({ subject: 'new-subject' }, provenance);
+        expect(fresh.payload).not.toHaveProperty('deckGranularity');
+        expect(fresh.payload).toMatchObject({ operation: 'create', destination: 'whole-field' });
     });
 
     it('produces a secret-free typed subject-design job', () => {
