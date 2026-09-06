@@ -3642,6 +3642,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         });
     }
     const isSubjectOverview = !ranked && graph.nodes.every(node => node.nodeType === 'subject');
+    if (isSubjectOverview) nodeSizing.nodeHeight = 112;
     const layout = ranked
         ? layoutCurriculumGraph(graph, nodeSizing)
         : await layoutCurriculumGraphElk(graph, {
@@ -3837,7 +3838,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
                 : ''].filter(Boolean).join(' · ');
         node.setAttribute('aria-label', [deck.nodeType, nodeName, nodeMeta].filter(Boolean).join(' '));
         node.innerHTML = `
-            <span class="curriculum-graph-node-subject">${escapeHtml(deck.nodeType === 'subject' ? 'subject' : deck.subject)}</span>
+            ${deck.nodeType === 'subject' ? '' : `<span class="curriculum-graph-node-subject">${escapeHtml(deck.subject)}</span>`}
             <span class="curriculum-graph-node-name">${escapeHtml(nodeName)}</span>
             <span class="curriculum-graph-node-status">${escapeHtml(nodeMeta)}</span>
         `;
@@ -3981,6 +3982,8 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     let scale = 1;
     let subjectPanX = 0;
     let subjectPanY = 0;
+    let layerOffsetX = 0;
+    const fixedMobileLayers = compact && ranked && Boolean(focusRanks);
     const subjectBaseOffset = () => ({
         x: Math.max(0, (stage.clientWidth - layout.width * scale) / 2),
         y: Math.max(0, (stage.clientHeight - scrollExtentHeight * scale) / 2)
@@ -3997,9 +4000,12 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             scrollCanvas.style.height = `${stage.clientHeight}px`;
             return;
         }
-        viewport.style.left = `${horizontalGutter}px`;
+        // Mobile layers are a fixed horizontal window, not a hidden horizontal
+        // scroller. Native touch/focus/scroll restoration cannot select another
+        // layer by resetting scrollLeft while the user scrolls vertically.
+        viewport.style.left = `${fixedMobileLayers ? layerOffsetX : horizontalGutter}px`;
         viewport.style.top = '0px';
-        scrollCanvas.style.width = `${renderedWidth + horizontalGutter * 2}px`;
+        scrollCanvas.style.width = fixedMobileLayers ? '100%' : `${renderedWidth + horizontalGutter * 2}px`;
         scrollCanvas.style.height = `${renderedHeight}px`;
     };
     const fitBounds = (bounds, { horizontal = false } = {}) => {
@@ -4013,6 +4019,9 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             subjectPanX = 0;
             subjectPanY = 0;
         }
+        if (fixedMobileLayers) {
+            layerOffsetX = (stage.clientWidth - bounds.width * scale) / 2 - bounds.x * scale;
+        }
         applyScale();
         if (isSubjectOverview) {
             stage.scrollTo({ left: 0, top: 0 });
@@ -4023,7 +4032,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const top = horizontal
             ? bounds.y * scale - padding
             : bounds.y * scale - (stage.clientHeight - bounds.height * scale) / 2;
-        stage.scrollTo({ left: Math.max(0, left), top: Math.max(0, top) });
+        stage.scrollTo({ left: fixedMobileLayers ? 0 : Math.max(0, left), top: Math.max(0, top) });
     };
     const graphBounds = { x: 0, y: 0, width: layout.width, height: layout.height };
     const rankBounds = range => {
@@ -4184,7 +4193,9 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             subjectPanX = stage.clientWidth / 2 - centerX * scale - base.x;
             subjectPanY = stage.clientHeight / 2 - centerY * scale - base.y;
             applyScale();
-        } else {
+        } else if (!(initialized && fixedMobileLayers && previousStageWidth === stage.clientWidth)) {
+            // Safari changes viewport height when its browser bars collapse.
+            // Do not refit or interrupt native scrolling for height-only changes.
             const oldScrollTop = stage.scrollTop;
             const oldScale = scale;
             fit();

@@ -12,7 +12,12 @@ export default defineConfig({
     },
     projects: [
         { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
-        { name: 'mobile-chromium', use: { ...devices['iPhone 13'], browserName: 'chromium' } }
+        { name: 'mobile-chromium', use: { ...devices['iPhone 13'], browserName: 'chromium' } },
+        {
+            name: 'mobile-webkit',
+            grep: /mobile layered scrolling|subject overview emphasizes/,
+            use: { ...devices['iPhone 13'], browserName: 'webkit' }
+        }
     ],
     webServer: {
         command: 'npm run dev:no-watch -- --host 127.0.0.1',
