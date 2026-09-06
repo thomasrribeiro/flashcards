@@ -3619,14 +3619,22 @@ function curriculumElkEdgeGeometry(edge, source, target) {
     };
 }
 
+function useCompactCurriculumCanvas() {
+    return window.matchMedia('(max-width: 600px), (pointer: coarse)').matches;
+}
+
 async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     ranked = false,
-    focusRanks = null
+    focusRanks = null,
+    onResponsiveChange = null
 } = {}) {
+    const compact = useCompactCurriculumCanvas();
+    const nodeSizing = compact ? { nodeHeight: 112 } : {};
     const isSubjectOverview = !ranked && graph.nodes.every(node => node.nodeType === 'subject');
     const layout = ranked
-        ? layoutCurriculumGraph(graph)
+        ? layoutCurriculumGraph(graph, nodeSizing)
         : await layoutCurriculumGraphElk(graph, {
+            ...nodeSizing,
             direction: graph.nodes.every(node => node.nodeType === 'subject') ? 'DOWN' : 'RIGHT'
         });
     if (ranked) {
@@ -3638,6 +3646,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     stage.className = 'curriculum-graph-stage';
     if (ranked) stage.classList.add('is-layered');
     if (isSubjectOverview) stage.classList.add('is-subject-overview');
+    if (compact) stage.classList.add('is-compact');
     if (graph.nodes.length > 12) stage.classList.add('is-dense');
     stage.setAttribute('aria-label', 'Interactive curriculum prerequisite graph');
     const cableRouting = ranked
@@ -3651,7 +3660,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const scrollExtentNodeBottom = scrollExtentNodes.length
         ? Math.max(...scrollExtentNodes.map(node => node.y + node.height))
         : 0;
-    const scrollExtentRouteBottom = ranked && focusRanks
+    const scrollExtentRouteBottom = ranked && focusRanks && !compact
         ? Math.max(0, ...[...cableRouting.routes.values()]
             .flatMap(route => [...(route.rankYs || [])]
                 .filter(([rank]) => rank >= focusRanks.start && rank < focusRanks.end)
@@ -3983,7 +3992,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         scrollCanvas.style.height = `${renderedHeight}px`;
     };
     const fitBounds = (bounds, { horizontal = false } = {}) => {
-        const padding = 48;
+        const padding = compact ? 16 : 48;
         const width = Math.max(1, stage.clientWidth - padding * 2);
         const height = Math.max(1, stage.clientHeight - padding * 2);
         scale = horizontal
@@ -4023,10 +4032,10 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const columnStep = layout.nodeWidth + (layout.columnGap || 0);
         const focalX = focalNodes.length ? Math.min(...focalNodes.map(node => node.x)) : minX;
         return {
-            x: Number.isInteger(range.layer) ? focalX - columnStep : minX,
+            x: Number.isInteger(range.layer) ? compact ? focalX : focalX - columnStep : minX,
             y: minY,
             width: Number.isInteger(range.layer)
-                ? layout.nodeWidth + columnStep * 2
+                ? layout.nodeWidth + (compact ? 0 : columnStep * 2)
                 : Math.max(1, maxX - minX),
             height: Math.max(1, maxY - minY)
         };
@@ -4040,7 +4049,8 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const graphOriginY = oldBase.y + subjectPanY;
         const graphPointX = (originX - graphOriginX) / oldScale;
         const graphPointY = (originY - graphOriginY) / oldScale;
-        scale = Math.max(0.45, Math.min(2.5, scale * factor));
+        // Fit may be below the usual reading scale; zoom out must never jump in.
+        scale = Math.max(Math.min(0.1, oldScale), Math.min(2.5, scale * factor));
         const newBase = subjectBaseOffset();
         subjectPanX = originX - graphPointX * scale - newBase.x;
         subjectPanY = originY - graphPointY * scale - newBase.y;
@@ -4063,17 +4073,18 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             };
         };
         stage.addEventListener('pointerdown', event => {
+            if (!touchPoints.size) suppressClick = false;
             if (event.pointerType === 'touch') {
                 touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
-                stage.setPointerCapture(event.pointerId);
                 if (touchPoints.size >= 2) {
+                    for (const pointerId of touchPoints.keys()) stage.setPointerCapture(pointerId);
                     dragState = null;
                     pinchDistance = pinchMetrics()?.distance || 0;
                     stage.classList.add('is-panning');
                     return;
                 }
             }
-            if (event.button !== 0 || event.target.closest('.curriculum-graph-node')) return;
+            if (event.button !== 0 || (event.pointerType !== 'touch' && event.target.closest('.curriculum-graph-node'))) return;
             dragState = {
                 pointerId: event.pointerId,
                 x: event.clientX,
@@ -4081,8 +4092,10 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
                 panX: subjectPanX,
                 panY: subjectPanY
             };
-            stage.classList.add('is-panning');
-            stage.setPointerCapture(event.pointerId);
+            if (event.pointerType !== 'touch') {
+                stage.classList.add('is-panning');
+                stage.setPointerCapture(event.pointerId);
+            }
         });
         stage.addEventListener('pointermove', event => {
             if (event.pointerType === 'touch' && touchPoints.has(event.pointerId)) {
@@ -4098,6 +4111,10 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
                 }
             }
             if (!dragState || event.pointerId !== dragState.pointerId) return;
+            if (Math.hypot(event.clientX - dragState.x, event.clientY - dragState.y) < 6) return;
+            suppressClick = true;
+            stage.classList.add('is-panning');
+            stage.setPointerCapture(event.pointerId);
             subjectPanX = dragState.panX + event.clientX - dragState.x;
             subjectPanY = dragState.panY + event.clientY - dragState.y;
             applyScale();
@@ -4135,7 +4152,15 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             event.stopPropagation();
         }, true);
     }
+    let initialized = false;
+    let previousStageWidth = 0;
+    let previousStageHeight = 0;
     const fitVisibleViewport = () => {
+        // Preserve the graph point at the center when the phone rotates.
+        const oldBaseX = Math.max(0, (previousStageWidth - layout.width * scale) / 2);
+        const oldBaseY = Math.max(0, (previousStageHeight - scrollExtentHeight * scale) / 2);
+        const centerX = (previousStageWidth / 2 - oldBaseX - subjectPanX) / scale;
+        const centerY = (previousStageHeight / 2 - oldBaseY - subjectPanY) / scale;
         const top = stage.getBoundingClientRect().top;
         const available = Math.floor(window.innerHeight - top - 16);
         const pageContentStartsBelowViewport = top >= window.innerHeight - 160;
@@ -4143,7 +4168,27 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             ? Math.min(480, Math.max(320, Math.floor(window.innerHeight * 0.62)))
             : Math.max(160, available);
         stage.style.height = `${height}px`;
-        fit();
+        if (isSubjectOverview && initialized) {
+            const base = subjectBaseOffset();
+            subjectPanX = stage.clientWidth / 2 - centerX * scale - base.x;
+            subjectPanY = stage.clientHeight / 2 - centerY * scale - base.y;
+            applyScale();
+        } else if (isSubjectOverview && compact) {
+            scale = Math.min(1, Math.max(1, stage.clientWidth - 32) / 250);
+            const first = [...layout.nodes].sort((a, b) => a.y - b.y || a.x - b.x)[0];
+            const base = subjectBaseOffset();
+            subjectPanX = stage.clientWidth / 2 - (first.x + first.width / 2) * scale - base.x;
+            subjectPanY = 16 - first.y * scale - base.y;
+            applyScale();
+        } else {
+            const oldScrollTop = stage.scrollTop;
+            const oldScale = scale;
+            fit();
+            if (initialized && ranked) stage.scrollTop = oldScrollTop * scale / oldScale;
+        }
+        initialized = true;
+        previousStageWidth = stage.clientWidth;
+        previousStageHeight = stage.clientHeight;
     };
     stage.addEventListener('scroll', () => {
         isScrolling = true;
@@ -4158,6 +4203,11 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const onViewportResize = () => {
         if (!stage.isConnected) {
             window.removeEventListener('resize', onViewportResize);
+            return;
+        }
+        if (compact !== useCompactCurriculumCanvas() && onResponsiveChange) {
+            window.removeEventListener('resize', onViewportResize);
+            onResponsiveChange();
             return;
         }
         fitVisibleViewport();
@@ -4623,6 +4673,8 @@ function curriculumGraphControls({ windowState = null, showFit = true, headerAct
         <span class="curriculum-graph-primary-actions"></span>
         ${layerNavigation}
         ${showFit ? `<span class="curriculum-graph-view-actions">
+            <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
+            <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
             <button type="button" data-action="fit">Fit</button>
         </span>` : ''}`;
     controls.querySelector('.curriculum-graph-primary-actions').append(...headerActions);
@@ -4654,7 +4706,7 @@ async function renderCurriculumGraph(root, progressStates, graph, {
         return;
     }
     const windowState = layered
-        ? curriculumLayerWindow(graph, curriculumViewState.layerStart, 3)
+        ? curriculumLayerWindow(graph, curriculumViewState.layerStart, useCompactCurriculumCanvas() ? 1 : 3)
         : null;
     if (windowState) curriculumViewState.layerStart = windowState.layer;
     const subjectOverview = !layered && graph.nodes.every(node => node.nodeType === 'subject');
@@ -4666,6 +4718,7 @@ async function renderCurriculumGraph(root, progressStates, graph, {
     root.appendChild(controls);
     const controller = await renderCurriculumGraphCanvas(root, graph, progressStates, {
         ranked: layered,
+        onResponsiveChange: () => renderCurriculumView(),
         focusRanks: windowState ? {
             start: windowState.start,
             end: windowState.end,

@@ -81,6 +81,8 @@ async function installGenerationAccount(page, {
     await page.reload();
     await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
     await page.locator('#tab-curriculum').click();
+    const fit = page.getByRole('button', { name: 'Fit', exact: true });
+    if (await fit.count()) await fit.click();
 }
 
 async function openCurriculumDeckSettings(page, deckName) {
@@ -130,29 +132,28 @@ test.beforeEach(async ({ page }) => {
         'curriculum-history-controls',
         'curriculum-breadcrumb-actions'
     ]);
-    const [backBox, createBox] = await Promise.all([
-        page.getByRole('button', { name: 'Back in curriculum' }).boundingBox(),
-        page.getByRole('button', { name: 'Queue AI job' }).boundingBox()
-    ]);
-    const breadcrumbBox = await page.locator('.curriculum-breadcrumb').boundingBox();
-    expect(Math.abs(backBox.x - breadcrumbBox.x)).toBeLessThan(1);
-    expect(backBox.y).toBeGreaterThanOrEqual(breadcrumbBox.y + breadcrumbBox.height);
-    expect(createBox.y).toBeCloseTo(backBox.y, 0);
-    expect(createBox.height).toBeCloseTo(backBox.height, 0);
-    const inputBox = await page.getByRole('textbox', { name: 'Subject name' }).boundingBox();
-    expect(inputBox.y).toBeCloseTo(backBox.y, 0);
-    expect(inputBox.height).toBeCloseTo(backBox.height, 0);
-    const forwardBox = await page.getByRole('button', { name: 'Forward in curriculum' }).boundingBox();
-    expect(inputBox.x).toBeGreaterThan(forwardBox.x + forwardBox.width);
-    const canvasBox = await page.locator('.curriculum-graph-stage').boundingBox();
-    if (page.viewportSize().width <= 600) {
-        expect(backBox.x).toBeCloseTo(canvasBox.x, 0);
-        expect(createBox.x + createBox.width).toBeCloseTo(canvasBox.x + canvasBox.width, 0);
-    } else {
-        expect(createBox.x + createBox.width - inputBox.x).toBeCloseTo(320, 0);
-    }
-    expect(createBox.x + createBox.width).toBeLessThanOrEqual(page.viewportSize().width);
+    // Read all geometry in one frame: initial canvas sizing can scroll the page.
+    await expect.poll(() => page.locator('.curriculum-breadcrumb-row').evaluate(row => {
+        const rect = selector => row.querySelector(selector).getBoundingClientRect();
+        const back = rect('[aria-label="Back in curriculum"]');
+        const forward = rect('[aria-label="Forward in curriculum"]');
+        const create = rect('[aria-label="Queue AI job"]');
+        const input = rect('[aria-label="Subject name"]');
+        const breadcrumb = rect('.curriculum-breadcrumb');
+        const canvas = document.querySelector('.curriculum-graph-stage')?.getBoundingClientRect();
+        if (!canvas) return false;
+        return Math.abs(back.x - breadcrumb.x) < 1 && back.y >= breadcrumb.bottom
+            && Math.abs(create.y - back.y) < 1 && Math.abs(input.y - back.y) < 1
+            && Math.abs(create.height - back.height) < 1 && Math.abs(input.height - back.height) < 1
+            && input.x > forward.right && create.right <= innerWidth
+            && (innerWidth <= 600
+                ? Math.abs(back.x - canvas.x) < 1 && Math.abs(create.right - canvas.right) < 1
+                : Math.abs(create.right - input.x - 320) < 1);
+    })).toBe(true);
     await expect(page.getByRole('button', { name: 'Queue AI job' })).toHaveText('+');
+    // Most workflow tests need the entire subject overview; mobile readability
+    // and zoom defaults are covered separately below.
+    await page.getByRole('button', { name: 'Fit', exact: true }).click();
 });
 
 test('groups connection and settings with the user and uses an icon theme toggle', async ({ page }) => {
@@ -1399,6 +1400,7 @@ test('reviews generated flashcards in-app and publishes both pull requests', asy
 });
 
 test('navigates subject graph, ranked deck layers, deck neighborhood, and chapter layers', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile-chromium', 'Three-column geometry; mobile single-column navigation has dedicated coverage.');
     if (testInfo.project.name === 'desktop-chromium') {
         await page.setViewportSize({ width: 2000, height: 1100 });
     }
@@ -1407,8 +1409,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toBeVisible();
     await expect(page.locator('.curriculum-graph-stage')).toHaveClass(/is-subject-overview/);
     await expect(page.locator('.curriculum-graph-stage')).not.toHaveClass(/is-layered/);
-    await expect(page.getByRole('button', { name: 'Zoom in' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Zoom out' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Zoom in' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Zoom out' })).toBeVisible();
     expect(await page.locator('.curriculum-graph-stage').evaluate(stage => getComputedStyle(stage).overflowX))
         .toBe('hidden');
     if (testInfo.project.name === 'desktop-chromium') {
@@ -2392,6 +2394,118 @@ test('AI generation stays blank until an API provider is connected', async ({ pa
     await form.getByRole('tab', { name: 'AI generation' }).click();
     await expect(page.getByLabel('Provider', { exact: true })).toHaveValue('');
     await expect(page.getByLabel('Model')).toBeDisabled();
+});
+
+test('mobile overview starts readable and preserves zoom and center on rotation', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile-chromium');
+    await page.reload();
+    await page.locator('#tab-curriculum').click();
+    const stage = page.locator('.curriculum-graph-stage');
+    const viewport = stage.locator('.curriculum-graph-viewport');
+    const scale = () => viewport.evaluate(element => new DOMMatrix(getComputedStyle(element).transform).a);
+    await expect.poll(scale).toBeCloseTo(1, 2);
+    await expect(stage.locator('.curriculum-graph-node-name').first()).toHaveCSS('font-size', '14px');
+    await page.locator('#curriculum-view').screenshot({ path: testInfo.outputPath('mobile-overview.png') });
+    await page.getByRole('button', { name: 'Zoom in' }).click();
+    await expect.poll(scale).toBeCloseTo(1.2, 2);
+    await page.getByRole('button', { name: 'Zoom out' }).click();
+    await expect.poll(scale).toBeCloseTo(1, 2);
+    await stage.scrollIntoViewIfNeeded();
+    const box = await stage.boundingBox();
+    const client = await page.context().newCDPSession(page);
+    const center = { x: box.x + box.width / 2, y: box.y + Math.min(box.height / 2, 120) };
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [
+        { x: center.x - 30, y: center.y, id: 1 }, { x: center.x + 30, y: center.y, id: 2 }
+    ] });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [
+        { x: center.x - 45, y: center.y, id: 1 }, { x: center.x + 45, y: center.y, id: 2 }
+    ] });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect.poll(scale).toBeGreaterThan(1.1);
+    const centerPoint = () => stage.evaluate(element => {
+        const viewport = element.querySelector('.curriculum-graph-viewport');
+        const scale = new DOMMatrix(getComputedStyle(viewport).transform).a;
+        return {
+            x: (element.clientWidth / 2 - parseFloat(viewport.style.left)) / scale,
+            y: (element.clientHeight / 2 - parseFloat(viewport.style.top)) / scale
+        };
+    });
+    const before = await centerPoint();
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [
+        { x: center.x, y: center.y, id: 1 }
+    ] });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [
+        { x: center.x + 60, y: center.y, id: 1 }
+    ] });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(stage).toHaveClass(/is-subject-overview/);
+    await expect.poll(async () => Math.abs((await centerPoint()).x - before.x)).toBeGreaterThan(25);
+    const panned = await centerPoint();
+    const beforeScale = await scale();
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect.poll(scale).toBeCloseTo(beforeScale, 3);
+    await expect.poll(async () => Math.abs((await centerPoint()).x - panned.x)).toBeLessThan(1);
+    await expect.poll(async () => Math.abs((await centerPoint()).y - panned.y)).toBeLessThan(1);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(async () => Math.abs((await centerPoint()).x - panned.x)).toBeLessThan(1);
+    await page.getByRole('button', { name: 'Fit', exact: true }).click();
+    await expect.poll(scale).toBeLessThan(1);
+    const fitted = await scale();
+    await page.getByRole('button', { name: 'Zoom out' }).click();
+    await expect.poll(scale).toBeLessThan(fitted);
+    await page.getByRole('button', { name: 'Fit', exact: true }).click();
+    await page.getByRole('button', { name: 'Zoom in' }).click();
+    await expect.poll(scale).toBeGreaterThan(fitted);
+    await page.getByRole('button', { name: 'Fit', exact: true }).click();
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').tap();
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
+});
+
+test('mobile subject layers show one readable column including first and last layers', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile-chromium');
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    const stage = page.locator('.curriculum-graph-stage');
+    await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
+    await expect(page.getByRole('button', { name: 'Show previous dependency layer' })).toBeDisabled();
+    const count = Number((await page.locator('.curriculum-layer-label').textContent()).split(' of ')[1]);
+    for (let rank = 0; rank < count; rank += 1) {
+        await expect(stage).toHaveAttribute('data-scroll-layer', String(rank));
+        const metrics = await stage.evaluate(element => {
+            const bounds = element.getBoundingClientRect();
+            const nodes = [...element.querySelectorAll('.curriculum-graph-node')].filter(node => {
+                const rect = node.getBoundingClientRect();
+                return rect.left + rect.width / 2 >= bounds.left && rect.left + rect.width / 2 <= bounds.right;
+            });
+            return {
+                ranks: [...new Set(nodes.map(node => Number(node.dataset.rank)))],
+                wholeNodes: nodes.every(node => {
+                    const rect = node.getBoundingClientRect();
+                    return rect.left >= bounds.left && rect.right <= bounds.right;
+                }),
+                readable: nodes.every(node => {
+                    const scale = node.getBoundingClientRect().width / parseFloat(node.style.width);
+                    const label = node.querySelector('.curriculum-graph-node-name');
+                    return parseFloat(getComputedStyle(label).fontSize) * scale >= 13
+                        && label.scrollHeight <= label.clientHeight + 1
+                        && node.scrollHeight <= node.clientHeight + 1;
+                })
+            };
+        });
+        expect(metrics).toEqual({ ranks: [rank], wholeNodes: true, readable: true });
+        if (rank === 2) {
+            await page.locator('#curriculum-view').screenshot({ path: testInfo.outputPath('mobile-subject-column.png') });
+            const focal = stage.locator(`.curriculum-graph-node[data-rank="${rank}"]`).last();
+            await focal.scrollIntoViewIfNeeded();
+            await expect(focal).toBeInViewport();
+        }
+        if (rank < count - 1) await page.getByRole('button', { name: 'Show next dependency layer' }).click();
+    }
+    await expect(page.getByRole('button', { name: 'Show next dependency layer' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
+    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 2));
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect(stage).toHaveClass(/is-compact/);
+    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 2));
 });
 
 test('curriculum controls fit a phone viewport', async ({ page }, testInfo) => {

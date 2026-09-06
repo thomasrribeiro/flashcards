@@ -284,6 +284,16 @@ describe('curriculum dependency planning', () => {
         expect(lastBoundary).toMatchObject({ start: 1, end: 4, layer: 2 });
     });
 
+    it('allows every dependency rank in the single-column mobile window', () => {
+        const graph = curriculumGraph(index);
+        expect(curriculumLayerWindow(graph, 0, 1)).toMatchObject({
+            start: 0, end: 1, layer: 0, minLayer: 0, maxLayer: 2, width: 1
+        });
+        expect(curriculumLayerWindow(graph, 99, 1)).toMatchObject({
+            start: 2, end: 3, layer: 2, minLayer: 0, maxLayer: 2, width: 1
+        });
+    });
+
     it('builds chapter-level edges from resolved local dependencies', () => {
         const graph = chapterGraph(index, 'mathematics/arithmetic');
         expect(graph.edges).toEqual([{

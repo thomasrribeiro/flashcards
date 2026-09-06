@@ -4696,6 +4696,10 @@ body.standalone-phone .mobile-sidebar-close {
     white-space: normal;
 }
 
+.curriculum-graph-stage.is-compact .curriculum-graph-node-name { font-size: 14px; }
+.curriculum-graph-stage.is-compact .curriculum-graph-node-subject,
+.curriculum-graph-stage.is-compact .curriculum-graph-node-status { font-size: 11px; }
+
 .curriculum-graph-empty {
     min-height: 220px;
     border: 1px solid var(--black);
