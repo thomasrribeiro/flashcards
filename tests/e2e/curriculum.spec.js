@@ -2396,20 +2396,32 @@ test('AI generation stays blank until an API provider is connected', async ({ pa
     await expect(page.getByLabel('Model')).toBeDisabled();
 });
 
-test('mobile overview starts readable and preserves zoom and center on rotation', async ({ page }, testInfo) => {
+test('mobile overview starts fitted and centered and preserves zoom on rotation', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile-chromium');
     await page.reload();
     await page.locator('#tab-curriculum').click();
     const stage = page.locator('.curriculum-graph-stage');
     const viewport = stage.locator('.curriculum-graph-viewport');
     const scale = () => viewport.evaluate(element => new DOMMatrix(getComputedStyle(element).transform).a);
-    await expect.poll(scale).toBeCloseTo(1, 2);
+    await expect.poll(scale).toBeLessThan(1);
+    const initialScale = await scale();
+    await expect.poll(() => stage.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        const nodes = [...element.querySelectorAll('.curriculum-graph-node')].map(node => node.getBoundingClientRect());
+        const left = Math.min(...nodes.map(node => node.left));
+        const right = Math.max(...nodes.map(node => node.right));
+        const top = Math.min(...nodes.map(node => node.top));
+        const bottom = Math.max(...nodes.map(node => node.bottom));
+        return left >= bounds.left && right <= bounds.right && top >= bounds.top && bottom <= bounds.bottom
+            && Math.abs((left + right - bounds.left - bounds.right) / 2) < 2
+            && Math.abs((top + bottom - bounds.top - bounds.bottom) / 2) < 2;
+    })).toBe(true);
     await expect(stage.locator('.curriculum-graph-node-name').first()).toHaveCSS('font-size', '14px');
     await page.locator('#curriculum-view').screenshot({ path: testInfo.outputPath('mobile-overview.png') });
     await page.getByRole('button', { name: 'Zoom in' }).click();
-    await expect.poll(scale).toBeCloseTo(1.2, 2);
+    await expect.poll(scale).toBeCloseTo(initialScale * 1.2, 2);
     await page.getByRole('button', { name: 'Zoom out' }).click();
-    await expect.poll(scale).toBeCloseTo(1, 2);
+    await expect.poll(scale).toBeCloseTo(initialScale, 2);
     await stage.scrollIntoViewIfNeeded();
     const box = await stage.boundingBox();
     const client = await page.context().newCDPSession(page);
@@ -2421,7 +2433,7 @@ test('mobile overview starts readable and preserves zoom and center on rotation'
         { x: center.x - 45, y: center.y, id: 1 }, { x: center.x + 45, y: center.y, id: 2 }
     ] });
     await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await expect.poll(scale).toBeGreaterThan(1.1);
+    await expect.poll(scale).toBeGreaterThan(initialScale * 1.1);
     const centerPoint = () => stage.evaluate(element => {
         const viewport = element.querySelector('.curriculum-graph-viewport');
         const scale = new DOMMatrix(getComputedStyle(viewport).transform).a;

@@ -4173,13 +4173,6 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             subjectPanX = stage.clientWidth / 2 - centerX * scale - base.x;
             subjectPanY = stage.clientHeight / 2 - centerY * scale - base.y;
             applyScale();
-        } else if (isSubjectOverview && compact) {
-            scale = Math.min(1, Math.max(1, stage.clientWidth - 32) / 250);
-            const first = [...layout.nodes].sort((a, b) => a.y - b.y || a.x - b.x)[0];
-            const base = subjectBaseOffset();
-            subjectPanX = stage.clientWidth / 2 - (first.x + first.width / 2) * scale - base.x;
-            subjectPanY = 16 - first.y * scale - base.y;
-            applyScale();
         } else {
             const oldScrollTop = stage.scrollTop;
             const oldScale = scale;
