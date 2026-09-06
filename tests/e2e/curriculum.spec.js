@@ -726,7 +726,7 @@ test('adds only generated curriculum chapters and refreshes them through Add to 
     })).toHaveCount(0);
 });
 
-test('shows chapter generation as checking until AI access is verified', async ({ page }) => {
+test('keeps generation labels unchanged and buttons disabled until AI access is verified', async ({ page }) => {
     const catalog = structuredClone(bundledCurriculum);
     const target = catalog.decks.find(deck => deck.id === 'mathematics/geometry-and-measurement');
     target.chapters = [];
@@ -738,7 +738,9 @@ test('shows chapter generation as checking until AI access is verified', async (
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/geometry-and-measurement"]').click();
     const button = page.locator('.curriculum-chapter-empty-action');
-    await expect(button).toHaveText('Checking AI access…');
+    await expect(button).toHaveText('Generate curriculum');
+    await expect(page.getByText('Checking AI access', { exact: false })).toHaveCount(0);
+    await expect(button).not.toHaveAttribute('title', /Checking/);
     await expect(button).toBeDisabled();
     await expect(button).toHaveClass(/is-checking/);
     await expect(button).toHaveText('Generate curriculum', { timeout: 5_000 });

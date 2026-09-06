@@ -7409,11 +7409,9 @@ async function websiteGenerationAvailability() {
 }
 
 async function configureWebsiteGenerationButton(button, { registry = null } = {}) {
-    const readyContent = [...button.childNodes].map(node => node.cloneNode(true));
     button.disabled = true;
+    button.setAttribute('aria-disabled', 'true');
     button.classList.add('is-checking');
-    button.textContent = 'Checking AI access…';
-    button.title = 'Checking GitHub sign-in, AI provider, model, and curriculum provenance.';
     const availability = await websiteGenerationAvailability();
     if (availability.enabled && registry
         && (!registry.resolved_commit || !registry.catalog_hash)) {
@@ -7422,7 +7420,6 @@ async function configureWebsiteGenerationButton(button, { registry = null } = {}
     }
     if (!button.isConnected) return availability;
     button.classList.remove('is-checking');
-    button.replaceChildren(...readyContent);
     button.disabled = !availability.enabled;
     button.title = availability.reason;
     button.setAttribute('aria-disabled', String(!availability.enabled));
