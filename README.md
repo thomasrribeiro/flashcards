@@ -285,7 +285,10 @@ switch between the current loaded curriculum and the proposal, and inspect
 added/removed/changed nodes and prerequisite edges. Previewing does not apply
 changes. **Apply generated DAG** separately confirms and merges the exact
 previewed pull-request commit; completed historical jobs remain viewable.
-The subject viewer also exposes **Regenerate DAG**. Every website generation
+The subject viewer exposes **Subject options**, matching the deck viewer's
+**Deck options** menu. Choose **Regenerate DAG** there to create a reviewable
+subject curriculum draft. The menu stays available without AI access and
+explains any unmet generation requirements. Every website generation
 launch, including prerequisite batches, confirms the exact provider, model, and
 reasoning effort before queueing; cancelling creates no job. Change defaults
 under Settings → AI generation, then restart the launch flow.

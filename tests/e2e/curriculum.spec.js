@@ -361,9 +361,15 @@ test('regenerates a subject DAG with model disclosure and cancellable pinned lau
     const queuedJobs = [];
     await installGenerationAccount(page, { onPost: job => queuedJobs.push(job) });
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
-    const regenerate = page.getByRole('button', { name: 'Regenerate mathematics DAG', exact: true });
+    const subjectOptions = page.getByRole('button', { name: 'Subject options for mathematics' });
+    await expect(subjectOptions).toHaveText('Subject options');
+    await subjectOptions.click();
+    const options = page.getByRole('dialog', { name: 'mathematics', exact: true });
+    await expect(options.getByRole('button', { name: /Subject curriculum/ })).toBeVisible();
+    const regenerate = options.getByRole('button', { name: /Regenerate DAG/ });
     await expect(regenerate).toBeEnabled();
     await regenerate.click();
+    await expect(options).toBeHidden();
     const builder = page.getByRole('dialog', { name: 'Regenerate mathematics DAG', exact: true });
     await expect(builder.getByLabel('Subject name')).toHaveValue('mathematics');
     await builder.getByRole('button', { name: 'Queue AI draft' }).click();
@@ -385,6 +391,29 @@ test('regenerates a subject DAG with model disclosure and cancellable pinned lau
     await expect.poll(() => queuedJobs.length).toBe(1);
     expect(queuedJobs[0]).toMatchObject({ jobType:'subject-design', modelId:'gpt-test', payload:{ subject:'mathematics', reasoningEffort:'high' } });
     await expect(page.getByRole('dialog', { name: 'Settings' }).getByLabel('Job type: Subject DAG')).toBeVisible();
+});
+
+test('keeps Subject options discoverable without AI access and restores focus when closed', async ({ page }, testInfo) => {
+    await expect(page.getByRole('button', { name: /Subject options for/ })).toHaveCount(0);
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    const trigger = page.getByRole('button', { name: 'Subject options for mathematics' });
+    await expect(trigger).toHaveText('Subject options');
+    await expect(trigger).toBeEnabled();
+    await trigger.click();
+    const options = page.getByRole('dialog', { name: 'mathematics', exact: true });
+    await expect(options.getByRole('button', { name: /Regenerate DAG/ })).toBeDisabled();
+    await expect(options.getByRole('status')).toContainText('Sign in with GitHub');
+    await page.screenshot({ path: testInfo.outputPath('subject-options.png') });
+    await page.keyboard.press('Escape');
+    await expect(options).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await options.getByRole('button', { name: /Subject curriculum/ }).click();
+    await expect(options).toBeHidden();
+    await expect(trigger).toBeVisible();
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics/elementary-algebra-and-functions"]').click();
+    await expect(trigger).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Deck settings for elementary-algebra-and-functions' })).toHaveText('Deck options');
 });
 
 test('queues a chapter-curriculum agent from an empty deck chapter viewer', async ({ page }) => {

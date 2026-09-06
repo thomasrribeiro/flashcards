@@ -1480,6 +1480,48 @@ async function openCurriculumRepositoryInStudy(deck, repositoryId) {
     writeStudyHistory();
 }
 
+function openCurriculumSubjectActionsModal({ subject, registry }, trigger = null) {
+    const modal = document.getElementById('deck-actions-modal');
+    const title = document.getElementById('deck-actions-title');
+    const path = document.getElementById('deck-actions-path');
+    const body = document.getElementById('deck-actions-body');
+    if (!modal || !title || !path || !body || !subject) return;
+
+    activeDeckActions = { subject };
+    activeDeckActionsTrigger = trigger;
+    title.textContent = subject;
+    path.textContent = `~ / ${registry?.repository || 'curriculum'} / ${subject}`;
+    body.innerHTML = '';
+    const view = appendDeckAction(body, {
+        label: 'Subject curriculum',
+        description: 'View the dependency graph for this subject’s decks.',
+        onClick: () => {
+            closeDeckActionsModal({ restoreFocus: false });
+            navigateCurriculum({
+                mode: 'subject', hierarchy: 'deck', subject, parentId: subject,
+                targetId: '', query: '', layerStart: 0
+            });
+        }
+    });
+    const regenerate = appendDeckAction(body, {
+        label: 'Regenerate DAG',
+        description: 'Create a new subject curriculum draft to review before applying.',
+        onClick: () => {
+            closeDeckActionsModal({ restoreFocus: false });
+            openCurriculumBuilder(subject, registry);
+        }
+    });
+    const availabilityMessage = document.createElement('p');
+    availabilityMessage.className = 'study-settings-help';
+    availabilityMessage.setAttribute('role', 'status');
+    body.appendChild(availabilityMessage);
+    configureWebsiteGenerationButton(regenerate, { registry }).then(availability => {
+        if (availabilityMessage.isConnected) availabilityMessage.textContent = availability.reason;
+    });
+    modal.classList.remove('hidden');
+    view.focus();
+}
+
 function openCurriculumDeckActionsModal({ deck, registry, installedRepository }, trigger = null) {
     const modal = document.getElementById('deck-actions-modal');
     const title = document.getElementById('deck-actions-title');
@@ -4889,14 +4931,17 @@ async function renderCurriculumView(options = {}) {
         }
     }
     if (mode === 'subject' && hierarchy === 'deck' && subject && !curriculumPreview) {
-        const regenerate = document.createElement('button');
-        regenerate.type = 'button';
-        regenerate.className = 'curriculum-toolbar-action';
-        regenerate.textContent = 'Regenerate DAG';
-        regenerate.setAttribute('aria-label', `Regenerate ${subject} DAG`);
-        regenerate.onclick = () => openCurriculumBuilder(subject, activeRegistry);
-        breadcrumbActions.appendChild(regenerate);
-        configureWebsiteGenerationButton(regenerate, { registry: activeRegistry });
+        const subjectOptions = document.createElement('button');
+        subjectOptions.type = 'button';
+        subjectOptions.className = 'curriculum-toolbar-action';
+        subjectOptions.textContent = 'Subject options';
+        subjectOptions.setAttribute('aria-label', `Subject options for ${subject}`);
+        subjectOptions.setAttribute('aria-haspopup', 'dialog');
+        subjectOptions.title = 'Open subject options';
+        subjectOptions.onclick = () => openCurriculumSubjectActionsModal({
+            subject, registry: activeRegistry
+        }, subjectOptions);
+        breadcrumbActions.appendChild(subjectOptions);
     }
     const installedStudyTarget = deckId
         ? installedRepositoryForCurriculumDeck(decks, activeChapterDeck)
