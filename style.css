@@ -3992,6 +3992,13 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-builder-actions button { background: var(--gold); }
 .curriculum-builder-launch { text-align: right; }
 .curriculum-launch-model { margin: 8px 0 0; font-size: 0.6rem; color: var(--muted); overflow-wrap: anywhere; }
+.curriculum-subject-create { width: min(320px, calc(100vw - 48px)); min-width: 0; }
+.curriculum-subject-input-row { display: flex; min-width: 0; }
+.curriculum-subject-create .add-repo-btn { background: var(--gold); }
+.curriculum-subject-create .add-repo-btn:hover { background: var(--black); }
+.curriculum-subject-create .curriculum-launch-model { margin-top: 4px; text-align: right; }
+.curriculum-subject-create [data-subject-errors]:empty,
+.curriculum-subject-create [data-errors]:empty { display: none; }
 .curriculum-builder-deck {
     display: grid;
     grid-template-columns: 32px minmax(150px, .8fr) minmax(220px, 1.4fr) minmax(210px, 1fr) auto;

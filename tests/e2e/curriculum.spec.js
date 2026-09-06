@@ -120,8 +120,8 @@ test.beforeEach(async ({ page }) => {
     })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByText('Recommended paths', { exact: true })).toHaveCount(0);
     await expect(page.locator('.curriculum-toolbar').getByRole('button', { name: 'Sources' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Create subject' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Create subject' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Queue AI job' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Queue AI job' })).toBeDisabled();
     const breadcrumbControlOrder = await page.locator('.curriculum-breadcrumb-row').evaluate(row => (
         [...row.children].map(child => child.className)
     ));
@@ -132,14 +132,14 @@ test.beforeEach(async ({ page }) => {
     ]);
     const [backBox, createBox] = await Promise.all([
         page.getByRole('button', { name: 'Back in curriculum' }).boundingBox(),
-        page.getByRole('button', { name: 'Create subject' }).boundingBox()
+        page.getByRole('button', { name: 'Queue AI job' }).boundingBox()
     ]);
     const breadcrumbBox = await page.locator('.curriculum-breadcrumb').boundingBox();
     expect(Math.abs(backBox.x - breadcrumbBox.x)).toBeLessThan(1);
     expect(backBox.y).toBeGreaterThanOrEqual(breadcrumbBox.y + breadcrumbBox.height);
-    expect(createBox.x).toBeGreaterThan(backBox.x + backBox.width);
-    expect(Math.abs(createBox.y - backBox.y)).toBeLessThan(1);
-    await expect(page.getByRole('button', { name: 'Create subject' })).toHaveText('+');
+    expect(createBox.y).toBeGreaterThanOrEqual(backBox.y);
+    expect(createBox.x + createBox.width).toBeLessThanOrEqual(page.viewportSize().width);
+    await expect(page.getByRole('button', { name: 'Queue AI job' })).toHaveText('+');
 });
 
 test('groups connection and settings with the user and uses an icon theme toggle', async ({ page }) => {
@@ -303,10 +303,9 @@ test('queues a subject draft only for a signed-in account with a connected model
     await page.reload();
     await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
     await page.locator('#tab-curriculum').click();
-    const create = page.getByRole('button', { name: 'Create subject' });
-    await expect(create).toBeEnabled();
-    await create.click();
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole('form', { name: 'Create subject' });
+    await expect(dialog).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Create subject' })).toHaveCount(0);
     await expect(dialog).not.toContainText('Enter the structured subject intent');
     await expect(dialog).not.toContainText('subject-design-v1');
     await expect(dialog.getByLabel('Local provider')).toHaveCount(0);
@@ -315,7 +314,7 @@ test('queues a subject draft only for a signed-in account with a connected model
     await expect(dialog.getByRole('button', { name: 'Add deck' })).toHaveCount(0);
     await expect(dialog.getByLabel('Destination')).toHaveCount(0);
     await expect(dialog.getByLabel('Deck size')).toHaveCount(0);
-    await expect(dialog).toContainText('Whole-field curriculum: foundations, undergraduate, graduate, and advanced topics as needed.');
+    await expect(dialog).not.toContainText('Whole-field curriculum:');
     const launchModel = dialog.locator('#curriculum-launch-model');
     await expect(launchModel).toHaveText('gpt-test high');
     await expect(dialog).not.toContainText('Change in Settings → AI generation.');
@@ -332,7 +331,8 @@ test('queues a subject draft only for a signed-in account with a connected model
     await expect(dialog.getByLabel('Title')).toHaveCount(0);
     await expect(dialog).not.toContainText('Subject title is required.');
     const subjectError = dialog.getByText('Subject must use lowercase kebab-case.');
-    await expect(subjectError).toHaveCount(1);
+    await expect(subjectError).toHaveCount(0);
+    await dialog.getByLabel('Subject name').fill('not a slug');
     await expect(subjectError).toBeVisible();
     await dialog.getByLabel('Subject name').fill(' MATHEMATICS ');
     await expect(dialog).toContainText('Subject "mathematics" already exists.');
@@ -343,10 +343,16 @@ test('queues a subject draft only for a signed-in account with a connected model
     expect(queuedJob).toBeNull();
     await dialog.getByLabel('Subject name').fill('earth-science');
     await expect(subjectError).toBeHidden();
-    await page.screenshot({ path: testInfo.outputPath('subject-generation-form.png') });
+    await dialog.screenshot({ path: testInfo.outputPath('subject-generation-form.png') });
     await dialog.getByRole('button', { name: 'Queue AI job' }).click();
     expect(queuedJob).toBeNull();
+    await page.getByRole('dialog', { name: 'Confirm AI generation' }).getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog.getByLabel('Subject name')).toHaveValue('earth-science');
+    await dialog.getByLabel('Subject name').press('Enter');
     await confirmAIStart(page);
+    await expect(dialog.getByLabel('Subject name')).toHaveValue('');
+    await expect(dialog.getByRole('button', { name: 'Queue AI job' })).toHaveText('+');
+    await expect(dialog.getByRole('button', { name: 'Queue AI job' })).toBeDisabled();
     const settings = page.getByRole('dialog', { name: 'Settings' });
     const activity = settings.locator('#study-settings-pane-agents');
     await expect(settings.getByRole('tab', { name: /Agents/ })).toHaveAttribute('aria-selected', 'true');
@@ -1099,7 +1105,7 @@ test('tracks generation activity and previews an unmerged subject PR in the curr
     await expect(page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'curricula' })).toBeVisible();
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toBeVisible();
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-reactions"]')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Create subject' })).toHaveCount(0);
+    await expect(page.getByRole('form', { name: 'Create subject' })).toHaveCount(0);
 
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toHaveClass(/is-dag-added/);
     await page.getByRole('button', { name: 'Current curriculum', exact: true }).click();
@@ -1112,7 +1118,7 @@ test('tracks generation activity and previews an unmerged subject PR in the curr
     await page.getByRole('button', { name: 'Exit preview' }).click();
     await expect(page.locator('.curriculum-preview-banner')).toHaveCount(0);
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toHaveCount(1);
-    await expect(page.getByRole('button', { name: 'Create subject' })).toBeVisible();
+    await expect(page.getByRole('form', { name: 'Create subject' })).toBeVisible();
 });
 
 test('reviews a generated deck curriculum on the chapter canvas without applying it', async ({ page }, testInfo) => {
@@ -2383,5 +2389,5 @@ test('curriculum controls fit a phone viewport', async ({ page }, testInfo) => {
     await page.getByRole('button', { name: 'Unlocks' }).click();
     await expect(page.locator('.curriculum-neighborhood-column.is-unlocks')).toBeVisible();
     await page.getByRole('button', { name: 'curricula', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Create subject' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Queue AI job' })).toBeDisabled();
 });

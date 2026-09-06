@@ -4838,6 +4838,7 @@ async function renderCurriculumView(options = {}) {
     ]);
     const { mode, hierarchy, subject, parentId } = curriculumViewState;
     ensureCurriculumNavigationHistory();
+    root.querySelector('.curriculum-subject-create')?.dispatchEvent(new Event('close'));
     root.innerHTML = '';
 
     const breadcrumbRow = document.createElement('div');
@@ -4918,16 +4919,10 @@ async function renderCurriculumView(options = {}) {
     }
     if (hierarchy === 'subject' && mode === 'overview') {
         if (!curriculumPreview) {
-            const createSubject = document.createElement('button');
-            createSubject.type = 'button';
-            createSubject.className = 'curriculum-toolbar-action is-primary';
-            createSubject.textContent = '+';
-            createSubject.setAttribute('aria-label', 'Create subject');
-            createSubject.title = 'Create subject';
-            createSubject.disabled = true;
-            createSubject.onclick = () => openCurriculumBuilder('', activeRegistry);
+            const createSubject = document.createElement('div');
+            createSubject.className = 'curriculum-subject-create';
+            openCurriculumBuilder('', activeRegistry, createSubject);
             breadcrumbActions.append(createSubject);
-            configureWebsiteGenerationButton(createSubject, { registry: activeRegistry });
         }
     }
     if (mode === 'subject' && hierarchy === 'deck' && subject && !curriculumPreview) {
@@ -5846,14 +5841,30 @@ function renderCurriculumSettingsSources() {
     });
 }
 
-function openCurriculumBuilder(subjectId = '', registry = null) {
+function openCurriculumBuilder(subjectId = '', registry = null, inlineContainer = null) {
     const targetRegistry = registry || curriculumRegistryForView(curriculumIndex, { subjectId });
     const draft = {
         subject: subjectId,
         destination: 'whole-field'
     };
-    const { overlay, content, close } = curriculumOverlay(subjectId ? `Regenerate ${subjectId} curriculum` : 'Create subject');
-    content.innerHTML = `<form class="curriculum-builder-form">
+    const { overlay, content, close } = inlineContainer
+        ? { overlay: inlineContainer, content: inlineContainer, close: () => {
+            form.reset();
+            form.querySelector('[type="submit"]').textContent = '+';
+            validate(false);
+        } }
+        : curriculumOverlay(subjectId ? `Regenerate ${subjectId} curriculum` : 'Create subject');
+    content.innerHTML = inlineContainer ? `<form aria-label="Create subject" novalidate>
+            <div class="curriculum-subject-input-row">
+                <div class="repo-input-inline">
+                    <input class="repo-input-field" name="subject" placeholder="Add a new subject..." aria-label="Subject name" aria-describedby="curriculum-subject-name-hint curriculum-launch-model" autocomplete="off">
+                </div>
+                <button class="add-repo-btn" type="submit" aria-label="Queue AI job" title="Queue AI job" aria-describedby="curriculum-launch-model">+</button>
+            </div>
+            <p id="curriculum-launch-model" class="curriculum-launch-model" aria-live="polite"></p>
+            <p id="curriculum-subject-name-hint" class="curriculum-builder-field-error" data-subject-errors aria-live="polite"></p>
+            <div data-errors class="curriculum-builder-errors" aria-live="polite"></div>
+        </form>` : `<form class="curriculum-builder-form">
             ${subjectId ? `<p class="study-settings-help">Create a revised curriculum draft using the existing curriculum as reference, without prescribing its current deck outline. Nothing changes until you review and apply the draft.</p>` : ''}
             <div>
                 <div class="curriculum-builder-field">
@@ -5861,7 +5872,6 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
                     <p id="curriculum-subject-name-hint" class="curriculum-builder-field-error" data-subject-errors aria-live="polite"></p>
                 </div>
             </div>
-            <p class="study-settings-help">Whole-field curriculum: foundations, undergraduate, graduate, and advanced topics as needed.</p>
             <div data-errors class="curriculum-builder-errors" aria-live="polite"></div>
             <div class="curriculum-builder-launch">
                 <div class="curriculum-builder-actions"><button type="submit" aria-describedby="curriculum-launch-model">Queue AI job</button></div>
@@ -5894,7 +5904,9 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
         instructions: '',
         proposedDecks: []
     });
-    const validate = () => {
+    let launchAvailable = !inlineContainer;
+    let submitting = false;
+    const validate = (showErrors = true) => {
         const result = validateCurriculumDraft(readDraft(), {
             existingSubjects: curriculumIndex.subjects || [],
             allowExistingSubject: Boolean(subjectId)
@@ -5902,20 +5914,24 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
         const subjectErrorMessages = new Set([
             'Subject must use lowercase kebab-case.'
         ]);
-        content.querySelector('[data-subject-errors]').textContent = result.errors
+        content.querySelector('[data-subject-errors]').textContent = (showErrors ? result.errors : [])
             .filter(error => subjectErrorMessages.has(error))
             .join(' ');
-        content.querySelector('[data-errors]').textContent = result.errors
+        content.querySelector('[data-errors]').textContent = (showErrors ? result.errors : [])
             .filter(error => !subjectErrorMessages.has(error))
             .join(' ');
-        form.querySelector('[type="submit"]').disabled = result.errors.length > 0;
+        const submit = form.querySelector('[type="submit"]');
+        submit.disabled = submitting || !launchAvailable || result.errors.length > 0;
+        submit.setAttribute('aria-disabled', String(submit.disabled));
         return result;
     };
     form.addEventListener('input', validate);
     form.onsubmit = async event => {
         event.preventDefault();
-        if (validate().errors.length) return;
+        if (submitting || validate().errors.length || !launchAvailable) return;
         if (!githubAuth.isAuthenticated()) return alert('Sign in with GitHub to queue a curriculum draft.');
+        submitting = true;
+        validate();
         try {
             const generationPreferences = await connectedWebsiteGenerationPreferences();
             const job = generationJobForDraft(readDraft(), {
@@ -5948,9 +5964,24 @@ function openCurriculumBuilder(subjectId = '', registry = null) {
             });
         } catch (error) {
             content.querySelector('[data-errors]').textContent = error.message;
+        } finally {
+            submitting = false;
+            const submit = form.querySelector('[type="submit"]');
+            submit.disabled = !launchAvailable || validateCurriculumDraft(readDraft(), {
+                existingSubjects: curriculumIndex.subjects || [],
+                allowExistingSubject: Boolean(subjectId)
+            }).errors.length > 0;
+            submit.setAttribute('aria-disabled', String(submit.disabled));
         }
     };
-    validate();
+    validate(!inlineContainer);
+    if (inlineContainer) {
+        configureWebsiteGenerationButton(form.querySelector('[type="submit"]'), { registry: targetRegistry })
+            .then(availability => {
+                launchAvailable = availability.enabled;
+                validate(Boolean(field('subject').value));
+            });
+    }
 }
 
 function dependencyItemMarkup(name, meta, command = null) {
