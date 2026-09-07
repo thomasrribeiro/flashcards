@@ -3,7 +3,7 @@ import {
     canCancelGenerationRequest,
     cancelGenerationRequest,
     generationEffectiveCommand,
-    generationPullRequestActionLabel,
+    generationRequestName,
     generationPreviewDestination,
     mergeGenerationPullRequest,
     loadPullRequestChapter,
@@ -94,10 +94,21 @@ describe('generation activity', () => {
         expect(fetchImpl).toHaveBeenCalledTimes(1);
     });
 
-    it('labels pull request links by lifecycle state', () => {
-        expect(generationPullRequestActionLabel('needs-review')).toBe('Review pull request');
-        expect(generationPullRequestActionLabel('published')).toBe('View merged pull request');
-        expect(generationPullRequestActionLabel('cancelled')).toBe('View closed pull request');
+    it('uses curriculum breadcrumbs for every job level without task labels', () => {
+        const repository = 'example/curricula';
+        const root = '~ / example / curricula';
+        expect(generationRequestName({ jobType: 'curriculum-design', targetRepository: repository })).toBe(root);
+        expect(generationRequestName({ jobType: 'subject-design', payload: {
+            subject: 'mathematics', title: 'Verbose task description'
+        } }, repository)).toBe(`${root} / mathematics`);
+        expect(generationRequestName({ jobType: 'deck-plan', deckId: 'mathematics/linear-algebra' }, repository))
+            .toBe(`${root} / mathematics / linear-algebra`);
+        expect(generationRequestName({ jobType: 'chapter-expand', targetRepository: 'example/linear-algebra',
+            payload: { deckId: 'mathematics/linear-algebra', chapterId: '01_vectors.md' }
+        }, repository)).toBe(`${root} / mathematics / linear-algebra / 01_vectors`);
+        expect(generationRequestName({ jobType: 'deck-build', deckId: 'mathematics/linear-algebra' }, repository))
+            .toBe(`${root} / mathematics / linear-algebra`);
+        expect(generationRequestName({ jobType: 'curriculum-design' })).toBe('~ / curricula');
     });
 
     it('opens deck-plan previews directly on the generated chapter DAG', () => {

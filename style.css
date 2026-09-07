@@ -4079,16 +4079,6 @@ body.standalone-phone .mobile-sidebar-close {
     gap: 14px;
 }
 .generation-activity-item-header > div { flex: 1 1 220px; min-width: 0; }
-.generation-job-tag {
-    display: inline-block;
-    margin-bottom: 6px;
-    border: 1px solid var(--black);
-    padding: 3px 6px;
-    font-size: 0.58rem;
-    background: #e8edf8;
-}
-.generation-job-tag.is-deck-dag { background: #e8f3ea; }
-.generation-job-tag.is-flashcards { background: #fff5c7; }
 .generation-launch-list { display: grid; gap: 12px; margin: 16px 0; }
 .generation-launch-list section { padding: 12px; border: 1px solid var(--subtle-border); overflow-wrap: anywhere; }
 .generation-launch-list h3 { margin: 0 0 8px; font-size: 0.85rem; }

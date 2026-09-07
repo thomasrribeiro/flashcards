@@ -97,7 +97,6 @@ import { validateCurriculumDraft } from './curriculum-builder.js';
 import {
     canCancelGenerationRequest,
     cancelGenerationRequest,
-    generationPullRequestActionLabel,
     generationEffectiveCommand,
     generationPreviewDestination,
     generationRequestName,
@@ -5549,15 +5548,14 @@ function appendGenerationRequestRow(list, request, close) {
     header.className = 'generation-activity-item-header';
     const identity = document.createElement('div');
     const title = document.createElement('h3');
-    title.textContent = generationRequestName(request);
-    const category = generationJobCategory(request);
-    const tag = document.createElement('span');
-    tag.className = `generation-job-tag is-${category.id}`;
-    tag.textContent = category.label;
-    tag.setAttribute('aria-label', `Job type: ${category.label}`);
+    const registry = curriculumIndex?.registries?.find(entry => entry.id === request.registryId)
+        || (curriculumIndex && curriculumRegistryForView(curriculumIndex, {
+            subjectId: request.subject, deckId: request.deckId
+        }));
+    title.textContent = generationRequestName(request, registry?.repository);
     const meta = document.createElement('p');
     meta.textContent = generationRequestMeta(request);
-    identity.append(tag, title, meta);
+    identity.append(title, meta);
     const status = document.createElement('span');
     status.className = `generation-activity-status is-${request.status}`;
     status.textContent = generationStatusLabel(request.status);
@@ -5605,8 +5603,7 @@ function appendGenerationRequestRow(list, request, close) {
     if (canReviewGenerationDag(request)) {
         const preview = document.createElement('button');
         preview.type = 'button';
-        preview.textContent = request.jobType === 'curriculum-design' ? 'Review global curriculum'
-            : request.jobType === 'subject-design' ? 'Review subject curriculum' : 'Review deck curriculum';
+        preview.textContent = 'Review';
         preview.onclick = () => enterCurriculumPreview(request, close, preview);
         actions.appendChild(preview);
     }
@@ -5615,21 +5612,9 @@ function appendGenerationRequestRow(list, request, close) {
         && request.resultUrl) {
         const preview = document.createElement('button');
         preview.type = 'button';
-        preview.textContent = 'Review flashcards';
+        preview.textContent = 'Review';
         preview.onclick = () => openChapterGenerationPreview(request, close, preview);
         actions.appendChild(preview);
-    } else if (request.resultUrl) {
-        try {
-            pullRequestCoordinates(request.resultUrl);
-            const link = document.createElement('a');
-            link.href = request.resultUrl;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.textContent = request.jobType === 'chapter-expand'
-                ? 'View flashcards pull request'
-                : generationPullRequestActionLabel(request.status);
-            actions.appendChild(link);
-        } catch { /* The worker result is not a pull request. */ }
     }
     if (request.jobType === 'chapter-expand'
         && request.status === 'needs-review'

@@ -440,7 +440,7 @@ test('queues a subject draft only for a signed-in account with a connected model
     const activity = settings.locator('#study-settings-pane-agents');
     await expect(settings.getByRole('tab', { name: /Agents/ })).toHaveAttribute('aria-selected', 'true');
     await expect(activity).toBeVisible();
-    await expect(activity.getByRole('heading', { name: 'Global curriculum' })).toBeVisible();
+    await expect(activity.getByRole('heading', { name: '~ / thomasrribeiro-flashcards / curricula', exact: true })).toBeVisible();
     await expect(activity.getByText('Request 123 · openai · gpt-test · high reasoning')).toBeVisible();
     await expect(activity.getByText('Queued', { exact: true })).toBeVisible();
     await expect(activity).not.toContainText('waiting for an isolated runner');
@@ -495,7 +495,7 @@ test('regenerates the global curriculum with model disclosure and cancellable pi
     await expect.poll(() => queuedJobs.length).toBe(1);
     expect(queuedJobs[0]).toMatchObject({ jobType:'curriculum-design', modelId:'gpt-test', payload:{ subjects: expect.arrayContaining(['mathematics']), reasoningEffort:'high' } });
     expect(queuedJobs[0].payload).not.toHaveProperty('proposedDecks');
-    await expect(page.getByRole('dialog', { name: 'Settings' }).getByLabel('Job type: Global curriculum')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Settings' }).getByRole('heading', { name: '~ / thomasrribeiro-flashcards / curricula', exact: true })).toBeVisible();
 });
 
 for (const recordSubmission of [true, false]) {
@@ -678,7 +678,7 @@ test('queues a chapter-curriculum agent from an empty deck chapter viewer', asyn
     const settings = page.getByRole('dialog', { name: 'Settings' });
     await expect(settings.getByRole('tab', { name: /Agents/ })).toHaveAttribute('aria-selected', 'true');
     await expect(settings.getByRole('heading', {
-        name: 'mathematics/geometry-and-measurement chapter curriculum'
+        name: '~ / thomasrribeiro-flashcards / curricula / mathematics / geometry-and-measurement'
     })).toBeVisible();
     expect(queuedJob).toMatchObject({
         jobType: 'deck-plan',
@@ -1170,7 +1170,7 @@ test('queues content generation for one eligible chapter', async ({ page }) => {
 
     const settings = page.getByRole('dialog', { name: 'Settings' });
     await expect(settings.getByRole('heading', {
-        name: `${targetId} / ${chapterId} content`
+        name: `~ / thomasrribeiro-flashcards / curricula / ${targetId.split('/').join(' / ')} / ${chapterId}`
     })).toBeVisible();
     expect(queuedJob).toMatchObject({
         jobType: 'chapter-expand',
@@ -1206,6 +1206,15 @@ test('agent activity stays within the settings viewport with long job details', 
     const modal = page.getByRole('dialog', { name: 'Settings', exact: true });
     await modal.getByRole('tab', { name: /Agents/ }).click();
     await expect(modal.locator('.generation-activity-item')).toHaveCount(4);
+    await expect(modal.locator('.generation-job-tag')).toHaveCount(0);
+    await expect(modal.locator('.generation-activity-actions a')).toHaveCount(0);
+    const root = '~ / thomasrribeiro-flashcards / curricula';
+    for (const [id, path] of [[36, root], [35, `${root} / mathematics`],
+        [34, `${root} / mathematics / linear-algebra / 01_linear_equations_and_coordinate_geometry`],
+        [33, `${root} / computer-science / algorithms-and-data-structures`]]) {
+        await expect(modal.locator(`[data-request-id="${id}"] h3`)).toHaveText(path);
+    }
+    await expect(modal.getByRole('button', { name: 'Review', exact: true })).toHaveCount(2);
     for (const width of testInfo.project.name === 'desktop-chromium' ? [1280] : [390, 320]) {
         await page.setViewportSize({ width, height: 844 });
         const overflow = await modal.evaluate(element => {
@@ -1316,9 +1325,9 @@ test('tracks generation activity and previews an unmerged subject PR in the curr
     await agents.click();
     const activity = settings.locator('#study-settings-pane-agents');
     await expect(activity.getByText('No agents currently running. 1 result awaiting review.')).toBeVisible();
-    await expect(activity.getByRole('heading', { name: 'Chemistry curriculum' })).toBeVisible();
-    await expect(activity.getByLabel('Job type: Subject curriculum')).toBeVisible();
-    await activity.getByRole('button', { name: 'Review subject curriculum' }).click();
+    await expect(activity.getByRole('heading', { name: /\/ chemistry$/ })).toBeVisible();
+    await expect(activity.locator('.generation-job-tag')).toHaveCount(0);
+    await activity.getByRole('button', { name: 'Review', exact: true }).click();
 
     await expect(page.locator('#tab-curriculum')).toHaveClass(/active/);
     await expect(page.locator('.curriculum-preview-banner')).toContainText('Generated curriculum · chemistry curriculum · gpt-test · PR #12');
@@ -1364,7 +1373,8 @@ test('previews a fresh global curriculum and sends acceptance only to the guarde
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     const settings = page.getByRole('dialog', { name: 'Settings' });
     await settings.getByRole('tab', { name: /Agents/ }).click();
-    await settings.getByRole('button', { name: 'Review global curriculum' }).click();
+    await expect(settings.locator('.generation-activity-actions a')).toHaveCount(0);
+    await settings.getByRole('button', { name: 'Review', exact: true }).click();
     const banner = page.locator('.curriculum-preview-banner');
     await expect(banner).toContainText('Global curriculum');
     await banner.getByText('Inspect curriculum changes', { exact: true }).click();
@@ -1400,8 +1410,9 @@ test('reviews a generated deck curriculum on the chapter canvas without applying
     await page.getByRole('button', { name: 'Settings' }).click();
     const settings = page.getByRole('dialog', { name: 'Settings' });
     await settings.getByRole('tab', { name: /Agents/ }).click();
-    await expect(settings.getByLabel('Job type: Deck curriculum')).toBeVisible();
-    await settings.getByRole('button', { name: 'Review deck curriculum' }).click();
+    await expect(settings.locator('.generation-job-tag')).toHaveCount(0);
+    await expect(settings.locator('.generation-activity-actions a')).toHaveCount(0);
+    await settings.getByRole('button', { name: 'Review', exact: true }).click();
     const banner = page.locator('.curriculum-preview-banner');
     await expect(banner).toContainText('Nodes: 1 → 2. 1 added');
     await expect(banner).toContainText('Prerequisite edges: +1 / −0');
@@ -1482,8 +1493,8 @@ test('publishes merged review requests and clears the Agents review count', asyn
     const activity = settings.locator('#study-settings-pane-agents');
     await expect(activity.getByText('No agents currently running. 0 results awaiting review.')).toBeVisible();
     await expect(activity.getByText('Published', { exact: true })).toBeVisible();
-    await expect(activity.getByRole('button', { name: 'Review subject curriculum' })).toBeVisible();
-    await expect(activity.getByRole('link', { name: 'View merged pull request' })).toHaveAttribute('href', resultUrl);
+    await expect(activity.getByRole('button', { name: 'Review', exact: true })).toBeVisible();
+    await expect(activity.locator('.generation-activity-actions a')).toHaveCount(0);
     const [summaryBox, refreshBox, listBox] = await Promise.all([
         activity.locator('.generation-activity-summary').boundingBox(),
         activity.getByRole('button', { name: 'Refresh' }).boundingBox(),
@@ -1597,8 +1608,9 @@ test('reviews generated flashcards in-app and publishes both pull requests', asy
     await page.getByRole('button', { name: 'Settings' }).click();
     const settings = page.getByRole('dialog', { name: 'Settings' });
     await settings.getByRole('tab', { name: /Agents/ }).click();
-    await expect(settings.getByLabel('Job type: Flashcards')).toBeVisible();
-    await settings.getByRole('button', { name: 'Review flashcards' }).click();
+    await expect(settings.locator('.generation-job-tag')).toHaveCount(0);
+    await expect(settings.locator('.generation-activity-actions a')).toHaveCount(0);
+    await settings.getByRole('button', { name: 'Review', exact: true }).click();
 
     const browser = page.getByRole('dialog', { name: 'Variables and expressions' });
     await expect(browser).toBeVisible();

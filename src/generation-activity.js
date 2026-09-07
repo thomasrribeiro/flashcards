@@ -306,23 +306,21 @@ export async function loadPullRequestChapter(request, {
     };
 }
 
-export function generationRequestName(request) {
-    if (request.jobType === 'curriculum-design') return 'Global curriculum';
-    if (request.jobType === 'subject-design') {
-        const subject = request.payload?.title || String(request.subject || 'Subject')
-            .split('-')
-            .map(word => word ? `${word[0].toUpperCase()}${word.slice(1)}` : '')
-            .join(' ');
-        return `${subject} curriculum`;
+export function generationRequestName(request, registryRepository = '') {
+    const repository = registryRepository || (
+        ['curriculum-design', 'subject-design', 'deck-plan'].includes(request.jobType)
+            ? request.targetRepository : ''
+    ) || 'curricula';
+    const parts = ['~', ...repository.split('/').filter(Boolean)];
+    if (request.jobType === 'curriculum-design') return parts.join(' / ');
+    const deckId = request.deckId || request.payload?.deckId;
+    const target = request.jobType === 'subject-design'
+        ? request.subject || request.payload?.subject : deckId;
+    if (target) parts.push(...target.split('/').filter(Boolean));
+    if (request.jobType === 'chapter-expand' && request.payload?.chapterId) {
+        parts.push(request.payload.chapterId.replace(/\.md$/i, ''));
     }
-    if (request.jobType === 'deck-plan') {
-        return `${request.deckId || 'Deck'} chapter curriculum`;
-    }
-    if (request.jobType === 'chapter-expand') {
-        const chapter = request.payload?.chapterId || '';
-        return `${request.deckId || 'Deck'}${chapter ? ` / ${chapter}` : ''} content`;
-    }
-    return request.deckId || request.requestKey || `Request ${request.id}`;
+    return parts.join(' / ');
 }
 
 export function generationEffectiveCommand(request) {
@@ -345,14 +343,6 @@ export function generationStatusLabel(status) {
         failed: 'Failed',
         cancelled: 'Cancelled'
     })[status] || status;
-}
-
-export function generationPullRequestActionLabel(status) {
-    return ({
-        'needs-review': 'Review pull request',
-        published: 'View merged pull request',
-        cancelled: 'View closed pull request'
-    })[status] || 'View pull request';
 }
 
 export function generationPreviewDestination(request) {
