@@ -1,6 +1,19 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+const curriculum = JSON.parse(readFileSync(new URL('../../public/data/curriculum.json', import.meta.url), 'utf8'));
+curriculum.subjects.push({ id: 'misc' });
+curriculum.decks.push({
+    id: 'misc/example', subject: 'misc', deck: 'example', order: 1,
+    prerequisites: ['mathematics/elementary-algebra-and-functions'],
+    recommended_after: [], chapters: []
+});
 
 test.beforeEach(async ({ page }) => {
+    // Include real prerequisites so the removed action cannot regress unnoticed.
+    await page.route('**/data/curriculum.json', route => route.fulfill({ json: curriculum }));
+    await page.route('https://raw.githubusercontent.com/thomasrribeiro-flashcards/curricula/**',
+        route => route.fulfill({ json: curriculum }));
     await page.addInitScript(() => {
         localStorage.setItem(
             'flashcards_unlogged_repos',
@@ -57,6 +70,7 @@ test('deck commands are grouped in one labeled settings modal', async ({ page })
     await deck.getByRole('button', { name: 'Deck settings and actions' }).click();
     const modal = page.locator('#deck-actions-modal');
     await expect(modal).toBeVisible();
+    await expect(modal.getByRole('button', { name: /View prerequisite/ })).toHaveCount(0);
     await expect(modal.getByRole('button', { name: /Review this deck/ })).toBeVisible();
     await expect(modal.getByRole('button', { name: /Sync latest version from GitHub/ })).toBeVisible();
     await expect(modal.getByRole('button', { name: /Reset learning progress/ })).toBeVisible();

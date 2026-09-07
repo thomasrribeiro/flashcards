@@ -1387,14 +1387,14 @@ function appendDeckAction(body, {
     return button;
 }
 
-function openDeckActionsModal({ deckId, deckName, subject, curriculumDeck }, trigger = null) {
+function openDeckActionsModal({ deckId, deckName, subject }, trigger = null) {
     const modal = document.getElementById('deck-actions-modal');
     const title = document.getElementById('deck-actions-title');
     const path = document.getElementById('deck-actions-path');
     const body = document.getElementById('deck-actions-body');
     if (!modal || !title || !path || !body) return;
 
-    activeDeckActions = { deckId, deckName, subject, curriculumDeck };
+    activeDeckActions = { deckId, deckName, subject };
     activeDeckActionsTrigger = trigger;
     title.textContent = deckName;
     path.textContent = `~ / home / ${subject} / ${deckName}`;
@@ -1415,18 +1415,6 @@ function openDeckActionsModal({ deckId, deckName, subject, curriculumDeck }, tri
         description: 'Study due and new cards from every chapter in this deck.',
         onClick: review
     });
-
-    if (hasCurriculumDependencies(curriculumDeck)) {
-        appendDeckAction(body, {
-            label: 'View prerequisite path',
-            description: 'See required and recommended preparation in the curriculum.',
-            onClick: () => {
-                const target = activeDeckActions;
-                closeDeckActionsModal({ restoreFocus: false });
-                openDependencyModal(target.curriculumDeck.id);
-            }
-        });
-    }
 
     if (!deckId.startsWith('local/')) {
         appendDeckAction(body, {
@@ -1991,12 +1979,6 @@ function curriculumDeckForRepository(deckId, subject = null) {
         deck.deck === repoName && (!subject || deck.subject === subject)) || null;
 }
 
-function hasCurriculumDependencies(deck, chapter = null) {
-    if (!deck) return false;
-    if (chapter && (chapter.prerequisites?.length || chapter.resolved_dependencies?.length)) return true;
-    return Boolean(deck.prerequisites?.length || deck.recommended_after?.length);
-}
-
 /**
  * One columns row: optional inline star (left), name and compact metadata,
  * then compact contextual actions and a chevron for drillable items. Deck-level
@@ -2262,7 +2244,6 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
             const deckName = deckId.split('/').pop();
             const deckFiles = [filesOf(decks)(deckId)];
             const starState = scopeStarState(scopes, deckFiles, completedActiveScopes);
-            const curriculumDeck = curriculumDeckForRepository(deckId, columnsSel.subject);
             return colRow({
                 name: deckName,
                 star: { glyph: subjectStarGlyph(starState), active: starState !== 'none', title: starState === 'all' ? 'Remove deck from daily focus' : 'Add deck to daily focus', onClick: () => toggleScopes(deckFiles) },
@@ -2272,8 +2253,7 @@ function renderColumnsView(displayDecks, allCards, allReviews, allChapterProgres
                     onClick: trigger => openDeckActionsModal({
                         deckId,
                         deckName,
-                        subject: columnsSel.subject,
-                        curriculumDeck
+                        subject: columnsSel.subject
                     }, trigger)
                 }],
                 hasChildren: true, selected: columnsSel.deck === deckId,
