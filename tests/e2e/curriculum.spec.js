@@ -1495,7 +1495,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.getByRole('button', { name: 'Zoom out' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Fit', exact: true })).toHaveCount(0);
     await expect(page).toHaveURL(/curriculum-level=deck.*curriculum-subject=physics|curriculum-subject=physics.*curriculum-level=deck/);
-    await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
+    await expect(page.locator('.curriculum-graph-node-subject')).toHaveCount(0);
     const completeDeckGraphCount = await page.locator('.curriculum-graph-node').count();
     expect(completeDeckGraphCount).toBeGreaterThan(3);
     await expect(page.locator('.curriculum-graph-stage')).toHaveClass(/is-dense/);
@@ -2129,10 +2129,11 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await page.reload();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
     const layerCount = Number((await page.locator('.curriculum-layer-label').textContent()).split(' of ')[1]);
-    for (let layer = 2; layer < layerCount - 1; layer += 1) {
+    const lastLayer = testInfo.project.name === 'desktop-chromium' ? layerCount - 1 : layerCount;
+    for (let layer = 2; layer < lastLayer; layer += 1) {
         await page.getByRole('button', { name: 'Show next dependency layer' }).click();
     }
-    await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer ${layerCount - 1} of ${layerCount}`);
+    await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer ${lastLayer} of ${layerCount}`);
     await expect(page.getByRole('button', { name: 'Show next dependency layer' })).toBeDisabled();
     if (testInfo.project.name === 'desktop-chromium') {
         const lastLayerOffset = await page.locator('.curriculum-graph-stage').evaluate((stage, rank) => {
@@ -2143,7 +2144,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
         }, layerCount - 2);
         expect(lastLayerOffset).toBeLessThan(2);
     }
-    for (let layer = layerCount - 1; layer > 2; layer -= 1) {
+    for (let layer = lastLayer; layer > 2; layer -= 1) {
         await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
     }
     await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer 2 of ${layerCount}`);
@@ -2258,7 +2259,7 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-graph-stage')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Back in curriculum' })).toBeEnabled();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
-    await expect(page.locator('.curriculum-graph-node-subject').first()).toHaveText('physics');
+    await expect(page.locator('.curriculum-graph-node-subject')).toHaveCount(0);
     await expect(page.locator('.curriculum-graph-node')).toHaveCount(10);
 
     await historyBack.click();
@@ -2501,14 +2502,15 @@ test('mobile overview starts fitted and centered and preserves zoom on rotation'
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
 });
 
-test('mobile subject layers show three readable columns with the center layer labeled', async ({ page }, testInfo) => {
+test('mobile subject layers show two readable columns without redundant subject labels', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name === 'desktop-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     const stage = page.locator('.curriculum-graph-stage');
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
     await expect(page.getByRole('button', { name: 'Show previous dependency layer' })).toBeDisabled();
     const count = Number((await page.locator('.curriculum-layer-label').textContent()).split(' of ')[1]);
-    for (let rank = 1; rank < count - 1; rank += 1) {
+    await expect(stage.locator('.curriculum-graph-node-subject')).toHaveCount(0);
+    for (let rank = 1; rank < count; rank += 1) {
         await expect(stage).toHaveAttribute('data-scroll-layer', String(rank));
         await expect(page.locator('.curriculum-layer-label')).toHaveText(`Layer ${rank + 1} of ${count}`);
         const metrics = await stage.evaluate(element => {
@@ -2532,32 +2534,26 @@ test('mobile subject layers show three readable columns with the center layer la
                 })
             };
         });
-        expect(metrics).toEqual({ ranks: [rank - 1, rank, rank + 1], wholeNodes: true, readable: true });
-        const centered = await stage.locator(`.curriculum-graph-node[data-rank="${rank}"]`).first().evaluate(node => {
-            const box = node.getBoundingClientRect();
-            const canvas = node.closest('.curriculum-graph-stage').getBoundingClientRect();
-            return Math.abs(box.left + box.width / 2 - (canvas.left + canvas.width / 2)) < 1;
-        });
-        expect(centered).toBe(true);
+        expect(metrics).toEqual({ ranks: [rank - 1, rank], wholeNodes: true, readable: true });
         if (rank === 2) {
             await page.locator('#curriculum-view').screenshot({ path: testInfo.outputPath('mobile-subject-column.png') });
             const focal = stage.locator(`.curriculum-graph-node[data-rank="${rank}"]`).last();
             await focal.scrollIntoViewIfNeeded();
             await expect(focal).toBeInViewport();
         }
-        if (rank < count - 2) await page.getByRole('button', { name: 'Show next dependency layer' }).click();
+        if (rank < count - 1) await page.getByRole('button', { name: 'Show next dependency layer' }).click();
     }
     await expect(page.getByRole('button', { name: 'Show next dependency layer' })).toBeDisabled();
     await page.getByRole('button', { name: 'Show previous dependency layer' }).click();
-    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 3));
+    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 2));
     await page.setViewportSize({ width: 320, height: 700 });
-    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 3));
+    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 2));
     await expect.poll(() => stage.locator('.curriculum-graph-node-name').evaluateAll(labels =>
         labels.every(label => label.scrollHeight <= label.clientHeight + 1)
     )).toBe(true);
     await page.setViewportSize({ width: 844, height: 390 });
     await expect(stage).toHaveClass(/is-compact/);
-    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 3));
+    await expect(stage).toHaveAttribute('data-scroll-layer', String(count - 2));
 });
 
 test('subject overview emphasizes names without redundant labels', async ({ page }, testInfo) => {
@@ -2603,7 +2599,7 @@ test('mobile layered scrolling keeps later columns fixed through resize and focu
                     return rect.left >= box.left && rect.right <= box.right;
                 }).map(node => Number(node.dataset.rank)));
             return [...ranks].sort((a, b) => a - b);
-        })).toEqual([tallRank - 1, tallRank, tallRank + 1]);
+        })).toEqual([tallRank - 1, tallRank]);
     };
     await assertColumns();
     // Mobile browser bars change viewport height during a vertical gesture.

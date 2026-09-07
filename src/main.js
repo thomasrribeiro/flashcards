@@ -3616,8 +3616,8 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const compact = useCompactCurriculumCanvas();
     const nodeSizing = compact ? { nodeHeight: 112 } : {};
     if (compact && ranked) {
-        // Fit three phone columns without shrinking their text.
-        const nodeWidth = Math.max(60, (root.clientWidth - 2 - 24 - 24) / 3);
+        // Two phone columns leave room for names and prerequisite arrows.
+        const nodeWidth = Math.max(60, (root.clientWidth - 2 - 24 - 20) / 2);
         const charactersPerLine = Math.max(1, Math.floor((nodeWidth - 18) / 6.6));
         const longestLabel = Math.max(...graph.nodes.map(node => String(node.deck || node.id).length + 5));
         Object.assign(nodeSizing, {
@@ -3625,7 +3625,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             // Leave a line of headroom for wrapping at hyphens instead of at
             // an exact character count in these narrower cards.
             nodeHeight: Math.max(104, 64 + Math.ceil(longestLabel / charactersPerLine) * 13.2),
-            columnGap: 12
+            columnGap: 20
         });
     }
     const isSubjectOverview = !ranked && graph.nodes.every(node => node.nodeType === 'subject');
@@ -3825,7 +3825,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
                 : ''].filter(Boolean).join(' · ');
         node.setAttribute('aria-label', [deck.nodeType, nodeName, nodeMeta].filter(Boolean).join(' '));
         node.innerHTML = `
-            ${deck.nodeType === 'subject' ? '' : `<span class="curriculum-graph-node-subject">${escapeHtml(deck.subject)}</span>`}
+            ${deck.nodeType === 'subject' || deck.subject === curriculumViewState.subject ? '' : `<span class="curriculum-graph-node-subject">${escapeHtml(deck.subject)}</span>`}
             <span class="curriculum-graph-node-name">${escapeHtml(nodeName)}</span>
             <span class="curriculum-graph-node-status">${escapeHtml(nodeMeta)}</span>
         `;
@@ -4038,11 +4038,12 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             : [];
         const columnStep = layout.nodeWidth + (layout.columnGap || 0);
         const focalX = focalNodes.length ? Math.min(...focalNodes.map(node => node.x)) : minX;
+        const columns = compact ? 2 : 3;
         return {
             x: Number.isInteger(range.layer) ? focalX - columnStep : minX,
             y: minY,
             width: Number.isInteger(range.layer)
-                ? layout.nodeWidth + columnStep * 2
+                ? layout.nodeWidth + columnStep * (columns - 1)
                 : Math.max(1, maxX - minX),
             height: Math.max(1, maxY - minY)
         };
@@ -4216,7 +4217,9 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         fitVisibleViewport();
     };
     window.addEventListener('resize', onViewportResize);
-    requestAnimationFrame(fitVisibleViewport);
+    // Position the selected layers before the first paint, avoiding a flash
+    // of the first column when navigating on mobile Safari.
+    fitVisibleViewport();
     return { fit, zoomIn, zoomOut };
 }
 
@@ -4709,7 +4712,7 @@ async function renderCurriculumGraph(root, progressStates, graph, {
         return;
     }
     const windowState = layered
-        ? curriculumLayerWindow(graph, curriculumViewState.layerStart, 3)
+        ? curriculumLayerWindow(graph, curriculumViewState.layerStart, useCompactCurriculumCanvas() ? 2 : 3)
         : null;
     if (windowState) curriculumViewState.layerStart = windowState.layer;
     const subjectOverview = !layered && graph.nodes.every(node => node.nodeType === 'subject');
