@@ -3998,7 +3998,8 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-builder-launch { text-align: right; }
 .curriculum-launch-model { margin: 8px 0 0; font-size: 0.6rem; color: var(--muted); overflow-wrap: anywhere; }
 .curriculum-builder-modal.curriculum-options-modal { width: min(520px, calc(100vw - 32px)); }
-.curriculum-options-regenerate { margin-top: 20px; width: 100%; }
+.curriculum-options-regenerate { width: 100%; }
+.curriculum-options-modal .curriculum-builder-errors:empty { display: none; }
 .curriculum-subject-create { width: 100%; min-width: 0; }
 .curriculum-diff-value { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.65rem; max-height: 22rem; overflow: auto; }
 .curriculum-subject-input-row { display: flex; min-width: 0; }

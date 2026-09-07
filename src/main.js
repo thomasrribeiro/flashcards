@@ -4872,6 +4872,7 @@ async function renderCurriculumView(options = {}) {
     ]);
     const { mode, hierarchy, subject, parentId } = curriculumViewState;
     ensureCurriculumNavigationHistory();
+    root.querySelector('.curriculum-subject-create')?.dispatchEvent(new Event('close'));
     root.innerHTML = '';
 
     const breadcrumbRow = document.createElement('div');
@@ -4976,6 +4977,12 @@ async function renderCurriculumView(options = {}) {
     breadcrumbRow.append(breadcrumbs, historyControls);
     if (breadcrumbActions.children.length) breadcrumbRow.appendChild(breadcrumbActions);
     root.appendChild(breadcrumbRow);
+    if (hierarchy === 'subject' && mode === 'overview' && !curriculumPreview) {
+        const subjectCreation = document.createElement('div');
+        subjectCreation.className = 'curriculum-subject-create';
+        breadcrumbRow.appendChild(subjectCreation);
+        renderSubjectCreation(activeRegistry, subjectCreation);
+    }
     const previewBanner = curriculumPreviewBanner();
     if (previewBanner) root.appendChild(previewBanner);
 
@@ -5886,25 +5893,24 @@ function renderCurriculumSettingsSources() {
 function openCurriculumOptions(registry, trigger) {
     const { overlay, content, close } = curriculumOverlay('Options');
     content.closest('.curriculum-builder-modal').classList.add('curriculum-options-modal');
-    content.classList.add('curriculum-subject-create');
-    renderSubjectCreation(registry, content, { onQueued: close });
     const regenerate = document.createElement('button');
     regenerate.type = 'button';
     regenerate.className = 'curriculum-toolbar-action curriculum-options-regenerate';
     regenerate.textContent = 'Regenerate curriculum';
-    regenerate.setAttribute('aria-describedby', 'curriculum-launch-model');
+    const errors = document.createElement('div');
+    errors.className = 'curriculum-builder-errors';
+    errors.setAttribute('aria-live', 'polite');
     regenerate.onclick = async () => {
         try {
             const preferences = await connectedWebsiteGenerationPreferences();
             await queueCurriculumAgentJob({ jobType: 'curriculum-design', registryId: registry.id,
                 providerId: preferences.providerId, modelId: preferences.modelId,
                 payload: { reasoningEffort: preferences.reasoningEffort } }, regenerate, { onQueued: close });
-        } catch (error) { content.querySelector('[data-errors]').textContent = error.message; }
+        } catch (error) { errors.textContent = error.message; }
     };
-    content.querySelector('#curriculum-launch-model').before(regenerate);
+    content.append(regenerate, errors);
     configureWebsiteGenerationButton(regenerate, { registry });
     overlay.addEventListener('close', () => {
-        content.dispatchEvent(new Event('close'));
         if (trigger?.isConnected) trigger.focus();
     }, { once: true });
     overlay.addEventListener('keydown', event => {

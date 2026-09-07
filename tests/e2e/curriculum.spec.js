@@ -150,14 +150,15 @@ test.beforeEach(async ({ page }) => {
     await expect(page.getByText('Recommended paths', { exact: true })).toHaveCount(0);
     await expect(page.locator('.curriculum-toolbar').getByRole('button', { name: 'Sources' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Options', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Queue AI job' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Queue AI job' })).toBeVisible();
     const breadcrumbControlOrder = await page.locator('.curriculum-breadcrumb-row').evaluate(row => (
         [...row.children].map(child => child.className)
     ));
     expect(breadcrumbControlOrder).toEqual([
         'curriculum-breadcrumb',
         'curriculum-history-controls',
-        'curriculum-breadcrumb-actions'
+        'curriculum-breadcrumb-actions',
+        'curriculum-subject-create'
     ]);
     // Read all geometry in one frame: initial canvas sizing can scroll the page.
     await expect.poll(() => page.locator('.curriculum-breadcrumb-row').evaluate(row => {
@@ -166,12 +167,16 @@ test.beforeEach(async ({ page }) => {
         const forward = rect('[aria-label="Forward in curriculum"]');
         const options = rect('.curriculum-toolbar-action');
         const breadcrumb = rect('.curriculum-breadcrumb');
+        const subject = rect('.curriculum-subject-input-row');
         const canvas = document.querySelector('.curriculum-graph-stage')?.getBoundingClientRect();
         if (!canvas) return false;
         return Math.abs(back.x - breadcrumb.x) < 1 && back.y >= breadcrumb.bottom
             && Math.abs(options.y - back.y) < 1
             && Math.abs(options.height - back.height) < 1
-            && options.x > forward.right && options.right <= innerWidth;
+            && options.x > forward.right && options.right <= innerWidth
+            && subject.y >= back.bottom && Math.abs(subject.x - canvas.x) < 1
+            && Math.abs(subject.width - canvas.width) < 1
+            && Math.abs(subject.height - back.height) < 1;
     })).toBe(true);
     // Most workflow tests need the entire subject overview; mobile readability
     // and zoom defaults are covered separately below.
@@ -376,10 +381,9 @@ test('queues a subject draft only for a signed-in account with a connected model
     await page.reload();
     await expect(page.locator('#tab-curriculum')).toBeVisible({ timeout: 20_000 });
     await page.locator('#tab-curriculum').click();
-    await page.getByRole('button', { name: 'Options', exact: true }).click();
     const dialog = page.getByRole('form', { name: 'Create subject' });
     await expect(dialog).toBeVisible();
-    await expect(page.getByRole('dialog', { name: 'Options', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Options', exact: true })).toHaveCount(0);
     await expect(dialog).not.toContainText('Enter the structured subject intent');
     await expect(dialog).not.toContainText('subject-design-v1');
     await expect(dialog.getByLabel('Local provider')).toHaveCount(0);
@@ -423,14 +427,14 @@ test('queues a subject draft only for a signed-in account with a connected model
     await dialog.getByLabel('Subject name').fill('earth-science');
     await expect(dialog.getByLabel('Subject name')).toHaveAttribute('aria-invalid', 'false');
     await expect(subjectError).toBeHidden();
-    await page.getByRole('dialog', { name: 'Options', exact: true }).screenshot({ path: testInfo.outputPath('subject-generation-form.png') });
+    await dialog.screenshot({ path: testInfo.outputPath('subject-generation-form.png') });
     await dialog.getByRole('button', { name: 'Queue AI job' }).click();
     expect(queuedJob).toBeNull();
     await page.getByRole('dialog', { name: 'Confirm AI generation' }).getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(dialog.getByLabel('Subject name')).toHaveValue('earth-science');
     await dialog.getByLabel('Subject name').press('Enter');
     await confirmAIStart(page);
-    await expect(dialog).toHaveCount(0);
+    await expect(dialog.getByLabel('Subject name')).toHaveValue('');
     const settings = page.getByRole('dialog', { name: 'Settings' });
     const activity = settings.locator('#study-settings-pane-agents');
     await expect(settings.getByRole('tab', { name: /Agents/ })).toHaveAttribute('aria-selected', 'true');
@@ -494,7 +498,6 @@ test('regenerates the global curriculum with model disclosure and cancellable pi
 test('changes launch settings without losing the subject draft or starting a job on save', async ({ page }, testInfo) => {
     const queuedJobs = [];
     await installGenerationAccount(page, { onPost: job => queuedJobs.push(job) });
-    await page.getByRole('button', { name: 'Options', exact: true }).click();
     const builder = page.getByRole('form', { name: 'Create subject' });
     await builder.getByLabel('Subject name').fill('earth-science');
     await expect(builder.getByLabel('Destination')).toHaveCount(0);
@@ -532,27 +535,28 @@ test('changes launch settings without losing the subject draft or starting a job
     });
 });
 
-test('curriculum Options contains both generation actions and fits mobile', async ({ page }, testInfo) => {
+test('curriculum Options contains only regeneration with subject entry below navigation and fits mobile', async ({ page }, testInfo) => {
     const trigger = page.getByRole('button', { name: 'Options', exact: true });
-    await expect(page.getByRole('form', { name: 'Create subject' })).toHaveCount(0);
+    const subject = page.getByRole('form', { name: 'Create subject' });
+    await expect(subject).toBeVisible();
     await expect(page.getByRole('button', { name: 'Regenerate curriculum', exact: true })).toHaveCount(0);
     await trigger.click();
     const modal = page.getByRole('dialog', { name: 'Options', exact: true });
     await expect(modal.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
-    await expect(modal.getByLabel('Subject name')).not.toBeFocused();
+    await expect(modal.getByLabel('Subject name')).toHaveCount(0);
+    await expect(subject.getByLabel('Subject name')).not.toBeFocused();
     if (testInfo.project.name !== 'desktop-chromium') {
-        expect(await modal.getByLabel('Subject name').evaluate(input =>
+        expect(await subject.getByLabel('Subject name').evaluate(input =>
             parseFloat(getComputedStyle(input).fontSize)
         )).toBeGreaterThanOrEqual(16);
         // Editing remains available; avoid disabling user zoom to fix autofocus.
-        await modal.getByLabel('Subject name').click();
-        await expect(modal.getByLabel('Subject name')).toBeFocused();
         const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
         expect(viewport).not.toMatch(/user-scalable\s*=\s*no|maximum-scale\s*=\s*1(?:\D|$)/);
     }
-    await expect(modal.getByRole('button', { name: 'Queue AI job' })).toBeDisabled();
+    await expect(modal.getByRole('button', { name: 'Queue AI job' })).toHaveCount(0);
     await expect(modal.getByRole('button', { name: 'Regenerate curriculum', exact: true })).toBeDisabled();
-    await expect(modal.locator('.curriculum-launch-model')).not.toBeEmpty();
+    await expect(modal.locator('.curriculum-launch-model')).toHaveCount(0);
+    await expect(modal.getByRole('button')).toHaveCount(2); // Close and regenerate only.
     expect(await modal.evaluate(element => {
         const box = element.getBoundingClientRect();
         return box.left >= 0 && box.right <= innerWidth && element.scrollWidth <= element.clientWidth;
