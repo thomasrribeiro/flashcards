@@ -501,7 +501,18 @@ test('curriculum Options contains both generation actions and fits mobile', asyn
     await expect(page.getByRole('button', { name: 'Regenerate curriculum', exact: true })).toHaveCount(0);
     await trigger.click();
     const modal = page.getByRole('dialog', { name: 'Options', exact: true });
-    await expect(modal.getByLabel('Subject name')).toBeFocused();
+    await expect(modal.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+    await expect(modal.getByLabel('Subject name')).not.toBeFocused();
+    if (testInfo.project.name !== 'desktop-chromium') {
+        expect(await modal.getByLabel('Subject name').evaluate(input =>
+            parseFloat(getComputedStyle(input).fontSize)
+        )).toBeGreaterThanOrEqual(16);
+        // Editing remains available; avoid disabling user zoom to fix autofocus.
+        await modal.getByLabel('Subject name').click();
+        await expect(modal.getByLabel('Subject name')).toBeFocused();
+        const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
+        expect(viewport).not.toMatch(/user-scalable\s*=\s*no|maximum-scale\s*=\s*1(?:\D|$)/);
+    }
     await expect(modal.getByRole('button', { name: 'Queue AI job' })).toBeDisabled();
     await expect(modal.getByRole('button', { name: 'Regenerate curriculum', exact: true })).toBeDisabled();
     await expect(modal.locator('.curriculum-launch-model')).not.toBeEmpty();

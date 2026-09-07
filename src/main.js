@@ -5923,7 +5923,8 @@ function openCurriculumOptions(registry, trigger) {
             }
         }
     });
-    content.querySelector('input').focus();
+    // Opening Options should not summon the phone keyboard or zoom the page.
+    overlay.querySelector('[data-close]').focus({ preventScroll: true });
 }
 
 function renderSubjectCreation(targetRegistry, content, { onQueued = null } = {}) {
