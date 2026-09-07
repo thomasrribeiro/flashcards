@@ -3583,8 +3583,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             columnGap: 20
         });
     }
-    // Measure actual wrapped content, rather than giving every node the height
-    // of the longest title. Reuse these elements after routing the graph.
+    // Measure wrapped titles before routing so no label is clipped.
     await document.fonts.ready;
     stage.classList.add('is-measuring');
     document.body.appendChild(stage);
@@ -3620,6 +3619,10 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         nodeSizing.nodeSizes.set(id, { width: Math.ceil(bounds.width), height: Math.ceil(bounds.height) });
     }
     nodeSizing.nodeHeight = Math.max(...[...nodeSizing.nodeSizes.values()].map(size => size.height));
+    if (graph.nodes.every(node => node.nodeType === 'deck')) {
+        // A common deck size keeps rows aligned across prerequisite columns.
+        for (const size of nodeSizing.nodeSizes.values()) size.height = nodeSizing.nodeHeight;
+    }
     stage.replaceChildren();
     stage.remove();
     stage.classList.remove('is-measuring');

@@ -610,9 +610,9 @@ test('curriculum Options contains only regeneration with subject entry below nav
 
 test('omits redundant subject actions and labels deck actions Options', async ({ page }, testInfo) => {
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
-    // Deck widths stay uniform even though wrapped titles have different heights.
+    // Deck boxes align even when their titles wrap to different line counts.
     await expect.poll(() => page.locator('.curriculum-graph-node').evaluateAll(nodes =>
-        new Set(nodes.map(node => node.offsetWidth)).size
+        new Set(nodes.map(node => `${node.offsetWidth}x${node.offsetHeight}`)).size
     )).toBe(1);
     await expect(page.locator('.curriculum-breadcrumb-actions')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Options/ })).toHaveCount(0);
@@ -2670,12 +2670,17 @@ test('mobile subject layers show two readable columns without redundant subject 
                         && node.scrollHeight <= node.clientHeight + 1
                         && style.paddingTop === style.paddingRight
                         && style.paddingTop === style.paddingBottom
-                        && style.paddingTop === style.paddingLeft
-                        && node.clientHeight - label.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) <= 1;
-                })
+                        && style.paddingTop === style.paddingLeft;
+                }),
+                uniform: new Set(nodes.map(node => `${node.offsetWidth}x${node.offsetHeight}`)).size === 1,
+                aligned: (() => {
+                    const columns = [...new Set(nodes.map(node => node.dataset.rank))].map(rank =>
+                        nodes.filter(node => node.dataset.rank === rank).map(node => parseFloat(node.style.top)));
+                    return columns[0].slice(0, columns[1].length).every((top, index) => top === columns[1][index]);
+                })()
             };
         });
-        expect(metrics).toEqual({ ranks: [rank - 1, rank], wholeNodes: true, readable: true });
+        expect(metrics).toEqual({ ranks: [rank - 1, rank], wholeNodes: true, readable: true, uniform: true, aligned: true });
         if (rank === 2) {
             await page.locator('#curriculum-view').screenshot({ path: testInfo.outputPath('mobile-subject-column.png') });
             const focal = stage.locator(`.curriculum-graph-node[data-rank="${rank}"]`).last();
