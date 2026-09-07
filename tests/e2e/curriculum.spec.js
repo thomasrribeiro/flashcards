@@ -517,26 +517,18 @@ test('curriculum Options contains both generation actions and fits mobile', asyn
     await expect(trigger).toBeFocused();
 });
 
-test('keeps subject Options discoverable without AI access and restores focus when closed', async ({ page }, testInfo) => {
-    await expect(page.getByRole('button', { name: /Options for/ })).toHaveCount(0);
+test('omits redundant subject actions and labels deck actions Options', async ({ page }, testInfo) => {
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
-    const trigger = page.getByRole('button', { name: 'Options for mathematics' });
-    await expect(trigger).toHaveText('Options');
-    await expect(trigger).toBeEnabled();
-    await trigger.click();
-    const options = page.getByRole('dialog', { name: 'mathematics', exact: true });
-    await expect(options.getByRole('button', { name: /Regenerate curriculum/ })).toHaveCount(0);
-    await page.screenshot({ path: testInfo.outputPath('subject-options.png') });
-    await page.keyboard.press('Escape');
-    await expect(options).toBeHidden();
-    await expect(trigger).toBeFocused();
-    await trigger.click();
-    await options.getByRole('button', { name: /Subject curriculum/ }).click();
-    await expect(options).toBeHidden();
-    await expect(trigger).toBeVisible();
+    await expect(page.locator('.curriculum-breadcrumb-actions')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Options/ })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('subject-without-options.png') });
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics/elementary-algebra-and-functions"]').click();
-    await expect(trigger).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Deck settings for elementary-algebra-and-functions' })).toHaveText('Deck options');
+    const trigger = page.getByRole('button', { name: 'Deck settings for elementary-algebra-and-functions' });
+    await expect(trigger).toHaveText('Options');
+    await trigger.click();
+    await expect(page.getByRole('dialog', { name: 'elementary-algebra-and-functions', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(trigger).toBeFocused();
 });
 
 test('queues a chapter-curriculum agent from an empty deck chapter viewer', async ({ page }) => {
@@ -639,7 +631,7 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
     const settingsTrigger = page.getByRole('button', {
         name: 'Deck settings for elementary-algebra-and-functions'
     });
-    await expect(settingsTrigger).toHaveText('Deck options');
+    await expect(settingsTrigger).toHaveText('Options');
     const deckCrumb = page.locator('.curriculum-breadcrumb').getByRole('button', {
         name: 'elementary-algebra-and-functions', exact: true
     });
