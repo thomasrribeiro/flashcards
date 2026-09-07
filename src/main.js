@@ -4200,7 +4200,11 @@ function captureCurriculumPosition() {
     if (!neighborhood) return null;
     return {
         type: 'neighborhood',
-        top: neighborhood.scrollTop
+        top: neighborhood.scrollTop,
+        relation: neighborhood.querySelector('.curriculum-mobile-relation-tabs button.active')?.dataset.relation || 'prerequisites',
+        columnTops: Object.fromEntries(['prerequisites', 'selected', 'unlocks'].map(kind => [
+            kind, neighborhood.querySelector(`.is-${kind} .curriculum-neighborhood-scroll`)?.scrollTop || 0
+        ]))
     };
 }
 
@@ -4297,7 +4301,15 @@ function restoreCurriculumPosition() {
     }
     if (position?.type === 'neighborhood') {
         const neighborhood = document.querySelector('#curriculum-view .curriculum-neighborhood');
-        if (neighborhood) neighborhood.scrollTop = position.top || 0;
+        if (neighborhood) {
+            const relation = position.relation === 'unlocks' ? 'unlocks' : 'prerequisites';
+            neighborhood.querySelector(`[data-relation="${relation}"]`)?.click();
+            neighborhood.scrollTop = position.top || 0;
+            for (const kind of ['prerequisites', 'selected', 'unlocks']) {
+                const scroll = neighborhood.querySelector(`.is-${kind} .curriculum-neighborhood-scroll`);
+                if (scroll) scroll.scrollTop = position.columnTops?.[kind] || 0;
+            }
+        }
     }
 }
 
@@ -4471,6 +4483,13 @@ function fitCurriculumNeighborhoodViewport(explorer) {
             explorer.removeAttribute('aria-label');
             explorer.scrollTop = 0;
         }
+        for (const scroll of explorer.querySelectorAll('.curriculum-neighborhood-scroll')) {
+            const scrollable = mobile && scroll.clientHeight > 0 && scroll.scrollHeight > scroll.clientHeight + 1;
+            scroll.tabIndex = scrollable ? 0 : -1;
+            if (scrollable) scroll.setAttribute('aria-label', scroll.dataset.scrollLabel);
+            else scroll.removeAttribute('aria-label');
+            if (!mobile) scroll.scrollTop = 0;
+        }
     };
     const fit = () => {
         if (window.matchMedia('(max-width: 760px)').matches) {
@@ -4490,6 +4509,7 @@ function fitCurriculumNeighborhoodViewport(explorer) {
         ? new ResizeObserver(updateOverflow)
         : null;
     resizeObserver?.observe(explorer);
+    explorer.querySelectorAll('.curriculum-neighborhood-scroll').forEach(scroll => resizeObserver?.observe(scroll));
     const onViewportResize = () => {
         if (!explorer.isConnected) {
             window.removeEventListener('resize', onViewportResize);
@@ -4607,11 +4627,16 @@ function renderCurriculumNeighborhood(root, progressStates) {
     mobileTabs.innerHTML = '<button type="button" class="active" data-relation="prerequisites">Prerequisites</button><button type="button" data-relation="unlocks">Unlocks</button>';
     prerequisites.classList.add('is-mobile-active');
     mobileTabs.querySelectorAll('button').forEach(button => {
+        button.classList.toggle('active', button.dataset.relation === 'prerequisites');
+        button.setAttribute('aria-pressed', String(button.dataset.relation === 'prerequisites'));
         button.onclick = () => {
             const showPrerequisites = button.dataset.relation === 'prerequisites';
             prerequisites.classList.toggle('is-mobile-active', showPrerequisites);
             unlocks.classList.toggle('is-mobile-active', !showPrerequisites);
-            mobileTabs.querySelectorAll('button').forEach(item => item.classList.toggle('active', item === button));
+            mobileTabs.querySelectorAll('button').forEach(item => {
+                item.classList.toggle('active', item === button);
+                item.setAttribute('aria-pressed', String(item === button));
+            });
         };
     });
     explorer.append(prerequisites, selected, mobileTabs, unlocks);

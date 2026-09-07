@@ -5037,19 +5037,31 @@ body.standalone-phone .mobile-sidebar-close {
     .curriculum-neighborhood {
         display: flex;
         flex-direction: column;
-        height: auto;
-        min-height: 0;
-        max-height: none;
-        overflow: visible;
+        height: clamp(360px, 70dvh, 760px);
+        overflow: hidden;
+        scrollbar-gutter: auto;
     }
 
     .curriculum-neighborhood-column {
         display: flex;
-        max-height: 58dvh;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .curriculum-neighborhood-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        touch-action: pan-y;
+        padding-bottom: 12px;
     }
 
     .curriculum-neighborhood-column > h3 {
         position: static;
+        flex-shrink: 0;
     }
 
     .curriculum-neighborhood-column + .curriculum-neighborhood-column {
@@ -5062,7 +5074,8 @@ body.standalone-phone .mobile-sidebar-close {
 
     .curriculum-neighborhood-column.is-selected {
         order: 1;
-        max-height: none;
+        flex: 0 1 auto;
+        max-height: 40%;
         border-bottom: 1px solid var(--black);
     }
 
@@ -5072,6 +5085,7 @@ body.standalone-phone .mobile-sidebar-close {
 
     .curriculum-mobile-relation-tabs {
         order: 2;
+        flex-shrink: 0;
         display: grid;
         grid-template-columns: 1fr 1fr;
         border-bottom: 1px solid var(--black);
@@ -5090,6 +5104,7 @@ body.standalone-phone .mobile-sidebar-close {
     .curriculum-neighborhood-column.is-unlocks {
         display: none;
         order: 3;
+        flex: 1;
     }
 
     .curriculum-neighborhood-column.is-mobile-active {

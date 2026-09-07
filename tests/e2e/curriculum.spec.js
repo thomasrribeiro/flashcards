@@ -2989,6 +2989,82 @@ test(`mobile ${column} columns scroll with touch through the last node`, async (
 });
 }
 
+for (const direction of ['prerequisites', 'unlocks']) {
+test(`mobile neighborhood contains large ${direction} lists and preserves navigation`, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'desktop-chromium');
+    const catalog = structuredClone(bundledCurriculum);
+    const base = catalog.decks.find(deck => deck.id === 'mathematics/number-sense-and-arithmetic');
+    catalog.subjects = catalog.subjects.filter(subject => subject.id === 'mathematics');
+    catalog.decks = Array.from({ length: 205 }, (_, i) => ({
+        ...base, id: `mathematics/topic-${i}`, deck: `topic-${i}`, title: `Topic ${i}`,
+        prerequisites: i === 0 ? [] : i === 204
+            ? Array.from({ length: 203 }, (_, j) => `mathematics/topic-${j + 1}`) : ['mathematics/topic-0'],
+        required_outcomes: [], recommended_after: [], chapters: []
+    }));
+    await installGenerationAccount(page, { catalog });
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    const target = direction === 'unlocks' ? 'topic-0' : 'topic-204';
+    await openCurriculumNode(page, `mathematics/${target}`);
+    const options = await openCurriculumDeckSettings(page, target);
+    await options.getByRole('button', { name: /Prereqs & unlocks/ }).click();
+    const explorer = page.locator('.curriculum-neighborhood');
+    const tabs = explorer.locator('.curriculum-mobile-relation-tabs');
+    const tab = tabs.locator(`[data-relation="${direction}"]`);
+    await tab.click();
+    await explorer.evaluate(element => element.scrollIntoView({ block: 'start' }));
+    const selected = explorer.locator('.is-selected');
+    const list = explorer.locator(`.is-${direction} .curriculum-neighborhood-scroll`);
+    await expect(list.locator('.curriculum-explorer-item')).toHaveCount(204);
+    await expect(list).toHaveAttribute('tabindex', '0');
+    const before = await selected.boundingBox();
+    await expect(list).toHaveCSS('overflow-y', 'auto');
+    await expect(list).toHaveCSS('touch-action', 'pan-y');
+    if (testInfo.project.name === 'mobile-chromium') {
+        const client = await page.context().newCDPSession(page);
+        const box = await list.boundingBox();
+        const x = box.x + box.width / 2;
+        const start = box.y + box.height - 20;
+        const end = box.y + 20;
+        await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: start, id: 1 }] });
+        for (let i = 1; i <= 6; i += 1) {
+            await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: start + (end - start) * i / 6, id: 1 }] });
+            await page.waitForTimeout(20);
+        }
+        await page.waitForTimeout(120);
+        await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await client.detach();
+    } else {
+        // Playwright WebKit mobile does not expose native touch-drag or wheel.
+        await list.evaluate(element => element.scrollBy({ top: 400 }));
+    }
+    await expect.poll(() => list.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+    await list.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    const last = list.locator('.curriculum-explorer-item').last();
+    await expect(last).toBeInViewport({ ratio: 0.99 });
+    expect(await explorer.evaluate(element => {
+        const box = element.getBoundingClientRect();
+        const active = element.querySelector('.is-mobile-active');
+        const list = active.querySelector('.curriculum-neighborhood-scroll').getBoundingClientRect();
+        return element.scrollHeight <= element.clientHeight + 1 && element.scrollWidth <= element.clientWidth + 1
+            && list.left >= box.left && list.right <= box.right && list.bottom <= box.bottom;
+    })).toBe(true);
+    expect(Math.abs((await selected.boundingBox()).y - before.y)).toBeLessThan(2);
+    await expect(tabs).toBeInViewport();
+    const scrollTop = await list.evaluate(element => element.scrollTop);
+    const other = direction === 'unlocks' ? 'prerequisites' : 'unlocks';
+    await tabs.locator(`[data-relation="${other}"]`).click();
+    await tab.click();
+    await expect.poll(() => list.evaluate(element => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+    await last.click();
+    await page.getByRole('button', { name: 'Back in curriculum' }).click();
+    await expect(tab).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => list.evaluate(element => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+    await explorer.evaluate(element => element.scrollIntoView({ block: 'start' }));
+    await expect(last).toBeInViewport({ ratio: 0.99 });
+    await explorer.screenshot({ path: testInfo.outputPath(`large-${direction}.png`) });
+});
+}
+
 test('curriculum controls fit a phone viewport', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="physics"]').click();
