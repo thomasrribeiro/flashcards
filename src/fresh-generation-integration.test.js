@@ -24,7 +24,7 @@ describe('fresh generation integration', () => {
         const added = freshGenerationJob('curriculum-design', { subjects: ['physics', 'math'], newSubject: 'physics' }, preferences, registry, 'c'.repeat(40));
         const regenerated = freshGenerationJob('curriculum-design', { subjects: ['math', 'physics'] }, preferences, registry, 'c'.repeat(40));
         expect(added.payload.subjects).toEqual(regenerated.payload.subjects);
-        expect(Object.keys(added.payload).sort()).toEqual(['catalogHash', 'catalogPath', 'newSubject', 'reasoningEffort', 'registryBaseCommit', 'registryRef', 'subjects', 'workflowCommit', 'workflowVersion']);
+        expect(Object.keys(added.payload).sort()).toEqual(['catalogHash', 'catalogPath', 'newSubjects', 'reasoningEffort', 'registryBaseCommit', 'registryRef', 'subjects', 'workflowCommit', 'workflowVersion']);
     });
     it('archives metadata and invalidates only changed scopes and downstream plans', () => {
         const candidate = structuredClone(before);

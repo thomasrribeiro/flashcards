@@ -55,7 +55,7 @@ async function readGenerationResponse(response) {
  * here: that would invalidate the guarantee that old content is inaccessible.
  */
 export async function requestFreshGeneration({
-    jobType, subjects, catalog, deckId, chapterId,
+    jobType, subjects, mandatoryDecks, catalog, deckId, chapterId,
     instructions, schema, modelId, reasoningEffort, providerId = 'openai',
     apiKey, signal, fetchImpl = fetch
 }) {
@@ -66,7 +66,7 @@ export async function requestFreshGeneration({
     if (!schema || schema.type !== 'object' || schema.additionalProperties !== false) {
         throw new Error('A strict output schema is required.');
     }
-    const context = buildFreshGenerationContext({ jobType, subjects, catalog, deckId, chapterId });
+    const context = buildFreshGenerationContext({ jobType, subjects, mandatoryDecks, catalog, deckId, chapterId });
     const input = JSON.stringify(context);
     // AbortSignal alone does not override the HTTP client's shorter header /
     // body timeouts. Scope the transport to this job; never change global fetch.

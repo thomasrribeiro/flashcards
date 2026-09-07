@@ -13,6 +13,14 @@ const stored = {
 };
 
 describe('generation submission recovery', () => {
+    it('ignores addition metadata but distinguishes different required decks during recovery', async () => {
+        const constrained = { ...job, payload: { ...job.payload, newSubjects: ['math'], mandatoryDecks: [{ subject: 'math', decks: ['algebra'] }] } };
+        const wrong = { ...stored, id: 99, payload_json: JSON.stringify({ ...constrained.payload, mandatoryDecks: [{ subject: 'math', decks: ['geometry'] }] }) };
+        const matching = { ...stored, payload_json: JSON.stringify({ ...job.payload, mandatoryDecks: constrained.payload.mandatoryDecks }) };
+        const api = vi.fn().mockRejectedValueOnce(new TypeError('Load failed')).mockResolvedValueOnce({ requests: [wrong, matching] });
+        expect((await submitGenerationJob(api, constrained)).request.id).toBe(42);
+        expect(api).toHaveBeenCalledTimes(2);
+    });
     it('does not add requests when submission succeeds', async () => {
         const result = { request: stored, existing: false };
         const api = vi.fn().mockResolvedValue(result);

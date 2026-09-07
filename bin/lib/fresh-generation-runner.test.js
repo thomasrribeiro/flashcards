@@ -43,7 +43,7 @@ function respond(candidate) {
 }
 function globalCandidate() {
     const source = JSON.parse(readFileSync(path.join(state.root, 'fresh-curriculum.json')));
-    return { curriculum_version: 'whole-field-v1', subjects: ['math'], scopeIssues: [],
+    return { subjects: ['math'], scopeIssues: [],
         decks: [{ ...source.decks[0], title: 'New arithmetic', level: 'foundational',
             scope: { includes: ['Counting and operations.'], excludes: ['Algebra.'] },
             practice: ['Solve varied arithmetic problems.'] }],
@@ -51,6 +51,45 @@ function globalCandidate() {
             targets: [{ deck_id: 'math/arithmetic', outcome_ids: ['basics'] }], rationale: 'Entry arithmetic capability.' }] };
 }
 describe('queued restricted runner', () => {
+    it('forwards explicit required names with multiple additions, but no launch metadata or catalog', async () => {
+        const job = setup();
+        job.payload.subjects = ['physics', 'math', 'chemistry'];
+        job.payload.newSubjects = ['physics', 'chemistry'];
+        job.payload.mandatoryDecks = [{ subject: 'math', decks: ['arithmetic'] }];
+        const candidate = globalCandidate();
+        candidate.subjects = [...job.payload.subjects];
+        for (const subject of job.payload.newSubjects) {
+            const id = `${subject}/foundations`;
+            candidate.decks.push({ ...candidate.decks[0], subject, id, title: 'Foundations' });
+            candidate.coverage.push({ ...candidate.coverage[0], subject, domain: 'Foundations', targets: [{ deck_id: id, outcome_ids: ['basics'] }] });
+        }
+        const fetchImpl = respond(candidate);
+        await runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
+        const input = JSON.parse(JSON.parse(fetchImpl.mock.calls[0][1].body).input);
+        expect(input).toEqual({ subjects: ['chemistry', 'math', 'physics'], mandatoryDecks: [{ subject: 'math', decks: ['arithmetic'] }] });
+        expect(state.published[0].catalog.subjects.map(subject => subject.id)).toEqual(input.subjects);
+    });
+    it('blocks a result missing a mandatory deck without publishing or repeating the provider call', async () => {
+        const job = setup(); job.payload.mandatoryDecks = [{ subject: 'math', decks: ['measure-theoretic-probability'] }];
+        const fetchImpl = respond(globalCandidate());
+        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
+            .rejects.toThrow(/Missing required decks: math\/measure-theoretic-probability/);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(state.published).toEqual([]);
+    });
+    it('rejects invalid required-deck subjects before making a paid request', async () => {
+        const job = setup(); job.payload.mandatoryDecks = [{ subject: 'physics', decks: ['mechanics'] }];
+        const fetchImpl = respond({});
+        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } })).rejects.toThrow(/listed subject/);
+        expect(fetchImpl).not.toHaveBeenCalled();
+    });
+    it('rejects unresolved chapter-plan scope instead of silently dropping it', async () => {
+        const job = setup('deck-plan');
+        respond({ deckId: 'math/arithmetic', chapters: [], scopeIssues: ['Missing prerequisite capability.'] });
+        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
+            .rejects.toThrow(/Unresolved chapter scope/);
+        expect(state.published).toEqual([]);
+    });
     it('publishes a review-only global candidate and archives the previous catalog outside model context', async () => {
         const job = setup();
         const candidate = globalCandidate();
@@ -60,13 +99,13 @@ describe('queued restricted runner', () => {
         const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
         expect(body.instructions).toBe(readFileSync(path.join(FLASHCARDS_ROOT,
             '.agents/skills/manage-flashcard-decks/references/global-curriculum-workflow.md'), 'utf8'));
-        expect(body.text.format.schema.required).toEqual(['curriculum_version', 'subjects', 'coverage', 'decks', 'scopeIssues']);
+        expect(body.text.format.schema.required).toEqual(['subjects', 'coverage', 'decks', 'scopeIssues']);
         expect(JSON.stringify(fetchImpl.mock.calls)).not.toContain('OLD_CHAPTER_SECRET');
         expect(result.status).toBe('needs-review');
         expect(result.result.proposals).toHaveLength(1);
         expect(state.published[0].catalog.decks[0].chapters).toEqual([]);
         expect(state.published[0].catalog.coverage).toEqual(candidate.coverage);
-        expect(state.published[0].catalog.curriculum_version).toBe('whole-field-v1');
+        expect(state.published[0].catalog.curriculum_schema_version).toBe(1);
         expect(readFileSync(path.join(state.root, 'generation-archive/request-1/previous-curriculum.json'), 'utf8')).toContain('OLD_CARD_SECRET');
     });
     it('fails closed on a schema downgrade or unresolved scope without publishing or retrying', async () => {
@@ -74,23 +113,23 @@ describe('queued restricted runner', () => {
             const job = setup();
             const candidate = globalCandidate();
             if (unresolved) candidate.scopeIssues = ['Missing advanced coverage: needs a coherent prerequisite bridge.'];
-            else delete candidate.curriculum_version;
+            else delete candidate.coverage;
             const fetchImpl = respond(candidate);
             await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
-                .rejects.toThrow(unresolved ? /Unresolved curriculum scope/ : /coverage version/);
+                .rejects.toThrow(unresolved ? /Unresolved curriculum scope/ : /coverage map/);
             expect(fetchImpl).toHaveBeenCalledTimes(1);
             expect(state.published).toEqual([]);
             expect(state.abandoned).toBe(true);
         }
     });
     it('isolates global instructions while preserving chapter/card instruction bundles', () => {
-        expect(freshGenerationInstructions('deck-plan')).not.toContain('# Global curriculum: whole-field-v1');
+        expect(freshGenerationInstructions('deck-plan')).not.toContain('# Global curriculum');
         expect(freshGenerationInstructions('chapter-expand')).toContain('# Card quality standard');
         expect(() => freshGenerationInstructions('unknown')).toThrow(/Unsupported/);
     });
     it('publishes a deck plan without supplying any previous chapter context', async () => {
         const job = setup('deck-plan');
-        const fetchImpl = respond({ deckId: 'math/arithmetic', chapters: [{ id: '01_counting', title: 'Counting', outcomes, prerequisites: [] }] });
+        const fetchImpl = respond({ deckId: 'math/arithmetic', chapters: [{ id: '01_counting', title: 'Counting', outcomes, prerequisites: [] }], scopeIssues: [] });
         await runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
         expect(JSON.stringify(fetchImpl.mock.calls)).not.toContain('OLD_CHAPTER_SECRET');
         expect(state.published[0].catalog.decks[0].chapters[0].id).toBe('01_counting');
@@ -103,7 +142,7 @@ describe('queued restricted runner', () => {
     });
     it('does not publish after cancellation', async () => {
         const job = setup('deck-plan');
-        respond({ deckId: 'math/arithmetic', chapters: [{ id: '01_counting', title: 'Counting', outcomes, prerequisites: [] }] });
+        respond({ deckId: 'math/arithmetic', chapters: [{ id: '01_counting', title: 'Counting', outcomes, prerequisites: [] }], scopeIssues: [] });
         await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' }, beforePublish: async () => { throw new Error('Cancelled'); } })).rejects.toThrow('Cancelled');
         expect(state.published).toEqual([]); expect(state.abandoned).toBe(true);
     });

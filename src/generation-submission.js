@@ -10,8 +10,8 @@ function canonical(value) {
 
 function fingerprint(input) {
     const request = normalizeGenerationRequest(input);
-    // newSubject is UI metadata; the backend deduplicates by the full subject list.
-    const { newSubject, ...payload } = request.payload;
+    // Addition metadata does not change model input; required decks do.
+    const { newSubject, newSubjects, ...payload } = request.payload;
     return JSON.stringify(canonical([
         request.jobType, request.registryId, request.targetRepository,
         request.providerId, request.modelId, payload

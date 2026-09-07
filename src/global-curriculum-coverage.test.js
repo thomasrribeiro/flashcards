@@ -13,7 +13,7 @@ function fixture() {
         prerequisites, required_outcomes: prerequisites.map(deck_id => ({ deck_id, outcome_ids: ['core'] }))
     });
     const decks = [deck('math/tools', 'undergraduate-core'), deck('physics/models', 'undergraduate-advanced', ['math/tools'])];
-    return { curriculum_version: 'whole-field-v1', subjects: ['math', 'physics'], decks, scopeIssues: [],
+    return { curriculum_schema_version: 1, subjects: ['math', 'physics'], decks, scopeIssues: [],
         coverage: decks.map(deck => ({ subject: deck.subject, domain: deck.title, level: deck.level,
             disposition: 'included', targets: [{ deck_id: deck.id, outcome_ids: ['core'] }], rationale: 'Teaches the specified capability.' })) };
 }
@@ -29,8 +29,7 @@ describe('whole-field curriculum contract', () => {
         expect(validate(candidate)).toEqual(candidate);
     });
     it.each([
-        ['version', candidate => { delete candidate.curriculum_version; }, /coverage version/],
-        ['unknown version', candidate => { candidate.curriculum_version = 'unknown'; }, /coverage version/],
+        ['unknown version', candidate => { candidate.curriculum_schema_version = 999; }, /schema version/],
         ['empty map', candidate => { candidate.coverage = []; }, /coverage map/],
         ['missing scope', candidate => { delete candidate.decks[0].scope; }, /scope boundaries/],
         ['empty scope', candidate => { candidate.decks[0].scope.includes = []; }, /must not be empty/],
@@ -55,10 +54,27 @@ describe('whole-field curriculum contract', () => {
     });
     it('keeps legacy proposals readable but does not accept their contract for new runs', () => {
         const candidate = fixture();
-        delete candidate.curriculum_version; delete candidate.coverage; delete candidate.scopeIssues;
+        delete candidate.curriculum_schema_version; delete candidate.coverage; delete candidate.scopeIssues;
         candidate.decks.forEach(deck => { delete deck.scope; delete deck.practice; delete deck.level; });
         expect(validateGlobalCurriculumCandidate(candidate, candidate.subjects).decks).toHaveLength(2);
-        expect(() => validate(candidate)).toThrow(/coverage version/);
+        expect(() => validate(candidate)).toThrow(/learning level/);
+    });
+    it('stamps schema metadata on the host and reads the previous marker for compatibility', () => {
+        const candidate = fixture(); delete candidate.curriculum_schema_version;
+        expect(validate(candidate).curriculum_schema_version).toBe(1);
+        candidate.curriculum_version = 'whole-field-v1';
+        const migrated = validate(candidate);
+        expect(migrated.curriculum_schema_version).toBe(1);
+        expect(migrated).not.toHaveProperty('curriculum_version');
+    });
+    it('rejects missing mandatory deck IDs instead of allowing a mention in another deck', () => {
+        const candidate = fixture();
+        expect(() => validateGlobalCurriculumCandidate(candidate, candidate.subjects, {
+            mandatoryDecks: [{ subject: 'math', decks: ['fourier-analysis'] }]
+        })).toThrow('Missing required decks: math/fourier-analysis.');
+        expect(() => validateGlobalCurriculumCandidate(candidate, candidate.subjects, {
+            mandatoryDecks: [{ subject: 'math', decks: ['tools'] }]
+        })).not.toThrow();
     });
     it('persists coverage and passes only accepted scope to later generation, never old content', () => {
         const candidate = fixture();

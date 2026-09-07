@@ -3,6 +3,7 @@
  */
 
 import { freshGenerationJob } from './fresh-generation-contract.js';
+import { globalCurriculumFields } from './global-curriculum-form.js';
 import { buildFreshGenerationContext, FRESH_GENERATION_VERSION } from './fresh-generation.js';
 import {
     clearReviewsByDeck,
@@ -5236,6 +5237,7 @@ function openGenerationConfirmation({
 function confirmGenerationJobs(jobs) {
     return new Promise(resolve => {
         const { overlay, content, close } = curriculumOverlay(jobs.length === 1 ? 'Start AI job?' : 'Start AI jobs?');
+        content.closest('.curriculum-builder-modal').classList.add('generation-launch-modal');
         let settled = false;
         const finish = value => {
             if (settled) return;
@@ -5247,6 +5249,7 @@ function confirmGenerationJobs(jobs) {
         const list = document.createElement('div');
         list.className = 'generation-launch-list';
         const settingLabels = [];
+        const globalFields = [];
         for (const job of jobs) {
             const item = document.createElement('section');
             const title = document.createElement('h3');
@@ -5258,9 +5261,9 @@ function confirmGenerationJobs(jobs) {
             settingLabels.push(settings);
             item.append(title, settings);
             if (job.jobType === 'curriculum-design') {
-                const scope = document.createElement('p');
-                scope.textContent = `Fresh curriculum for ${job.payload.subjects.join(', ')}.`;
-                item.append(scope);
+                const fields = globalCurriculumFields(job.payload);
+                globalFields.push({ job, fields });
+                item.append(fields.element);
             }
             list.appendChild(item);
         }
@@ -5274,7 +5277,19 @@ function confirmGenerationJobs(jobs) {
         confirm.type = 'button';
         confirm.className = 'btn-primary';
         confirm.textContent = jobs.length === 1 ? 'Start AI job' : `Start ${jobs.length} AI jobs`;
-        confirm.onclick = () => finish(true);
+        confirm.onclick = () => {
+            try {
+                const updates = globalFields.map(({ job, fields }) => ({ job, target: fields.read() }));
+                updates.forEach(({ job, target }) => {
+                    const { subjects, newSubject, newSubjects, mandatoryDecks, ...metadata } = job.payload;
+                    job.payload = { ...metadata, ...target };
+                });
+                finish(true);
+            } catch (error) {
+                status.textContent = error.message;
+                status.hidden = false;
+            }
+        };
         const status = document.createElement('p');
         status.setAttribute('role', 'status');
         status.hidden = true;

@@ -1,4 +1,5 @@
-import { FRESH_GENERATION_VERSION, canonicalSubjectNames } from './fresh-generation.js';
+import { FRESH_GENERATION_VERSION } from './fresh-generation.js';
+import { globalCurriculumTarget } from './global-curriculum-input.js';
 
 export function freshGenerationJob(jobType, target, preferences, registry, workflowCommit) {
     if (preferences.providerId !== 'openai') throw new Error('Fresh generation currently requires OpenAI.');
@@ -11,7 +12,7 @@ export function freshGenerationJob(jobType, target, preferences, registry, workf
         registryRef: registry?.ref || 'master',
         catalogPath: registry?.path || 'dist/curriculum.json',
         reasoningEffort: preferences.reasoningEffort,
-        ...(jobType === 'curriculum-design' ? { subjects: canonicalSubjectNames(target.subjects), ...(target.newSubject ? { newSubject: target.newSubject } : {}) }
+        ...(jobType === 'curriculum-design' ? globalCurriculumTarget(target)
             : { deckId: target.deckId, ...(jobType === 'chapter-expand' ? { chapterId: target.chapterId } : {}) })
     };
     validateFreshProvenance(payload);

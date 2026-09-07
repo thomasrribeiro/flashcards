@@ -51,9 +51,20 @@ All three job types disclose and pin model and reasoning before launch.
 New global runs use `references/global-curriculum-workflow.md` verbatim, with
 no appended instructions or chapter/card-authoring bundle. The queued
 `workflowCommit` and recorded instruction/schema hashes pin the exact contract;
-the transport envelope remains `fresh-generation-v1`. The output declares
-`curriculum_version: whole-field-v1`. Historical unversioned catalogs and
-proposals remain readable; they are not valid output for a new global run.
+the transport envelope remains `fresh-generation-v1`. The host stamps
+`curriculum_schema_version: 1` after validation; the model neither sees nor
+generates a version tag. Historical unversioned catalogs and the short-lived
+`curriculum_version: whole-field-v1` marker remain readable. New runs require
+the coverage contract regardless of metadata.
+
+The launch dialog accepts optional additional subjects and required deck names
+in `subject: deck-one, deck-two` lines. Names must use kebab-case. The request
+stores the complete subject list, `newSubjects`, and optional `mandatoryDecks`
+groups. The runner checks additions against the pinned registry before a paid
+call, and requires the returned candidate to contain every mandatory deck ID.
+The input projector forwards only subjects and nonempty mandatory-deck groups.
+Deduplication and uncertain-submission recovery distinguish required-deck lists,
+but not addition metadata. Old single-`newSubject` requests remain compatible.
 
 The structured candidate requires a domain-and-level coverage map targeting
 individual deck outcomes, deck learning levels, included/excluded scope,
@@ -67,7 +78,14 @@ The existing compact diff does not yet display the complete coverage map.
 Accepted scope/practice/level specifications are projected into later chapter
 and card requests. Their changes invalidate affected and downstream plans;
 archived content and review history remain untouched. Global generation still
-receives only canonical subject names, not the existing coverage map or decks.
+receives only canonical subject names and explicit mandatory deck names, not
+the existing coverage map or deck specifications.
+
+Each operation now has a dedicated prompt file. The obsolete combined prompt
+and hidden runtime suffix are removed. Deck chapter planning now has a real
+`scopeIssues` schema field and publication gate instead of asking for a field
+its schema forbade. Legacy CLI audit/build commands remain supported; they
+are separate, still-used workflows rather than dead generation code.
 
 ### Remaining boundaries
 

@@ -12,14 +12,16 @@ stable-ID implementation, and validator as executable truth.
 
 For isolated fresh global `curriculum-design` requests, the model receives only
 [references/global-curriculum-workflow.md](references/global-curriculum-workflow.md),
-the strict output schema, and subject names. That workflow supersedes the
+the strict output schema, subject names, and optional mandatory deck names.
+That workflow supersedes the
 legacy subject-design context loading below; never supply old curricula to it.
 
-For an explicitly versioned `fresh-generation-v1` job, use
-[references/fresh-generation-workflow.md](references/fresh-generation-workflow.md)
-instead of the legacy context-loading and existing-content workflows below.
-Its input allowlist is mandatory. Missing context is a reported scope issue,
-not permission to retrieve the existing repository or previous generations.
+For other explicitly versioned `fresh-generation-v1` jobs, use
+[references/deck-plan-workflow.md](references/deck-plan-workflow.md) for a deck's
+chapter graph, or [references/chapter-expand-workflow.md](references/chapter-expand-workflow.md)
+for chapter cards, instead of the legacy context-loading workflows below.
+The restricted adapter owns each input allowlist. Missing context is a scope
+issue, not permission to retrieve additional material.
 
 Infer one mode from the request and CLI prompt:
 

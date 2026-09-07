@@ -451,7 +451,7 @@ test('queues a subject draft only for a signed-in account with a connected model
         providerId: 'openai',
         modelId: 'gpt-test',
         payload: {
-            newSubject: 'earth-science',
+            newSubjects: ['earth-science'],
             subjects: expect.arrayContaining(['mathematics', 'earth-science']),
             workflowVersion: 'fresh-generation-v1',
             workflowCommit: '0'.repeat(40),
@@ -465,6 +465,64 @@ test('queues a subject draft only for a signed-in account with a connected model
     expect(JSON.stringify(queuedJob)).not.toMatch(/api.?key|secret/i);
     expect(queuedJob.payload).not.toHaveProperty('deckGranularity');
     expect(JSON.stringify(queuedJob)).not.toMatch(/estimated.?chapters/i);
+});
+
+test('global curriculum launch accepts optional subjects and required decks without mobile overflow', async ({ page }, testInfo) => {
+    const posts = [];
+    await installGenerationAccount(page, { onPost: job => posts.push(job) });
+    await page.getByRole('button', { name: 'Options', exact: true }).click();
+    await page.getByRole('button', { name: 'Regenerate curriculum', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Start AI job?', exact: true });
+    const added = dialog.getByLabel('Additional subjects (optional)');
+    const required = dialog.getByLabel('Required decks (optional)');
+    const start = dialog.getByRole('button', { name: 'Start AI job', exact: true });
+    await expect(start).toBeFocused();
+    await added.fill('Earth-Science');
+    await start.click();
+    await expect(dialog.getByRole('status')).toContainText('kebab-case');
+    expect(posts).toEqual([]);
+    await added.fill('earth-science, economics');
+    await required.fill('mathematics: Fourier-analysis');
+    await start.click();
+    await expect(dialog.getByRole('status')).toContainText('kebab-case');
+    await required.fill('unknown-subject: some-deck');
+    await start.click();
+    await expect(dialog.getByRole('status')).toContainText('listed subject');
+    await required.fill('mathematics: fourier-analysis, measure-theoretic-probability\neconomics: game-theory');
+    await dialog.getByRole('button', { name: 'Change AI settings' }).click();
+    const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+    await expect(settings.getByLabel('Model', { exact: true })).toBeEnabled();
+    await settings.getByLabel('Model', { exact: true }).selectOption('gpt-test');
+    await settings.getByLabel('Reasoning effort', { exact: true }).selectOption('high');
+    await settings.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(added).toHaveValue('earth-science, economics');
+    await expect(required).toHaveValue(/measure-theoretic-probability/);
+    expect(posts).toEqual([]);
+    for (const width of testInfo.project.name === 'desktop-chromium' ? [1280] : [390, 320]) {
+        await page.setViewportSize({ width, height: 844 });
+        const layout = await dialog.evaluate(el => ({ overflow: el.scrollWidth > el.clientWidth + 1,
+            fields: [...el.querySelectorAll('textarea')].map(field => ({
+                font: parseFloat(getComputedStyle(field).fontSize), right: field.getBoundingClientRect().right,
+                left: field.getBoundingClientRect().left
+            })), right: el.getBoundingClientRect().right, left: el.getBoundingClientRect().left }));
+        expect(layout.overflow).toBe(false);
+        for (const field of layout.fields) {
+            expect(field.font).toBeGreaterThanOrEqual(16);
+            expect(field.left).toBeGreaterThanOrEqual(layout.left);
+            expect(field.right).toBeLessThanOrEqual(layout.right);
+        }
+    }
+    await dialog.screenshot({ path: testInfo.outputPath('global-launch-fields.png') });
+    await start.click();
+    await expect.poll(() => posts.length).toBe(1);
+    expect(posts[0].payload).toMatchObject({
+        subjects: expect.arrayContaining(['earth-science', 'economics', 'mathematics']),
+        newSubjects: ['earth-science', 'economics'], mandatoryDecks: [
+            { subject: 'economics', decks: ['game-theory'] },
+            { subject: 'mathematics', decks: ['fourier-analysis', 'measure-theoretic-probability'] }
+        ]
+    });
+    expect(posts[0].payload).not.toHaveProperty('newSubject');
 });
 
 test('regenerates the global curriculum with model disclosure and cancellable pinned launch settings', async ({ page }, testInfo) => {
@@ -561,7 +619,7 @@ test('changes launch settings without losing the subject draft or starting a job
     await expect.poll(() => queuedJobs.length).toBe(1);
     expect(queuedJobs[0]).toMatchObject({
         jobType: 'curriculum-design', providerId: 'openai', modelId: 'gpt-6-astra',
-        payload: { newSubject: 'earth-science', subjects: expect.arrayContaining(['earth-science', 'mathematics']), reasoningEffort: 'max' }
+        payload: { newSubjects: ['earth-science'], subjects: expect.arrayContaining(['earth-science', 'mathematics']), reasoningEffort: 'max' }
     });
 });
 

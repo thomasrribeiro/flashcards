@@ -1,8 +1,10 @@
 // Shared, provider-independent boundary for the new generation pipeline.
 // Never serialize a catalog or queued job directly into a model request.
+import { canonicalSubjectNames, canonicalMandatoryDecks } from './global-curriculum-input.js';
+export { canonicalSubjectNames } from './global-curriculum-input.js';
 export const FRESH_GENERATION_VERSION = 'fresh-generation-v1';
 export const FRESH_JOB_TYPES = ['curriculum-design', 'deck-plan', 'chapter-expand'];
-export const GLOBAL_CURRICULUM_VERSION = 'whole-field-v1';
+export const CURRICULUM_SCHEMA_VERSION = 1;
 export const CURRICULUM_LEVELS = ['foundational', 'undergraduate-core', 'undergraduate-advanced', 'graduate', 'research-specialization'];
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -22,13 +24,6 @@ function unique(values, label) {
     requireValue(Array.isArray(values), `${label} must be an array.`);
     requireValue(new Set(values).size === values.length, `${label} contains duplicates.`);
     return values;
-}
-
-export function canonicalSubjectNames(subjects) {
-    requireValue(Array.isArray(subjects), 'Subjects must be an array.');
-    const names = unique(subjects.map(subject => typeof subject === 'string' ? subject : subject.id), 'Subjects');
-    requireValue(names.length > 0 && names.every(name => SLUG.test(name)), 'Subjects must use kebab-case.');
-    return [...names].sort();
 }
 
 function outcomes(values, label) {
@@ -142,10 +137,14 @@ function chapterSpecification(chapter, deckId) {
     };
 }
 
-export function buildFreshGenerationContext({ jobType, subjects, catalog, deckId, chapterId }) {
+export function buildFreshGenerationContext({ jobType, subjects, mandatoryDecks, catalog, deckId, chapterId }) {
     requireValue(FRESH_JOB_TYPES.includes(jobType), 'Unsupported fresh generation job.');
     // Intentionally return before touching the old catalog for global jobs.
-    if (jobType === 'curriculum-design') return { subjects: canonicalSubjectNames(subjects) };
+    if (jobType === 'curriculum-design') {
+        const names = canonicalSubjectNames(subjects);
+        const required = canonicalMandatoryDecks(mandatoryDecks, names);
+        return { subjects: names, ...(required.length ? { mandatoryDecks: required } : {}) };
+    }
     const rawDecks = new Map((catalog?.decks || []).map(deck => [deck.id, deck]));
     unique((catalog?.decks || []).map(deck => deck.id), 'Deck IDs');
     const rawTarget = rawDecks.get(deckId);
@@ -165,7 +164,7 @@ export function buildFreshGenerationContext({ jobType, subjects, catalog, deckId
     return { ...context, chapters: chapters.sort((a, b) => a.id.localeCompare(b.id)), chapterId };
 }
 
-export function validateGlobalCurriculumCandidate(candidate, expectedSubjects, { requireCoverage = false } = {}) {
+export function validateGlobalCurriculumCandidate(candidate, expectedSubjects, { requireCoverage = false, mandatoryDecks = [] } = {}) {
     const subjects = canonicalSubjectNames(candidate.subjects || []);
     requireValue(JSON.stringify(subjects) === JSON.stringify(canonicalSubjectNames(expectedSubjects)),
         'The candidate must contain exactly the requested subjects.');
@@ -174,13 +173,20 @@ export function validateGlobalCurriculumCandidate(candidate, expectedSubjects, {
     requireValue(decks.every(deck => subjects.includes(deck.subject)), 'A deck belongs to an unrequested subject.');
     requireValue(subjects.every(subject => decks.some(deck => deck.subject === subject)), 'Every subject needs a curriculum.');
     validateDeckEdges(decks);
+    const ids = new Set(decks.map(deck => deck.id));
+    const missing = canonicalMandatoryDecks(mandatoryDecks, subjects)
+        .flatMap(group => group.decks.map(deck => `${group.subject}/${deck}`)).filter(id => !ids.has(id));
+    requireValue(!missing.length, `Missing required decks: ${missing.join(', ')}.`);
     // Returning a projection prevents model-supplied paths, content or
     // publication metadata from leaking into the downstream acceptance step.
     const result = { subjects, decks: decks.sort((a, b) => a.id.localeCompare(b.id)) };
     // Historical proposals have no coverage contract. New runner jobs require
     // it; catalog reads validate it whenever any of its metadata is present.
-    if (requireCoverage || candidate.curriculum_version !== undefined || candidate.coverage !== undefined || candidate.scopeIssues !== undefined) {
-        requireValue(candidate.curriculum_version === GLOBAL_CURRICULUM_VERSION, 'Missing or unsupported global curriculum coverage version.');
+    if (requireCoverage || candidate.curriculum_schema_version !== undefined || candidate.curriculum_version !== undefined || candidate.coverage !== undefined || candidate.scopeIssues !== undefined) {
+        requireValue(candidate.curriculum_schema_version === undefined || candidate.curriculum_schema_version === CURRICULUM_SCHEMA_VERSION,
+            'Unsupported curriculum schema version.');
+        // Read the briefly used legacy marker; new model output has no version.
+        requireValue(candidate.curriculum_version === undefined || candidate.curriculum_version === 'whole-field-v1', 'Unsupported curriculum schema version.');
         decks.forEach(learningScope);
         const byId = new Map(decks.map(deck => [deck.id, deck]));
         requireValue(Array.isArray(candidate.coverage) && candidate.coverage.length > 0, 'The curriculum needs a coverage map.');
@@ -211,7 +217,7 @@ export function validateGlobalCurriculumCandidate(candidate, expectedSubjects, {
             'Every subject needs included coverage.');
         requireValue(decks.every(deck => deck.outcomes.every(outcome => covered.has(`${deck.id}#${outcome.id}`))),
             'Every deck outcome needs an included coverage mapping.');
-        Object.assign(result, { curriculum_version: GLOBAL_CURRICULUM_VERSION, coverage,
+        Object.assign(result, { curriculum_schema_version: CURRICULUM_SCHEMA_VERSION, coverage,
             scopeIssues: textList(candidate.scopeIssues, 'Scope issues') });
     }
     return result;

@@ -15,7 +15,7 @@ export default defineConfig({
         { name: 'mobile-chromium', use: { ...devices['iPhone 13'], browserName: 'chromium' } },
         {
             name: 'mobile-webkit',
-            grep: /mobile layered scrolling|mobile subject layers|mobile neighborhood|previews a fresh global curriculum|subject overview emphasizes|agent activity stays within|curriculum Options contains|Study deck picker aligns|mobile settings opens|recovers lost submission|opens latest curriculum flashcards|groups connection and settings/,
+            grep: /global curriculum launch|mobile layered scrolling|mobile subject layers|mobile neighborhood|previews a fresh global curriculum|subject overview emphasizes|agent activity stays within|curriculum Options contains|Study deck picker aligns|mobile settings opens|recovers lost submission|opens latest curriculum flashcards|groups connection and settings/,
             use: { ...devices['iPhone 13'], browserName: 'webkit' }
         }
     ],
