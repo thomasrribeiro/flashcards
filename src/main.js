@@ -3650,11 +3650,11 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const scrollExtentNodeBottom = scrollExtentNodes.length
         ? Math.max(...scrollExtentNodes.map(node => node.y + node.height))
         : 0;
-    const scrollExtentRouteBottom = ranked && focusRanks && !compact
-        ? Math.max(0, ...[...cableRouting.routes.values()]
-            .flatMap(route => [...(route.rankYs || [])]
-                .filter(([rank]) => rank >= focusRanks.start && rank < focusRanks.end)
-                .map(([, y]) => y)))
+    const scrollExtentRouteBottom = ranked && focusRanks
+        ? Math.max(0, ...(cableRouting.trunks || [])
+            .flatMap(trunk => trunk.rankPoints
+                .filter(point => point.rank >= focusRanks.start && point.rank < focusRanks.end)
+                .map(point => point.y)))
         : 0;
     const scrollExtentHeight = ranked && focusRanks && scrollExtentNodes.length
         ? Math.max(scrollExtentNodeBottom + 36, scrollExtentRouteBottom + 24)

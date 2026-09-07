@@ -1697,15 +1697,10 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
             routeExtentMatchesLayer: (() => {
                 const start = Number(element.dataset.scrollRankStart);
                 const end = Number(element.dataset.scrollRankEnd);
-                const routeBottoms = [...element.querySelectorAll('.curriculum-graph-connection.is-long')]
-                    .flatMap(connection => {
-                        const source = element.querySelector(`.curriculum-graph-node[data-deck-id="${CSS.escape(connection.dataset.source)}"]`);
-                        const sourceRank = Number(source.dataset.rank);
-                        return connection.dataset.cableYs.split(',').filter(Boolean).map((y, index) => ({
-                            rank: sourceRank + index + 1,
-                            y: Number(y)
-                        })).filter(point => point.rank >= start && point.rank < end).map(point => point.y);
-                    });
+                const routeBottoms = [...element.querySelectorAll('.curriculum-graph-connection.is-cable-trunk')]
+                    .flatMap(connection => connection.dataset.rankYs.split(',')
+                        .map(point => point.split(':').map(Number))
+                        .filter(([rank]) => rank >= start && rank < end).map(([, y]) => y));
                 const actualRouteBottom = Math.max(0, ...routeBottoms);
                 return Math.abs(Number(element.dataset.scrollRouteBottom) - actualRouteBottom) < 1
                     && Number(element.dataset.scrollExtent) >= actualRouteBottom + 24;
@@ -2737,6 +2732,41 @@ for (const count of [1, 2]) {
         }
     });
 }
+
+test('mobile layered scrolling includes the lowest connector lanes', async ({ page }, testInfo) => {
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    const stage = page.locator('.curriculum-graph-stage');
+    for (let rank = 0; rank < 10; rank += 1) {
+        await expect(stage).toHaveAttribute('data-scroll-layer', String(rank));
+        await stage.evaluate(element => { element.scrollTop = element.scrollHeight; });
+        const geometry = await stage.evaluate(element => {
+            const start = Number(element.dataset.scrollRankStart);
+            const end = Number(element.dataset.scrollRankEnd);
+            const bottom = Math.max(0, ...[...element.querySelectorAll('.is-cable-trunk')].flatMap(trunk =>
+                trunk.dataset.rankYs.split(',').map(point => point.split(':').map(Number))
+                    .filter(([rank]) => rank >= start && rank < end).map(([, y]) => y)));
+            const viewport = element.querySelector('.curriculum-graph-viewport');
+            const scale = new DOMMatrix(getComputedStyle(viewport).transform).a;
+            const viewportBox = viewport.getBoundingClientRect();
+            const stageBox = element.getBoundingClientRect();
+            return {
+                bottom,
+                extent: Number(element.dataset.scrollExtent),
+                rank: Number(element.dataset.scrollLayer),
+                hasRoutes: bottom > 0,
+                extentIncludesRoutes: Number(element.dataset.scrollExtent) >= bottom + 24,
+                lastLaneVisible: viewportBox.top + bottom * scale <= stageBox.top + element.clientTop + element.clientHeight - 20 * scale,
+                horizontalScroll: element.scrollLeft
+            };
+        });
+        if (rank === 7) expect(geometry.hasRoutes).toBe(true);
+        expect(geometry.extentIncludesRoutes, JSON.stringify(geometry)).toBe(true);
+        expect(geometry.lastLaneVisible).toBe(true);
+        if (testInfo.project.name !== 'desktop-chromium') expect(geometry.horizontalScroll).toBe(0);
+        if (rank === 7) await stage.screenshot({ path: testInfo.outputPath('layer-8-connector-bottom.png') });
+        if (rank < 9) await page.getByRole('button', { name: 'Show next dependency layer' }).click();
+    }
+});
 
 test('subject overview emphasizes names without redundant labels', async ({ page }, testInfo) => {
     const stage = page.locator('.curriculum-graph-stage.is-subject-overview');

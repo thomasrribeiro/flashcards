@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as transport from 'undici';
 import {
     assertGenerationBaseCurrent, buildFreshGenerationContext,
     canonicalSubjectNames, validateGlobalCurriculumCandidate,
     validateChapterCurriculumCandidate
 } from './fresh-generation.js';
 import { requestFreshGeneration } from '../bin/lib/fresh-generation-provider.js';
+
+vi.mock('undici', async importOriginal => {
+    const actual = await importOriginal();
+    return { ...actual, Agent: vi.fn(options => new actual.Agent(options)) };
+});
 
 const outcome = (id = 'basics') => ({ id, description: `Explain ${id}.` });
 function fixture() {
@@ -100,7 +106,7 @@ describe('restricted provider request', () => {
         const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(completed)));
         const result = await requestFreshGeneration({ ...options(), fetchImpl });
         const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
-        expect(body).toMatchObject({ model: 'future-model-id', reasoning: { effort: 'high' }, tools: [], tool_choice: 'none', store: false, truncation: 'disabled' });
+        expect(body).toMatchObject({ model: 'future-model-id', reasoning: { effort: 'high' }, tools: [], tool_choice: 'none', store: false, stream: true, truncation: 'disabled' });
         expect(JSON.parse(body.input)).toEqual({ subjects: ['math'] });
         expect(JSON.stringify(body)).not.toMatch(/OLD_|test-key|previous_response_id|conversation/);
         expect(result.provenance.inputHash).toMatch(/^sha256:[a-f0-9]{64}$/);
@@ -118,5 +124,58 @@ describe('restricted provider request', () => {
         const fetchImpl = vi.fn();
         await expect(requestFreshGeneration({ ...options(), providerId: 'custom', fetchImpl })).rejects.toThrow(/does not yet support/);
         expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    const streamResponse = text => new Response(new ReadableStream({
+        start(controller) {
+            // Split even multi-byte characters and SSE frame separators.
+            for (const byte of new TextEncoder().encode(text)) controller.enqueue(new Uint8Array([byte]));
+            controller.close();
+        }
+    }), { headers: { 'Content-Type': 'text/event-stream' } });
+
+    it('reads chunked SSE through completion, preserving UTF-8 and ignoring partial output', async () => {
+        const response = { ...completed, output: [{ type: 'message', content: [{ type: 'output_text', text: '{"title":"géométrie"}' }] }] };
+        const fetchImpl = vi.fn(async () => streamResponse(': keepalive\r\n\r\ndata: {"type":"response.output_text.delta","delta":"partial"}\r\n\r\n'
+            + `event: response.completed\r\ndata: ${JSON.stringify({ type: 'response.completed', response })}\r\n\r\n`));
+        const result = await requestFreshGeneration({ ...options(), fetchImpl });
+        expect(result.candidate).toEqual({ title: 'géométrie' });
+        expect(result.provenance.responseId).toBe('response-1');
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl.mock.calls[0][1].dispatcher.destroyed).toBe(true);
+    });
+
+    it.each(['response.failed', 'response.incomplete', 'error'])('rejects streamed %s without leaking provider content or retrying', async type => {
+        const fetchImpl = vi.fn(async () => streamResponse(`data: ${JSON.stringify({ type, message: 'test-key secret' })}\n\n`));
+        await expect(requestFreshGeneration({ ...options(), fetchImpl })).rejects.toThrow('Generation did not complete. No candidate was accepted.');
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['data: {"type":"response.created"}\n\n', 'data: [DONE]\n\n', 'data: invalid secret\n\n'])('rejects truncated or malformed streams', async text => {
+        const fetchImpl = vi.fn(async () => streamResponse(text));
+        await expect(requestFreshGeneration({ ...options(), fetchImpl })).rejects.toThrow(/Generation stream ended|invalid response/);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports safe network causes, closes the transport, and never retries a paid POST', async () => {
+        const fetchImpl = vi.fn(async () => { throw new TypeError('fetch failed test-key', { cause: { code: 'UND_ERR_HEADERS_TIMEOUT', message: 'secret' } }); });
+        await expect(requestFreshGeneration({ ...options(), fetchImpl })).rejects.toThrow('Generation connection failed (UND_ERR_HEADERS_TIMEOUT). Not retried automatically.');
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl.mock.calls[0][1].dispatcher.destroyed).toBe(true);
+    });
+
+    it('overrides both HTTP timeouts, not just the abort deadline', async () => {
+        await requestFreshGeneration({ ...options(), fetchImpl: async () => Response.json(completed) });
+        expect(transport.Agent).toHaveBeenLastCalledWith({ headersTimeout: 1_200_000, bodyTimeout: 1_200_000 });
+    });
+
+    it('keeps the overall deadline even with a caller cancellation signal', async () => {
+        const controller = new AbortController();
+        const fetchImpl = vi.fn(async (_url, request) => {
+            expect(request.signal).not.toBe(controller.signal);
+            controller.abort();
+            request.signal.throwIfAborted();
+        });
+        await expect(requestFreshGeneration({ ...options(), signal: controller.signal, fetchImpl })).rejects.toThrow('Generation cancelled.');
     });
 });

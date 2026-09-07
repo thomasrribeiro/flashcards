@@ -1,7 +1,53 @@
 import { createHash } from 'node:crypto';
+import { Agent } from 'undici';
 import { buildFreshGenerationContext, FRESH_GENERATION_VERSION } from '../../src/fresh-generation.js';
 
 const hash = value => `sha256:${createHash('sha256').update(value).digest('hex')}`;
+const GENERATION_TIMEOUT_MS = 20 * 60 * 1000;
+
+function transportError(error) {
+    // Never expose arbitrary provider messages, URLs, request bodies or keys.
+    const code = error?.cause?.code || error?.code;
+    const safeCodes = new Set(['UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT',
+        'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET', 'ECONNRESET', 'ENOTFOUND',
+        'EAI_AGAIN', 'ETIMEDOUT', 'ENETUNREACH']);
+    if (error?.name === 'TimeoutError') return new Error('Generation timed out after 20 minutes.');
+    if (error?.name === 'AbortError') return new Error('Generation cancelled.');
+    return new Error(`Generation connection failed${safeCodes.has(code) ? ` (${code})` : ''}. Not retried automatically.`);
+}
+
+async function readGenerationResponse(response) {
+    if (!response.headers.get('content-type')?.includes('text/event-stream')) {
+        return response.json();
+    }
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let completed;
+    const consume = frame => {
+        const data = frame.split(/\r?\n/).filter(line => line.startsWith('data:'))
+            .map(line => line.slice(5).trimStart()).join('\n');
+        if (!data || data === '[DONE]') return;
+        const event = JSON.parse(data);
+        if (event.type === 'response.completed') completed = event.response;
+        if (['response.failed', 'response.incomplete', 'error'].includes(event.type)) {
+            throw new Error('Generation did not complete. No candidate was accepted.');
+        }
+    };
+    for await (const chunk of response.body) {
+        buffer += decoder.decode(chunk, { stream: true });
+        let boundary;
+        while ((boundary = /\r?\n\r?\n/.exec(buffer))) {
+            consume(buffer.slice(0, boundary.index));
+            buffer = buffer.slice(boundary.index + boundary[0].length);
+        }
+        // Do not wait for a proxy to close a successfully completed stream.
+        if (completed) return completed;
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) consume(buffer);
+    if (!completed) throw new Error('Generation stream ended before completion. Not retried automatically.');
+    return completed;
+}
 
 /**
  * Tool-free generation boundary. This process, not the model, owns credentials
@@ -22,26 +68,42 @@ export async function requestFreshGeneration({
     }
     const context = buildFreshGenerationContext({ jobType, subjects, catalog, deckId, chapterId });
     const input = JSON.stringify(context);
-    const response = await fetchImpl('https://api.openai.com/v1/responses', {
-        method: 'POST',
-        signal: signal || AbortSignal.timeout(20 * 60 * 1000),
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            model: modelId,
-            reasoning: { effort: reasoningEffort },
-            instructions,
-            input,
-            tools: [],
-            tool_choice: 'none',
-            store: false,
-            truncation: 'disabled',
-            text: { format: { type: 'json_schema', name: 'generation_candidate', strict: true, schema } }
-        })
-    });
-    // Do not echo provider error bodies: they can contain request data or
-    // credentials. Never silently retry a paid or uncertain generation.
-    if (!response.ok) throw new Error(`Generation provider returned HTTP ${response.status}.`);
-    const result = await response.json();
+    // AbortSignal alone does not override the HTTP client's shorter header /
+    // body timeouts. Scope the transport to this job; never change global fetch.
+    const dispatcher = new Agent({ headersTimeout: GENERATION_TIMEOUT_MS, bodyTimeout: GENERATION_TIMEOUT_MS });
+    let result;
+    try {
+        const response = await fetchImpl('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            dispatcher,
+            signal: AbortSignal.any([AbortSignal.timeout(GENERATION_TIMEOUT_MS), ...(signal ? [signal] : [])]),
+            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: modelId,
+                reasoning: { effort: reasoningEffort },
+                instructions,
+                input,
+                tools: [],
+                tool_choice: 'none',
+                store: false,
+                stream: true,
+                truncation: 'disabled',
+                text: { format: { type: 'json_schema', name: 'generation_candidate', strict: true, schema } }
+            })
+        });
+        // Do not echo provider error bodies: they can contain request data or
+        // credentials. Never silently retry a paid or uncertain generation.
+        if (!response.ok) throw new Error(`Generation provider returned HTTP ${response.status}.`);
+        result = await readGenerationResponse(response);
+    } catch (error) {
+        if (error instanceof TypeError || ['AbortError', 'TimeoutError'].includes(error?.name) || error?.cause?.code || error?.code) {
+            throw transportError(error);
+        }
+        if (error instanceof SyntaxError) throw new Error('The provider returned an invalid response.');
+        throw error;
+    } finally {
+        await dispatcher.destroy();
+    }
     if (result.status !== 'completed') throw new Error('Generation did not complete. No candidate was accepted.');
     if ((result.output || []).some(item => !['message', 'reasoning'].includes(item.type))) {
         throw new Error('Unexpected tool output from restricted generation.');
