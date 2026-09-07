@@ -3576,8 +3576,8 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     if (compact) stage.classList.add('is-compact');
     const nodeSizing = {};
     if (compact && ranked) {
-        // Two phone columns leave room for names and prerequisite arrows.
-        const nodeWidth = Math.max(60, (root.clientWidth - 2 - 24 - 20) / 2);
+        // One full center column plus half of each neighbor and two arrow gaps.
+        const nodeWidth = Math.max(60, (root.clientWidth - 2 - 40) / 2);
         Object.assign(nodeSizing, {
             nodeWidth,
             columnGap: 20
@@ -3961,7 +3961,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     };
     const fitBounds = (bounds, { horizontal = false } = {}) => {
         const padding = compact ? (ranked ? 12 : 16) : 48;
-        const width = Math.max(1, stage.clientWidth - padding * 2);
+        const width = Math.max(1, stage.clientWidth - (compact && ranked ? 0 : padding * 2));
         const height = Math.max(1, stage.clientHeight - padding * 2);
         scale = horizontal
             ? Math.min(3, width / bounds.width)
@@ -4002,12 +4002,13 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
             : [];
         const columnStep = layout.nodeWidth + (layout.columnGap || 0);
         const focalX = focalNodes.length ? Math.min(...focalNodes.map(node => node.x)) : minX;
-        const columns = compact ? 2 : 3;
         return {
-            x: Number.isInteger(range.layer) ? focalX - columnStep : minX,
+            x: Number.isInteger(range.layer)
+                ? focalX - (compact ? layout.nodeWidth / 2 + layout.columnGap : columnStep)
+                : minX,
             y: minY,
             width: Number.isInteger(range.layer)
-                ? layout.nodeWidth + columnStep * (columns - 1)
+                ? (compact ? columnStep * 2 : layout.nodeWidth + columnStep * 2)
                 : Math.max(1, maxX - minX),
             height: Math.max(1, maxY - minY)
         };
@@ -4668,7 +4669,7 @@ async function renderCurriculumGraph(root, progressStates, graph, {
         return;
     }
     const windowState = layered
-        ? curriculumLayerWindow(graph, curriculumViewState.layerStart, useCompactCurriculumCanvas() ? 2 : 3)
+        ? curriculumLayerWindow(graph, curriculumViewState.layerStart, 3)
         : null;
     if (windowState) curriculumViewState.layerStart = windowState.layer;
     const subjectOverview = !layered && graph.nodes.every(node => node.nodeType === 'subject');
