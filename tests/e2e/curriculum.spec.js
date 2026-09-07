@@ -1330,9 +1330,11 @@ test('tracks generation activity and previews an unmerged subject PR in the curr
     await activity.getByRole('button', { name: 'Review', exact: true }).click();
 
     await expect(page.locator('#tab-curriculum')).toHaveClass(/active/);
-    await expect(page.locator('.curriculum-preview-banner')).toContainText('Generated curriculum · chemistry curriculum · gpt-test · PR #12');
-    await expect(page.locator('.curriculum-preview-banner')).toContainText('2 added');
-    await expect(page.locator('.curriculum-preview-banner').getByRole('button', { name: 'Apply generated curriculum' })).toBeVisible();
+    await expect(page.locator('.curriculum-preview-meta p')).toHaveText([
+        `PR #12 · ${commit.slice(0, 12)}`, '~ / example / curricula / chemistry', 'gpt-test', 'high reasoning'
+    ]);
+    await expect(page.getByRole('button', { name: 'Decks: 2 added', exact: true })).toBeVisible();
+    await expect(page.locator('.curriculum-preview-banner').getByRole('button', { name: 'Apply', exact: true })).toBeVisible();
     await expect(page.locator('.curriculum-preview-banner').getByRole('link', { name: 'Review pull request' })).toHaveCount(0);
     await expect(page.locator('.curriculum-breadcrumb-label')).toHaveText('example');
     await expect(page.locator('.curriculum-breadcrumb').getByRole('button', { name: 'curricula' })).toBeVisible();
@@ -1341,24 +1343,33 @@ test('tracks generation activity and previews an unmerged subject PR in the curr
     await expect(page.getByRole('form', { name: 'Create subject' })).toHaveCount(0);
 
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toHaveClass(/is-dag-added/);
-    await page.getByRole('button', { name: 'Current curriculum', exact: true }).click();
-    await expect(page.locator('.curriculum-preview-banner')).toContainText('Current curriculum (loaded snapshot)');
-    await expect(page.getByRole('button', { name: 'Apply generated curriculum' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Current', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Current', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled();
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Generated curriculum', exact: true }).click();
+    await page.getByRole('button', { name: 'Proposed', exact: true }).click();
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry/chemical-literacy"]')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Exit preview' }).click();
+    await page.getByRole('button', { name: 'Exit', exact: true }).click();
     await expect(page.locator('.curriculum-preview-banner')).toHaveCount(0);
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Options', exact: true })).toBeVisible();
 });
 
-test('previews a fresh global curriculum and sends acceptance only to the guarded backend', async ({ page }) => {
+test('previews a fresh global curriculum and sends acceptance only to the guarded backend', async ({ page }, testInfo) => {
     await installGenerationAccount(page);
     const commit = 'd'.repeat(40);
     const generated = structuredClone(bundledCurriculum);
+    // Match the generation account's authored-field defaults before changing scope.
+    for (const deck of generated.decks) {
+        deck.outcomes ||= [{ id: 'basics', description: deck.description || 'Basic concepts' }];
+        deck.required_outcomes ||= (deck.prerequisites || []).map(deck_id => ({ deck_id, outcome_ids: ['basics'] }));
+    }
     generated.decks[0].description = 'Freshly proposed scope';
+    generated.decks.push(...Array.from({ length: 40 }, (_, i) => ({
+        id: `mathematics/new-deck-${i}`, deck: `new-deck-${i}`, subject: 'mathematics',
+        prerequisites: [generated.decks[0].id], chapters: []
+    })));
     const job = { id: 1234, job_type: 'curriculum-design', deck_id: 'global/curriculum', status: 'needs-review', model_id: 'gpt-6-astra',
         result_url: 'https://github.com/example/curricula/pull/1234', payload_json: JSON.stringify({ workflowVersion: 'fresh-generation-v1', subjects: generated.subjects.map(subject => subject.id), reasoningEffort: 'high' }) };
     await page.route('**/api/generation-requests', route => route.fulfill({ json: { requests: [job] } }));
@@ -1376,15 +1387,45 @@ test('previews a fresh global curriculum and sends acceptance only to the guarde
     await expect(settings.locator('.generation-activity-actions a')).toHaveCount(0);
     await settings.getByRole('button', { name: 'Review', exact: true }).click();
     const banner = page.locator('.curriculum-preview-banner');
-    await expect(banner).toContainText('Global curriculum');
-    await banner.getByText('Inspect curriculum changes', { exact: true }).click();
-    await expect(banner).toContainText('Freshly proposed scope');
+    await expect(banner.locator('.curriculum-preview-meta p')).toHaveText([
+        `PR #1234 · ${commit.slice(0, 12)}`, '~ / example / curricula', 'gpt-6-astra', 'high reasoning'
+    ]);
+    await expect(banner.locator('.curriculum-preview-actions button')).toHaveText(['Current', 'Proposed', 'Apply', 'Exit']);
+    await expect(banner.getByRole('link')).toHaveCount(0);
+    await expect(banner.locator('pre')).toHaveCount(0);
+    await expect(banner.getByRole('button', { name: 'Proposed', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    for (const width of testInfo.project.name === 'desktop-chromium' ? [1280] : [390, 320]) {
+        await page.setViewportSize({ width, height: 844 });
+        const actionTop = await banner.locator('.curriculum-preview-actions').evaluate(el => el.offsetTop);
+        for (const name of ['Decks: 40 added', 'Decks: 1 changed', 'Prereqs: 40 added']) {
+            await banner.getByRole('button', { name, exact: true }).click();
+            await expect(banner.getByRole('button', { name, exact: true })).toHaveAttribute('aria-expanded', 'true');
+        }
+        await expect(banner.locator('#curriculum-diff-decks-added li')).toHaveCount(40);
+        await expect(banner.locator('#curriculum-diff-decks-changed')).toContainText(generated.decks[0].id);
+        expect(await banner.locator('.curriculum-preview-actions').evaluate(el => el.offsetTop)).toBe(actionTop);
+        const layout = await banner.evaluate(el => {
+            const actions = el.querySelector('.curriculum-preview-actions').getBoundingClientRect();
+            const rows = [...el.querySelectorAll('.curriculum-diff-counts')];
+            return {
+                overflow: [...el.querySelectorAll('*'), el].some(n => n.scrollWidth > n.clientWidth + 1),
+                actionsAboveDiff: actions.bottom <= rows[0].getBoundingClientRect().top,
+                singleLine: rows.every(row => new Set([...row.children].map(n => Math.round(n.getBoundingClientRect().top + n.getBoundingClientRect().height / 2))).size === 1)
+            };
+        });
+        expect(layout).toEqual({ overflow: false, actionsAboveDiff: true, singleLine: true });
+        await banner.locator('#curriculum-diff-decks-added').evaluate(el => { el.scrollTop = el.scrollHeight; });
+        await banner.screenshot({ path: testInfo.outputPath(`compact-diff-${width}.png`) });
+        for (const name of ['Decks: 40 added', 'Decks: 1 changed', 'Prereqs: 40 added']) {
+            await banner.getByRole('button', { name, exact: true }).click();
+        }
+    }
     await expect(page.locator('.curriculum-graph-node[data-deck-id="mathematics"]')).toBeVisible();
     page.once('dialog', dialog => dialog.accept());
-    await banner.getByRole('button', { name: 'Apply generated curriculum' }).click();
+    await banner.getByRole('button', { name: 'Apply', exact: true }).click();
     await expect(banner).toContainText('Curriculum changed. Generate a new proposal.');
     expect(attempts).toEqual([{ expectedHead: commit }]);
-    await expect(banner.getByRole('button', { name: 'Apply generated curriculum' })).toBeEnabled();
+    await expect(banner.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled();
 });
 
 test('reviews a generated deck curriculum on the chapter canvas without applying it', async ({ page }, testInfo) => {
@@ -1414,18 +1455,18 @@ test('reviews a generated deck curriculum on the chapter canvas without applying
     await expect(settings.locator('.generation-activity-actions a')).toHaveCount(0);
     await settings.getByRole('button', { name: 'Review', exact: true }).click();
     const banner = page.locator('.curriculum-preview-banner');
-    await expect(banner).toContainText('Nodes: 1 → 2. 1 added');
-    await expect(banner).toContainText('Prerequisite edges: +1 / −0');
+    await expect(banner.getByRole('button', { name: 'Chapters: 1 added', exact: true })).toBeVisible();
+    await expect(banner.getByRole('button', { name: 'Prereqs: 1 added', exact: true })).toBeVisible();
     await expect(page.locator(`[data-deck-id="${deckId}#02_next"]`)).toBeVisible();
-    await banner.getByText('Inspect curriculum changes', { exact: true }).click();
-    await expect(banner).toContainText(`Added required prerequisite: ${deckId}#01_start → ${deckId}#02_next`);
+    await banner.getByRole('button', { name: 'Prereqs: 1 added', exact: true }).click();
+    await expect(banner.locator('#curriculum-diff-prereqs-added')).toContainText(`+ ${deckId}#01_start → ${deckId}#02_next`);
     const screenshotPath = testInfo.outputPath('generated-deck-dag.png');
     await page.screenshot({ path: screenshotPath });
     await testInfo.attach('generated-deck-dag', { path: screenshotPath, contentType: 'image/png' });
-    await banner.getByRole('button', { name: 'Current curriculum', exact: true }).click();
+    await banner.getByRole('button', { name: 'Current', exact: true }).click();
     await expect(page.locator(`[data-deck-id="${deckId}#02_next"]`)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Apply generated curriculum' })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Exit preview' }).click();
+    await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Exit', exact: true }).click();
     await expect(banner).toHaveCount(0);
     expect(mutations).toEqual([]);
 });

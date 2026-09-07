@@ -4018,7 +4018,6 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-options-regenerate { width: 100%; }
 .curriculum-options-modal .curriculum-builder-errors:empty { display: none; }
 .curriculum-subject-create { width: 100%; min-width: 0; }
-.curriculum-diff-value { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.65rem; max-height: 22rem; overflow: auto; }
 .curriculum-subject-input-row { display: flex; min-width: 0; }
 .curriculum-subject-create .repo-input-field { height: 32px; }
 @media (max-width: 600px), (pointer: coarse) {
@@ -4149,14 +4148,12 @@ body.standalone-phone .mobile-sidebar-close {
     overflow-wrap: anywhere;
 }
 .curriculum-preview-banner {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 14px;
     margin: -3px 0 14px;
     border: 1px solid var(--black);
-    background: #fff5c7;
+    background: var(--white);
     padding: 10px 12px;
 }
 .curriculum-preview-banner p {
@@ -4164,12 +4161,49 @@ body.standalone-phone .mobile-sidebar-close {
     font-size: 0.66rem;
 }
 .curriculum-preview-banner > div { margin: 0; }
-.curriculum-preview-banner > section { flex: 1 1 320px; min-width: 0; }
-.curriculum-preview-banner > section p + p { margin-top: 6px; }
+.curriculum-preview-banner > section { min-width: 0; }
+.curriculum-preview-meta { overflow-wrap: anywhere; }
+.curriculum-preview-meta p + p { margin-top: 3px; }
+.curriculum-preview-banner .curriculum-preview-actions {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr .8fr .8fr;
+    width: 100%;
+    max-width: 420px;
+    gap: 6px;
+}
+.curriculum-preview-actions button {
+    justify-content: center;
+    min-width: 0;
+    padding: 8px 4px;
+    font-size: clamp(11px, 3vw, 14px);
+}
+.curriculum-preview-actions .generation-activity-error { grid-column: 1 / -1; }
 .curriculum-preview-banner button[aria-pressed="true"] { background: var(--black); color: var(--white); }
-.curriculum-preview-banner details { flex: 1 0 100%; min-width: 0; font-size: 0.64rem; }
-.curriculum-preview-banner summary { cursor: pointer; }
-.curriculum-preview-banner details ul { max-height: 240px; overflow: auto; overflow-wrap: anywhere; padding-left: 20px; }
+.curriculum-preview-diff { display: grid; gap: 8px; }
+.curriculum-diff-counts { display: flex; align-items: center; gap: 8px; font-size: 0.66rem; }
+.curriculum-diff-counts > span { min-width: 7ch; }
+.curriculum-preview-banner .curriculum-diff-toggle { padding: 4px 6px; font-size: inherit; }
+.curriculum-diff-toggle::after { content: ' ▸'; }
+.curriculum-diff-toggle[aria-expanded="true"]::after { content: ' ▾'; }
+.curriculum-diff-toggle:disabled::after { content: ''; }
+.curriculum-preview-diff .is-added { color: #187443; }
+.curriculum-preview-diff .is-removed { color: #b42318; }
+.curriculum-preview-diff .is-changed { color: #886009; }
+:root[data-theme="dark"] .curriculum-preview-diff .is-added { color: #74d69c; }
+:root[data-theme="dark"] .curriculum-preview-diff .is-removed { color: #ff9691; }
+:root[data-theme="dark"] .curriculum-preview-diff .is-changed { color: #e7c66a; }
+.curriculum-diff-list {
+    max-height: 240px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    margin: 8px 0 0;
+    padding: 8px;
+    border: 1px solid currentColor;
+    list-style: none;
+    font-size: 0.64rem;
+    overflow-wrap: anywhere;
+}
+.curriculum-diff-list li + li { margin-top: 6px; }
 .curriculum-source-row {
     display: grid;
     grid-template-columns: auto 1fr 180px auto;
@@ -4182,8 +4216,6 @@ body.standalone-phone .mobile-sidebar-close {
     .study-settings-pane.generation-activity-settings { grid-template-columns: minmax(0, 1fr); }
     .generation-activity-refresh { justify-self: start; }
     .generation-activity-list { grid-column: 1; }
-    .curriculum-preview-banner { align-items: flex-start; flex-direction: column; }
-    .curriculum-preview-banner > section { flex: none; width: 100%; }
     .curriculum-builder-grid { grid-template-columns: 1fr; }
     .curriculum-builder-deck { grid-template-columns: 28px 1fr auto; }
     .curriculum-builder-deck > input:nth-of-type(2),

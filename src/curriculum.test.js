@@ -119,6 +119,22 @@ describe('curriculum dependency planning', () => {
         expect(transitivelyReduceCurriculumGraph(graph).edges).toEqual(graph.edges);
     });
 
+    it('can project a valid cross-subject deck DAG into mutually dependent subjects', () => {
+        const decks = [
+            { id: 'chemistry/foundations', subject: 'chemistry', prerequisites: [] },
+            { id: 'biology/ecology', subject: 'biology', prerequisites: ['chemistry/foundations'] },
+            { id: 'chemistry/environment', subject: 'chemistry', prerequisites: ['biology/ecology', 'chemistry/foundations'] }
+        ];
+        const edges = decks.flatMap(deck => deck.prerequisites.map(source => ({ source, target: deck.id, type: 'required' })));
+        const reduced = transitivelyReduceCurriculumGraph({ nodes: decks, edges });
+        expect(reduced.edges).toEqual([edges[0], edges[1]]);
+        // The subject arrows refer to different decks; neither is a deck cycle.
+        expect(subjectOverviewGraph({ decks }).edges).toEqual([
+            { source: 'chemistry', target: 'biology', type: 'required' },
+            { source: 'biology', target: 'chemistry', type: 'required' }
+        ]);
+    });
+
     it('expands an exact external provider through its local chapter closure', () => {
         expect(chapterPrerequisiteClosure(index, 'physics/physical-reasoning', '01_systems'))
             .toEqual([

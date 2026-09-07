@@ -5698,40 +5698,23 @@ function curriculumPreviewBanner() {
     const banner = document.createElement('aside');
     banner.className = 'curriculum-preview-banner';
     const description = document.createElement('section');
-    const text = document.createElement('p');
+    description.className = 'curriculum-preview-meta';
     const { diff, showing, request } = curriculumPreview;
-    const target = curriculumPreview.request.jobType === 'deck-plan'
-        ? `${curriculumPreview.request.deckId} chapter curriculum`
-        : request?.jobType === 'curriculum-design' ? 'Global curriculum' : `${curriculumPreview.request.subject} curriculum`;
-    text.textContent = `${showing === 'generated' ? 'Generated curriculum' : 'Current curriculum (loaded snapshot)'} · ${target} · ${request.modelId || 'model not recorded'} · PR #${curriculumPreview.pull.number} at ${curriculumPreview.commit.slice(0, 12)}. Nothing is applied by previewing.`;
-    const summary = document.createElement('p');
-    summary.textContent = `Nodes: ${diff.beforeCount} → ${diff.afterCount}. ${diff.added.length} added, ${diff.removed.length} removed, ${diff.changed.length} changed. Prerequisite edges: +${diff.addedEdges.length} / −${diff.removedEdges.length} (required and recommended).`;
-    description.append(text, summary);
-    const details = document.createElement('details');
-    const detailLabel = document.createElement('summary');
-    detailLabel.textContent = 'Inspect curriculum changes';
-    details.append(detailLabel);
-    const line = (title, value) => {
-        const heading = document.createElement('h4');
-        heading.textContent = title;
-        const content = document.createElement('pre');
-        content.className = 'curriculum-diff-value';
-        content.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-        details.append(heading, content);
-    };
-    for (const [label, nodes] of [['Added', diff.added], ['Removed', diff.removed]]) {
-        if (nodes.length) line(label, nodes.map(node => `${node.id}${node.description ? ` — ${node.description}` : ''}`).join('\n'));
+    const { pull, commit } = curriculumPreview;
+    const recorded = request.result?.provenance;
+    for (const value of [
+        `PR #${pull.number} · ${commit.slice(0, 12)}`,
+        generationRequestName(request, `${pull.owner}/${pull.repository}`),
+        recorded?.resolvedModelId || recorded?.modelId || request.modelId || 'Model not recorded',
+        `${recorded?.reasoningEffort || request.payload?.reasoningEffort || 'Unspecified'} reasoning`
+    ]) {
+        const line = document.createElement('p');
+        line.textContent = value;
+        description.append(line);
     }
-    for (const node of diff.changed) for (const change of node.changes || []) {
-        line(`${node.id} · ${change.field.replaceAll('_', ' ')}`, { before: change.before, after: change.after });
-    }
-    if (diff.addedEdges.length) line('Prerequisites added', diff.addedEdges.map(edge => `Added ${edge.type} prerequisite: ${edge.source} → ${edge.target}`).join('\n'));
-    if (diff.removedEdges.length) line('Prerequisites removed', diff.removedEdges.map(edge => `Removed ${edge.type} prerequisite: ${edge.source} → ${edge.target}`).join('\n'));
-    if (diff.affectedContent?.length) line('Plans needing review', diff.affectedContent.map(item => `${item.id}: ${item.chapterCount} chapters · ${item.cardCount} cards — ${item.reason}`).join('\n'));
-    if (request.payload?.workflowVersion === FRESH_GENERATION_VERSION) line('Existing content', 'Previous plans are archived. Card repositories and review history stay saved. Changed decks need new chapter plans. Renames, splits and merges are not automatically matched.');
-    description.append(details);
     const actions = document.createElement('div');
-    for (const [value, label] of [['published', 'Current curriculum'], ['generated', 'Generated curriculum']]) {
+    actions.className = 'curriculum-preview-actions';
+    for (const [value, label] of [['published', 'Current'], ['generated', 'Proposed']]) {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = label;
@@ -5746,12 +5729,13 @@ function curriculumPreviewBanner() {
     }
     const merge = document.createElement('button');
     merge.type = 'button';
-    merge.textContent = 'Apply generated curriculum';
+    merge.textContent = 'Apply';
+    merge.disabled = request.status !== 'needs-review' || showing !== 'generated';
     merge.onclick = async () => {
         const preview = curriculumPreview;
-        if (!window.confirm(`Apply this generated curriculum by merging pull request #${preview.pull.number}? This changes the published curriculum. Previewing alone does not change it.`)) return;
+        if (!window.confirm('Apply this proposed curriculum? This replaces the published plan.')) return;
         merge.disabled = true;
-        merge.textContent = 'Merging…';
+        merge.textContent = 'Applying…';
         try {
             if (preview.request.payload?.workflowVersion === FRESH_GENERATION_VERSION) {
                 await githubAuth.apiRequest(`/api/generation-requests/${preview.request.id}/accept`, { method: 'POST', body: JSON.stringify({ expectedHead: preview.commit }) });
@@ -5759,7 +5743,7 @@ function curriculumPreviewBanner() {
                 token: githubAuth.getToken(),
                 expectedHead: preview.commit
             });
-            merge.textContent = 'Merged';
+            merge.textContent = 'Applied';
             if (preview.request.payload?.workflowVersion !== FRESH_GENERATION_VERSION) await githubAuth.apiRequest(`/api/generation-requests/${preview.request.id}`, {
                 method: 'PATCH',
                 body: JSON.stringify({
@@ -5780,7 +5764,7 @@ function curriculumPreviewBanner() {
             );
         } catch (error) {
             merge.disabled = false;
-            merge.textContent = 'Apply generated curriculum';
+            merge.textContent = 'Apply';
             const message = document.createElement('p');
             message.className = 'generation-activity-error';
             message.setAttribute('aria-live', 'polite');
@@ -5791,16 +5775,58 @@ function curriculumPreviewBanner() {
     };
     const exit = document.createElement('button');
     exit.type = 'button';
-    exit.textContent = 'Exit preview';
+    exit.textContent = 'Exit';
     exit.onclick = exitCurriculumPreview;
-    if (request.status === 'needs-review' && showing === 'generated') actions.appendChild(merge);
-    const github = document.createElement('a');
-    github.href = request.resultUrl;
-    github.target = '_blank';
-    github.rel = 'noopener noreferrer';
-    github.textContent = 'View pull request';
-    actions.append(github, exit);
-    banner.append(description, actions);
+    actions.append(merge, exit);
+    const changes = document.createElement('section');
+    changes.className = 'curriculum-preview-diff';
+    const nodeKind = request.jobType === 'deck-plan' ? 'Chapters' : 'Decks';
+    const edgeLabel = edge => `${edge.source} → ${edge.target}${edge.type === 'recommended' ? ' (recommended)' : ''}`;
+    for (const [kind, groups] of [
+        [nodeKind, [['added', diff.added], ['removed', diff.removed], ['changed', diff.changed]]],
+        ['Prereqs', [['added', diff.addedEdges], ['removed', diff.removedEdges]]]
+    ]) {
+        const row = document.createElement('section');
+        row.className = 'curriculum-diff-row';
+        row.setAttribute('aria-label', kind);
+        const controls = document.createElement('div');
+        controls.className = 'curriculum-diff-counts';
+        const label = document.createElement('span');
+        label.textContent = kind;
+        controls.append(label);
+        row.append(controls);
+        for (const [state, entries] of groups) {
+            const symbol = { added: '+', removed: '−', changed: '~' }[state];
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = `curriculum-diff-toggle is-${state}`;
+            toggle.textContent = `${symbol}${entries.length}`;
+            toggle.setAttribute('aria-label', `${kind}: ${entries.length} ${state}`);
+            toggle.setAttribute('aria-expanded', 'false');
+            toggle.disabled = !entries.length;
+            const list = document.createElement('ul');
+            list.className = `curriculum-diff-list is-${state}`;
+            list.id = `curriculum-diff-${kind.toLowerCase()}-${state}`;
+            list.hidden = true;
+            list.tabIndex = 0;
+            list.setAttribute('aria-label', `${kind} ${state}`);
+            toggle.setAttribute('aria-controls', list.id);
+            for (const entry of entries) {
+                const item = document.createElement('li');
+                // Only changed entries are listed; never serialize the full DAG.
+                item.textContent = `${symbol} ${kind === 'Prereqs' ? edgeLabel(entry) : entry.id}`;
+                list.append(item);
+            }
+            toggle.onclick = () => {
+                list.hidden = !list.hidden;
+                toggle.setAttribute('aria-expanded', String(!list.hidden));
+            };
+            controls.append(toggle);
+            row.append(list);
+        }
+        changes.append(row);
+    }
+    banner.append(description, actions, changes);
     return banner;
 }
 
