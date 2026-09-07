@@ -18,6 +18,20 @@ function currentChapterProgress(progress, file) {
     return Number(progress.reviewedCards) >= Number(progress.totalCards);
 }
 
+export function curriculumSubjectProgressStates(decks = [], deckStates = new Map()) {
+    const subjects = new Map();
+    for (const deck of decks) {
+        const state = deckStates.get(deck.id)
+            || (deck.repository?.configured || deck.materialized ? 'learning' : 'unavailable');
+        if (!subjects.has(deck.subject)) subjects.set(deck.subject, []);
+        subjects.get(deck.subject).push(state);
+    }
+    return new Map([...subjects].map(([subject, states]) => [subject,
+        states.every(state => state === 'complete') ? 'complete'
+            : states.some(state => state !== 'unavailable') ? 'learning' : 'unavailable'
+    ]));
+}
+
 export function curriculumChapterProgressStates(
     curriculumDecks = [],
     repositories = [],

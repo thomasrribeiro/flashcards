@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
     curriculumChapterProgressStates,
-    curriculumDeckProgressStates
+    curriculumDeckProgressStates,
+    curriculumSubjectProgressStates
 } from './curriculum-progress.js';
 
 const deck = {
@@ -17,6 +18,27 @@ const progress = [{
     totalCards: 10,
     reviewedCards: 10
 }];
+
+describe('curriculumSubjectProgressStates', () => {
+    const decks = [
+        { id: 'math/a', subject: 'math' },
+        { id: 'math/b', subject: 'math' }
+    ];
+    it('is gray until any deck is available, then yellow', () => {
+        expect(curriculumSubjectProgressStates(decks).get('math')).toBe('unavailable');
+        expect(curriculumSubjectProgressStates([
+            decks[0], { ...decks[1], repository: { configured: true } }
+        ]).get('math')).toBe('learning');
+    });
+    it('is green only when all decks are complete', () => {
+        const states = new Map([['math/a', 'complete']]);
+        expect(curriculumSubjectProgressStates(decks, states).get('math')).toBe('learning');
+        states.set('math/b', 'complete');
+        expect(curriculumSubjectProgressStates(decks, states).get('math')).toBe('complete');
+        states.set('math/b', 'learning');
+        expect(curriculumSubjectProgressStates(decks, states).get('math')).toBe('learning');
+    });
+});
 
 describe('curriculumDeckProgressStates', () => {
     it('marks generated unfinished content as learning', () => {

@@ -114,7 +114,8 @@ import {
 import { canReviewGenerationDag, compareGenerationDag, generationJobCategory, generationModelSummary } from './generation-dag-review.js';
 import {
     curriculumChapterProgressStates,
-    curriculumDeckProgressStates
+    curriculumDeckProgressStates,
+    curriculumSubjectProgressStates
 } from './curriculum-progress.js';
 import {
     chapterContentGenerationScope,
@@ -3096,7 +3097,6 @@ function installedCurriculumIds(decks) {
 }
 
 function curriculumStatus(deck, progressStates) {
-    if (deck.nodeType === 'subject') return `${deck.deck_count || 0} decks`;
     if (progressStates.has(deck.id)) {
         return typeof progressStates.get === 'function'
             ? progressStates.get(deck.id)
@@ -3776,9 +3776,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const highlightsMatches = graph.seedIds.length < graph.nodes.length;
     for (const deck of layout.nodes) {
         const node = preparedNodes.get(deck.id);
-        const progressState = deck.nodeType === 'deck' || deck.nodeType === 'chapter'
-            ? curriculumStatus(deck, progressStates)
-            : null;
+        const progressState = curriculumStatus(deck, progressStates);
         if (progressState) {
             node.classList.add(`is-${progressState}`);
             node.dataset.progressState = progressState;
@@ -4851,6 +4849,9 @@ async function renderCurriculumView(options = {}) {
         )
     ]);
     const { mode, hierarchy, subject, parentId } = curriculumViewState;
+    for (const [id, state] of curriculumSubjectProgressStates(curriculumIndex.decks, progressStates)) {
+        progressStates.set(id, state);
+    }
     ensureCurriculumNavigationHistory();
     root.querySelector('.curriculum-subject-create')?.dispatchEvent(new Event('close'));
     root.innerHTML = '';

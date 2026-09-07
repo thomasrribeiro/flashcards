@@ -591,6 +591,10 @@ test('curriculum Options contains only regeneration with subject entry below nav
 
 test('omits redundant subject actions and labels deck actions Options', async ({ page }, testInfo) => {
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    // Deck widths stay uniform even though wrapped titles have different heights.
+    await expect.poll(() => page.locator('.curriculum-graph-node').evaluateAll(nodes =>
+        new Set(nodes.map(node => node.offsetWidth)).size
+    )).toBe(1);
     await expect(page.locator('.curriculum-breadcrumb-actions')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Options/ })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('subject-without-options.png') });
@@ -2682,11 +2686,24 @@ test('subject overview emphasizes names without redundant labels', async ({ page
     const nodes = stage.locator('.curriculum-graph-node');
     for (const node of await nodes.all()) {
         await expect(node).toHaveCSS('text-align', 'center');
+        await expect(node).toHaveCSS('border-left-width', '4px');
+        const subject = await node.getAttribute('data-deck-id');
+        const available = bundledCurriculum.decks.some(deck => deck.subject === subject
+            && (deck.repository?.configured || deck.materialized));
+        await expect(node).toHaveAttribute('data-progress-state', available ? 'learning' : 'unavailable');
+        await expect(node).toHaveCSS('border-left-color', available ? 'rgb(245, 200, 66)' : 'rgb(102, 102, 102)');
         expect(await node.evaluate(element => {
             const box = element.getBoundingClientRect();
             const label = element.querySelector('.curriculum-graph-node-name').getBoundingClientRect();
-            return Math.max(label.left - box.left, box.right - label.right, label.top - box.top, box.bottom - label.bottom)
-                - Math.min(label.left - box.left, box.right - label.right, label.top - box.top, box.bottom - label.bottom);
+            const style = getComputedStyle(element);
+            const scale = box.width / element.offsetWidth;
+            const padding = [
+                (label.left - box.left) / scale - parseFloat(style.borderLeftWidth),
+                (box.right - label.right) / scale - parseFloat(style.borderRightWidth),
+                (label.top - box.top) / scale - parseFloat(style.borderTopWidth),
+                (box.bottom - label.bottom) / scale - parseFloat(style.borderBottomWidth)
+            ];
+            return Math.max(...padding) - Math.min(...padding);
         })).toBeLessThan(1);
         expect(await node.evaluate(element => {
             const box = element.getBoundingClientRect();
