@@ -12,6 +12,7 @@ async function installGenerationAccount(page, {
     repos = [],
     reviews = [],
     chapterProgress = [],
+    requests = [],
     providerDelayMs = 0
 } = {}) {
     catalog = structuredClone(catalog);
@@ -75,7 +76,7 @@ async function installGenerationAccount(page, {
                 provider_id: queued.providerId,
                 model_id: queued.modelId,
                 payload_json: JSON.stringify(queued.payload)
-            }] : [] } });
+            }] : requests } });
         }
         return route.fulfill({ json: {} });
     });
@@ -1030,6 +1031,44 @@ test('queues content generation for one eligible chapter', async ({ page }) => {
             reasoningEffort: 'high'
         }
     });
+});
+
+test('agent activity stays within the settings viewport with long job details', async ({ page }, testInfo) => {
+    await installGenerationAccount(page, { requests: [
+        { id: 36, status: 'running', job_type: 'curriculum-design', provider_id: 'openai', model_id: 'gpt-6-astra',
+            created_at: '2026-09-06T23:50:01Z', payload: { reasoningEffort: 'high', workflowVersion: 'fresh-generation-v1' } },
+        { id: 35, status: 'needs-review', job_type: 'subject-design', provider_id: 'openai', model_id: 'gpt-6-astra',
+            result_url: 'https://github.com/example/curricula/pull/12', payload: { subject: 'mathematics',
+                title: 'Mathematics — independent Astra comparison across all advanced mathematical topics', reasoningEffort: 'high' } },
+        { id: 34, status: 'needs-review', job_type: 'chapter-expand', provider_id: 'openai', model_id: 'gpt-6-astra',
+            deck_id: 'mathematics/linear-algebra', result_url: 'https://github.com/example/linear-algebra/pull/34',
+            payload: { chapterId: '01_linear_equations_and_coordinate_geometry', reasoningEffort: 'high', generationMode: 'replace' } },
+        { id: 33, status: 'failed', job_type: 'deck-plan', deck_id: 'computer-science/algorithms-and-data-structures',
+            error: `Unable to validate prerequisite ${'long-prerequisite-identifier-'.repeat(8)}`, payload: {} }
+    ] });
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const modal = page.getByRole('dialog', { name: 'Settings', exact: true });
+    await modal.getByRole('tab', { name: /Agents/ }).click();
+    await expect(modal.locator('.generation-activity-item')).toHaveCount(4);
+    for (const width of testInfo.project.name === 'desktop-chromium' ? [1280] : [390, 320]) {
+        await page.setViewportSize({ width, height: 844 });
+        const overflow = await modal.evaluate(element => {
+            const modalBox = element.getBoundingClientRect();
+            return [...element.querySelectorAll('.study-settings-body, .generation-activity-list, .generation-activity-item, .generation-activity-item h3, .generation-activity-item p, .generation-activity-command, .generation-activity-status, .generation-activity-actions > *, [role="tab"]')]
+                .filter(node => node.getClientRects().length)
+                .filter(node => {
+                    const box = node.getBoundingClientRect();
+                    return box.left < modalBox.left || box.right > modalBox.right
+                        || node.scrollWidth > node.clientWidth + 1;
+                }).map(node => node.className || node.textContent);
+        });
+        expect(overflow).toEqual([]);
+        const lastJob = modal.locator('.generation-activity-item').last();
+        await lastJob.scrollIntoViewIfNeeded();
+        await expect(lastJob).toBeInViewport();
+        await modal.locator('.study-settings-body').evaluate(element => { element.scrollTop = 0; });
+        await modal.screenshot({ path: testInfo.outputPath(`agents-${width}.png`) });
+    }
 });
 
 test('tracks generation activity and previews an unmerged subject PR in the curriculum', async ({ page }) => {

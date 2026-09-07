@@ -4034,19 +4034,25 @@ body.standalone-phone .mobile-sidebar-close {
 }
 .generation-activity-list {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-column: 1 / -1;
     gap: 10px;
+    min-width: 0;
 }
 .generation-activity-item {
+    min-width: 0;
+    overflow-wrap: anywhere;
     border: 1px solid var(--subtle-border);
     padding: 12px;
 }
 .generation-activity-item-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
     gap: 14px;
 }
+.generation-activity-item-header > div { flex: 1 1 220px; min-width: 0; }
 .generation-job-tag {
     display: inline-block;
     margin-bottom: 6px;
@@ -4075,10 +4081,10 @@ body.standalone-phone .mobile-sidebar-close {
 .generation-activity-command {
     display: block;
     margin-top: 8px;
-    overflow-x: auto;
     color: var(--muted);
     font-size: 0.62rem;
-    white-space: nowrap;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 .generation-activity-status {
     flex: 0 0 auto;
@@ -4120,6 +4126,12 @@ body.standalone-phone .mobile-sidebar-close {
     color: #c22;
 }
 .generation-activity-error:empty { display: none; }
+.generation-activity-actions > :is(button, a) {
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
 .curriculum-preview-banner {
     display: flex;
     flex-wrap: wrap;
@@ -4162,6 +4174,13 @@ body.standalone-phone .mobile-sidebar-close {
     .curriculum-builder-deck > input:nth-of-type(3) { grid-column: 2 / -1; }
     .curriculum-source-row { grid-template-columns: auto 1fr auto; }
     .curriculum-source-row input:nth-of-type(3) { grid-column: 2; }
+}
+
+@media (max-width: 600px) {
+    .study-settings-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .study-settings-tabs button { overflow-wrap: normal; }
+    .study-settings-tabs button:nth-child(2n) { border-right: 0; }
+    .study-settings-tabs button:nth-child(-n + 2) { border-bottom: 1px solid var(--black); }
 }
 
 .curriculum-summary {

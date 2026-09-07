@@ -15,7 +15,7 @@ export default defineConfig({
         { name: 'mobile-chromium', use: { ...devices['iPhone 13'], browserName: 'chromium' } },
         {
             name: 'mobile-webkit',
-            grep: /mobile layered scrolling|mobile subject layers|subject overview emphasizes/,
+            grep: /mobile layered scrolling|mobile subject layers|subject overview emphasizes|agent activity stays within/,
             use: { ...devices['iPhone 13'], browserName: 'webkit' }
         }
     ],
