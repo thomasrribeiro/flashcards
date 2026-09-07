@@ -112,6 +112,7 @@ import {
     summarizeGenerationActivity
 } from './generation-activity.js';
 import { canReviewGenerationDag, compareGenerationDag, generationJobCategory, generationModelSummary } from './generation-dag-review.js';
+import { submitGenerationJob } from './generation-submission.js';
 import {
     curriculumChapterProgressStates,
     curriculumDeckProgressStates,
@@ -4728,9 +4729,8 @@ async function queueCurriculumAgentJob(inputJob, button, { onQueued = null } = {
             return null;
         }
         button.textContent = 'Queueing…';
-        const result = await githubAuth.apiRequest('/api/generation-requests', {
-            method: 'POST',
-            body: JSON.stringify(job)
+        const result = await submitGenerationJob(generationApiRequest, job, {
+            onChecking: () => { button.textContent = 'Checking job…'; }
         });
         const initialRequest = {
             ...result.request,
@@ -5881,12 +5881,23 @@ function openCurriculumOptions(registry, trigger) {
     errors.className = 'curriculum-builder-errors';
     errors.setAttribute('aria-live', 'polite');
     regenerate.onclick = async () => {
+        errors.replaceChildren();
         try {
             const preferences = await connectedWebsiteGenerationPreferences();
             await queueCurriculumAgentJob({ jobType: 'curriculum-design', registryId: registry.id,
                 providerId: preferences.providerId, modelId: preferences.modelId,
                 payload: { reasoningEffort: preferences.reasoningEffort } }, regenerate, { onQueued: close });
-        } catch (error) { errors.textContent = error.message; }
+        } catch (error) {
+            errors.textContent = error.message;
+            if (error.submissionUnconfirmed) {
+                const check = document.createElement('button');
+                check.type = 'button';
+                check.className = 'curriculum-toolbar-action';
+                check.textContent = 'Check jobs';
+                check.onclick = () => { close(); openGenerationActivity(); };
+                errors.append(document.createElement('br'), check);
+            }
+        }
     };
     content.append(regenerate, errors);
     configureWebsiteGenerationButton(regenerate, { registry });
@@ -6170,10 +6181,7 @@ async function requestMissingGeneration() {
             return;
         }
         for (const job of jobs) {
-            await githubAuth.apiRequest('/api/generation-requests', {
-                method: 'POST',
-                body: JSON.stringify(job)
-            });
+            await submitGenerationJob(generationApiRequest, job);
         }
         if (button) button.textContent = 'Requested';
     } catch (error) {

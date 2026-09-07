@@ -13,7 +13,9 @@ async function installGenerationAccount(page, {
     reviews = [],
     chapterProgress = [],
     requests = [],
-    providerDelayMs = 0
+    providerDelayMs = 0,
+    loseSubmissionResponse = false,
+    recordSubmission = true
 } = {}) {
     catalog = structuredClone(catalog);
     for (const deck of catalog.decks) {
@@ -65,6 +67,8 @@ async function installGenerationAccount(page, {
         if (path === '/api/generation-requests' && request.method() === 'POST') {
             queued = request.postDataJSON();
             onPost(queued);
+            if (!recordSubmission) queued = null;
+            if (loseSubmissionResponse) return route.abort('failed');
             return route.fulfill({ json: { request: { id: 321, status: 'queued' }, existing: false } });
         }
         if (path === '/api/generation-requests') {
@@ -73,6 +77,7 @@ async function installGenerationAccount(page, {
                 status: 'queued',
                 job_type: queued.jobType,
                 registry_id: queued.registryId,
+                target_repository: queued.targetRepository,
                 provider_id: queued.providerId,
                 model_id: queued.modelId,
                 payload_json: JSON.stringify(queued.payload)
@@ -484,6 +489,30 @@ test('regenerates the global curriculum with model disclosure and cancellable pi
     expect(queuedJobs[0].payload).not.toHaveProperty('proposedDecks');
     await expect(page.getByRole('dialog', { name: 'Settings' }).getByLabel('Job type: Global curriculum')).toBeVisible();
 });
+
+for (const recordSubmission of [true, false]) {
+    test(`recovers lost submission responses without duplicate jobs: recorded=${recordSubmission}`, async ({ page }) => {
+        const posts = [];
+        await installGenerationAccount(page, {
+            onPost: job => posts.push(job), loseSubmissionResponse: true, recordSubmission
+        });
+        await page.getByRole('button', { name: 'Options', exact: true }).click();
+        const options = page.getByRole('dialog', { name: 'Options', exact: true });
+        await options.getByRole('button', { name: 'Regenerate curriculum', exact: true }).click();
+        await confirmAIStart(page);
+        if (recordSubmission) {
+            await expect(options).toHaveCount(0);
+        } else {
+            await expect(options).toContainText('Submission unconfirmed.');
+            await expect(options).not.toContainText('Failed to fetch');
+            await options.getByRole('button', { name: 'Check jobs', exact: true }).click();
+        }
+        const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+        await expect(settings.getByRole('tab', { name: /Agents/ })).toHaveAttribute('aria-selected', 'true');
+        if (recordSubmission) await expect(settings).toContainText('Request 321');
+        expect(posts).toHaveLength(1);
+    });
+}
 
 test('changes launch settings without losing the subject draft or starting a job on save', async ({ page }, testInfo) => {
     const queuedJobs = [];
