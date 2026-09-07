@@ -182,6 +182,29 @@ describe('curriculum dependency planning', () => {
         expect(layout.height).toBeGreaterThan(0);
     });
 
+    it('packs measured node heights without overlap in a column', () => {
+        const graph = curriculumGraph(index);
+        graph.edges = [];
+        const nodeSizes = new Map(graph.nodes.map((node, i) => [node.id, { width: 250, height: 40 + i * 30 }]));
+        const layout = layoutCurriculumGraph(graph, { nodeSizes });
+        for (const [i, node] of layout.nodes.entries()) {
+            expect(node.height).toBe(nodeSizes.get(node.id).height);
+            if (i) expect(node.y).toBe(layout.nodes[i - 1].y + layout.nodes[i - 1].height + 24);
+            expect(node.y + node.height).toBeLessThan(layout.height);
+        }
+    });
+
+    it('uses measured widths and heights when routing subject nodes', async () => {
+        const graph = subjectOverviewGraph(index);
+        const nodeSizes = new Map(graph.nodes.map((node, i) => [node.id, { width: 100 + i * 30, height: 50 }]));
+        const layout = await layoutCurriculumGraphElk(graph, { nodeSizes });
+        for (const node of layout.nodes) {
+            expect(node.width).toBe(nodeSizes.get(node.id).width);
+            expect(node.height).toBe(50);
+        }
+        expect(layout.edges.every(edge => edge.sections.length > 0)).toBe(true);
+    });
+
     it('summarizes cross-subject dependencies without rendering every deck', () => {
         const graph = subjectOverviewGraph(index);
         expect(graph.nodes.map(node => node.id)).toEqual(['mathematics', 'physics']);

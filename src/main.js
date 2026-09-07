@@ -3587,22 +3587,61 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     onResponsiveChange = null
 } = {}) {
     const compact = useCompactCurriculumCanvas();
-    const nodeSizing = compact ? { nodeHeight: 112 } : {};
+    const isSubjectOverview = !ranked && graph.nodes.every(node => node.nodeType === 'subject');
+    const stage = document.createElement('div');
+    stage.className = 'curriculum-graph-stage';
+    if (ranked) stage.classList.add('is-layered');
+    if (isSubjectOverview) stage.classList.add('is-subject-overview');
+    if (compact) stage.classList.add('is-compact');
+    const nodeSizing = {};
     if (compact && ranked) {
         // Two phone columns leave room for names and prerequisite arrows.
         const nodeWidth = Math.max(60, (root.clientWidth - 2 - 24 - 20) / 2);
-        const charactersPerLine = Math.max(1, Math.floor((nodeWidth - 18) / 6.6));
-        const longestLabel = Math.max(...graph.nodes.map(node => String(node.deck || node.id).length + 5));
         Object.assign(nodeSizing, {
             nodeWidth,
-            // Leave a line of headroom for wrapping at hyphens instead of at
-            // an exact character count in these narrower cards.
-            nodeHeight: Math.max(104, 64 + Math.ceil(longestLabel / charactersPerLine) * 13.2),
             columnGap: 20
         });
     }
-    const isSubjectOverview = !ranked && graph.nodes.every(node => node.nodeType === 'subject');
-    if (isSubjectOverview) nodeSizing.nodeHeight = 112;
+    // Measure actual wrapped content, rather than giving every node the height
+    // of the longest title. Reuse these elements after routing the graph.
+    await document.fonts.ready;
+    stage.classList.add('is-measuring');
+    document.body.appendChild(stage);
+    const preparedNodes = new Map();
+    nodeSizing.nodeSizes = new Map();
+    for (const deck of graph.nodes) {
+        const node = document.createElement('button');
+        node.type = 'button';
+        node.className = 'curriculum-graph-node';
+        const nodeName = deck.nodeType === 'subject' ? deck.id : `${deck.order}. ${deck.deck}`;
+        if (curriculumViewState.targetId === deck.id) node.classList.add('is-target');
+        const dagChange = curriculumPreview?.diff && (
+            (curriculumPreview.showing === 'generated' ? curriculumPreview.diff.added : curriculumPreview.diff.removed)
+                .some(item => item.id === deck.id)
+                ? curriculumPreview.showing === 'generated' ? 'Added' : 'Removed'
+                : curriculumPreview.diff.changed.some(item => item.id === deck.id) ? 'Changed' : ''
+        );
+        if (dagChange) node.classList.add(`is-dag-${dagChange.toLowerCase()}`);
+        const nodeMeta = [dagChange, deck.nodeType === 'chapter' ? `${deck.card_count || 0} cards` : ''].filter(Boolean).join(' · ');
+        node.setAttribute('aria-label', [deck.nodeType, nodeName, nodeMeta].filter(Boolean).join(' '));
+        node.innerHTML = `
+            ${deck.nodeType === 'subject' || deck.subject === curriculumViewState.subject ? '' : `<span class="curriculum-graph-node-subject">${escapeHtml(deck.subject)}</span>`}
+            <span class="curriculum-graph-node-name">${escapeHtml(nodeName)}</span>
+            ${nodeMeta ? `<span class="curriculum-graph-node-status">${escapeHtml(nodeMeta)}</span>` : ''}
+        `;
+        node.style.width = isSubjectOverview ? 'max-content' : `${nodeSizing.nodeWidth || 250}px`;
+        if (isSubjectOverview) node.style.maxWidth = '280px';
+        stage.appendChild(node);
+        preparedNodes.set(deck.id, node);
+    }
+    for (const [id, node] of preparedNodes) {
+        const bounds = node.getBoundingClientRect();
+        nodeSizing.nodeSizes.set(id, { width: Math.ceil(bounds.width), height: Math.ceil(bounds.height) });
+    }
+    nodeSizing.nodeHeight = Math.max(...[...nodeSizing.nodeSizes.values()].map(size => size.height));
+    stage.replaceChildren();
+    stage.remove();
+    stage.classList.remove('is-measuring');
     const layout = ranked
         ? layoutCurriculumGraph(graph, nodeSizing)
         : await layoutCurriculumGraphElk(graph, {
@@ -3614,11 +3653,6 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         layout.nodes.forEach(node => { node.x += boundaryPadding; });
         layout.width += boundaryPadding * 2;
     }
-    const stage = document.createElement('div');
-    stage.className = 'curriculum-graph-stage';
-    if (ranked) stage.classList.add('is-layered');
-    if (isSubjectOverview) stage.classList.add('is-subject-overview');
-    if (compact) stage.classList.add('is-compact');
     if (graph.nodes.length > 12) stage.classList.add('is-dense');
     stage.setAttribute('aria-label', 'Interactive curriculum prerequisite graph');
     const cableRouting = ranked
@@ -3761,9 +3795,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     const nodeElements = [];
     const highlightsMatches = graph.seedIds.length < graph.nodes.length;
     for (const deck of layout.nodes) {
-        const node = document.createElement('button');
-        node.type = 'button';
-        node.className = 'curriculum-graph-node';
+        const node = preparedNodes.get(deck.id);
         const progressState = deck.nodeType === 'deck' || deck.nodeType === 'chapter'
             ? curriculumStatus(deck, progressStates)
             : null;
@@ -3779,29 +3811,6 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         node.style.top = `${deck.y}px`;
         node.style.width = `${deck.width}px`;
         node.style.height = `${deck.height}px`;
-        const nodeName = deck.nodeType === 'subject'
-            ? deck.id
-            : deck.nodeType === 'chapter'
-                ? `${deck.order}. ${deck.deck}`
-                : `${deck.order}. ${deck.deck}`;
-        const dagChange = curriculumPreview?.diff && (
-            (curriculumPreview.showing === 'generated' ? curriculumPreview.diff.added : curriculumPreview.diff.removed)
-                .some(item => item.id === deck.id)
-                ? curriculumPreview.showing === 'generated' ? 'Added' : 'Removed'
-                : curriculumPreview.diff.changed.some(item => item.id === deck.id) ? 'Changed' : ''
-        );
-        if (dagChange) node.classList.add(`is-dag-${dagChange.toLowerCase()}`);
-        const nodeMeta = [dagChange, deck.nodeType === 'subject'
-            ? `${deck.deck_count} decks`
-            : deck.nodeType === 'chapter'
-                ? `${deck.card_count || 0} cards`
-                : ''].filter(Boolean).join(' · ');
-        node.setAttribute('aria-label', [deck.nodeType, nodeName, nodeMeta].filter(Boolean).join(' '));
-        node.innerHTML = `
-            ${deck.nodeType === 'subject' || deck.subject === curriculumViewState.subject ? '' : `<span class="curriculum-graph-node-subject">${escapeHtml(deck.subject)}</span>`}
-            <span class="curriculum-graph-node-name">${escapeHtml(nodeName)}</span>
-            <span class="curriculum-graph-node-status">${escapeHtml(nodeMeta)}</span>
-        `;
         node.onclick = async () => {
             if (deck.nodeType === 'subject') {
                 navigateCurriculum({

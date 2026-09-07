@@ -715,6 +715,7 @@ export function chapterGraph(index, deckId) {
 export async function layoutCurriculumGraphElk(graph, {
     nodeWidth = 250,
     nodeHeight = 78,
+    nodeSizes = new Map(),
     direction = 'RIGHT'
 } = {}) {
     const { default: ELK } = await import('elkjs/lib/elk.bundled.js');
@@ -729,7 +730,7 @@ export async function layoutCurriculumGraphElk(graph, {
             'elk.edgeRouting': 'ORTHOGONAL',
             'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES'
         },
-        children: graph.nodes.map(node => ({ id: node.id, width: nodeWidth, height: nodeHeight })),
+        children: graph.nodes.map(node => ({ id: node.id, width: nodeWidth, height: nodeHeight, ...nodeSizes.get(node.id) })),
         edges: graph.edges.map((edge, index) => ({
             id: `edge-${index}`,
             sources: [edge.source],
@@ -758,6 +759,7 @@ export async function layoutCurriculumGraphElk(graph, {
 export function layoutCurriculumGraph(graph, {
     nodeWidth = 250,
     nodeHeight = 78,
+    nodeSizes = new Map(),
     columnGap = 96,
     rowGap = 24,
     margin = 40
@@ -786,17 +788,21 @@ export function layoutCurriculumGraph(graph, {
 
     const positioned = [];
     for (const [column, nodes] of [...columns].sort((a, b) => a[0] - b[0])) {
-        nodes.forEach((node, row) => positioned.push({
-            ...node,
-            rank: column,
-            x: margin + column * (nodeWidth + columnGap),
-            y: margin + row * (nodeHeight + rowGap),
-            width: nodeWidth,
-            height: nodeHeight
-        }));
+        let y = margin;
+        nodes.forEach(node => {
+            const height = nodeSizes.get(node.id)?.height || nodeHeight;
+            positioned.push({
+                ...node,
+                rank: column,
+                x: margin + column * (nodeWidth + columnGap),
+                y,
+                width: nodeWidth,
+                height
+            });
+            y += height + rowGap;
+        });
     }
     const maxRank = positioned.reduce((max, node) => Math.max(max, node.rank), 0);
-    const maxRows = Math.max(1, ...columns.values().map(nodes => nodes.length));
     return {
         nodes: positioned,
         edges: graph.edges,
@@ -804,6 +810,6 @@ export function layoutCurriculumGraph(graph, {
         nodeHeight,
         columnGap,
         width: margin * 2 + (maxRank + 1) * nodeWidth + maxRank * columnGap,
-        height: margin * 2 + maxRows * nodeHeight + (maxRows - 1) * rowGap
+        height: Math.max(margin + nodeHeight, ...positioned.map(node => node.y + node.height)) + margin
     };
 }

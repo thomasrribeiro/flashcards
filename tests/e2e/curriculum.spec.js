@@ -2626,9 +2626,14 @@ test('mobile subject layers show two readable columns without redundant subject 
                 readable: nodes.every(node => {
                     const scale = node.getBoundingClientRect().width / parseFloat(node.style.width);
                     const label = node.querySelector('.curriculum-graph-node-name');
+                    const style = getComputedStyle(node);
                     return parseFloat(getComputedStyle(label).fontSize) * scale >= 10.5
                         && label.scrollHeight <= label.clientHeight + 1
-                        && node.scrollHeight <= node.clientHeight + 1;
+                        && node.scrollHeight <= node.clientHeight + 1
+                        && style.paddingTop === style.paddingRight
+                        && style.paddingTop === style.paddingBottom
+                        && style.paddingTop === style.paddingLeft
+                        && node.clientHeight - label.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) <= 1;
                 })
             };
         });
@@ -2658,10 +2663,16 @@ test('subject overview emphasizes names without redundant labels', async ({ page
     const stage = page.locator('.curriculum-graph-stage.is-subject-overview');
     await expect(stage.locator('.curriculum-graph-node-subject')).toHaveCount(0);
     await expect(stage.locator('.curriculum-graph-node-name').first()).toHaveCSS('font-size', '26px');
-    await expect(stage.locator('.curriculum-graph-node-status').first()).toHaveCSS('font-size', '16px');
+    await expect(stage.locator('.curriculum-graph-node-status')).toHaveCount(0);
     const nodes = stage.locator('.curriculum-graph-node');
     for (const node of await nodes.all()) {
-        await expect(node.locator('.curriculum-graph-node-status')).toHaveText(/\d+ decks/);
+        await expect(node).toHaveCSS('text-align', 'center');
+        expect(await node.evaluate(element => {
+            const box = element.getBoundingClientRect();
+            const label = element.querySelector('.curriculum-graph-node-name').getBoundingClientRect();
+            return Math.max(label.left - box.left, box.right - label.right, label.top - box.top, box.bottom - label.bottom)
+                - Math.min(label.left - box.left, box.right - label.right, label.top - box.top, box.bottom - label.bottom);
+        })).toBeLessThan(1);
         expect(await node.evaluate(element => {
             const box = element.getBoundingClientRect();
             return [...element.children].every(child => {
@@ -2670,6 +2681,12 @@ test('subject overview emphasizes names without redundant labels', async ({ page
                     && child.scrollWidth <= child.clientWidth + 1;
             });
         })).toBe(true);
+        expect(await node.evaluate(element => {
+            const box = element.getBoundingClientRect();
+            const stage = element.closest('.curriculum-graph-stage').getBoundingClientRect();
+            return { left: box.left >= stage.left, right: box.right <= stage.right,
+                top: box.top >= stage.top, bottom: box.bottom <= stage.bottom };
+        })).toEqual({ left: true, right: true, top: true, bottom: true });
     }
     await stage.screenshot({ path: testInfo.outputPath('subject-names.png') });
 });
@@ -2736,7 +2753,13 @@ test(`mobile ${column} columns scroll with touch through the last node`, async (
     // Simulate the browser bars collapsing once the canvas is on screen.
     await page.setViewportSize({ width: 390, height: 900 });
     await stage.scrollIntoViewIfNeeded();
-    await expect.poll(() => stage.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(100);
+    const scrollable = await stage.evaluate(element => element.scrollHeight - element.clientHeight);
+    if (scrollable === 0) {
+        // Content-sized cards can make this entire layer fit without scrolling.
+        await expect(stage.locator(`.curriculum-graph-node[data-rank="${tallRank}"]`).last()).toBeInViewport();
+        await expect(stage).toHaveAttribute('data-scroll-layer', String(tallRank));
+        return;
+    }
     const initialTop = await stage.evaluate(element => element.scrollTop);
     const client = await page.context().newCDPSession(page);
     const swipe = async (distance = 180) => {
@@ -2764,7 +2787,7 @@ test(`mobile ${column} columns scroll with touch through the last node`, async (
         expect(currentNodeBox.x + currentNodeBox.width).toBeLessThanOrEqual(currentBox.x + currentBox.width);
     };
     await swipe();
-    await expect.poll(() => stage.evaluate(element => element.scrollTop)).toBeGreaterThan(initialTop + 30);
+    await expect.poll(() => stage.evaluate(element => element.scrollTop)).toBeGreaterThan(initialTop + Math.min(30, scrollable / 2));
     const lastNode = stage.locator(`.curriculum-graph-node[data-rank="${tallRank}"]`).last();
     for (let i = 0; i < 15; i += 1) {
         const remaining = await lastNode.evaluate(node => {

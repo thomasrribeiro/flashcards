@@ -4660,7 +4660,8 @@ body.standalone-phone .mobile-sidebar-close {
     border: 1px solid var(--black);
     border-left: 4px solid var(--muted);
     background: var(--white);
-    padding: 8px 10px;
+    padding: 10px;
+    gap: 4px;
     color: var(--black);
     text-align: left;
     font: inherit;
@@ -4713,7 +4714,7 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-graph-node-name {
     display: block;
     width: 100%;
-    margin: 3px 0;
+    margin: 0;
     font-size: 0.66rem;
     font-weight: 400;
     line-height: 1.2;
@@ -4725,7 +4726,6 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-graph-stage.is-compact .curriculum-graph-node-subject,
 .curriculum-graph-stage.is-compact .curriculum-graph-node-status { font-size: 11px; }
 .curriculum-graph-stage.is-compact.is-layered .curriculum-graph-node-name { font-size: 11px; }
-.curriculum-graph-stage.is-compact.is-layered .curriculum-graph-node { padding-inline: 6px; }
 .curriculum-graph-stage.is-compact.is-layered .curriculum-graph-node-subject {
     max-width: 100%;
     overflow-wrap: anywhere;
@@ -4735,7 +4735,21 @@ body.standalone-phone .mobile-sidebar-close {
 
 .curriculum-graph-stage.is-subject-overview .curriculum-graph-node-name {
     font-size: 26px;
+    width: auto;
 }
+.curriculum-graph-stage.is-subject-overview .curriculum-graph-node {
+    align-items: center;
+    text-align: center;
+    border-left-width: 1px;
+    padding: 12px;
+}
+.curriculum-graph-stage.is-measuring {
+    position: fixed;
+    left: -10000px;
+    visibility: hidden;
+    height: auto;
+}
+.curriculum-graph-stage.is-measuring .curriculum-graph-node { position: static; height: auto; }
 
 .curriculum-graph-stage.is-subject-overview .curriculum-graph-node-status {
     font-size: 16px;
