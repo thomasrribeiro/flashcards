@@ -205,6 +205,12 @@ test('groups connection and settings with the user and uses an icon theme toggle
         status.boundingBox(), settingsButton.boundingBox()
     ]);
     expect(Math.abs(statusBox.y - settingsBox.y)).toBeLessThan(2);
+    for (const control of [status, settingsButton, page.locator('#btn-logout')]) {
+        await expect(control).toHaveCSS('height', '28px');
+        await expect(control).toHaveCSS('font-size', '12px');
+        expect((await control.boundingBox()).height).toBe(28);
+    }
+    await expect(status.locator('.connection-status-label')).toHaveCSS('font-size', '12px');
     await theme.click();
     const lightTheme = page.getByRole('button', { name: 'Switch to light mode' });
     await expect(lightTheme).toBeVisible();

@@ -265,6 +265,22 @@ a[href] {
     color: var(--white);
 }
 
+.user-info :is(.btn-logout, .connection-status, .study-settings-btn) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 28px;
+    padding: 5px 10px;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.user-info .connection-status-label {
+    font-size: inherit;
+    line-height: inherit;
+}
+
 .hidden {
     display: none !important;
 }
