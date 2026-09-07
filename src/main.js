@@ -4853,7 +4853,6 @@ async function renderCurriculumView(options = {}) {
         progressStates.set(id, state);
     }
     ensureCurriculumNavigationHistory();
-    root.querySelector('.curriculum-subject-create')?.dispatchEvent(new Event('close'));
     root.innerHTML = '';
 
     const breadcrumbRow = document.createElement('div');
@@ -5925,32 +5924,15 @@ function renderSubjectCreation(targetRegistry, content, { onQueued = null } = {}
     content.innerHTML = `<form aria-label="Create subject" novalidate>
             <div class="curriculum-subject-input-row">
                 <div class="repo-input-inline">
-                    <input class="repo-input-field" name="subject" placeholder="Add a new subject..." aria-label="Subject name" aria-describedby="curriculum-subject-name-hint curriculum-launch-model" autocomplete="off">
+                    <input class="repo-input-field" name="subject" placeholder="Add a new subject..." aria-label="Subject name" aria-describedby="curriculum-subject-name-hint" autocomplete="off">
                 </div>
-                <button class="add-repo-btn" type="submit" aria-label="Queue AI job" title="Queue AI job" aria-describedby="curriculum-launch-model">+</button>
+                <button class="add-repo-btn" type="submit" aria-label="Queue AI job" title="Queue AI job">+</button>
             </div>
-            <p id="curriculum-launch-model" class="curriculum-launch-model" aria-live="polite"></p>
             <p id="curriculum-subject-name-hint" class="curriculum-builder-field-error" data-subject-errors aria-live="polite"></p>
             <div data-errors class="curriculum-builder-errors" aria-live="polite"></div>
         </form>`;
     const form = content.querySelector('form');
     const field = name => form.elements.namedItem(name);
-    const renderLaunchSettings = () => {
-        const preferences = getGenerationPreferences();
-        content.querySelector('#curriculum-launch-model').textContent = preferences.modelId
-            ? `${preferences.modelId} ${preferences.reasoningEffort}`
-            : 'No model selected';
-    };
-    const settingsModal = document.getElementById('study-settings-modal');
-    settingsModal?.addEventListener('settings-closed', renderLaunchSettings);
-    window.addEventListener('storage', renderLaunchSettings);
-    window.addEventListener('focus', renderLaunchSettings);
-    content.addEventListener('close', () => {
-        settingsModal?.removeEventListener('settings-closed', renderLaunchSettings);
-        window.removeEventListener('storage', renderLaunchSettings);
-        window.removeEventListener('focus', renderLaunchSettings);
-    }, { once: true });
-    renderLaunchSettings();
     const readDraft = () => ({ subject: field('subject').value });
     let launchAvailable = false;
     let submitting = false;

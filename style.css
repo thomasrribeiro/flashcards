@@ -3996,7 +3996,6 @@ body.standalone-phone .mobile-sidebar-close {
 .curriculum-builder-actions { justify-content: flex-end; }
 .curriculum-builder-actions button { background: var(--gold); }
 .curriculum-builder-launch { text-align: right; }
-.curriculum-launch-model { margin: 8px 0 0; font-size: 0.6rem; color: var(--muted); overflow-wrap: anywhere; }
 .curriculum-builder-modal.curriculum-options-modal { width: min(520px, calc(100vw - 32px)); }
 .curriculum-options-regenerate { width: 100%; }
 .curriculum-options-modal .curriculum-builder-errors:empty { display: none; }
@@ -4010,7 +4009,6 @@ body.standalone-phone .mobile-sidebar-close {
 }
 .curriculum-subject-create .add-repo-btn { width: 32px; height: 32px; padding: 0; background: var(--gold); }
 .curriculum-subject-create .add-repo-btn:hover { background: var(--black); }
-.curriculum-subject-create .curriculum-launch-model { margin-top: 4px; text-align: right; }
 .curriculum-subject-create [data-subject-errors]:empty,
 .curriculum-subject-create [data-errors]:empty { display: none; }
 .curriculum-builder-deck {

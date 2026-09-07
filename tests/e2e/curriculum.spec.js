@@ -393,19 +393,9 @@ test('queues a subject draft only for a signed-in account with a connected model
     await expect(dialog.getByLabel('Destination')).toHaveCount(0);
     await expect(dialog.getByLabel('Deck size')).toHaveCount(0);
     await expect(dialog).not.toContainText('Whole-field curriculum:');
-    const launchModel = dialog.locator('#curriculum-launch-model');
-    await expect(launchModel).toHaveText('gpt-test high');
+    await expect(dialog.locator('#curriculum-launch-model')).toHaveCount(0);
+    await expect(dialog).not.toContainText('gpt-test');
     await expect(dialog).not.toContainText('Change in Settings → AI generation.');
-    const modelStyle = await launchModel.evaluate(element => {
-        const style = getComputedStyle(element);
-        const root = getComputedStyle(document.documentElement);
-        return { fontSize: parseFloat(style.fontSize), rootSize: parseFloat(root.fontSize) };
-    });
-    expect(modelStyle.fontSize).toBeCloseTo(modelStyle.rootSize * 0.6);
-    await expect(launchModel).toHaveCSS('color', 'rgb(102, 102, 102)');
-    const launchBox = await dialog.getByRole('button', { name: 'Queue AI job' }).boundingBox();
-    const modelBox = await launchModel.boundingBox();
-    expect(modelBox.y).toBeGreaterThanOrEqual(launchBox.y + launchBox.height);
     await expect(dialog.getByLabel('Title')).toHaveCount(0);
     await expect(dialog).not.toContainText('Subject title is required.');
     const subjectError = dialog.getByText('Use kebab-case: earth-science.');
@@ -526,7 +516,7 @@ test('changes launch settings without losing the subject draft or starting a job
     await expect(confirmation).toContainText('Model: gpt-6-astra · Reasoning: Max · Provider: OpenAI');
     await expect(confirmation.getByRole('status')).toContainText('Settings updated');
     await expect(builder.getByLabel('Subject name')).toHaveValue('earth-science');
-    await expect(builder.locator('#curriculum-launch-model')).toHaveText('gpt-6-astra max');
+    await expect(builder.locator('#curriculum-launch-model')).toHaveCount(0);
     expect(queuedJobs).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath('generation-settings-confirmation.png') });
     await confirmation.getByRole('button', { name: 'Start AI job', exact: true }).click();
