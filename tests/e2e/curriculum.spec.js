@@ -565,7 +565,7 @@ test('changes launch settings without losing the subject draft or starting a job
     });
 });
 
-test('mobile settings opens without focusing a dropdown', async ({ page }) => {
+test('mobile settings opens without focusing a dropdown', async ({ page }, testInfo) => {
     await installGenerationAccount(page);
     const trigger = page.locator('#study-settings-btn');
     const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
@@ -574,6 +574,18 @@ test('mobile settings opens without focusing a dropdown', async ({ page }) => {
         await expect(settings).toBeVisible();
         await expect(settings.getByRole('button', { name: 'Close settings' })).toBeFocused();
         await expect(settings.locator('select:focus')).toHaveCount(0);
+        const time = settings.locator('#daily-reminder-time');
+        await expect(time).toBeVisible();
+        expect(await time.evaluate(input => {
+            const box = input.getBoundingClientRect();
+            const field = input.parentElement.getBoundingClientRect();
+            return box.left >= field.left && box.right <= field.right
+                && box.width < field.width && box.width <= 200;
+        })).toBe(true);
+        await expect(settings.locator('#study-settings-pane-study .study-settings-help')).toHaveCount(0);
+        await time.fill('10:15');
+        await expect(time).toHaveValue('10:15');
+        if (opening === 0) await settings.screenshot({ path: testInfo.outputPath('compact-reminder-time.png') });
         // Manual selection still works normally.
         await settings.locator('#daily-new-target').selectOption('20');
         await expect(settings.locator('#daily-new-target')).toHaveValue('20');

@@ -7716,7 +7716,6 @@ async function openStudySettings({ tab = 'study', focusRequestId = null } = {}) 
     const batch = document.getElementById('new-session-size');
     const reminderEnabled = document.getElementById('daily-reminder-enabled');
     const reminderTime = document.getElementById('daily-reminder-time');
-    const reminderHelp = document.getElementById('reminder-settings-help');
     const generationProvider = document.getElementById('generation-provider');
     const generationModel = document.getElementById('generation-model');
     const generationReasoning = document.getElementById('generation-reasoning');
@@ -7766,17 +7765,6 @@ async function openStudySettings({ tab = 'study', focusRequestId = null } = {}) 
     if (modal.classList.contains('hidden')) return;
     reminderEnabled.value = String(reminder.enabled);
     reminderTime.value = reminder.reminderTime;
-    if (reminderHelp) {
-        if (reminder.state === 'needs-install') {
-            reminderHelp.textContent = 'Install the app on your Home Screen before enabling reminders on this device.';
-        } else if (reminder.state === 'denied') {
-            reminderHelp.textContent = 'Notifications are blocked in this device’s system settings.';
-        } else if (reminder.state === 'unsupported') {
-            reminderHelp.textContent = 'This browser does not support app reminders.';
-        } else {
-            reminderHelp.textContent = 'Uses this device’s timezone and only nudges you when cards are due or a session is paused.';
-        }
-    }
 }
 
 async function saveStudySettingsFromForm(event) {
