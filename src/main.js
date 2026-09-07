@@ -4898,7 +4898,6 @@ async function renderCurriculumView(options = {}) {
     ]);
     const { mode, hierarchy, subject, parentId } = curriculumViewState;
     ensureCurriculumNavigationHistory();
-    root.querySelector('.curriculum-subject-create')?.dispatchEvent(new Event('close'));
     root.innerHTML = '';
 
     const breadcrumbRow = document.createElement('div');
@@ -4979,33 +4978,23 @@ async function renderCurriculumView(options = {}) {
     }
     if (hierarchy === 'subject' && mode === 'overview') {
         if (!curriculumPreview) {
-            const createSubject = document.createElement('div');
-            createSubject.className = 'curriculum-subject-create';
-            renderSubjectCreation(activeRegistry, createSubject);
-            breadcrumbActions.append(createSubject);
-            const regenerate = document.createElement('button');
-            regenerate.type = 'button';
-            regenerate.className = 'curriculum-toolbar-action';
-            regenerate.textContent = 'Regenerate curriculum';
-            regenerate.onclick = async () => {
-                try {
-                    const preferences = await connectedWebsiteGenerationPreferences();
-                    await queueCurriculumAgentJob({ jobType: 'curriculum-design', registryId: activeRegistry.id,
-                        providerId: preferences.providerId, modelId: preferences.modelId, payload: { reasoningEffort: preferences.reasoningEffort } }, regenerate);
-                } catch (error) { alert(error.message); }
-            };
-            configureWebsiteGenerationButton(regenerate, { registry: activeRegistry });
-            breadcrumbActions.append(regenerate);
+            const options = document.createElement('button');
+            options.type = 'button';
+            options.className = 'curriculum-toolbar-action';
+            options.textContent = 'Options';
+            options.setAttribute('aria-haspopup', 'dialog');
+            options.onclick = () => openCurriculumOptions(activeRegistry, options);
+            breadcrumbActions.append(options);
         }
     }
     if (mode === 'subject' && hierarchy === 'deck' && subject && !curriculumPreview) {
         const subjectOptions = document.createElement('button');
         subjectOptions.type = 'button';
         subjectOptions.className = 'curriculum-toolbar-action';
-        subjectOptions.textContent = 'Subject options';
-        subjectOptions.setAttribute('aria-label', `Subject options for ${subject}`);
+        subjectOptions.textContent = 'Options';
+        subjectOptions.setAttribute('aria-label', `Options for ${subject}`);
         subjectOptions.setAttribute('aria-haspopup', 'dialog');
-        subjectOptions.title = 'Open subject options';
+        subjectOptions.title = 'Open options';
         subjectOptions.onclick = () => openCurriculumSubjectActionsModal({
             subject, registry: activeRegistry
         }, subjectOptions);
@@ -5933,11 +5922,56 @@ function renderCurriculumSettingsSources() {
     });
 }
 
-function renderSubjectCreation(targetRegistry, content) {
+function openCurriculumOptions(registry, trigger) {
+    const { overlay, content, close } = curriculumOverlay('Options');
+    content.closest('.curriculum-builder-modal').classList.add('curriculum-options-modal');
+    content.classList.add('curriculum-subject-create');
+    renderSubjectCreation(registry, content, { onQueued: close });
+    const regenerate = document.createElement('button');
+    regenerate.type = 'button';
+    regenerate.className = 'curriculum-toolbar-action curriculum-options-regenerate';
+    regenerate.textContent = 'Regenerate curriculum';
+    regenerate.setAttribute('aria-describedby', 'curriculum-launch-model');
+    regenerate.onclick = async () => {
+        try {
+            const preferences = await connectedWebsiteGenerationPreferences();
+            await queueCurriculumAgentJob({ jobType: 'curriculum-design', registryId: registry.id,
+                providerId: preferences.providerId, modelId: preferences.modelId,
+                payload: { reasoningEffort: preferences.reasoningEffort } }, regenerate, { onQueued: close });
+        } catch (error) { content.querySelector('[data-errors]').textContent = error.message; }
+    };
+    content.querySelector('#curriculum-launch-model').before(regenerate);
+    configureWebsiteGenerationButton(regenerate, { registry });
+    overlay.addEventListener('close', () => {
+        content.dispatchEvent(new Event('close'));
+        if (trigger?.isConnected) trigger.focus();
+    }, { once: true });
+    overlay.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            event.stopPropagation();
+            close();
+        } else if (event.key === 'Tab') {
+            const controls = [...overlay.querySelectorAll('button:not(:disabled), input:not(:disabled)')];
+            const first = controls[0];
+            const last = controls.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
+    });
+    content.querySelector('input').focus();
+}
+
+function renderSubjectCreation(targetRegistry, content, { onQueued = null } = {}) {
     const close = () => {
         form.reset();
         form.querySelector('[type="submit"]').textContent = '+';
         validate(false);
+        onQueued?.();
     };
     content.innerHTML = `<form aria-label="Create subject" novalidate>
             <div class="curriculum-subject-input-row">
