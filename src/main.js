@@ -4046,8 +4046,6 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         subjectPanY = originY - graphPointY * scale - newBase.y;
         applyScale();
     };
-    const zoomIn = () => zoom(1.2);
-    const zoomOut = () => zoom(1 / 1.2);
     if (isSubjectOverview) {
         let dragState = null;
         const touchPoints = new Map();
@@ -4202,7 +4200,7 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     // Position the selected layers before the first paint, avoiding a flash
     // of the first column when navigating on mobile Safari.
     fitVisibleViewport();
-    return { fit, zoomIn, zoomOut };
+    return { fit };
 }
 
 function curriculumStateSnapshot() {
@@ -4661,8 +4659,6 @@ function curriculumGraphControls({ windowState = null, showFit = true, headerAct
         <span class="curriculum-graph-primary-actions"></span>
         ${layerNavigation}
         ${showFit ? `<span class="curriculum-graph-view-actions">
-            <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
-            <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
             <button type="button" data-action="fit">Fit</button>
         </span>` : ''}`;
     controls.querySelector('.curriculum-graph-primary-actions').append(...headerActions);
@@ -4672,10 +4668,6 @@ function curriculumGraphControls({ windowState = null, showFit = true, headerAct
 function connectCurriculumGraphControls(controls, controller) {
     const fit = controls.querySelector('[data-action="fit"]');
     if (fit) fit.onclick = controller.fit;
-    const zoomIn = controls.querySelector('[data-action="zoom-in"]');
-    const zoomOut = controls.querySelector('[data-action="zoom-out"]');
-    if (zoomIn) zoomIn.onclick = controller.zoomIn;
-    if (zoomOut) zoomOut.onclick = controller.zoomOut;
 }
 
 async function renderCurriculumGraph(root, progressStates, graph, {

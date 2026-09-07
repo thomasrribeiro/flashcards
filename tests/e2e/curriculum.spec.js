@@ -1535,8 +1535,8 @@ test('navigates subject graph, ranked deck layers, deck neighborhood, and chapte
     await expect(page.locator('.curriculum-graph-node[data-deck-id="chemistry"]')).toBeVisible();
     await expect(page.locator('.curriculum-graph-stage')).toHaveClass(/is-subject-overview/);
     await expect(page.locator('.curriculum-graph-stage')).not.toHaveClass(/is-layered/);
-    await expect(page.getByRole('button', { name: 'Zoom in' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Zoom out' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Zoom in' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Zoom out' })).toHaveCount(0);
     expect(await page.locator('.curriculum-graph-stage').evaluate(stage => getComputedStyle(stage).overflowX))
         .toBe('hidden');
     if (testInfo.project.name === 'desktop-chromium') {
@@ -2545,10 +2545,8 @@ test('mobile overview starts fitted and centered and preserves zoom on rotation'
     })).toBe(true);
     await expect(stage.locator('.curriculum-graph-node-name').first()).toHaveCSS('font-size', '26px');
     await page.locator('#curriculum-view').screenshot({ path: testInfo.outputPath('mobile-overview.png') });
-    await page.getByRole('button', { name: 'Zoom in' }).click();
-    await expect.poll(scale).toBeCloseTo(initialScale * 1.2, 2);
-    await page.getByRole('button', { name: 'Zoom out' }).click();
-    await expect.poll(scale).toBeCloseTo(initialScale, 2);
+    await expect(page.getByRole('button', { name: 'Zoom in' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Zoom out' })).toHaveCount(0);
     await stage.scrollIntoViewIfNeeded();
     const box = await stage.boundingBox();
     const client = await page.context().newCDPSession(page);
@@ -2589,13 +2587,7 @@ test('mobile overview starts fitted and centered and preserves zoom on rotation'
     await expect.poll(async () => Math.abs((await centerPoint()).x - panned.x)).toBeLessThan(1);
     await page.getByRole('button', { name: 'Fit', exact: true }).click();
     await expect.poll(scale).toBeLessThan(1);
-    const fitted = await scale();
-    await page.getByRole('button', { name: 'Zoom out' }).click();
-    await expect.poll(scale).toBeLessThan(fitted);
-    await page.getByRole('button', { name: 'Fit', exact: true }).click();
-    await page.getByRole('button', { name: 'Zoom in' }).click();
-    await expect.poll(scale).toBeGreaterThan(fitted);
-    await page.getByRole('button', { name: 'Fit', exact: true }).click();
+    await expect.poll(scale).toBeCloseTo(initialScale, 2);
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').tap();
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 2 of');
 });
