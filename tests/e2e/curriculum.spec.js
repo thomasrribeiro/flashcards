@@ -109,7 +109,7 @@ async function openCurriculumDeckSettings(page, deckName) {
 }
 
 async function confirmAIStart(page) {
-    const confirmation = page.getByRole('dialog', { name: 'Confirm AI generation' });
+    const confirmation = page.getByRole('dialog', { name: /^Start AI jobs?\?$/ });
     await expect(confirmation).toContainText('Model: gpt-test · Reasoning: High · Provider: OpenAI');
     await expect(confirmation.getByRole('button', { name: 'Change AI settings' })).toBeVisible();
     await confirmation.getByRole('button', { name: 'Start AI job', exact: true }).click();
@@ -423,7 +423,7 @@ test('queues a subject draft only for a signed-in account with a connected model
     await expect(dialog.getByRole('button', { name: 'Queue AI job' })).toBeDisabled();
     // Submitting with Enter must not bypass duplicate-name validation.
     await dialog.getByLabel('Subject name').press('Enter');
-    await expect(page.getByRole('dialog', { name: 'Confirm AI generation' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: /^Start AI jobs?\?$/ })).toHaveCount(0);
     expect(queuedJob).toBeNull();
     await dialog.getByLabel('Subject name').fill('earth-science');
     await expect(dialog.getByLabel('Subject name')).toHaveAttribute('aria-invalid', 'false');
@@ -431,7 +431,7 @@ test('queues a subject draft only for a signed-in account with a connected model
     await dialog.screenshot({ path: testInfo.outputPath('subject-generation-form.png') });
     await dialog.getByRole('button', { name: 'Queue AI job' }).click();
     expect(queuedJob).toBeNull();
-    await page.getByRole('dialog', { name: 'Confirm AI generation' }).getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByRole('dialog', { name: /^Start AI jobs?\?$/ }).getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(dialog.getByLabel('Subject name')).toHaveValue('earth-science');
     await dialog.getByLabel('Subject name').press('Enter');
     await confirmAIStart(page);
@@ -475,8 +475,10 @@ test('regenerates the global curriculum with model disclosure and cancellable pi
     await expect(regenerate).toBeEnabled();
     await regenerate.click();
     await page.screenshot({ path: testInfo.outputPath('subject-curriculum-regeneration.png') });
-    const confirmation = page.getByRole('dialog', { name: 'Confirm AI generation' });
+    const confirmation = page.getByRole('dialog', { name: /^Start AI jobs?\?$/ });
     await expect(confirmation).toContainText('Global curriculum');
+    await expect(confirmation).not.toContainText('Results are drafts');
+    await expect(confirmation.locator('.curriculum-builder-content > p:visible')).toHaveCount(0);
     await expect(confirmation).toContainText('Model: gpt-test · Reasoning: High · Provider: OpenAI');
     expect(queuedJobs).toEqual([]);
     await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -527,7 +529,7 @@ test('changes launch settings without losing the subject draft or starting a job
     await builder.getByLabel('Subject name').fill('earth-science');
     await expect(builder.getByLabel('Destination')).toHaveCount(0);
     await builder.getByRole('button', { name: 'Queue AI job' }).click();
-    const confirmation = page.getByRole('dialog', { name: 'Confirm AI generation' });
+    const confirmation = page.getByRole('dialog', { name: /^Start AI jobs?\?$/ });
     const change = confirmation.getByRole('button', { name: 'Change AI settings' });
     await change.click();
     const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
@@ -549,7 +551,8 @@ test('changes launch settings without losing the subject draft or starting a job
     await settings.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(settings).toBeHidden();
     await expect(confirmation).toContainText('Model: gpt-6-astra · Reasoning: Max · Provider: OpenAI');
-    await expect(confirmation.getByRole('status')).toContainText('Settings updated');
+    await expect(confirmation).not.toContainText('Settings updated');
+    await expect(confirmation.getByRole('status')).toHaveCount(0);
     await expect(builder.getByLabel('Subject name')).toHaveValue('earth-science');
     await expect(builder.locator('#curriculum-launch-model')).toHaveCount(0);
     expect(queuedJobs).toEqual([]);

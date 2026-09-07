@@ -5211,7 +5211,7 @@ function openGenerationConfirmation({
 
 function confirmGenerationJobs(jobs) {
     return new Promise(resolve => {
-        const { overlay, content, close } = curriculumOverlay('Confirm AI generation');
+        const { overlay, content, close } = curriculumOverlay(jobs.length === 1 ? 'Start AI job?' : 'Start AI jobs?');
         let settled = false;
         const finish = value => {
             if (settled) return;
@@ -5220,8 +5220,6 @@ function confirmGenerationJobs(jobs) {
             close();
         };
         overlay.addEventListener('close', () => finish(false));
-        const introduction = document.createElement('p');
-        introduction.textContent = 'Results are drafts. API charges apply.';
         const list = document.createElement('div');
         list.className = 'generation-launch-list';
         const settingLabels = [];
@@ -5255,6 +5253,7 @@ function confirmGenerationJobs(jobs) {
         confirm.onclick = () => finish(true);
         const status = document.createElement('p');
         status.setAttribute('role', 'status');
+        status.hidden = true;
         const changeSettings = document.createElement('button');
         changeSettings.type = 'button';
         changeSettings.textContent = 'Change AI settings';
@@ -5279,16 +5278,15 @@ function confirmGenerationJobs(jobs) {
                             settingLabels[index].textContent = generationModelSummary(job);
                         });
                     }
-                    status.textContent = available
-                        ? 'Settings updated. Review the model and reasoning above, then start when ready.'
-                        : 'AI generation is disabled. Choose a connected provider and model in AI settings before starting.';
+                    status.textContent = available ? '' : 'Choose a connected model in AI settings.';
+                    status.hidden = available;
                 }
                 changeSettings.focus();
             }, { once: true });
             openStudySettings({ tab: 'generation' });
         };
         actions.append(cancel, changeSettings, confirm);
-        content.append(introduction, list, status, actions);
+        content.append(list, status, actions);
         confirm.focus();
     });
 }
