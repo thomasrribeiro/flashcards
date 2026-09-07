@@ -42,6 +42,11 @@ knowledge. Distinguish introductory familiarity, computational fluency,
 conceptual understanding, theoretical or proof competence, and advanced
 application where the domain calls for them.
 
+Provide accessible entry routes as well as advanced destinations. Separate a
+first conceptual or computational treatment from later proof-intensive,
+quantitative, or research treatments when their entry requirements differ.
+Advanced depth must extend the introductory route, not make it inaccessible.
+
 ## Field coverage before deck grouping
 
 Inventory each subject's major domains, methods, representations, and advanced
@@ -49,6 +54,34 @@ branches before choosing deck boundaries. Map each material domain at each
 intended learning level in coverage. Use these levels:
 foundational, undergraduate-core, undergraduate-advanced, graduate,
 research-specialization.
+
+Build this inventory independently of the deck list, then reconcile the two.
+Do not reverse-engineer a coverage row from each chosen deck and call that a
+field audit. Record distinct branches and depth transitions separately enough
+that an omitted branch remains visible even when neighboring material is
+included. One domain may map to several decks, and one deck to several domains.
+
+When the corresponding subjects are supplied, explicitly check these easily
+lost branches in addition to the rest of the field inventory:
+
+- mathematics: harmonic/Fourier analysis beyond transform applications,
+  measure-theoretic probability, Sobolev/weak PDE theory, algebraic number
+  theory, category/homological algebra, and set-theoretic foundations;
+- chemistry: medicinal chemistry and drug-discovery principles, green and
+  sustainable chemistry, and nuclear/radiochemistry;
+- computer science: embedded/real-time systems and societal/professional
+  responsibilities, alongside software, systems, theory, and AI;
+- biology: epidemiology, single-cell/spatial omics, and circuit neuroscience
+  and connectomics, alongside molecular, organismal, and ecological routes;
+- physics: soft/active matter and biological physics, alongside the
+  traditional mechanics, fields, thermal, and quantum routes.
+
+These are breadth checks, not an exhaustive syllabus or mandated deck names.
+Supply meaningful outcomes and prerequisite routes at the appropriate depths;
+do not count a neighboring application as the underlying branch. Distinguish
+established foundations from optional frontier extensions when recording a
+deferral. A deferral of specialist methods does not cover the omission of the
+branch's foundations.
 
 For every coverage row, record subject, domain, level, disposition, targets,
 and rationale. Use included only when targets identify the exact deck IDs and
@@ -91,6 +124,20 @@ verbs such as know or understand. Separate materially distinct capabilities;
 do not compress a whole field into a few bundled outcome bullets. There is no
 fixed or preferred number of outcomes or decks.
 
+An outcome is an independently assessable capability, not a chapter heading,
+single flashcard, or a list of subfields joined into one sentence. Split it when
+a learner could achieve one substantial component while lacking another, or
+when downstream decks need different components. For example, constructing a
+conditional distribution and evaluating a central-limit approximation need
+distinct outcomes; "understand probability" specifies neither. Make scope and
+outcomes detailed enough to constrain chapter generation without authoring the
+chapters here. Do not normalize every deck to the same small outcome count.
+
+Apply the same boundary test to foundational decks. Arithmetic, algebra,
+trigonometry, and proof writing are not automatically one capability merely
+because they all prepare learners for mathematics. Keep reusable entry skills
+separable when bundling them would force unrelated preparation on consumers.
+
 Design outcomes so later chapters can teach concepts before relying on them,
 then support retrieval, discrimination, representation changes, method choice,
 and transfer. Do not reduce advanced learning to terminology memorization.
@@ -122,6 +169,25 @@ Do not infer prerequisites from list order or silently assume a missing bridge.
 Keep cross-deck dependencies at deck level. Later chapter graphs are local to
 their own deck and may not create cross-deck chapter edges.
 
+Audit the full transitive prerequisite closure, not just immediate edges.
+Naming selected required_outcomes does not exempt a learner from the source
+deck's own prerequisites. For every introductory deck, check whether an
+advanced ancestor is truly necessary for its stated entry-level capability.
+Long paths are not inherently wrong; paths created by oversized prerequisite
+decks are. Do not fix them by deleting necessary edges or silently lowering
+the intended advanced coverage. Instead split introductory and advanced
+capabilities, extract a reusable bridge, or explicitly teach the small needed
+capability within the target's scope and outcomes.
+
+For example, introductory organic reaction reasoning should not inherit
+differential equations and statistical regression merely through a broad
+kinetics deck. Introductory cell biology should not inherit multivariable
+thermodynamics, nor basic physiology proof-level PDEs, merely to obtain a
+qualitative energy or transport model. Put the necessary elementary model in
+an appropriate introductory deck and retain the rigorous quantitative theory
+on an advanced route. These are scope tests, not bans on mathematical
+prerequisites for genuinely quantitative decks.
+
 ## Final audit and output
 
 Check domain-and-depth coverage against the field inventory, advanced-route
@@ -130,9 +196,17 @@ ownership, prerequisite sufficiency, maturity transitions, missing references,
 cycles, and redundant edges. Repair defects before returning. Do not certify
 completeness solely because the JSON schema or DAG is valid.
 
+Use two distinct acceptance checks: field completeness asks which important
+domains and depths are absent, regardless of the chosen deck titles; learner
+readiness asks whether each route teaches necessary capabilities before use
+without unnecessary advanced detours. Check outcome bundling and every scope
+exclusion against these tests. A complete mapping of the outcomes you happened
+to write does not prove either check passed. Report unresolved defects in
+scopeIssues rather than relabeling them as deliberate scope choices.
+
 Return a JSON candidate matching the supplied strict schema: subjects,
-coverage, decks, and scopeIssues. scopeIssues must
-list unresolved gaps, uncertainty, or verification needs with reasons; use an
+coverage, decks, and scopeIssues. scopeIssues must list unresolved gaps,
+uncertainty, or verification needs with reasons; use an
 empty array only when none remain. The host rejects unresolved scope issues
 before publication. Intentional scope exclusions remain visible in coverage
 for human review. Never fabricate verification to pass this gate.
