@@ -46,6 +46,31 @@ All three job types disclose and pin model and reasoning before launch.
 
 ## Release boundaries and follow-up work
 
+### Whole-field curriculum contract
+
+New global runs use `references/global-curriculum-workflow.md` verbatim, with
+no appended instructions or chapter/card-authoring bundle. The queued
+`workflowCommit` and recorded instruction/schema hashes pin the exact contract;
+the transport envelope remains `fresh-generation-v1`. The output declares
+`curriculum_version: whole-field-v1`. Historical unversioned catalogs and
+proposals remain readable; they are not valid output for a new global run.
+
+The structured candidate requires a domain-and-level coverage map targeting
+individual deck outcomes, deck learning levels, included/excluded scope,
+authentic practice, and `scopeIssues`. Deterministic checks reject unmapped
+outcomes, missing targets, mismatched target levels, contradictory dispositions,
+duplicate rows, and empty rationales. Unresolved scope issues stop publication
+and appear in the job error; intentional exclusions persist in the catalog's
+coverage rows for review. These checks cannot prove semantic completeness.
+The existing compact diff does not yet display the complete coverage map.
+
+Accepted scope/practice/level specifications are projected into later chapter
+and card requests. Their changes invalidate affected and downstream plans;
+archived content and review history remain untouched. Global generation still
+receives only canonical subject names, not the existing coverage map or decks.
+
+### Remaining boundaries
+
 1. Legacy catalogs without explicit learning outcomes must first receive a
    reviewed global proposal, then new chapter plans. No heuristic migration
    invents outcome requirements from old cards or cross-deck chapter links.

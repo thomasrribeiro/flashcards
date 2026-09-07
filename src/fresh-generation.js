@@ -2,6 +2,8 @@
 // Never serialize a catalog or queued job directly into a model request.
 export const FRESH_GENERATION_VERSION = 'fresh-generation-v1';
 export const FRESH_JOB_TYPES = ['curriculum-design', 'deck-plan', 'chapter-expand'];
+export const GLOBAL_CURRICULUM_VERSION = 'whole-field-v1';
+export const CURRICULUM_LEVELS = ['foundational', 'undergraduate-core', 'undergraduate-advanced', 'graduate', 'research-specialization'];
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DECK_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -40,6 +42,26 @@ function outcomes(values, label) {
     return result.sort((a, b) => a.id.localeCompare(b.id));
 }
 
+function textList(values, label, { nonempty = false } = {}) {
+    const result = unique(values, label).map(value => text(value, label));
+    unique(result, label);
+    requireValue(!nonempty || result.length > 0, `${label} must not be empty.`);
+    return result;
+}
+
+function learningScope(deck) {
+    requireValue(CURRICULUM_LEVELS.includes(deck.level), `${deck.id} has an invalid learning level.`);
+    requireValue(deck.scope && typeof deck.scope === 'object', `${deck.id} needs scope boundaries.`);
+    return {
+        level: deck.level,
+        scope: {
+            includes: textList(deck.scope.includes, `${deck.id} included scope`, { nonempty: true }),
+            excludes: textList(deck.scope.excludes, `${deck.id} excluded scope`)
+        },
+        practice: textList(deck.practice, `${deck.id} authentic practice`, { nonempty: true })
+    };
+}
+
 function deckSpecification(deck) {
     requireValue(deck && DECK_ID.test(deck.id), 'Invalid deck ID.');
     requireValue(deck.subject === deck.id.split('/')[0], `${deck.id} has an inconsistent subject.`);
@@ -50,6 +72,8 @@ function deckSpecification(deck) {
         subject: deck.subject,
         title: text(deck.title || deck.deck, `${deck.id} title`),
         description: text(deck.description, `${deck.id} scope`),
+        // Project accepted scope only, never old content or publication data.
+        ...(deck.scope !== undefined || deck.practice !== undefined ? learningScope(deck) : {}),
         outcomes: outcomes(deck.outcomes, deck.id),
         prerequisites: [...prerequisites].sort(),
         required_outcomes: (deck.required_outcomes || []).map(edge => ({
@@ -141,7 +165,7 @@ export function buildFreshGenerationContext({ jobType, subjects, catalog, deckId
     return { ...context, chapters: chapters.sort((a, b) => a.id.localeCompare(b.id)), chapterId };
 }
 
-export function validateGlobalCurriculumCandidate(candidate, expectedSubjects) {
+export function validateGlobalCurriculumCandidate(candidate, expectedSubjects, { requireCoverage = false } = {}) {
     const subjects = canonicalSubjectNames(candidate.subjects || []);
     requireValue(JSON.stringify(subjects) === JSON.stringify(canonicalSubjectNames(expectedSubjects)),
         'The candidate must contain exactly the requested subjects.');
@@ -152,7 +176,45 @@ export function validateGlobalCurriculumCandidate(candidate, expectedSubjects) {
     validateDeckEdges(decks);
     // Returning a projection prevents model-supplied paths, content or
     // publication metadata from leaking into the downstream acceptance step.
-    return { subjects, decks: decks.sort((a, b) => a.id.localeCompare(b.id)) };
+    const result = { subjects, decks: decks.sort((a, b) => a.id.localeCompare(b.id)) };
+    // Historical proposals have no coverage contract. New runner jobs require
+    // it; catalog reads validate it whenever any of its metadata is present.
+    if (requireCoverage || candidate.curriculum_version !== undefined || candidate.coverage !== undefined || candidate.scopeIssues !== undefined) {
+        requireValue(candidate.curriculum_version === GLOBAL_CURRICULUM_VERSION, 'Missing or unsupported global curriculum coverage version.');
+        decks.forEach(learningScope);
+        const byId = new Map(decks.map(deck => [deck.id, deck]));
+        requireValue(Array.isArray(candidate.coverage) && candidate.coverage.length > 0, 'The curriculum needs a coverage map.');
+        const covered = new Set();
+        const coverage = candidate.coverage.map(row => {
+            requireValue(subjects.includes(row.subject), 'Coverage belongs to an unrequested subject.');
+            const domain = text(row.domain, 'Coverage domain');
+            requireValue(CURRICULUM_LEVELS.includes(row.level), 'Invalid coverage level.');
+            requireValue(['included', 'deferred', 'out-of-scope'].includes(row.disposition), 'Invalid coverage disposition.');
+            requireValue(Array.isArray(row.targets), 'Coverage targets must be an array.');
+            unique(row.targets.map(target => target.deck_id), 'Coverage target decks');
+            requireValue(row.disposition === 'included' ? row.targets.length > 0 : row.targets.length === 0,
+                'Included coverage needs targets; exclusions must not claim targets.');
+            const targets = row.targets.map(target => {
+                const deck = byId.get(target.deck_id);
+                requireValue(deck, 'Coverage references a missing deck.');
+                requireValue(deck.level === row.level, 'Coverage depth must match the target deck level.');
+                const ids = textList(target.outcome_ids, 'Coverage outcome IDs', { nonempty: true });
+                requireValue(ids.every(id => deck.outcomes.some(outcome => outcome.id === id)), 'Coverage references missing outcomes.');
+                ids.forEach(id => covered.add(`${deck.id}#${id}`));
+                return { deck_id: deck.id, outcome_ids: ids };
+            });
+            return { subject: row.subject, domain, level: row.level, disposition: row.disposition,
+                targets, rationale: text(row.rationale, 'Coverage rationale') };
+        });
+        unique(coverage.map(row => JSON.stringify([row.subject, row.domain.toLowerCase(), row.level])), 'Coverage domain/level rows');
+        requireValue(subjects.every(subject => coverage.some(row => row.subject === subject && row.disposition === 'included')),
+            'Every subject needs included coverage.');
+        requireValue(decks.every(deck => deck.outcomes.every(outcome => covered.has(`${deck.id}#${outcome.id}`))),
+            'Every deck outcome needs an included coverage mapping.');
+        Object.assign(result, { curriculum_version: GLOBAL_CURRICULUM_VERSION, coverage,
+            scopeIssues: textList(candidate.scopeIssues, 'Scope issues') });
+    }
+    return result;
 }
 
 export function validateChapterCurriculumCandidate(candidate, deckId) {

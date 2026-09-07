@@ -10,6 +10,11 @@ stable-ID implementation, and validator as executable truth.
 
 ## Establish the operation
 
+For isolated fresh global `curriculum-design` requests, the model receives only
+[references/global-curriculum-workflow.md](references/global-curriculum-workflow.md),
+the strict output schema, and subject names. That workflow supersedes the
+legacy subject-design context loading below; never supply old curricula to it.
+
 For an explicitly versioned `fresh-generation-v1` job, use
 [references/fresh-generation-workflow.md](references/fresh-generation-workflow.md)
 instead of the legacy context-loading and existing-content workflows below.

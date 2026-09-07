@@ -12,7 +12,7 @@ export function freshCandidateCatalog(before, candidate, jobType, { deckId, gene
         const validated = validateGlobalCurriculumCandidate(candidate, candidate.subjects);
         const old = new Map(before.decks.map(deck => [deck.id, deck]));
         const specifications = catalog => ({ ...catalog, decks: catalog.decks.map(deck => ({ ...deck,
-            title: deck.title || deck.deck, order: undefined, level: undefined, tier: undefined,
+            title: deck.title || deck.deck, order: undefined, level: deck.scope ? deck.level : undefined, tier: undefined,
             estimated_chapters: undefined, recommended_after: undefined, provides: undefined, resolved_dependencies: undefined
         })) });
         const changed = new Set(compareGenerationDag(specifications(before), specifications(validated), { jobType }).affectedContent.map(deck => deck.id));
@@ -25,6 +25,8 @@ export function freshCandidateCatalog(before, candidate, jobType, { deckId, gene
         const ordered = [...validated.decks].sort((a, b) => level(a.id) - level(b.id) || a.id.localeCompare(b.id));
         const orders = new Map();
         return { schema_version: 3, registry: before.registry, fresh_generation: generation,
+            ...(validated.curriculum_version ? { curriculum_version: validated.curriculum_version,
+                coverage: validated.coverage, scopeIssues: validated.scopeIssues } : {}),
             subjects: validated.subjects.map(id => ({ id })),
             decks: ordered.map(deck => {
                 const prior = old.get(deck.id);

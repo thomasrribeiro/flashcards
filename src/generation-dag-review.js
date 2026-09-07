@@ -40,7 +40,7 @@ function normalized(value) {
 // Only authored curriculum fields count: publication/card counts/provenance are
 // not curriculum edits. Keep dependency declarations as well as resolved graph edges.
 const FIELDS = ['title', 'description', 'order', 'level', 'tier', 'estimated_chapters',
-    'prerequisites', 'recommended_after', 'provides', 'resolved_dependencies', 'outcomes', 'required_outcomes'];
+    'prerequisites', 'recommended_after', 'provides', 'resolved_dependencies', 'outcomes', 'required_outcomes', 'scope', 'practice'];
 
 function edges(nodes, request) {
     const result = new Map();
