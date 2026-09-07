@@ -53,6 +53,16 @@ describe('getRepositoryFileIndex', () => {
 
     afterEach(() => vi.unstubAllGlobals());
 
+    it('revalidates repository metadata and the branch tree for the latest version', async () => {
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ default_branch: 'master' }) })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({ tree: [] }) });
+        vi.stubGlobal('fetch', fetchMock);
+        await getRepositoryFileIndex('owner', 'deck');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        for (const [, options] of fetchMock.mock.calls) expect(options.cache).toBe('no-cache');
+    });
+
     it('returns flashcard markdown and the root deck manifest from one tree request', async () => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
             ok: true,

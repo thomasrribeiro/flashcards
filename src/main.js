@@ -1316,6 +1316,7 @@ function showTransientStatus(message) {
 async function syncDeckFromGitHub(deckId, button = null) {
     if (!deckId || deckId.startsWith('local/')) return;
     const previousHtml = button?.innerHTML;
+    const previousAriaLabel = button?.getAttribute('aria-label');
     if (button) {
         button.disabled = true;
         button.textContent = '…';
@@ -1355,7 +1356,8 @@ async function syncDeckFromGitHub(deckId, button = null) {
         if (button?.isConnected) {
             button.disabled = false;
             button.innerHTML = previousHtml;
-            button.setAttribute('aria-label', 'Sync latest version from GitHub');
+            if (previousAriaLabel == null) button.removeAttribute('aria-label');
+            else button.setAttribute('aria-label', previousAriaLabel);
         }
     }
 }
@@ -1512,38 +1514,26 @@ function openCurriculumDeckActionsModal({ deck, registry, installedRepository },
         actions.push(regenerate);
     }
 
-    if (hasGeneratedCards && installedRepository?.id) {
+    if (hasGeneratedCards && (installedRepository?.id || repositoryId)) {
         actions.push(appendDeckAction(body, {
             label: 'Open in Study',
-            description: 'Open this installed deck in the Study view.',
-            onClick: async () => {
-                closeDeckActionsModal({ restoreFocus: false });
-                await openCurriculumRepositoryInStudy(deck, installedRepository.id);
-            }
-        }));
-        actions.push(appendDeckAction(body, {
-            label: 'Add to Study',
-            description: 'Add the latest generated chapters to Study while preserving review history.',
-            onClick: async button => {
-                if (await syncDeckFromGitHub(installedRepository.id, button)) {
-                    closeDeckActionsModal({ restoreFocus: false });
-                    await openCurriculumRepositoryInStudy(deck, installedRepository.id);
-                }
-            }
-        }));
-    } else if (hasGeneratedCards && repositoryId) {
-        actions.push(appendDeckAction(body, {
-            label: 'Add to Study',
-            description: 'Add the generated flashcard chapters from this deck to Study.',
+            description: 'Open the latest flashcards. Review history is preserved.',
             onClick: async button => {
                 button.disabled = true;
                 try {
-                    const addedDeck = await addRepositoryToStudy(repositoryId);
+                    let studyRepositoryId = installedRepository?.id;
+                    if (studyRepositoryId) {
+                        if (!await syncDeckFromGitHub(studyRepositoryId, button)) return;
+                    } else {
+                        const addedDeck = await addRepositoryToStudy(repositoryId);
+                        studyRepositoryId = addedDeck.id;
+                    }
                     closeDeckActionsModal({ restoreFocus: false });
-                    await openCurriculumRepositoryInStudy(deck, addedDeck.id);
+                    await openCurriculumRepositoryInStudy(deck, studyRepositoryId);
                 } catch (error) {
-                    console.error('[Curriculum] Could not add deck to Study:', error);
-                    alert(`Failed to add deck to Study: ${error.message}`);
+                    console.error('[Curriculum] Could not open deck in Study:', error);
+                    alert(`Could not open in Study: ${error.message}`);
+                } finally {
                     button.disabled = false;
                 }
             }

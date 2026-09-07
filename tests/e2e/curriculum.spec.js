@@ -773,7 +773,7 @@ test('can regenerate an existing chapter curriculum without hiding the action', 
     });
 });
 
-test('adds only generated curriculum chapters and refreshes them through Add to Study', async ({ page }) => {
+test('opens latest curriculum flashcards, installing or syncing without resetting reviews', async ({ page }) => {
     const targetId = 'mathematics/elementary-algebra-and-functions';
     const repositoryId = 'thomasrribeiro-flashcards/elementary-algebra-and-functions';
     const catalog = structuredClone(bundledCurriculum);
@@ -781,6 +781,9 @@ test('adds only generated curriculum chapters and refreshes them through Add to 
     const chapter = target.chapters[0];
     chapter.card_count = 1;
     const emptyChapter = target.chapters.find(item => Number(item.card_count || 0) === 0);
+    let chapterSha = 'chapter-sha';
+    let failSync = false;
+    let treeRequests = 0;
     await page.route(`https://api.github.com/repos/${repositoryId}`, route => route.fulfill({ json: {
         full_name: repositoryId,
         name: 'elementary-algebra-and-functions',
@@ -790,13 +793,19 @@ test('adds only generated curriculum chapters and refreshes them through Add to 
         topics: ['mathematics'],
         private: false
     } }));
-    await page.route(`https://api.github.com/repos/${repositoryId}/git/trees/master**`, route => (
-        route.fulfill({ json: { truncated: false, tree: [
-            { type: 'blob', path: chapter.file, sha: 'chapter-sha', size: 240 },
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/trees/master**`, route => {
+        treeRequests += 1;
+        if (failSync) return route.fulfill({ status: 403, json: { message: 'Sync unavailable' } });
+        return route.fulfill({ json: { truncated: false, tree: [
+            { type: 'blob', path: chapter.file, sha: chapterSha, size: 240 },
             { type: 'blob', path: emptyChapter.file, sha: 'empty-chapter-sha', size: 120 },
             { type: 'blob', path: 'deck.toml', sha: 'manifest-sha', size: 120 }
-        ] } })
-    ));
+        ] } });
+    });
+    await page.route(`https://api.github.com/repos/${repositoryId}/git/blobs/chapter-sha*`, route => route.fulfill({
+        contentType: 'text/plain',
+        body: `+++\nsubject = "mathematics"\n+++\n\n<!-- card-id: open-study-stable -->\nQ: What is a variable?\nA: ${route.request().url().endsWith('chapter-sha-v2') ? 'A symbol representing a value.' : 'A symbol for a value.'}\n`
+    }));
     await page.route(`https://api.github.com/repos/${repositoryId}/git/blobs/manifest-sha`, route => (
         route.fulfill({
             contentType: 'text/plain',
@@ -808,8 +817,8 @@ test('adds only generated curriculum chapters and refreshes them through Add to 
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
     await openCurriculumNode(page, targetId);
     let deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
-    await expect(deckSettings.getByRole('button', { name: /Open in Study/ })).toHaveCount(0);
-    const add = deckSettings.getByRole('button', { name: /Add to Study/ });
+    await expect(deckSettings.getByRole('button', { name: /Add to Study/ })).toHaveCount(0);
+    const add = deckSettings.getByRole('button', { name: /Open in Study/ });
     await expect(add).toBeVisible();
     await add.click();
 
@@ -825,9 +834,19 @@ test('adds only generated curriculum chapters and refreshes them through Add to 
         hasText: emptyChapter.file.split('/').pop().replace(/\.md$/, '')
     })).toHaveCount(0);
 
+    const savedReview = await page.evaluate(async ({ repositoryId, file }) => {
+        const { loadRepositoryFiles } = await import('/src/repo-manager.js');
+        const { saveReview, getReview } = await import('/src/storage.js');
+        const [card] = await loadRepositoryFiles(repositoryId, [file]);
+        await saveReview(card.hash, { state: 2, reps: 7, stability: 12, difficulty: 4, due: '2030-01-01T00:00:00.000Z' });
+        return getReview(card.hash);
+    }, { repositoryId, file: chapter.file });
+    chapterSha = 'chapter-sha-v2';
+    const requestsBeforeSync = treeRequests;
     await page.locator('#tab-curriculum').click();
     deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
-    const refreshStudy = deckSettings.getByRole('button', { name: /Add to Study/ });
+    await expect(deckSettings.getByRole('button', { name: /Add to Study/ })).toHaveCount(0);
+    const refreshStudy = deckSettings.getByRole('button', { name: /Open in Study/ });
     await expect(refreshStudy).toBeVisible();
     await refreshStudy.click();
 
@@ -842,6 +861,28 @@ test('adds only generated curriculum chapters and refreshes them through Add to 
     await expect(chapterRows.filter({
         hasText: emptyChapter.file.split('/').pop().replace(/\.md$/, '')
     })).toHaveCount(0);
+    expect(treeRequests).toBeGreaterThan(requestsBeforeSync);
+    const synced = await page.evaluate(async ({ repositoryId, file }) => {
+        const { loadRepositoryFiles } = await import('/src/repo-manager.js');
+        const { getReview } = await import('/src/storage.js');
+        const [card] = await loadRepositoryFiles(repositoryId, [file]);
+        return { answer: card.content.answer, sha: card.source.sha, review: await getReview(card.hash) };
+    }, { repositoryId, file: chapter.file });
+    expect(synced.sha).toBe('chapter-sha-v2');
+    expect(synced.answer).toContain('A symbol representing a value.');
+    expect(synced.review).toEqual(savedReview);
+
+    // Failed refreshes must leave the action available, not open stale content.
+    failSync = true;
+    await page.locator('#tab-curriculum').click();
+    deckSettings = await openCurriculumDeckSettings(page, 'elementary-algebra-and-functions');
+    await Promise.all([
+        page.waitForEvent('dialog').then(dialog => dialog.dismiss()),
+        deckSettings.getByRole('button', { name: /Open in Study/ }).click()
+    ]);
+    await expect(deckSettings).toBeVisible();
+    await expect(deckSettings.getByRole('button', { name: /Open in Study/ })).toBeEnabled();
+    await expect(page.locator('#tab-curriculum')).toHaveClass(/active/);
 });
 
 test('keeps generation labels unchanged and buttons disabled until AI access is verified', async ({ page }) => {

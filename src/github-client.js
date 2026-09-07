@@ -57,7 +57,7 @@ export async function getRepository(owner, repo) {
     console.log(`[GitHub Client] Fetching repository: ${url}`);
 
     const headers = getAuthHeaders();
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, { headers, cache: 'no-cache' });
 
     console.log(`[GitHub Client] Response status: ${response.status} ${response.statusText}`);
 
@@ -104,7 +104,7 @@ export async function getRepositoryFileIndex(owner, repo, path = 'flashcards', t
     }
 
     const url = `${GITHUB_API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(treeRef)}?recursive=1`;
-    const response = await fetch(url, { headers: getAuthHeaders() });
+    const response = await fetch(url, { headers: getAuthHeaders(), cache: 'no-cache' });
 
     if (!response.ok) {
         if (response.status === 404) return { markdownFiles: [], deckManifest: null };
