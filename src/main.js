@@ -6301,7 +6301,7 @@ async function setupRepoInput() {
     let selectedIndex = -1;
 
     repoInput.value = '';
-    repoInput.placeholder = 'Find a GitHub deck...';
+    repoInput.placeholder = 'Add a deck...';
 
     // Signed-in users see repositories available to their GitHub account
     // (including private repositories) alongside the public deck catalog.

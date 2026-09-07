@@ -1501,7 +1501,8 @@ kbd {
 
 .controls-row {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     gap: 10px;
     flex-wrap: wrap;
 }
@@ -1509,13 +1510,17 @@ kbd {
 .study-library-actions {
     display: flex;
     align-items: center;
-    margin-left: auto;
+    width: 100%;
     min-width: min(100%, 340px);
 }
 
 .study-add-deck-control {
     min-width: 210px;
 }
+
+/* Include the shared border drawn by the adjacent add button. */
+.study-add-deck-control .repo-suggestions { right: -1px; }
+.controls-row > .search-input { width: 100%; }
 
 .study-view-curriculum {
     min-height: 28px;

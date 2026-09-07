@@ -237,11 +237,11 @@ test('keeps deck installation inside Study even when the collection is empty', a
 
     const controls = page.locator('#controls-bar');
     await expect(controls).toBeVisible();
-    await expect(controls.getByLabel('Find a GitHub deck')).toBeVisible();
+    await expect(controls.getByLabel('Add a deck', { exact: true })).toBeVisible();
     await expect(controls.getByRole('button', { name: 'Add deck' })).toBeVisible();
     await expect(page.locator('.auth-header #github-repo-input')).toHaveCount(0);
 
-    await controls.getByLabel('Find a GitHub deck').fill(repositoryId);
+    await controls.getByLabel('Add a deck', { exact: true }).fill(repositoryId);
     await controls.getByRole('button', { name: 'Add deck' }).click();
     await expect(page.locator('.col-pane-label')).toHaveText(['Subjects', 'Decks', 'Chapters']);
     await expect(page.locator('.col-pane-label')).toHaveCount(3);
@@ -249,6 +249,43 @@ test('keeps deck installation inside Study even when the collection is empty', a
     await expect(page.locator('.col-pane').nth(0).locator('.col-row')).toContainText('chemistry');
     await page.locator('.col-pane').nth(0).locator('.col-row').filter({ hasText: 'chemistry' }).click();
     await expect(page.locator('.col-pane').nth(1).locator('.col-row')).toContainText('organic-chemistry');
+});
+
+test('Study deck picker aligns its dropdown above search', async ({ page }, testInfo) => {
+    await page.route('https://api.github.com/orgs/**', route => route.fulfill({ json: [{
+        name: 'linear-algebra', full_name: 'example/linear-algebra',
+        description: 'Linear algebra', language: 'TeX', private: false
+    }] }));
+    await installGenerationAccount(page);
+    await page.getByRole('button', { name: 'Study', exact: true }).click();
+    const input = page.getByRole('textbox', { name: 'Add a deck', exact: true });
+    await expect(input).toHaveAttribute('placeholder', 'Add a deck...');
+    await input.click();
+    const dropdown = page.locator('#repo-suggestions');
+    await expect(dropdown).toBeVisible();
+    const metrics = await page.locator('#controls-bar').evaluate(root => {
+        const input = root.querySelector('#github-repo-input').getBoundingClientRect();
+        const dropdown = root.querySelector('#repo-suggestions').getBoundingClientRect();
+        const button = root.querySelector('#add-repo-btn');
+        const add = button.getBoundingClientRect();
+        const search = root.querySelector('#search-input').getBoundingClientRect();
+        return {
+            left: Math.abs(dropdown.left - input.left),
+            right: Math.abs(dropdown.right - add.left - parseFloat(getComputedStyle(button).borderLeftWidth)),
+            top: Math.abs(dropdown.top - input.bottom),
+            aboveSearch: input.bottom < search.top,
+            withinPage: dropdown.right <= innerWidth,
+            domOrder: Boolean(root.querySelector('#github-repo-input').compareDocumentPosition(root.querySelector('#search-input')) & Node.DOCUMENT_POSITION_FOLLOWING)
+        };
+    });
+    expect(metrics.left).toBeLessThan(0.1);
+    expect(metrics.right).toBeLessThan(0.1);
+    expect(metrics.top).toBeLessThan(0.1);
+    expect(metrics.aboveSearch && metrics.withinPage && metrics.domOrder).toBe(true);
+    await page.locator('#controls-bar').screenshot({ path: testInfo.outputPath('add-deck-above-search.png') });
+    await dropdown.getByText('example/linear-algebra', { exact: true }).click();
+    await expect(input).toHaveValue('example/linear-algebra');
+    await expect(dropdown).toBeHidden();
 });
 
 test('updates the root breadcrumb when the curriculum repository setting changes', async ({ page }) => {
