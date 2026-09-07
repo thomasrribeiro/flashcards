@@ -653,20 +653,18 @@ export function curriculumLayerWindow(graph, requestedLayer = 0, width = 3) {
     const ranks = requiredGraphRanks(graph);
     const layerCount = Math.max(...ranks.values()) + 1;
     const windowWidth = Math.max(1, Math.round(width));
-    const hasCompleteWindow = layerCount >= windowWidth;
     const ranksBefore = Math.floor(windowWidth / 2);
     const ranksAfter = windowWidth - ranksBefore - 1;
-    const minLayer = hasCompleteWindow ? ranksBefore : 0;
-    const maxLayer = hasCompleteWindow
-        ? layerCount - ranksAfter - 1
-        : layerCount - 1;
+    const minLayer = 0;
+    const maxLayer = layerCount - 1;
     const numericLayer = Number(requestedLayer);
     const layer = Math.max(minLayer, Math.min(
         maxLayer,
         Number.isFinite(numericLayer) ? Math.round(numericLayer) : minLayer
     ));
-    const start = hasCompleteWindow ? layer - ranksBefore : 0;
-    const end = Math.min(layerCount, start + windowWidth);
+    // Keep the selected layer centered, even when a neighbor does not exist.
+    const start = Math.max(0, layer - ranksBefore);
+    const end = Math.min(layerCount, layer + ranksAfter + 1);
     const visible = new Set(graph.nodes
         .filter(node => {
             const rank = ranks.get(node.id);

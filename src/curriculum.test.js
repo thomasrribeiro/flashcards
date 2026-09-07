@@ -269,17 +269,16 @@ describe('curriculum dependency planning', () => {
         expect(middle.graph.seedIds).toEqual(['mathematics/algebra']);
     });
 
-    it('shows three complete dependency ranks and slides one rank at a time', () => {
+    it('centers every dependency rank, including first and last', () => {
         const graph = curriculumGraph(index);
         const first = curriculumLayerWindow(graph, 0, 3);
         expect(first).toMatchObject({
-            start: 0, end: 3, layer: 1, layerCount: 3,
-            minLayer: 1, maxLayer: 1, width: 3
+            start: 0, end: 2, layer: 0, layerCount: 3,
+            minLayer: 0, maxLayer: 2, width: 3
         });
         expect(first.graph.nodes.map(node => [node.id, node.curriculumRank])).toEqual([
             ['mathematics/arithmetic', 0],
-            ['mathematics/algebra', 1],
-            ['physics/physical-reasoning', 2]
+            ['mathematics/algebra', 1]
         ]);
 
         const extended = {
@@ -291,10 +290,10 @@ describe('curriculum dependency planning', () => {
             }],
             seedIds: []
         };
-        const second = curriculumLayerWindow(extended, 3, 3);
+        const second = curriculumLayerWindow(extended, 2, 3);
         expect(second).toMatchObject({
             start: 1, end: 4, layer: 2, layerCount: 4,
-            minLayer: 1, maxLayer: 2
+            minLayer: 0, maxLayer: 3
         });
         expect(second.graph.nodes.map(node => node.id)).toEqual([
             'mathematics/algebra',
@@ -303,18 +302,31 @@ describe('curriculum dependency planning', () => {
         ]);
         const firstBoundary = curriculumLayerWindow(extended, 0, 3);
         const lastBoundary = curriculumLayerWindow(extended, 99, 3);
-        expect(firstBoundary).toMatchObject({ start: 0, end: 3, layer: 1 });
-        expect(lastBoundary).toMatchObject({ start: 1, end: 4, layer: 2 });
+        expect(firstBoundary).toMatchObject({ start: 0, end: 2, layer: 0 });
+        expect(lastBoundary).toMatchObject({ start: 2, end: 4, layer: 3 });
     });
 
     it('includes every dependency rank in two-column mobile windows', () => {
         const graph = curriculumGraph(index);
         expect(curriculumLayerWindow(graph, 0, 2)).toMatchObject({
-            start: 0, end: 2, layer: 1, minLayer: 1, maxLayer: 2, width: 2
+            start: 0, end: 1, layer: 0, minLayer: 0, maxLayer: 2, width: 2
         });
         expect(curriculumLayerWindow(graph, 99, 2)).toMatchObject({
-            start: 1, end: 3, layer: 2, minLayer: 1, maxLayer: 2, width: 2
+            start: 1, end: 3, layer: 2, minLayer: 0, maxLayer: 2, width: 2
         });
+    });
+
+    it('handles empty, single-layer, and two-layer graphs and out-of-range input', () => {
+        const empty = { nodes: [], edges: [], seedIds: [] };
+        expect(curriculumLayerWindow(empty)).toMatchObject({ start: 0, end: 0, layer: 0, layerCount: 0 });
+        const nodes = [{ id: 'a' }, { id: 'b' }];
+        const single = { ...empty, nodes };
+        expect(curriculumLayerWindow(single, 99)).toMatchObject({ start: 0, end: 1, layer: 0, minLayer: 0, maxLayer: 0 });
+        const two = { ...single, edges: [{ source: 'a', target: 'b', type: 'required' }] };
+        for (const input of [-9, NaN, Infinity]) {
+            expect(curriculumLayerWindow(two, input)).toMatchObject({ start: 0, end: 2, layer: 0, maxLayer: 1 });
+        }
+        expect(curriculumLayerWindow(two, 99)).toMatchObject({ start: 0, end: 2, layer: 1, maxLayer: 1 });
     });
 
     it('builds chapter-level edges from resolved local dependencies', () => {
