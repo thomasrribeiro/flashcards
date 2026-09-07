@@ -7771,8 +7771,8 @@ async function openStudySettings({ tab = 'study', focusRequestId = null } = {}) 
     button.setAttribute('aria-expanded', 'true');
     activateStudySettingsTab(tab);
     if (tab === 'agents') renderGenerationActivitySettings({ focusRequestId });
-    else if (tab === 'generation') generationProvider.focus();
-    else target.focus();
+    // Focusing a select during the opening tap summons its native iOS picker.
+    document.getElementById('study-settings-close')?.focus({ preventScroll: true });
 
     loadAIProviderConnections(generation.providerId).catch(error => {
         renderAIProviderConnections();

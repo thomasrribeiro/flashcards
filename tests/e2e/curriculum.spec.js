@@ -507,6 +507,8 @@ test('changes launch settings without losing the subject draft or starting a job
     await change.click();
     const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
     await expect(settings.getByRole('tab', { name: 'AI generation', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(settings.getByRole('button', { name: 'Close settings' })).toBeFocused();
+    await expect(settings.locator('select:focus')).toHaveCount(0);
     await expect(confirmation).toBeHidden();
     await expect(page.locator('#generation-model')).toBeEnabled();
     await page.locator('#generation-model').selectOption('gpt-6-astra');
@@ -533,6 +535,23 @@ test('changes launch settings without losing the subject draft or starting a job
         jobType: 'curriculum-design', providerId: 'openai', modelId: 'gpt-6-astra',
         payload: { newSubject: 'earth-science', subjects: expect.arrayContaining(['earth-science', 'mathematics']), reasoningEffort: 'max' }
     });
+});
+
+test('mobile settings opens without focusing a dropdown', async ({ page }) => {
+    await installGenerationAccount(page);
+    const trigger = page.locator('#study-settings-btn');
+    const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+    for (let opening = 0; opening < 2; opening += 1) {
+        await trigger.click();
+        await expect(settings).toBeVisible();
+        await expect(settings.getByRole('button', { name: 'Close settings' })).toBeFocused();
+        await expect(settings.locator('select:focus')).toHaveCount(0);
+        // Manual selection still works normally.
+        await settings.locator('#daily-new-target').selectOption('20');
+        await expect(settings.locator('#daily-new-target')).toHaveValue('20');
+        await settings.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(settings).toBeHidden();
+    }
 });
 
 test('curriculum Options contains only regeneration with subject entry below navigation and fits mobile', async ({ page }, testInfo) => {
