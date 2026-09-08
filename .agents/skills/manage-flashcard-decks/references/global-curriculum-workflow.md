@@ -49,6 +49,13 @@ objects and scales, research communities, methods and applications. Use only
 perspectives relevant to that subject. Check less prominent branches and failures
 or pathological mechanisms as carefully as prominent theories and normal behavior.
 
+Reconcile established branches at subject interfaces explicitly. Giving a shared
+foundation one owner does not account for the distinct methods built on it in
+another field. Locate the domain-specific performance, not just its mathematical
+tools, physical mechanism or neighboring application. A branch must not disappear
+because either subject could own it. Conversely, a complete contract in one
+subject needs no duplicate deck in another.
+
 Inventory the operational methods of each branch as well as its concepts and
 theorems: what learners must be able to measure, estimate, construct, compute,
 test or interpret. Inspect the progression from introductory use through
@@ -76,11 +83,14 @@ Use these boundary decisions:
   the additional representations, theory or methods needed only by a specialized
   continuation. Establish that reusable route and retain the continuation with
   its own appropriate prerequisites.
-- If a consumer needs capability A but not capability B, requiring a deck that
-  bundles A and B forces an avoidable detour. Extract the reusable preparation
-  when B is a substantial independent branch or introduces additional entry
-  requirements. A coherent foundation may contain related techniques that a
-  particular consumer does not immediately use; that alone is not a defect.
+- For each substantial capability in a deck, compare its own necessary entry
+  knowledge with the full prerequisites imposed by the combined deck. Do this
+  even for terminal decks with no consumers. If capability A can be learned
+  without capability B's substantial independent theory or extra preparation,
+  preserve an accessible route to A as well as the continuation teaching B.
+  Apply the same test when another deck needs only A. Related methods with shared
+  preparation can stay together; unused neighboring techniques alone do not
+  justify fragmentation.
 - An integrating deck is appropriate when combining established capabilities is
   itself a new learning objective. A shared umbrella name is not integration.
 
@@ -91,13 +101,17 @@ intended depth. Add newly discovered branches to it, including branches without
 any consumer elsewhere in the graph. Do not reconstruct the inventory from the
 decks you happened to finish.
 
-Reconcile in both directions. Starting from each inventory domain and depth,
-locate outcomes that teach its distinctive competence and trace their entry path.
-Starting from each deck outcome, locate its inventory entry. The second check
-alone can pass an incomplete curriculum. Inspect each branch's entry, established
-theory and practice, and advanced continuation separately; use stages appropriate
-to the branch, not a fixed number of decks or levels. A domain with no matching
-contract is missing coverage even if all existing outcomes have mappings.
+Reconcile in both directions. First revisit the field map without using the
+finished deck titles as the checklist. For each established branch, ask what
+distinctive problem, explanation or working method a prepared learner should
+be able to handle, then locate its exact outcomes and entry path. Test apparent
+coverage in neighboring subjects and complementary branches: shared foundations
+or one continuation do not establish the others. Then map every deck outcome
+back to the inventory. The second check alone can pass an incomplete curriculum.
+Inspect entry, established theory/practice and advanced continuation at stages
+appropriate to the branch, not a fixed number of decks or levels. Consolidation
+is successful when these capabilities and proportionate entry paths survive;
+neither more decks nor fewer decks is inherently better.
 
 When narrowing a deck or extracting reusable preparation, locate the remaining
 substantive capabilities in other contracts and reconnect their preparation.
@@ -284,10 +298,11 @@ verification is unavailable, fabricate verification, or conceal defects to pass.
 For an unnecessary-prerequisite issue, identify the consumer's actual need and
 the substantial unrelated branch or extra entry requirement imposed on it.
 Check its practice as well as its outcomes before calling preparation unnecessary.
-Do not report a hypothetical future consumer as a current blocking defect. A
-missing independent learning route can still be a real coverage defect; identify
-the intended competence and depth that are absent, rather than inventing a
-consumer. Keep a concrete unresolved finding even if structural checks pass.
+For a deck-internal barrier, identify the existing outcome and the extra theory
+or entry requirements imposed solely by its bundled sibling capability. No
+downstream consumer is needed for that finding. Do not invent hypothetical future
+consumers. For a missing independent route, identify its intended competence
+and depth. Keep a concrete unresolved finding even if structural checks pass.
 
 practiceNotes contains nonblocking execution conditions such as supervision,
 facilities, ethics approval or professional authorization. These conditions are
