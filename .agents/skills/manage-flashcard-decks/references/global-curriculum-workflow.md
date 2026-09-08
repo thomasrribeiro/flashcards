@@ -74,8 +74,11 @@ courses. Preserve coherent progressions; do not split isolated facts into decks.
 
 Use these boundary decisions:
 
-- If two substantial bodies of theory or practice can be learned independently
-  from shared foundations, give them distinct decks, even at the same level.
+- Keep related theory and working methods together when they form a coherent
+  learning destination with substantially shared preparation. A consumer needing
+  only some outcomes does not require a separate deck for each unused technique.
+  Use distinct decks for independent learning destinations or when bundling
+  imposes substantial preparation unrelated to a capability's actual performance.
 - If a foundation and its application have different entry requirements, put the
   reusable foundation before the application instead of inside its deck.
 - Compare the preparation of the capabilities being grouped, not just their
@@ -83,14 +86,12 @@ Use these boundary decisions:
   the additional representations, theory or methods needed only by a specialized
   continuation. Establish that reusable route and retain the continuation with
   its own appropriate prerequisites.
-- For each substantial capability in a deck, compare its own necessary entry
-  knowledge with the full prerequisites imposed by the combined deck. Do this
-  even for terminal decks with no consumers. If capability A can be learned
-  without capability B's substantial independent theory or extra preparation,
-  preserve an accessible route to A as well as the continuation teaching B.
-  Apply the same test when another deck needs only A. Related methods with shared
-  preparation can stay together; unused neighboring techniques alone do not
-  justify fragmentation.
+- For each substantial capability, compare its necessary entry knowledge with
+  the combined deck's full prerequisites, including for decks with no consumers.
+  Preserve an accessible route when another capability imposes extra independent
+  preparation. Distinguish that barrier from learning related techniques along
+  the way. Separate outcome IDs within a coherent deck when finer annotation is
+  sufficient; do not multiply decks merely to eliminate every unused outcome.
 - An integrating deck is appropriate when combining established capabilities is
   itself a new learning objective. A shared umbrella name is not integration.
 
@@ -113,21 +114,18 @@ appropriate to the branch, not a fixed number of decks or levels. Consolidation
 is successful when these capabilities and proportionate entry paths survive;
 neither more decks nor fewer decks is inherently better.
 
-When narrowing a deck or extracting reusable preparation, locate the remaining
-substantive capabilities in other contracts and reconnect their preparation.
-Removing an unsupported promise is not a complete correction if it removes
-required coverage from the curriculum. An application does not replace general
-theory; a frontier deferral does not account for a missing established foundation.
-An inclusion in a neighboring subject counts only when its exact outcomes teach
-the needed capability at the intended depth.
+Plan complete field coverage and usable entry paths before refining optional
+deck partitions. A cleaner partition cannot compensate for an absent established
+branch. Account separately for core branches within each subject and distinctive
+methods at subject interfaces; neither inventory substitutes for the other.
+The coverage array must preserve those domain-and-depth decisions even when
+several share a deck. Do not collapse it into one row per finished deck title.
 
-Make boundary corrections capability-preserving within this design. Before a
-split or simplification, identify each competence in the affected scopes,
-outcomes and practice. Afterward, assign every competence to an exact resulting
-deck/outcome pair and preserve its coverage depth. Check both the accessible
-entry and the independent advanced continuation. A shorter contract is not a
-successful split when some of its work has no destination. This check concerns
-your current design, not any curriculum outside this job.
+Every substantial capability in the inventory needs a destination at its intended
+depth. Consolidating, narrowing or separating decks must preserve that destination
+and its preparation. An application does not replace general theory; a frontier
+exclusion does not dispose of an established foundation. Count another subject's
+contract only when its exact outcomes teach the capability itself.
 
 ## Deck contract
 
@@ -255,20 +253,13 @@ scope issue instead of presenting a reduced survey as complete.
 
 ## Acceptance and serialization
 
-Return the completed design, not an initial deck list followed by a repair plan.
-You are authorized to complete the design within this generation: add a missing
-capability, establish its preparation, split an inappropriate bundle, and update
-its consumers and coverage without asking for approval of those design choices.
-The user reviews the resulting proposal, not permission to finish drafting it.
-
-Use the final audit to revise the specifications before serialization. A concrete
-omission, unsupported assessment or avoidable prerequisite barrier that you can
-correct is unfinished design work, not a reason to stop with a repair list in
-scopeIssues. After a correction, recheck the affected paths and the independent
-field inventory so the change does not break references or lose another branch.
-Do not clear a finding by erasing the warning, weakening the promised competence,
-or deferring required coverage. Preserve honest issues that remain unresolved
-after completing the design work you can do. Do not emit planning notes or reasoning.
+Plan the complete specification before emitting it: field coverage, assessable
+capabilities, coherent deck boundaries and necessary preparation are decisions
+for this generation, not a list of requested follow-up work. Make reasonable
+curricular choices within the stated destination without asking for permission.
+Return one candidate only. Do not produce an initial draft for an audit-and-revise
+loop, revise a generated draft, or emit planning notes or reasoning. There is no
+later repair pass or feedback from a checker.
 
 Check educational completeness against the independent field inventory, learner
 readiness against full prerequisite closures, and scope against assessable
@@ -295,22 +286,24 @@ prevents a sound learning plan: missing coverage, insufficient outcomes, or
 missing/unnecessary preparation. Use an empty array only when none remain.
 Report concrete defects honestly; do not invent generic doubts because exhaustive
 verification is unavailable, fabricate verification, or conceal defects to pass.
-For an unnecessary-prerequisite issue, identify the consumer's actual need and
-the substantial unrelated branch or extra entry requirement imposed on it.
-Check its practice as well as its outcomes before calling preparation unnecessary.
-For a deck-internal barrier, identify the existing outcome and the extra theory
-or entry requirements imposed solely by its bundled sibling capability. No
-downstream consumer is needed for that finding. Do not invent hypothetical future
-consumers. For a missing independent route, identify its intended competence
-and depth. Keep a concrete unresolved finding even if structural checks pass.
+For an unnecessary-prerequisite issue, identify the actual performance and the
+substantial unrelated preparation imposed on it. Check practice and the complete
+ancestor closure: preparation reached through another necessary path is not a
+new entry barrier. For a deck-internal barrier, identify the outcome and the
+extra preparation imposed solely by its sibling capability; no hypothetical
+consumer is needed. Distinguish a genuine defect from an optional alternative
+organization of a coherent course. For missing coverage, identify competence and
+depth and retain its deferred inventory row. Report concrete unresolved defects
+honestly even when structure is valid; do not hide them by weakening outcomes,
+dropping inventory entries or erasing warnings.
 
 practiceNotes contains nonblocking execution conditions such as supervision,
 facilities, ethics approval or professional authorization. These conditions are
 not represented as satisfied. They do not prevent educational planning, but
 missing knowledge is still a curriculum defect, not a practice condition.
 
-This job has one generation call and no later repair pass. The host retains the
-proposal for external review; unresolved issues are not sent back as context.
+This job has one generation call. The host retains the proposal for external
+review; unresolved issues are not sent back as context.
 The host can compute structural checks and prerequisite traces after generation.
 You have no execution tools in this run; do not claim to have run those checks.
 Their success would establish structural consistency, not educational completeness.
