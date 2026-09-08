@@ -155,9 +155,19 @@ not completeness: every important inventory capability still needs a disposition
 
 Use deferred or out-of-scope with empty targets and a specific rationale for
 deliberate exclusions. Deferred material is a future extension, never assumed
-preparation. Appropriate exclusions include specialist frontier extensions;
-difficulty, output length or low usefulness to another subject do not justify
-excluding an established major branch. Report inadequate coverage as a
+preparation. Distinguish a branch's established foundations from its specialist
+extensions: a frontier disposition does not dispose of the branch at every depth.
+When a rationale claims that lower-depth foundations remain included, identify
+their existing deck/outcome IDs in the rationale and give those capabilities
+their own included coverage rows. Those outcomes must teach the branch's
+distinctive competence, not merely its prerequisites or a neighboring method.
+If none do, the foundation is missing and needs a contract, not a frontier label.
+Keep deferred targets empty; these explanatory references are not included
+coverage of the deferred material itself.
+
+Specialist frontier extensions and separate professional qualifications may be
+excluded. Difficulty, output length or low usefulness to another subject do not
+justify excluding an established major branch. Report inadequate coverage as a
 scope issue instead of presenting a reduced survey as complete.
 
 ## Acceptance and serialization
