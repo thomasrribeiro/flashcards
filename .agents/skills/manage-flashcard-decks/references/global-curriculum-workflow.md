@@ -49,6 +49,16 @@ objects and scales, research communities, methods and applications. Use only
 perspectives relevant to that subject. Check less prominent branches and failures
 or pathological mechanisms as carefully as prominent theories and normal behavior.
 
+Inventory the operational methods of each branch as well as its concepts and
+theorems: what learners must be able to measure, estimate, construct, compute,
+test or interpret. Inspect the progression from introductory use through
+established working methods to advanced theory and integration. These are
+perspectives, not mandatory level labels or a fixed number of decks. An entry
+survey followed by a rigorous theory or frontier application can still omit
+the branch's established methodological middle. General-purpose mathematics or
+programming does not itself teach a domain's methods; an application of a method
+does not establish its independently reusable contract.
+
 Define each substantial capability by what the learner can demonstrate and the
 preparation that demonstration actually needs. Group capabilities into decks
 only after those requirements are clear. A deck develops one coherent,
@@ -61,6 +71,11 @@ Use these boundary decisions:
   from shared foundations, give them distinct decks, even at the same level.
 - If a foundation and its application have different entry requirements, put the
   reusable foundation before the application instead of inside its deck.
+- Compare the preparation of the capabilities being grouped, not just their
+  shared topic name. A broadly useful method must remain accessible without
+  the additional representations, theory or methods needed only by a specialized
+  continuation. Establish that reusable route and retain the continuation with
+  its own appropriate prerequisites.
 - If a consumer needs capability A but not capability B, requiring a deck that
   bundles A and B forces an avoidable detour. Extract the reusable preparation
   when B is a substantial independent branch or introduces additional entry
@@ -133,10 +148,13 @@ a clear place in scope. Let their number follow the material, not a repeated
 small template across decks.
 
 practice identifies concrete extended problems, proofs, programming, experiments
-or projects suited to the outcomes. If that practice needs knowledge or
-computational skills, establish them locally or through prerequisites rather
-than burying them in a disclaimer. Local teaching must have explicit scope and
-outcomes, not just a statement that unspecified tools will be introduced.
+or projects suited to the outcomes. Specify the working method and its required
+representations at a useful curriculum level; "fit a model" or "run a simulation"
+alone can hide substantial preparation. Distinguish hand calculations, use of a
+provided tool, implementation of an algorithm and derivation of its guarantees.
+Establish the knowledge needed for the chosen performance locally or through
+prerequisites. Local teaching needs explicit scope and outcomes, not a promise
+that unspecified tools will be introduced or an execution disclaimer.
 
 ## Global prerequisite contract
 
@@ -151,6 +169,12 @@ a model under stated assumptions, deriving its theory and implementing its
 machinery can require different preparation. Match the scope, outcomes, practice
 and prerequisite depth to that performance; a level label alone proves neither
 readiness nor an entry barrier.
+
+Choose the source by that required competence, not by taking the most advanced
+deck with a matching topic. If its full contract imposes an independent branch
+unneeded for the consumer's performance, locate or establish the reusable method
+at the appropriate entry requirements. Do not solve this by removing the method,
+leaving its implementation unsupported, or discarding the specialized branch.
 
 For a bounded application, it can be appropriate to teach a model locally:
 specify its notation, assumptions, interpretation and limitations as assessable
