@@ -164,9 +164,27 @@ describe('restricted provider request', () => {
         expect(fetchImpl.mock.calls[0][1].dispatcher.destroyed).toBe(true);
     });
 
-    it('overrides both HTTP timeouts, not just the abort deadline', async () => {
-        await requestFreshGeneration({ ...options(), fetchImpl: async () => Response.json(completed) });
-        expect(transport.Agent).toHaveBeenLastCalledWith({ headersTimeout: 1_200_000, bodyTimeout: 1_200_000 });
+    it.each([
+        ['curriculum-design', 45], ['deck-plan', 20], ['chapter-expand', 20]
+    ])('bounds %s HTTP timeouts and overall deadline to %i minutes', async (jobType, minutes) => {
+        const timeout = vi.spyOn(AbortSignal, 'timeout');
+        try {
+            await requestFreshGeneration({ ...options(), jobType, deckId: 'physics/mechanics', chapterId: '01_basics',
+                fetchImpl: async () => Response.json(completed) });
+            const milliseconds = minutes * 60_000;
+            expect(transport.Agent).toHaveBeenLastCalledWith({ headersTimeout: milliseconds, bodyTimeout: milliseconds });
+            expect(timeout).toHaveBeenLastCalledWith(milliseconds);
+        } finally { timeout.mockRestore(); }
+    });
+
+    it.each([
+        ['curriculum-design', 45], ['deck-plan', 20], ['chapter-expand', 20]
+    ])('reports the %s deadline without retrying', async (jobType, minutes) => {
+        const fetchImpl = vi.fn(async () => { throw new DOMException('secret provider data', 'TimeoutError'); });
+        await expect(requestFreshGeneration({ ...options(), jobType, deckId: 'physics/mechanics', chapterId: '01_basics', fetchImpl }))
+            .rejects.toThrow(`Generation timed out after ${minutes} minutes.`);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl.mock.calls[0][1].dispatcher.destroyed).toBe(true);
     });
 
     it('keeps the overall deadline even with a caller cancellation signal', async () => {

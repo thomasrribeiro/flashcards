@@ -4,7 +4,9 @@ import { buildFreshGenerationContext, FRESH_GENERATION_VERSION } from '../../src
 import { freshGenerationSchema } from './fresh-generation-schema.js';
 
 const hash = value => `sha256:${createHash('sha256').update(value).digest('hex')}`;
-const GENERATION_TIMEOUT_MS = 20 * 60 * 1000;
+// Whole-field plans span multiple subjects and need more time than a single
+// deck/chapter. Keep a finite per-attempt bound without lowering model effort.
+const generationTimeoutMs = jobType => (jobType === 'curriculum-design' ? 45 : 20) * 60 * 1000;
 
 // Project even invalid drafts before repair: no chapters, publication metadata,
 // credentials, paths, or extra fields can become model context.
@@ -16,13 +18,13 @@ function projectDraft(value, schema) {
     return typeof value === schema.type ? value : null;
 }
 
-function transportError(error) {
+function transportError(error, timeoutMs) {
     // Never expose arbitrary provider messages, URLs, request bodies or keys.
     const code = error?.cause?.code || error?.code;
     const safeCodes = new Set(['UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT',
         'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET', 'ECONNRESET', 'ENOTFOUND',
         'EAI_AGAIN', 'ETIMEDOUT', 'ENETUNREACH']);
-    if (error?.name === 'TimeoutError') return new Error('Generation timed out after 20 minutes.');
+    if (error?.name === 'TimeoutError') return new Error(`Generation timed out after ${timeoutMs / 60_000} minutes.`);
     if (error?.name === 'AbortError') return new Error('Generation cancelled.');
     return new Error(`Generation connection failed${safeCodes.has(code) ? ` (${code})` : ''}. Not retried automatically.`);
 }
@@ -88,13 +90,14 @@ export async function requestFreshGeneration({
     const input = JSON.stringify(context);
     // AbortSignal alone does not override the HTTP client's shorter header /
     // body timeouts. Scope the transport to this job; never change global fetch.
-    const dispatcher = new Agent({ headersTimeout: GENERATION_TIMEOUT_MS, bodyTimeout: GENERATION_TIMEOUT_MS });
+    const timeoutMs = generationTimeoutMs(jobType);
+    const dispatcher = new Agent({ headersTimeout: timeoutMs, bodyTimeout: timeoutMs });
     let result;
     try {
         const response = await fetchImpl('https://api.openai.com/v1/responses', {
             method: 'POST',
             dispatcher,
-            signal: AbortSignal.any([AbortSignal.timeout(GENERATION_TIMEOUT_MS), ...(signal ? [signal] : [])]),
+            signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
             headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 model: modelId,
@@ -115,7 +118,7 @@ export async function requestFreshGeneration({
         result = await readGenerationResponse(response);
     } catch (error) {
         if (error instanceof TypeError || ['AbortError', 'TimeoutError'].includes(error?.name) || error?.cause?.code || error?.code) {
-            throw transportError(error);
+            throw transportError(error, timeoutMs);
         }
         if (error instanceof SyntaxError) throw new Error('The provider returned an invalid response.');
         throw error;
