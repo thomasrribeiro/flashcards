@@ -70,11 +70,21 @@ Use these boundary decisions:
   itself a new learning objective. A shared umbrella name is not integration.
 
 Coverage is a reconciliation of this inventory with the resulting contracts,
-not a list reverse-engineered from the decks. Inspect absent branches and absent
-depth transitions as well as existing entries. An application does not replace
-general theory; a frontier deferral does not account for a missing established
-foundation. An inclusion in a neighboring subject counts only when its exact
-outcomes teach the needed capability at the intended depth.
+not a list reverse-engineered from the decks. For each major branch, reconstruct
+its learning progression from the actual capability targets: where does a learner
+enter, what established theory and practice follow, and where does the route stop?
+Check missing stages even when every existing node is internally valid. An
+included introductory row does not account for that branch's advanced foundations;
+a subject having some graduate decks does not establish depth in its other branches.
+Use appropriate stages for the branch, not a fixed number of decks or levels.
+
+When narrowing a deck or extracting reusable preparation, locate the remaining
+substantive capabilities in other contracts and reconnect their preparation.
+Removing an unsupported promise is not a complete correction if it removes
+required coverage from the curriculum. An application does not replace general
+theory; a frontier deferral does not account for a missing established foundation.
+An inclusion in a neighboring subject counts only when its exact outcomes teach
+the needed capability at the intended depth.
 
 ## Deck contract
 
