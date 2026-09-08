@@ -2859,6 +2859,40 @@ test('mobile overview starts fitted and centered and preserves zoom on rotation'
     await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
 });
 
+for (const preview of [false, true]) test(`mobile subject layers retain page scroll ${preview ? 'in a draft preview' : 'in the current curriculum'}`, async ({ page }) => {
+    if (preview) {
+        const job = { id: 52, job_type: 'curriculum-design', status: 'failed', target_repository: 'example/curricula',
+            result_json: JSON.stringify({ preview: { available: true, readOnly: true } }) };
+        await installGenerationAccount(page, { requests: [job] });
+        await page.route('**/api/generation-requests/52/preview', route => route.fulfill({ json: {
+            preview: { readOnly: true, catalog: bundledCurriculum, issues: ['Needs revision.'] }
+        } }));
+        await page.getByRole('button', { name: 'Settings', exact: true }).click();
+        const settings = page.getByRole('dialog', { name: 'Settings' });
+        await settings.getByRole('tab', { name: /Agents/ }).click();
+        await settings.getByRole('button', { name: 'Review', exact: true }).click();
+    }
+    await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();
+    for (const level of ['subject', 'chapter']) {
+        if (level === 'chapter') await openCurriculumNode(page, 'mathematics/elementary-algebra-and-functions');
+        const controls = page.locator('.curriculum-graph-controls');
+        await expect(page.locator('.curriculum-layer-label')).toContainText('Layer 1 of');
+        // Keep the arrows visible while the page (not the canvas) is scrolled down.
+        await controls.evaluate(el => window.scrollTo(0, window.scrollY + el.getBoundingClientRect().top - 80));
+        const initial = await page.evaluate(() => window.scrollY);
+        expect(initial).toBeGreaterThan(20);
+        for (const [direction, layer] of [['next', 2], ['next', 3], ['previous', 2], ['previous', 1]]) {
+            await page.getByRole('button', { name: `Show ${direction} dependency layer` }).click();
+            await expect(page.locator('.curriculum-layer-label')).toContainText(`Layer ${layer} of`);
+            await expect.poll(() => page.evaluate(top => Math.abs(window.scrollY - top), initial)).toBeLessThanOrEqual(2);
+            // Also check after restoration callbacks / viewport layout have settled.
+            await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+            expect(await page.evaluate(top => Math.abs(window.scrollY - top), initial)).toBeLessThanOrEqual(2);
+        }
+        await expect(page.getByRole('button', { name: 'Show previous dependency layer' })).toBeDisabled();
+    }
+});
+
 test('mobile subject layers show a full center column and half of each neighbor', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name === 'desktop-chromium');
     await page.locator('.curriculum-graph-node[data-deck-id="mathematics"]').click();

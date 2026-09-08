@@ -3555,6 +3555,7 @@ function useCompactCurriculumCanvas() {
 async function renderCurriculumGraphCanvas(root, graph, progressStates, {
     ranked = false,
     focusRanks = null,
+    initialStageHeight,
     onResponsiveChange = null
 } = {}) {
     const compact = useCompactCurriculumCanvas();
@@ -4125,7 +4126,9 @@ async function renderCurriculumGraphCanvas(root, graph, progressStates, {
         const top = stage.getBoundingClientRect().top;
         const available = Math.floor(window.innerHeight - top - 16);
         const pageContentStartsBelowViewport = top >= window.innerHeight - 160;
-        const height = pageContentStartsBelowViewport
+        const height = !initialized && Number.isFinite(initialStageHeight)
+            ? initialStageHeight
+            : pageContentStartsBelowViewport
             ? Math.min(480, Math.max(320, Math.floor(window.innerHeight * 0.62)))
             : Math.max(160, fixedMobileLayers ? layout.nodeHeight + 26 : 0, available);
         stage.style.height = `${height}px`;
@@ -4362,7 +4365,7 @@ function writeCurriculumHistory({ replace = false } = {}) {
     history[replace ? 'replaceState' : 'pushState'](historyState, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
-async function navigateCurriculum(options, { replace = false, trackHistory = true } = {}) {
+async function navigateCurriculum(options, { replace = false, trackHistory = true, preservePageScroll = false } = {}) {
     const previous = curriculumStateSnapshot();
     const next = {
         ...previous,
@@ -4373,7 +4376,27 @@ async function navigateCurriculum(options, { replace = false, trackHistory = tru
     if (trackHistory) recordCurriculumNavigation(previous, next);
     Object.assign(curriculumViewState, next);
     writeCurriculumHistory({ replace });
-    await renderCurriculumView();
+    const root = document.getElementById('curriculum-view');
+    const pagePosition = { left: window.scrollX, top: window.scrollY };
+    const oldMinHeight = root?.style.minHeight;
+    const initialStageHeight = preservePageScroll
+        ? root?.querySelector('.curriculum-graph-stage')?.getBoundingClientRect().height : undefined;
+    const focusedAction = preservePageScroll && root?.contains(document.activeElement)
+        ? document.activeElement.dataset.action : null;
+    // The async graph layout temporarily empties this container. Reserve its
+    // space so the document cannot shrink and clamp the browser's scroll offset.
+    if (preservePageScroll && root) root.style.minHeight = `${root.getBoundingClientRect().height}px`;
+    try {
+        await renderCurriculumView({}, { initialStageHeight });
+    } finally {
+        if (preservePageScroll && root) {
+            root.style.minHeight = oldMinHeight;
+            if (['previous-layer', 'next-layer'].includes(focusedAction)) {
+                root.querySelector(`[data-action="${focusedAction}"]:not(:disabled)`)?.focus({ preventScroll: true });
+            }
+            window.scrollTo({ ...pagePosition, behavior: 'instant' });
+        }
+    }
 }
 
 async function moveCurriculumNavigationHistory(offset) {
@@ -4670,6 +4693,7 @@ function connectCurriculumGraphControls(controls, controller) {
 
 async function renderCurriculumGraph(root, progressStates, graph, {
     layered = false,
+    initialStageHeight,
     emptyMessage = 'No curriculum items are available.',
     headerActions = []
 } = {}) {
@@ -4696,6 +4720,7 @@ async function renderCurriculumGraph(root, progressStates, graph, {
     root.appendChild(controls);
     const controller = await renderCurriculumGraphCanvas(root, graph, progressStates, {
         ranked: layered,
+        initialStageHeight,
         onResponsiveChange: () => renderCurriculumView(),
         focusRanks: windowState ? {
             start: windowState.start,
@@ -4707,8 +4732,13 @@ async function renderCurriculumGraph(root, progressStates, graph, {
     if (!windowState) return;
     const previous = controls.querySelector('[data-action="previous-layer"]');
     const next = controls.querySelector('[data-action="next-layer"]');
-    previous.onclick = () => navigateCurriculum({ layerStart: windowState.layer - 1 });
-    next.onclick = () => navigateCurriculum({ layerStart: windowState.layer + 1 });
+    const navigateLayer = layerStart => {
+        const navigation = navigateCurriculum({ layerStart }, { preservePageScroll: true });
+        previous.disabled = next.disabled = true;
+        return navigation;
+    };
+    previous.onclick = () => navigateLayer(windowState.layer - 1);
+    next.onclick = () => navigateLayer(windowState.layer + 1);
 }
 
 function deckJobProvenance(registry) {
@@ -4839,7 +4869,7 @@ function makeChapterCurriculumButton(deck, registry) {
     return configureChapterCurriculumButton(button, deck, registry);
 }
 
-async function renderCurriculumView(options = {}) {
+async function renderCurriculumView(options = {}, { initialStageHeight } = {}) {
     const root = document.getElementById('curriculum-view');
     if (!root) return;
     if (!curriculumIndex) {
@@ -4991,14 +5021,14 @@ async function renderCurriculumView(options = {}) {
     else if (mode === 'overview') {
         await renderCurriculumGraph(root, progressStates, subjectOverviewGraph(curriculumIndex));
     } else if (mode === 'subject') {
-        await renderCurriculumGraph(root, progressStates, subjectDeckGraph(curriculumIndex, subject), { layered: true });
+        await renderCurriculumGraph(root, progressStates, subjectDeckGraph(curriculumIndex, subject), { layered: true, initialStageHeight });
     } else {
         const graph = chapterGraph(curriculumIndex, parentId);
         const deck = curriculumMaps(curriculumIndex).decks.get(parentId);
         if (!graph.nodes.length && deck) {
             renderEmptyChapterCurriculum(root, deck, activeRegistry);
         } else {
-            await renderCurriculumGraph(root, progressStates, graph, { layered: true });
+            await renderCurriculumGraph(root, progressStates, graph, { layered: true, initialStageHeight });
         }
     }
     requestAnimationFrame(() => requestAnimationFrame(restoreCurriculumPosition));
