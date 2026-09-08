@@ -71,9 +71,36 @@ individual deck outcomes, deck learning levels, included/excluded scope,
 authentic practice, and `scopeIssues`. Deterministic checks reject unmapped
 outcomes, missing targets, mismatched target levels, contradictory dispositions,
 duplicate rows, and empty rationales. Unresolved scope issues stop publication
-and appear in the job error; intentional exclusions persist in the catalog's
+after one bounded repair pass; intentional exclusions persist in the catalog's
 coverage rows for review. These checks cannot prove semantic completeness.
 The existing compact diff does not yet display the complete coverage map.
+
+Global jobs now return separate `practiceNotes` for nonblocking external-practice
+conditions (supervision, facilities, institutional approval). Notes persist in
+the candidate and appear collapsed in preview. Missing curriculum content,
+prerequisites, or correctness verification remain blocking `scopeIssues`;
+the runner never downgrades issues with keyword matching. Legacy catalogs may
+omit practice notes, but new global responses must include the array.
+
+Before validation, each completed global response is saved with its provenance
+under `~/.flashcards/generation-drafts/request-<id>-<unique>/` on the runner,
+outside disposable Git worktrees. Files are private to the runner user and
+contain no credentials or old catalog. Initial and repair attempts, validation
+reports, and start markers are retained even on cancellation or failure. A
+successful proposal also archives them under `generation-archive/request-<id>/attempts`.
+Retention is local on failure, not a failed-draft web preview or automatic resume;
+the error identifies the directory for inspection. Interrupted streams without
+a completed JSON candidate cannot supply a recoverable draft. Earlier discarded
+jobs cannot be recovered retroactively by this change.
+
+Only a completed response with validation defects triggers one additional paid
+call, disclosed at launch. The same model/reasoning and strict schema are used.
+Repair receives only subject names, mandatory names, schema-projected fields
+from this job's fresh candidate, and its defects. It never receives published
+content, conversation history, or tools. Both calls' hashes and response IDs
+are recorded. Cancellation is checked before each call and publication. A
+failed repair blocks publication; transport/refusal/incomplete-response failures
+are not retried. `global-curriculum-repair.md` owns the repair instructions.
 
 Accepted scope/practice/level specifications are projected into later chapter
 and card requests. Their changes invalidate affected and downstream plans;
@@ -106,7 +133,8 @@ are separate, still-used workflows rather than dead generation code.
    transaction. A concurrent registry change can leave accepted cards awaiting
    metadata reconciliation; never roll them back or overwrite newer work.
 5. Other providers need equally restricted adapters. No provider/model/reasoning
-   substitution or automatic paid retry is allowed.
+   substitution or uncertain transport retry is allowed. The only automatic
+   follow-up is the disclosed single global-curriculum repair described above.
 
 Existing queued legacy jobs keep their recorded workflow contract; they are
 not relabeled fresh. No live generation, content migration or provider billing

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 const state = vi.hoisted(() => ({ root: '', published: [], abandoned: false }));
@@ -13,7 +13,9 @@ vi.mock('./github-publisher.js', async importOriginal => ({
     })
 }));
 import { registryCatalogHash } from './github-publisher.js';
-import { runFreshGenerationJob } from './fresh-generation-runner.js';
+import { runFreshGenerationJob as runJob } from './fresh-generation-runner.js';
+const runFreshGenerationJob = (job, options) => runJob(job, { ...options, draftsRoot: path.join(state.root, 'retained') });
+const retained = () => path.join(state.root, 'retained', readdirSync(path.join(state.root, 'retained'))[0]);
 import { freshGenerationInstructions } from './fresh-generation-instructions.js';
 import { FLASHCARDS_ROOT } from './paths.js';
 
@@ -43,7 +45,7 @@ function respond(candidate) {
 }
 function globalCandidate() {
     const source = JSON.parse(readFileSync(path.join(state.root, 'fresh-curriculum.json')));
-    return { subjects: ['math'], scopeIssues: [],
+    return { subjects: ['math'], scopeIssues: [], practiceNotes: [],
         decks: [{ ...source.decks[0], title: 'New arithmetic', level: 'foundational',
             scope: { includes: ['Counting and operations.'], excludes: ['Algebra.'] },
             practice: ['Solve varied arithmetic problems.'] }],
@@ -51,6 +53,78 @@ function globalCandidate() {
             targets: [{ deck_id: 'math/arithmetic', outcome_ids: ['basics'] }], rationale: 'Entry arithmetic capability.' }] };
 }
 describe('queued restricted runner', () => {
+    it('repairs only the fresh draft, retains both attempts, and records both provider calls', async () => {
+        const job = setup();
+        const first = globalCandidate();
+        first.scopeIssues = ['Missing advanced arithmetic outcome.'];
+        const fixed = globalCandidate();
+        fixed.decks[0].outcomes.push({ id: 'advanced', description: 'Justify an advanced arithmetic method.' });
+        fixed.coverage[0].targets[0].outcome_ids.push('advanced');
+        const fetchImpl = respond(first);
+        const firstResponse = fetchImpl.getMockImplementation();
+        fetchImpl.mockImplementationOnce(firstResponse).mockImplementationOnce(async () => {
+            expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(first);
+            return Response.json({ id: 'repair-response', status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(fixed) }] }] });
+        });
+        const result = await runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        const bodies = fetchImpl.mock.calls.map(call => JSON.parse(call[1].body));
+        const repair = JSON.parse(bodies[1].input);
+        expect(Object.keys(repair).sort()).toEqual(['repair', 'subjects']);
+        expect(repair.repair.issues).toEqual(first.scopeIssues);
+        expect(repair.repair.draft.decks[0].title).toBe('New arithmetic');
+        expect(JSON.stringify(repair)).not.toMatch(/OLD_|chapters|repository|materialized/);
+        expect(bodies[1].instructions).toBe(freshGenerationInstructions('curriculum-design', { repair: true }));
+        for (const body of bodies) {
+            expect(body.tools).toEqual([]); expect(body.store).toBe(false);
+            expect(body.model).toBe(job.model_id); expect(body.reasoning.effort).toBe('high');
+            expect(body).not.toHaveProperty('previous_response_id');
+        }
+        expect(result.result.provenance.attempts.map(item => item.responseId)).toEqual(['response-test', 'repair-response']);
+        expect(state.published[0].catalog.decks[0].outcomes).toHaveLength(2);
+        expect(JSON.parse(readFileSync(path.join(state.root, 'generation-archive/request-1/attempts/attempt-1.json'))).candidate).toEqual(first);
+        expect(readFileSync(path.join(retained(), 'attempt-2.json'), 'utf8')).not.toContain('test-only');
+    });
+    it('preserves practice disclaimers without charging for a repair', async () => {
+        const job = setup(); const candidate = globalCandidate();
+        candidate.practiceNotes = ['Laboratory practice requires supervision and institutional approval.'];
+        const fetchImpl = respond(candidate);
+        await runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(state.published[0].catalog.practiceNotes).toEqual(candidate.practiceNotes);
+    });
+    it('does not treat a blocking defect as harmless because it mentions laboratory approval', async () => {
+        const job = setup(); const candidate = globalCandidate();
+        candidate.scopeIssues = ['Missing quantitative prerequisite outcomes; laboratory approval is also needed.'];
+        candidate.practiceNotes = ['Institutional review required.'];
+        const fetchImpl = respond(candidate);
+        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } })).rejects.toThrow(/still needs repair/);
+        expect(fetchImpl).toHaveBeenCalledTimes(2); expect(state.published).toEqual([]);
+    });
+    it('keeps the first draft after a repair connection failure without a third call', async () => {
+        const job = setup(); const candidate = globalCandidate(); candidate.scopeIssues = ['Missing capability.'];
+        const fetchImpl = respond(candidate); const firstResponse = fetchImpl.getMockImplementation();
+        fetchImpl.mockImplementationOnce(firstResponse).mockRejectedValueOnce(new TypeError('secret transport detail'));
+        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
+            .rejects.toThrow(/connection failed.*Not retried automatically.*Drafts:/);
+        expect(fetchImpl).toHaveBeenCalledTimes(2); expect(state.published).toEqual([]);
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(candidate);
+        expect(readdirSync(retained())).toContain('attempt-2-started.json');
+        expect(readdirSync(retained())).not.toContain('attempt-2.json');
+    });
+    it('does not retry an initial transport failure', async () => {
+        const job = setup(); const fetchImpl = respond({}); fetchImpl.mockRejectedValue(new TypeError('network'));
+        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } })).rejects.toThrow(/Not retried automatically/);
+        expect(fetchImpl).toHaveBeenCalledTimes(1); expect(state.published).toEqual([]);
+    });
+    it('checks cancellation before the paid repair, preserving the completed first attempt', async () => {
+        const job = setup(); const candidate = globalCandidate(); candidate.scopeIssues = ['Missing capability.'];
+        const fetchImpl = respond(candidate);
+        const beforePublish = vi.fn().mockResolvedValueOnce().mockRejectedValueOnce(new Error('Cancelled'));
+        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' }, beforePublish })).rejects.toThrow(/Cancelled/);
+        expect(fetchImpl).toHaveBeenCalledTimes(1); expect(state.published).toEqual([]);
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(candidate);
+    });
     it('forwards explicit required names with multiple additions, but no launch metadata or catalog', async () => {
         const job = setup();
         job.payload.subjects = ['physics', 'math', 'chemistry'];
@@ -69,12 +143,13 @@ describe('queued restricted runner', () => {
         expect(input).toEqual({ subjects: ['chemistry', 'math', 'physics'], mandatoryDecks: [{ subject: 'math', decks: ['arithmetic'] }] });
         expect(state.published[0].catalog.subjects.map(subject => subject.id)).toEqual(input.subjects);
     });
-    it('blocks a result missing a mandatory deck without publishing or repeating the provider call', async () => {
+    it('blocks a result still missing a mandatory deck after one repair', async () => {
         const job = setup(); job.payload.mandatoryDecks = [{ subject: 'math', decks: ['measure-theoretic-probability'] }];
         const fetchImpl = respond(globalCandidate());
         await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
-            .rejects.toThrow(/Missing required decks: math\/measure-theoretic-probability/);
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
+            .rejects.toThrow(/still needs repair/);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(readFileSync(path.join(retained(), 'attempt-2-validation.json'), 'utf8')).toContain('Missing required decks');
         expect(state.published).toEqual([]);
     });
     it('rejects invalid required-deck subjects before making a paid request', async () => {
@@ -99,7 +174,7 @@ describe('queued restricted runner', () => {
         const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
         expect(body.instructions).toBe(readFileSync(path.join(FLASHCARDS_ROOT,
             '.agents/skills/manage-flashcard-decks/references/global-curriculum-workflow.md'), 'utf8'));
-        expect(body.text.format.schema.required).toEqual(['subjects', 'coverage', 'decks', 'scopeIssues']);
+        expect(body.text.format.schema.required).toEqual(['subjects', 'coverage', 'decks', 'scopeIssues', 'practiceNotes']);
         expect(JSON.stringify(fetchImpl.mock.calls)).not.toContain('OLD_CHAPTER_SECRET');
         expect(result.status).toBe('needs-review');
         expect(result.result.proposals).toHaveLength(1);
@@ -108,7 +183,7 @@ describe('queued restricted runner', () => {
         expect(state.published[0].catalog.curriculum_schema_version).toBe(1);
         expect(readFileSync(path.join(state.root, 'generation-archive/request-1/previous-curriculum.json'), 'utf8')).toContain('OLD_CARD_SECRET');
     });
-    it('fails closed on a schema downgrade or unresolved scope without publishing or retrying', async () => {
+    it('retains both drafts and fails closed after a bounded repair of invalid or incomplete output', async () => {
         for (const unresolved of [false, true]) {
             const job = setup();
             const candidate = globalCandidate();
@@ -116,8 +191,12 @@ describe('queued restricted runner', () => {
             else delete candidate.coverage;
             const fetchImpl = respond(candidate);
             await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
-                .rejects.toThrow(unresolved ? /Unresolved curriculum scope/ : /coverage map/);
-            expect(fetchImpl).toHaveBeenCalledTimes(1);
+                .rejects.toThrow(/still needs repair/);
+            expect(fetchImpl).toHaveBeenCalledTimes(2);
+            expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(candidate);
+            expect(readFileSync(path.join(retained(), 'attempt-2-validation.json'), 'utf8'))
+                .toMatch(unresolved ? /Missing advanced coverage/ : /coverage map/);
+            expect(statSync(path.join(retained(), 'attempt-1.json')).mode & 0o777).toBe(0o600);
             expect(state.published).toEqual([]);
             expect(state.abandoned).toBe(true);
         }

@@ -26,7 +26,8 @@ export function freshCandidateCatalog(before, candidate, jobType, { deckId, gene
         const orders = new Map();
         return { schema_version: 3, registry: before.registry, fresh_generation: generation,
             ...(validated.curriculum_schema_version ? { curriculum_schema_version: validated.curriculum_schema_version,
-                coverage: validated.coverage, scopeIssues: validated.scopeIssues } : {}),
+                coverage: validated.coverage, scopeIssues: validated.scopeIssues,
+                ...(validated.practiceNotes !== undefined ? { practiceNotes: validated.practiceNotes } : {}) } : {}),
             subjects: validated.subjects.map(id => ({ id })),
             decks: ordered.map(deck => {
                 const prior = old.get(deck.id);

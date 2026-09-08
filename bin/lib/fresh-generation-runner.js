@@ -1,10 +1,11 @@
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, cpSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { FLASHCARDS_ROOT } from './paths.js';
 import { requestFreshGeneration } from './fresh-generation-provider.js';
+import { generateRecoverableCurriculum } from './fresh-curriculum-recovery.js';
 import { freshGenerationSchema } from './fresh-generation-schema.js';
 import { freshGenerationInstructions } from './fresh-generation-instructions.js';
 import { globalCurriculumTarget } from '../../src/global-curriculum-input.js';
@@ -47,7 +48,8 @@ export function renderFreshChapter(candidate, chapter, deck, generation) {
     return { markdown, cardCount: cards.length };
 }
 
-export async function runFreshGenerationJob(queued, { registryRoot, credential, beforePublish = async () => {} }) {
+export async function runFreshGenerationJob(queued, { registryRoot, credential, beforePublish = async () => {},
+    draftsRoot = path.join(os.homedir(), '.flashcards', 'generation-drafts') }) {
     const payload = validateFreshProvenance(queued.payload);
     assertRepositoryCommit(FLASHCARDS_ROOT, payload.workflowCommit);
     let draft = beginRegistryDraft(registryRoot, queued.id, { baseCommit: payload.registryBaseCommit, baseRef: payload.registryRef });
@@ -68,9 +70,14 @@ export async function runFreshGenerationJob(queued, { registryRoot, credential, 
             if (JSON.stringify(expected) !== JSON.stringify(target.subjects)) throw new Error('Subject list changed. Refresh and try again.');
         }
         const instructions = freshGenerationInstructions(jobType);
-        const generated = await requestFreshGeneration({ jobType, subjects: payload.subjects, mandatoryDecks: payload.mandatoryDecks, catalog: before, deckId: payload.deckId, chapterId: payload.chapterId,
+        const requestOptions = { jobType, subjects: payload.subjects, mandatoryDecks: payload.mandatoryDecks,
+            ...(jobType === 'curriculum-design' ? {} : { catalog: before, deckId: payload.deckId, chapterId: payload.chapterId }),
             instructions, schema: freshGenerationSchema(jobType), modelId: queued.model_id, reasoningEffort: payload.reasoningEffort,
-            providerId: queued.provider_id, apiKey: credential?.apiKey });
+            providerId: queued.provider_id, apiKey: credential?.apiKey };
+        const generated = jobType === 'curriculum-design'
+            ? await generateRecoverableCurriculum(requestOptions, {
+                draftsRoot, requestId: queued.id, beforeAttempt: beforePublish
+            }) : await requestFreshGeneration(requestOptions);
         const generation = { ...generated.provenance, run_id: `request-${queued.id}`, request_id: queued.id,
             operation: jobType === 'deck-plan' ? 'chapter-curriculum' : jobType === 'chapter-expand' ? 'chapter-content' : 'global-curriculum',
             artifacts: [jobType === 'chapter-expand' ? `flashcards/${payload.chapterId}.md` : 'curriculum'],
@@ -122,6 +129,8 @@ export async function runFreshGenerationJob(queued, { registryRoot, credential, 
             }) };
         }
         writeFreshCatalog(root, after, before, queued.id, registry.outputPath);
+        if (generated.draftDirectory) cpSync(generated.draftDirectory,
+            path.join(root, 'generation-archive', `request-${queued.id}`, 'attempts'), { recursive: true, errorOnExist: true, force: false });
         await beforePublish();
         const registryProposal = publishRegistryDraft(root, draft, { title: `Review ${jobType} request ${queued.id}`, body: `Fresh generation: ${queued.model_id} ${payload.reasoningEffort}.\n\nBase: ${payload.registryBaseCommit}\n\nPrevious curriculum metadata is archived. Existing card repositories are untouched by curriculum acceptance. Changed plans require new generation; no automatic identity mappings.`, returnProposal: true });
         draft = null;

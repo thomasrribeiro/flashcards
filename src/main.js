@@ -5264,6 +5264,10 @@ function confirmGenerationJobs(jobs) {
                 const fields = globalCurriculumFields(job.payload);
                 globalFields.push({ job, fields });
                 item.append(fields.element);
+                const repairNotice = document.createElement('p');
+                repairNotice.className = 'generation-launch-settings';
+                repairNotice.textContent = 'May include one paid repair pass.';
+                item.append(repairNotice);
             }
             list.appendChild(item);
         }
@@ -5842,6 +5846,19 @@ function curriculumPreviewBanner() {
         changes.append(row);
     }
     banner.append(description, actions, changes);
+    const practiceNotes = curriculumPreview.generatedIndex?.practiceNotes || [];
+    if (practiceNotes.length) {
+        const notes = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = 'Practice notes';
+        notes.append(summary);
+        for (const note of practiceNotes) {
+            const line = document.createElement('p');
+            line.textContent = note;
+            notes.append(line);
+        }
+        banner.append(notes);
+    }
     return banner;
 }
 

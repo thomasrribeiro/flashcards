@@ -20,6 +20,17 @@ function fixture() {
 const validate = candidate => validateGlobalCurriculumCandidate(candidate, ['math', 'physics'], { requireCoverage: true });
 
 describe('whole-field curriculum contract', () => {
+    it('keeps optional practice notes separate from blocking issues across catalog persistence', () => {
+        const candidate = fixture();
+        candidate.practiceNotes = ['Supervised laboratory access is needed for external practice.'];
+        expect(validate(candidate).practiceNotes).toEqual(candidate.practiceNotes);
+        const after = freshCandidateCatalog({ ...candidate, subjects: candidate.subjects.map(id => ({ id })) }, candidate, 'curriculum-design', { generation: {} });
+        const root = mkdtempSync(path.join(os.tmpdir(), 'practice-notes-'));
+        writeFreshCatalog(root, after, {}, 1, path.join(root, 'dist/curriculum.json'));
+        expect(readFreshCatalog(path.join(root, 'fresh-curriculum.json')).practiceNotes).toEqual(candidate.practiceNotes);
+        candidate.practiceNotes = { warning: 'not an array' };
+        expect(() => validate(candidate)).toThrow(/Practice notes/);
+    });
     it('retains explicit depth, boundaries, practice and outcome-level coverage', () => {
         const candidate = fixture();
         candidate.coverage.push({ subject: 'physics', domain: 'Shared mathematics', level: 'undergraduate-core',

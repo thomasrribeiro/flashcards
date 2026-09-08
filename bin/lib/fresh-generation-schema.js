@@ -16,7 +16,7 @@ export function freshGenerationSchema(jobType) {
             id: string, subject: string, title: string, description: string, outcomes,
             level, scope: object({ includes: list(string), excludes: list(string) }), practice: list(string),
             prerequisites: list(string), required_outcomes: targets
-        })), scopeIssues: list(string)
+        })), scopeIssues: list(string), practiceNotes: list(string)
     });
     if (jobType === 'deck-plan') return object({ deckId: string, chapters: list(object({ id: string, title: string, outcomes, prerequisites: list(string) })), scopeIssues: list(string) });
     if (jobType === 'chapter-expand') return object({ chapterId: string, markdown: string,

@@ -535,6 +535,7 @@ test('regenerates the global curriculum with model disclosure and cancellable pi
     await page.screenshot({ path: testInfo.outputPath('subject-curriculum-regeneration.png') });
     const confirmation = page.getByRole('dialog', { name: /^Start AI jobs?\?$/ });
     await expect(confirmation).toContainText('Global curriculum');
+    await expect(confirmation).toContainText('May include one paid repair pass.');
     await expect(confirmation).not.toContainText('Results are drafts');
     await expect(confirmation.locator('.curriculum-builder-content > p:visible')).toHaveCount(0);
     await expect(confirmation).toContainText('Model: gpt-test · Reasoning: High · Provider: OpenAI');
@@ -1424,6 +1425,7 @@ test('previews a fresh global curriculum and sends acceptance only to the guarde
         deck.required_outcomes ||= (deck.prerequisites || []).map(deck_id => ({ deck_id, outcome_ids: ['basics'] }));
     }
     generated.decks[0].description = 'Freshly proposed scope';
+    generated.practiceNotes = ['Laboratory practice requires institutional approval.'];
     generated.decks.push(...Array.from({ length: 40 }, (_, i) => ({
         id: `mathematics/new-deck-${i}`, deck: `new-deck-${i}`, subject: 'mathematics',
         prerequisites: [generated.decks[0].id], chapters: []
@@ -1449,6 +1451,11 @@ test('previews a fresh global curriculum and sends acceptance only to the guarde
         `PR #1234 · ${commit.slice(0, 12)}`, '~ / example / curricula', 'gpt-6-astra', 'high reasoning'
     ]);
     await expect(banner.locator('.curriculum-preview-actions button')).toHaveText(['Current', 'Proposed', 'Apply', 'Exit']);
+    const practiceNotes = banner.locator('details').filter({ has: page.locator('summary', { hasText: 'Practice notes' }) });
+    await expect(practiceNotes.locator('p')).not.toBeVisible();
+    await practiceNotes.locator('summary').click();
+    await expect(practiceNotes.locator('p')).toHaveText(generated.practiceNotes);
+    await practiceNotes.locator('summary').click();
     await expect(banner.getByRole('link')).toHaveCount(0);
     await expect(banner.locator('pre')).toHaveCount(0);
     await expect(banner.getByRole('button', { name: 'Proposed', exact: true })).toHaveAttribute('aria-pressed', 'true');

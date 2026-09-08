@@ -219,6 +219,7 @@ export function validateGlobalCurriculumCandidate(candidate, expectedSubjects, {
             'Every deck outcome needs an included coverage mapping.');
         Object.assign(result, { curriculum_schema_version: CURRICULUM_SCHEMA_VERSION, coverage,
             scopeIssues: textList(candidate.scopeIssues, 'Scope issues') });
+        if (candidate.practiceNotes !== undefined) result.practiceNotes = textList(candidate.practiceNotes, 'Practice notes');
     }
     return result;
 }
