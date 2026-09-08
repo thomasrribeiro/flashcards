@@ -113,9 +113,13 @@ prerequisites, and required_outcomes.
 One deck should develop a coherent, independently learnable capability. Split
 decks when topics require substantially different prerequisites, depth,
 representations, or independent practice, or when grouping creates false
-dependencies on unrelated material. Merge only when the conceptual progression
-and culminating capability genuinely belong together. Avoid both catch-all
-advanced-topic decks and tiny decks created just to inflate coverage.
+dependencies on unrelated material. Test a proposed grouping by its culminating
+assessments: if its branches can each be learned from shared foundations without
+learning the others, and lead to distinct substantial projects or bodies of
+theory, give them separate decks. A later integrating deck may combine them.
+A shared umbrella title or the same academic level is not sufficient reason
+to merge them. Keep a coherent progression together; do not split individual
+facts or create tiny decks just to inflate coverage.
 
 In scope.includes, state the material taught and its depth. In scope.excludes,
 state important boundaries with adjacent or more advanced material; use an
@@ -181,24 +185,29 @@ Do not infer prerequisites from list order or silently assume a missing bridge.
 Keep cross-deck dependencies at deck level. Later chapter graphs are local to
 their own deck and may not create cross-deck chapter edges.
 
-Audit the full transitive prerequisite closure, not just immediate edges.
-Naming selected required_outcomes does not exempt a learner from the source
-deck's own prerequisites. For every introductory deck, check whether an
-advanced ancestor is truly necessary for its stated entry-level capability.
-Long paths are not inherently wrong; paths created by oversized prerequisite
-decks are. Do not fix them by deleting necessary edges or silently lowering
-the intended advanced coverage. Instead split introductory and advanced
-capabilities, extract a reusable bridge, or explicitly teach the small needed
-capability within the target's scope and outcomes.
+Determine the preparation for each target capability before choosing its source
+deck. Distinguish using a method with stated assumptions from deriving its
+general theory or implementing its machinery. These can require different
+preparation even when they share a name. Provide substantive entry-level
+capabilities, not just a qualitative overview followed by an advanced-only
+treatment.
 
-Stress-test entry routes in every subject, not only the easiest root deck.
-Trace what a learner must complete before the first useful conceptual,
-computational, experimental, or proof-based treatment of each major branch.
-If an early capability inherits advanced formalism only because a predecessor
-bundles several depths, separate the depths. Necessary advanced prerequisites
-remain appropriate for genuinely advanced outcomes. A local bridge must state
-the actual capability taught in scope and outcomes; "tools taught locally"
-is not sufficient when the tools are a substantial learning objective.
+Audit the full transitive prerequisite closure, starting with shared decks that
+feed many other decks or subjects. For each consumer, compare the preparation
+its actual outcomes require with everything inherited through the chosen source.
+Ask whether the consumer would need each inherited capability if the source
+deck had been grouped differently. Naming selected required_outcomes does not
+let the learner skip other parts of that deck or its own prerequisites.
+When bundling creates an avoidable barrier, extract a reusable entry deck or
+split the source's levels and reconnect the consumers. Keep the advanced
+continuation intact. Do not hide the barrier by deleting a necessary edge,
+changing a level label, or copying a substantial prerequisite into every target.
+
+Then trace entry routes in every subject, including conceptual, computational,
+experimental and proof-based learning where applicable. Long or advanced paths
+are appropriate when the target actually needs them. A small local bridge is
+also appropriate, but its scope and outcomes must state the capability taught;
+"tools taught locally" does not specify a substantial learning objective.
 
 ## Final audit and output
 
