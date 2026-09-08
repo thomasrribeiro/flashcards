@@ -211,10 +211,13 @@ also appropriate, but its scope and outcomes must state the capability taught;
 
 ## Final audit and output
 
-Check domain-and-depth coverage against the field inventory, advanced-route
-coverage, outcome specificity, deck coherence, scope boundaries, shared
-ownership, prerequisite sufficiency, maturity transitions, missing references,
-cycles, and redundant edges. Repair defects before returning. Do not certify
+Complete planning and the audits below before emitting the final JSON. Final
+serialization should describe the audited design, not freeze a deck list and
+then append a backlog of corrections discovered afterward. For a resolvable
+defect, change the relevant specifications, outcome references and coverage
+before returning. After splitting a shared capability or adding a missing
+foundation, recheck all affected consumers and their transitive preparation,
+then resume the field audit beyond the areas just corrected. Do not certify
 completeness solely because the JSON schema or DAG is valid.
 
 Use two distinct acceptance checks: field completeness asks which important
@@ -245,12 +248,11 @@ Use an empty array when none are relevant. These conditions do not prevent
 proposing an educational curriculum, but must not be represented as satisfied.
 Missing knowledge or computational skills needed for practice are curriculum
 defects, not practice disclaimers. Never move a defect to practiceNotes simply
-to pass validation. This job has one generation attempt: finish the field,
-entry-route, and outcome-contract audits within this response rather than
-deferring corrections to a later repair call. Correct resolvable defects before
-returning; report genuinely unresolved defects honestly. The host retains the
+to pass validation. This job has one generation attempt and no later repair
+call. Report genuinely unresolved defects honestly; an empty scopeIssues list
+is not a substitute for correcting them. The host retains the
 draft for external review but never returns it to you as repair context.
-Intentional scope exclusions remain visible in
-coverage for human review. Never fabricate verification to pass this gate.
+Intentional scope exclusions remain visible in coverage for human review.
+Never fabricate verification to pass this gate.
 
 A result is a proposal for human review.
