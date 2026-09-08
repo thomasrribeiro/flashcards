@@ -11,6 +11,9 @@ or prerequisite edges as needed. Preserve sound parts of this draft, including
 IDs when their capability is unchanged. Preserve mandatory deck IDs and the
 requested subject set. Recheck references, cycles, coverage and entry routes
 after the repair; additions or splits can require changes in several places.
+Keep unaffected specifications intact rather than rewriting them for style or
+brevity. Check that every changed or removed outcome retains its intended
+capability somewhere in the repaired plan unless the capability was defective.
 
 Do not merely erase scopeIssues, relabel defects as practiceNotes, or drop
 requested coverage to satisfy validation. Missing content, missing prerequisite

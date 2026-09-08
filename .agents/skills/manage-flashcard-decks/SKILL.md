@@ -20,6 +20,11 @@ repair call using that candidate and its defects, with
 [references/global-curriculum-repair.md](references/global-curriculum-repair.md).
 This does not grant access to the published curriculum or previous jobs.
 
+For an external review or an explicitly authorized generate/review iteration,
+use [references/curriculum-evaluation-workflow.md](references/curriculum-evaluation-workflow.md).
+That reviewer may compare proposals with published plans; its comparison data
+must never enter the isolated curriculum-generation request.
+
 For other explicitly versioned `fresh-generation-v1` jobs, use
 [references/deck-plan-workflow.md](references/deck-plan-workflow.md) for a deck's
 chapter graph, or [references/chapter-expand-workflow.md](references/chapter-expand-workflow.md)

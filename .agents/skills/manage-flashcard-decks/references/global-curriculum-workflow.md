@@ -47,6 +47,11 @@ Provide accessible entry routes as well as advanced destinations. Separate a
 first conceptual or computational treatment from later proof-intensive,
 quantitative, or research treatments when their entry requirements differ.
 Advanced depth must extend the introductory route, not make it inaccessible.
+For each major branch, identify its earliest useful learnable capability and
+its advanced continuation. Do not make a rigorous treatment the only entrance
+when a meaningful elementary treatment needs less preparation. Conversely,
+an elementary treatment does not satisfy the advanced destination. Choose
+levels from actual entry requirements and outcomes, not prestige or difficulty.
 
 ## Field coverage before deck grouping
 
@@ -62,27 +67,27 @@ field audit. Record distinct branches and depth transitions separately enough
 that an omitted branch remains visible even when neighboring material is
 included. One domain may map to several decks, and one deck to several domains.
 
-When the corresponding subjects are supplied, explicitly check these easily
-lost branches in addition to the rest of the field inventory:
+Check the field from complementary perspectives: established teaching branches,
+graduate foundations, major research communities, objects and scales of study,
+theoretical and empirical methods, and important applications. Use whichever
+perspectives genuinely fit the subject; these are lenses, not a fixed taxonomy
+or a requirement to make every combination a deck. A branch with a distinct
+body of concepts and practice must remain visible even if no other subject
+depends on it. Include less familiar branches with the same care as prominent
+ones; relevance to another supplied subject must not determine breadth.
 
-- mathematics: harmonic/Fourier analysis beyond transform applications,
-  measure-theoretic probability, Sobolev/weak PDE theory, algebraic number
-  theory, category/homological algebra, and set-theoretic foundations;
-- chemistry: medicinal chemistry and drug-discovery principles, green and
-  sustainable chemistry, and nuclear/radiochemistry;
-- computer science: embedded/real-time systems and societal/professional
-  responsibilities, alongside software, systems, theory, and AI;
-- biology: epidemiology, single-cell/spatial omics, and circuit neuroscience
-  and connectomics, alongside molecular, organismal, and ecological routes;
-- physics: soft/active matter and biological physics, alongside the
-  traditional mechanics, fields, thermal, and quantum routes.
+For each branch, distinguish its underlying theory from uses of that theory,
+normal behavior from important failure or pathological mechanisms where
+relevant, and established advanced foundations from frontier extensions.
+Check neighboring branches independently: shared terminology, a common tool,
+or an application in one does not establish coverage of another. A frontier
+deferral cannot stand in for a missing established foundation.
 
-These are breadth checks, not an exhaustive syllabus or mandated deck names.
-Supply meaningful outcomes and prerequisite routes at the appropriate depths;
-do not count a neighboring application as the underlying branch. Distinguish
-established foundations from optional frontier extensions when recording a
-deferral. A deferral of specialist methods does not cover the omission of the
-branch's foundations.
+Keep coverage rows at a reviewable domain-and-depth resolution. Do not hide
+unrelated omitted branches under a collective "specialist extensions" row.
+Some rows will naturally map to one deck and others to several; neither shape
+is a quality target. The test is whether an independent reader can locate each
+important capability and distinguish inclusion from deliberate omission.
 
 For every coverage row, record subject, domain, level, disposition, targets,
 and rationale. Use included only when targets identify the exact deck IDs and
@@ -126,17 +131,23 @@ do not compress a whole field into a few bundled outcome bullets. There is no
 fixed or preferred number of outcomes or decks.
 
 An outcome is an independently assessable capability, not a chapter heading,
-single flashcard, or a list of subfields joined into one sentence. Split it when
-a learner could achieve one substantial component while lacking another, or
-when downstream decks need different components. For example, constructing a
-conditional distribution and evaluating a central-limit approximation need
-distinct outcomes; "understand probability" specifies neither. Make scope and
-outcomes detailed enough to constrain chapter generation without authoring the
-chapters here. Do not normalize every deck to the same small outcome count.
+single flashcard, or a list of subfields joined into one sentence. Test each
+outcome against a concrete assessment: could one substantial component be
+demonstrated while another is absent? Would a later deck need to reference only
+one component? If so, give those components distinct outcome IDs. An integrated
+outcome is appropriate when combining its parts is itself the capability, not
+as a substitute for the separately needed foundations. Avoid both omnibus
+outcomes and fragmentation into individual facts.
 
-Apply the same boundary test to foundational decks. Arithmetic, algebra,
-trigonometry, and proof writing are not automatically one capability merely
-because they all prepare learners for mathematics. Keep reusable entry skills
+Audit scope against outcomes in both directions. Every substantive promise in
+scope.includes needs explicit outcomes; every outcome needs a clear place in
+scope. Naming several theories or methods in scope while giving one generic
+"apply methods" outcome leaves the teaching contract unfinished. Specify
+conditions and depth sufficiently that a chapter planner need not invent the
+major capabilities. Outcome counts should vary with the actual contract;
+neither matching counts nor deliberately varying them demonstrates quality.
+
+Apply the same boundary test at every level. Keep reusable entry skills
 separable when bundling them would force unrelated preparation on consumers.
 
 Design outcomes so later chapters can teach concepts before relying on them,
@@ -180,14 +191,14 @@ the intended advanced coverage. Instead split introductory and advanced
 capabilities, extract a reusable bridge, or explicitly teach the small needed
 capability within the target's scope and outcomes.
 
-For example, introductory organic reaction reasoning should not inherit
-differential equations and statistical regression merely through a broad
-kinetics deck. Introductory cell biology should not inherit multivariable
-thermodynamics, nor basic physiology proof-level PDEs, merely to obtain a
-qualitative energy or transport model. Put the necessary elementary model in
-an appropriate introductory deck and retain the rigorous quantitative theory
-on an advanced route. These are scope tests, not bans on mathematical
-prerequisites for genuinely quantitative decks.
+Stress-test entry routes in every subject, not only the easiest root deck.
+Trace what a learner must complete before the first useful conceptual,
+computational, experimental, or proof-based treatment of each major branch.
+If an early capability inherits advanced formalism only because a predecessor
+bundles several depths, separate the depths. Necessary advanced prerequisites
+remain appropriate for genuinely advanced outcomes. A local bridge must state
+the actual capability taught in scope and outcomes; "tools taught locally"
+is not sufficient when the tools are a substantial learning objective.
 
 ## Final audit and output
 
@@ -204,6 +215,15 @@ without unnecessary advanced detours. Check outcome bundling and every scope
 exclusion against these tests. A complete mapping of the outcomes you happened
 to write does not prove either check passed. Report unresolved defects in
 scopeIssues rather than relabeling them as deliberate scope choices.
+
+Perform a final omission pass from the subject names and independent field
+inventory, rather than starting from the proposed deck titles. Then perform a
+separate learner-route and outcome-contract pass. Correcting one defect must
+not erase a sound branch or dilute another specification. Finishing these
+checks means a defensible educational plan, not an exhaustive map of every
+research topic or a promise of perfect knowledge. Report concrete remaining
+defects; do not invent generic doubts solely because exhaustive verification
+is unavailable.
 
 Return a JSON candidate matching the supplied strict schema: subjects,
 coverage, decks, scopeIssues, and practiceNotes. scopeIssues lists blocking
