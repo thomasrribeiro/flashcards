@@ -184,10 +184,19 @@ scope issue instead of presenting a reduced survey as complete.
 ## Acceptance and serialization
 
 Return the completed design, not an initial deck list followed by a repair plan.
-Before serialization, resolve correctable omissions, unsupported scope promises
-and avoidable prerequisite barriers in the specifications themselves. Reconcile
-all affected consumers and coverage after a split or addition without dropping
-other sound branches. Do not emit your planning notes or reasoning.
+You are authorized to complete the design within this generation: add a missing
+capability, establish its preparation, split an inappropriate bundle, and update
+its consumers and coverage without asking for approval of those design choices.
+The user reviews the resulting proposal, not permission to finish drafting it.
+
+Use the final audit to revise the specifications before serialization. A concrete
+omission, unsupported assessment or avoidable prerequisite barrier that you can
+correct is unfinished design work, not a reason to stop with a repair list in
+scopeIssues. After a correction, recheck the affected paths and the independent
+field inventory so the change does not break references or lose another branch.
+Do not clear a finding by erasing the warning, weakening the promised competence,
+or deferring required coverage. Preserve honest issues that remain unresolved
+after completing the design work you can do. Do not emit planning notes or reasoning.
 
 Check educational completeness against the independent field inventory, learner
 readiness against full prerequisite closures, and scope against assessable
