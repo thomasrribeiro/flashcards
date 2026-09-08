@@ -122,9 +122,20 @@ appropriate owner among the supplied subjects and reuse them across subjects.
 All cross-deck dependencies stay at deck level; future chapter DAGs are local.
 
 Require only necessary preparation, not conventional ordering or helpful context.
-Determine what the consumer needs before selecting a source. Using a method
-under stated assumptions, deriving its theory and implementing its machinery
-can have different prerequisites.
+Determine the consumer's actual performance before selecting a source: applying
+a model under stated assumptions, deriving its theory and implementing its
+machinery can require different preparation. Match the scope, outcomes, practice
+and prerequisite depth to that performance; a level label alone proves neither
+readiness nor an entry barrier.
+
+For a bounded application, it can be appropriate to teach a model locally:
+specify its notation, assumptions, interpretation and limitations as assessable
+content. Do not require a whole proof-based theory merely to use that model.
+Conversely, a supplied formula or the words "introduced locally" do not supply
+the mathematics needed to derive, transform, estimate or implement it. Establish
+those capabilities explicitly wherever the contract promises them. Preserve the
+independent theoretical and advanced continuations; an accessible application
+does not replace them or justify omitting their coverage.
 
 Every prerequisite edge must have a required_outcomes annotation identifying the
 source deck_id and exact source outcome_ids needed. Annotations describe the
