@@ -63,7 +63,9 @@ Use these boundary decisions:
   reusable foundation before the application instead of inside its deck.
 - If a consumer needs capability A but not capability B, requiring a deck that
   bundles A and B forces an avoidable detour. Extract the reusable preparation
-  when A and B are substantial independent capabilities.
+  when B is a substantial independent branch or introduces additional entry
+  requirements. A coherent foundation may contain related techniques that a
+  particular consumer does not immediately use; that alone is not a defect.
 - An integrating deck is appropriate when combining established capabilities is
   itself a new learning objective. A shared umbrella name is not integration.
 
@@ -87,8 +89,9 @@ important boundaries; it may be empty when no such clarification is needed.
 An exclusion from one deck must be taught elsewhere or explicitly accounted for
 in the global coverage disposition.
 
-Each outcome has a unique local kebab-case ID and an observable description,
-including relevant conditions and depth. It must identify a capability that can
+Each outcome has a unique local kebab-case ID naming its capability, not just
+an action verb such as analyze or derive, and an observable description including
+relevant conditions and depth. It must identify a capability that can
 be assessed: explain, calculate, distinguish, derive, prove, interpret, design,
 or apply. Neither a chapter heading nor an individual flashcard is the unit.
 
@@ -97,7 +100,13 @@ when a later deck may need only one of them. Combining components is appropriate
 when their integration is the capability being assessed, not when a broad bullet
 merely lists several independent theories or methods. The contract must specify
 every substantive promise in scope.includes, with no vague omnibus outcome
-standing in for those promises. Outcomes also need a clear place in scope.
+standing in for those promises. Using the same verb for several methods does
+not make them one capability: if a learner could demonstrate one while failing
+the others, specify the independently meaningful assessments separately. Keep
+related outcomes in the same coherent deck when their preparation permits it;
+more outcome IDs do not automatically require more decks. Outcomes also need
+a clear place in scope. Let their number follow the material, not a repeated
+small template across decks.
 
 practice identifies concrete extended problems, proofs, programming, experiments
 or projects suited to the outcomes. If that practice needs knowledge or
@@ -174,6 +183,9 @@ prevents a sound learning plan: missing coverage, insufficient outcomes, or
 missing/unnecessary preparation. Use an empty array only when none remain.
 Report concrete defects honestly; do not invent generic doubts because exhaustive
 verification is unavailable, fabricate verification, or conceal defects to pass.
+For an unnecessary-prerequisite issue, identify the consumer's actual need and
+the substantial unrelated branch or extra entry requirement imposed on it.
+Check its practice as well as its outcomes before calling preparation unnecessary.
 
 practiceNotes contains nonblocking execution conditions such as supervision,
 facilities, ethics approval or professional authorization. These conditions are
