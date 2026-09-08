@@ -69,14 +69,20 @@ Use these boundary decisions:
 - An integrating deck is appropriate when combining established capabilities is
   itself a new learning objective. A shared umbrella name is not integration.
 
-Coverage is a reconciliation of this inventory with the resulting contracts,
-not a list reverse-engineered from the decks. For each major branch, reconstruct
-its learning progression from the actual capability targets: where does a learner
-enter, what established theory and practice follow, and where does the route stop?
-Check missing stages even when every existing node is internally valid. An
-included introductory row does not account for that branch's advanced foundations;
-a subject having some graduate decks does not establish depth in its other branches.
-Use appropriate stages for the branch, not a fixed number of decks or levels.
+Develop the domain-and-depth entries of coverage from the field inventory before
+grouping capabilities into decks. Keep this inventory accountable through the
+design: changing deck boundaries or names does not remove a domain or lower its
+intended depth. Add newly discovered branches to it, including branches without
+any consumer elsewhere in the graph. Do not reconstruct the inventory from the
+decks you happened to finish.
+
+Reconcile in both directions. Starting from each inventory domain and depth,
+locate outcomes that teach its distinctive competence and trace their entry path.
+Starting from each deck outcome, locate its inventory entry. The second check
+alone can pass an incomplete curriculum. Inspect each branch's entry, established
+theory and practice, and advanced continuation separately; use stages appropriate
+to the branch, not a fixed number of decks or levels. A domain with no matching
+contract is missing coverage even if all existing outcomes have mappings.
 
 When narrowing a deck or extracting reusable preparation, locate the remaining
 substantive capabilities in other contracts and reconnect their preparation.
@@ -168,6 +174,16 @@ For each material domain at each intended depth, record subject, domain, level,
 disposition, targets and rationale. Keep independent branches and depth
 transitions separately inspectable; do not obscure them in catch-all rows.
 One domain may map to multiple decks and one deck to multiple domains.
+
+The returned coverage array is the complete domain-and-depth inventory, including
+its exclusions, not just an index of successful deck mappings. In each rationale,
+state the competence reached and the material boundary at that depth; a generic
+claim of usefulness or completeness is not a reconciliation. If a required domain
+still lacks a sound contract after the design work, retain its intended-depth row
+as deferred with empty targets, explicitly identify the unresolved gap in its
+rationale, and report it in scopeIssues. This records an incomplete proposal; it
+does not authorize excluding required coverage. Do not leave a missing branch
+only in scopeIssues while silently dropping it from the field inventory.
 
 An included row identifies exact deck IDs and outcome IDs teaching the domain.
 Its target decks must match the row's level, but may belong to another supplied
