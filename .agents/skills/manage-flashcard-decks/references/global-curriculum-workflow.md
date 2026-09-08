@@ -66,6 +66,11 @@ Do not reverse-engineer a coverage row from each chosen deck and call that a
 field audit. Record distinct branches and depth transitions separately enough
 that an omitted branch remains visible even when neighboring material is
 included. One domain may map to several decks, and one deck to several domains.
+Audit absent rows too: for each major branch, locate its substantive entry and
+established advanced capabilities, or record the missing depth explicitly.
+Checking only the targets in existing rows cannot reveal a branch omitted from
+both the deck list and coverage. A nearby research deferral does not account
+for an absent established theoretical or applied foundation.
 
 Check the field from complementary perspectives: established teaching branches,
 graduate foundations, major research communities, objects and scales of study,
@@ -219,6 +224,13 @@ before returning. After splitting a shared capability or adding a missing
 foundation, recheck all affected consumers and their transitive preparation,
 then resume the field audit beyond the areas just corrected. Do not certify
 completeness solely because the JSON schema or DAG is valid.
+
+After the design audit, finalize one index of deck IDs and their local outcome
+IDs. Resolve every prerequisite annotation and coverage target against that
+index as a pair: an outcome name existing in another deck does not make the
+reference valid. Propagate any rename, split or ownership change to all
+references. Check this consistency before serialization; do not emit a known
+broken reference with a prose instruction telling the reviewer how to fix it.
 
 Use two distinct acceptance checks: field completeness asks which important
 domains and depths are absent, regardless of the chosen deck titles; learner
