@@ -57,8 +57,14 @@ describe('queued restricted runner', () => {
         const job = setup(); const candidate = globalCandidate();
         candidate.scopeIssues = ['Missing advanced arithmetic outcome.'];
         const fetchImpl = respond(candidate);
-        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
-            .rejects.toThrow(/needs revision/);
+        const result = await runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
+        expect(result).toMatchObject({ status: 'failed', result: { preview: {
+            available: true, readOnly: true, issues: candidate.scopeIssues,
+            catalog: { decks: [{ id: 'math/arithmetic', title: 'New arithmetic' }] }
+        } } });
+        expect(result.result.proposals).toBeUndefined();
+        expect(result.error).not.toContain('Drafts:');
+        expect(state.abandoned).toBe(true);
         expect(fetchImpl).toHaveBeenCalledTimes(1);
         const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
         expect(JSON.parse(body.input)).toEqual({ subjects: ['math'] });
@@ -84,13 +90,25 @@ describe('queued restricted runner', () => {
         candidate.scopeIssues = ['Missing quantitative prerequisite outcomes; laboratory approval is also needed.'];
         candidate.practiceNotes = ['Institutional review required.'];
         const fetchImpl = respond(candidate);
-        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } })).rejects.toThrow(/needs revision/);
+        const result = await runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
+        expect(result.status).toBe('failed');
+        expect(result.result.preview.issues).toEqual(candidate.scopeIssues);
         expect(fetchImpl).toHaveBeenCalledTimes(1); expect(state.published).toEqual([]);
     });
     it('does not retry an initial transport failure', async () => {
         const job = setup(); const fetchImpl = respond({}); fetchImpl.mockRejectedValue(new TypeError('network'));
         await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } })).rejects.toThrow(/Not retried automatically/);
         expect(fetchImpl).toHaveBeenCalledTimes(1); expect(state.published).toEqual([]);
+    });
+    it('retains but does not expose a cyclic graph to the DAG viewer', async () => {
+        const job = setup(); const candidate = globalCandidate();
+        candidate.decks[0].prerequisites = ['math/arithmetic'];
+        const fetchImpl = respond(candidate);
+        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } })).rejects.toThrow(/needs revision/);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(state.published).toEqual([]);
+        expect(state.abandoned).toBe(true);
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(candidate);
     });
     it('checks cancellation before publication, preserving the completed first attempt', async () => {
         const job = setup(); const candidate = globalCandidate();
@@ -133,11 +151,13 @@ describe('queued restricted runner', () => {
         await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } })).rejects.toThrow(/listed subject/);
         expect(fetchImpl).not.toHaveBeenCalled();
     });
-    it('rejects unresolved chapter-plan scope instead of silently dropping it', async () => {
+    it('retains a read-only chapter graph with unresolved scope instead of publishing it', async () => {
         const job = setup('deck-plan');
-        respond({ deckId: 'math/arithmetic', chapters: [], scopeIssues: ['Missing prerequisite capability.'] });
-        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
-            .rejects.toThrow(/Unresolved chapter scope/);
+        respond({ deckId: 'math/arithmetic', chapters: [{ id: '01_counting', title: 'Counting', outcomes, prerequisites: [] }], scopeIssues: ['Missing prerequisite capability.'] });
+        const result = await runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
+        expect(result.status).toBe('failed');
+        expect(result.result.preview).toMatchObject({ readOnly: true, issues: ['Missing prerequisite capability.'] });
+        expect(result.result.preview.catalog.decks[0].chapters[0].title).toBe('Counting');
         expect(state.published).toEqual([]);
     });
     it('publishes a review-only global candidate and archives the previous catalog outside model context', async () => {
@@ -167,8 +187,9 @@ describe('queued restricted runner', () => {
             if (unresolved) candidate.scopeIssues = ['Missing advanced coverage: needs a coherent prerequisite bridge.'];
             else delete candidate.coverage;
             const fetchImpl = respond(candidate);
-            await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
-                .rejects.toThrow(/needs revision/);
+            const run = runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
+            if (unresolved) expect((await run).status).toBe('failed');
+            else await expect(run).rejects.toThrow(/needs revision/);
             expect(fetchImpl).toHaveBeenCalledTimes(1);
             expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(candidate);
             expect(readFileSync(path.join(retained(), 'attempt-1-validation.json'), 'utf8'))

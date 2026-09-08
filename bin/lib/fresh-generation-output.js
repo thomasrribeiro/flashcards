@@ -5,6 +5,13 @@ import { validateGlobalCurriculumCandidate, validateChapterCurriculumCandidate }
 
 export const FRESH_CATALOG = 'fresh-curriculum.json';
 
+export function rejectedCurriculumResult(catalog, issues, provenance) {
+    if (!issues?.length) throw new Error('A rejected draft must record its validation issues.');
+    return { status: 'failed', error: 'Needs revision. Draft available for review.', result: {
+        provenance, preview: { available: true, readOnly: true, issues, catalog }
+    } };
+}
+
 // Generation never sees this comparison or the old content. This deterministic
 // publication step preserves it separately for review and recovery.
 export function freshCandidateCatalog(before, candidate, jobType, { deckId, generation }) {

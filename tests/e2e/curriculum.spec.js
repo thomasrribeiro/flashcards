@@ -1415,6 +1415,52 @@ test('tracks generation activity and previews an unmerged subject PR in the curr
     await expect(page.getByRole('button', { name: 'Options', exact: true })).toBeVisible();
 });
 
+test('previews a fresh global curriculum rejected draft without enabling Apply', async ({ page }, testInfo) => {
+    const generated = structuredClone(bundledCurriculum);
+    generated.decks.push({ id: 'mathematics/draft-deck', deck: 'draft-deck', subject: 'mathematics', prerequisites: [], chapters: [] });
+    const preview = { available: true, readOnly: true, issues: ['Missing a prerequisite capability.'], catalog: generated };
+    const job = { id: 52, job_type: 'curriculum-design', target_repository: 'example/curricula', status: 'failed',
+        model_id: 'gpt-6-astra', error: 'Needs revision. Draft available for review.',
+        payload_json: JSON.stringify({ workflowVersion: 'fresh-generation-v1', reasoningEffort: 'high' }),
+        result_json: JSON.stringify({ preview: { ...preview, catalog: undefined } }) };
+    await installGenerationAccount(page, { requests: [job, { ...job, id: 51, error: 'Network failed.', result_json: '{}' }] });
+    let previewLoads = 0;
+    const writes = [];
+    page.on('request', request => { if (['POST', 'PATCH', 'PUT'].includes(request.method()) && /generation-requests|github.com\/repos/.test(request.url())) writes.push(request.url()); });
+    await page.route('**/api/generation-requests/52/preview', route => {
+        previewLoads++;
+        return route.fulfill({ json: { preview } });
+    });
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    await settings.getByRole('tab', { name: /Agents/ }).click();
+    await expect(settings.getByRole('button', { name: 'Review', exact: true })).toHaveCount(1);
+    await expect(settings.locator('[data-request-id="52"] .generation-activity-status')).toHaveText('Needs revision');
+    expect(previewLoads).toBe(0);
+    await settings.getByRole('button', { name: 'Review', exact: true }).click();
+    const banner = page.locator('.curriculum-preview-banner');
+    await expect(banner.locator('.curriculum-preview-meta p')).toHaveText([
+        'Draft · Request 52', '~ / example / curricula', 'gpt-6-astra', 'high reasoning'
+    ]);
+    await expect(banner.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled();
+    await banner.getByRole('button', { name: 'Decks: 1 added', exact: true }).click();
+    await expect(banner.locator('#curriculum-diff-decks-added')).toContainText('mathematics/draft-deck');
+    await expect(banner.getByText(preview.issues[0], { exact: true })).not.toBeVisible();
+    await banner.locator('summary', { hasText: 'Needs revision' }).click();
+    await expect(banner.getByText(preview.issues[0], { exact: true })).toBeVisible();
+    await expect(page.locator('.curriculum-graph-node[data-deck-id="mathematics"]')).toBeVisible();
+    for (const name of ['Current', 'Proposed']) {
+        await banner.getByRole('button', { name, exact: true }).click();
+        await expect(banner.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'true');
+        await expect(banner.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled();
+    }
+    await banner.screenshot({ path: testInfo.outputPath('rejected-draft.png') });
+    await banner.getByRole('button', { name: 'Exit', exact: true }).click();
+    await expect(banner).toHaveCount(0);
+    expect(previewLoads).toBe(1);
+    expect(writes).toEqual([]);
+});
+
 test('previews a fresh global curriculum and sends acceptance only to the guarded backend', async ({ page }, testInfo) => {
     await installGenerationAccount(page);
     const commit = 'd'.repeat(40);

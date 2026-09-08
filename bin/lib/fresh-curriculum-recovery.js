@@ -33,8 +33,10 @@ export async function generateRecoverableCurriculum(options, { draftsRoot, reque
             issues.push(error.message);
         }
         save('attempt-1-validation.json', { issues });
-        if (issues.length) throw new Error('Curriculum needs revision. Review the draft and update the instructions before a fresh job.');
-        return { candidate, provenance: { ...generated.provenance, attempts: [generated.provenance] }, draftDirectory: directory };
+        // Only structurally valid graphs can enter the viewer. Scope failures
+        // still prevent publication, but no longer discard a completed graph.
+        if (!candidate) throw new Error('Curriculum needs revision. Review the draft and update the instructions before a fresh job.');
+        return { candidate, issues, provenance: { ...generated.provenance, attempts: [generated.provenance] }, draftDirectory: directory };
     } catch (error) {
         // The detailed issues remain in validation artifacts, not a wall of UI text.
         throw new Error(`${error.message} Drafts: ${directory}`, { cause: error });

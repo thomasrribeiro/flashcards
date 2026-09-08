@@ -967,7 +967,9 @@ addAgentOptions(requests
                 }));
                 const update = trustedRunner ? updateClaimedGenerationRequest : updateGenerationRequest;
                 await update(queued.id, result, { workerUrl: options.workerUrl, runnerToken: options.runnerToken });
-                console.log(`Request ${queued.id} is ready for review: ${result.resultUrl}`);
+                console.log(result.status === 'failed'
+                    ? `Request ${queued.id} needs revision. Draft available for review.`
+                    : `Request ${queued.id} is ready for review: ${result.resultUrl}`);
                 return;
             }
             const runner = providerRunner(queued.provider_id, options.agentRunner);

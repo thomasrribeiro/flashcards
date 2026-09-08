@@ -111,7 +111,7 @@ import {
     sortGenerationRequestsByInitiatedAt,
     summarizeGenerationActivity
 } from './generation-activity.js';
-import { canReviewGenerationDag, compareGenerationDag, generationJobCategory, generationModelSummary } from './generation-dag-review.js';
+import { canReviewGenerationDag, canApplyGenerationDag, hasRetainedGenerationDag, loadRetainedGenerationDag, compareGenerationDag, generationJobCategory, generationModelSummary } from './generation-dag-review.js';
 import { submitGenerationJob } from './generation-submission.js';
 import {
     curriculumChapterProgressStates,
@@ -5418,12 +5418,12 @@ async function enterCurriculumPreview(request, close, trigger) {
     trigger.disabled = true;
     trigger.textContent = 'Loading…';
     try {
-        const { catalog, commit, pull } = await loadPullRequestCurriculum(request, {
-            token: githubAuth.getToken()
-        });
+        const { catalog, commit, pull, issues = [] } = hasRetainedGenerationDag(request)
+            ? await loadRetainedGenerationDag(request, endpoint => githubAuth.apiRequest(endpoint))
+            : await loadPullRequestCurriculum(request, { token: githubAuth.getToken() });
         const publishedIndex = curriculumPreview?.publishedIndex || curriculumIndex || await loadCurriculumIndex();
         curriculumPreview = {
-            publishedIndex, generatedIndex: catalog, request, commit, pull,
+            publishedIndex, generatedIndex: catalog, request, commit, pull, issues,
             showing: 'generated', diff: compareGenerationDag(publishedIndex, catalog, request)
         };
         curriculumIndex = catalog;
@@ -5577,7 +5577,7 @@ function appendGenerationRequestRow(list, request, close) {
     identity.append(title, meta);
     const status = document.createElement('span');
     status.className = `generation-activity-status is-${request.status}`;
-    status.textContent = generationStatusLabel(request.status);
+    status.textContent = hasRetainedGenerationDag(request) ? 'Needs revision' : generationStatusLabel(request.status);
     header.append(identity, status);
     item.appendChild(header);
 
@@ -5722,8 +5722,8 @@ function curriculumPreviewBanner() {
     const { pull, commit } = curriculumPreview;
     const recorded = request.result?.provenance;
     for (const value of [
-        `PR #${pull.number} · ${commit.slice(0, 12)}`,
-        generationRequestName(request, `${pull.owner}/${pull.repository}`),
+        pull ? `PR #${pull.number} · ${commit.slice(0, 12)}` : `Draft · Request ${request.id}`,
+        generationRequestName(request, pull ? `${pull.owner}/${pull.repository}` : request.targetRepository),
         recorded?.resolvedModelId || recorded?.modelId || request.modelId || 'Model not recorded',
         `${recorded?.reasoningEffort || request.payload?.reasoningEffort || 'Unspecified'} reasoning`
     ]) {
@@ -5749,9 +5749,10 @@ function curriculumPreviewBanner() {
     const merge = document.createElement('button');
     merge.type = 'button';
     merge.textContent = 'Apply';
-    merge.disabled = request.status !== 'needs-review' || showing !== 'generated';
+    merge.disabled = !canApplyGenerationDag(request) || showing !== 'generated';
     merge.onclick = async () => {
         const preview = curriculumPreview;
+        if (!canApplyGenerationDag(preview.request)) return;
         if (!window.confirm('Apply this proposed curriculum? This replaces the published plan.')) return;
         merge.disabled = true;
         merge.textContent = 'Applying…';
@@ -5846,6 +5847,20 @@ function curriculumPreviewBanner() {
         changes.append(row);
     }
     banner.append(description, actions, changes);
+    if (curriculumPreview.issues?.length) {
+        const issues = document.createElement('details');
+        issues.className = 'curriculum-preview-issues';
+        const summary = document.createElement('summary');
+        summary.textContent = `Needs revision · ${curriculumPreview.issues.length} ${curriculumPreview.issues.length === 1 ? 'issue' : 'issues'}`;
+        const list = document.createElement('ul');
+        for (const issue of curriculumPreview.issues) {
+            const item = document.createElement('li');
+            item.textContent = issue;
+            list.append(item);
+        }
+        issues.append(summary, list);
+        banner.append(issues);
+    }
     const practiceNotes = curriculumPreview.generatedIndex?.practiceNotes || [];
     if (practiceNotes.length) {
         const notes = document.createElement('details');

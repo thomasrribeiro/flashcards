@@ -9,7 +9,7 @@ import { generateRecoverableCurriculum } from './fresh-curriculum-recovery.js';
 import { freshGenerationSchema } from './fresh-generation-schema.js';
 import { freshGenerationInstructions } from './fresh-generation-instructions.js';
 import { globalCurriculumTarget } from '../../src/global-curriculum-input.js';
-import { freshCandidateCatalog, writeFreshCatalog } from './fresh-generation-output.js';
+import { freshCandidateCatalog, writeFreshCatalog, rejectedCurriculumResult } from './fresh-generation-output.js';
 import { validateFreshProvenance } from '../../src/fresh-generation-contract.js';
 import { canonicalSubjectNames, validateGlobalCurriculumCandidate, validateChapterCurriculumCandidate } from '../../src/fresh-generation.js';
 import { parseDeck } from '../../src/parser.js';
@@ -84,14 +84,15 @@ export async function runFreshGenerationJob(queued, { registryRoot, credential, 
             provider_id: queued.provider_id, model_id: queued.model_id, reasoning_effort: payload.reasoningEffort,
             registry_base_commit: payload.registryBaseCommit, workflow_commit: payload.workflowCommit, generated_at: new Date().toISOString() };
         let after;
+        let reviewIssues = [];
         const proposals = [];
         if (jobType === 'curriculum-design') {
             const candidate = validateGlobalCurriculumCandidate(generated.candidate, payload.subjects, { requireCoverage: true, mandatoryDecks: payload.mandatoryDecks });
-            if (candidate.scopeIssues.length) throw new Error(`Unresolved curriculum scope: ${candidate.scopeIssues.join('; ')}`);
+            reviewIssues = generated.issues || candidate.scopeIssues;
             after = freshCandidateCatalog(before, candidate, jobType, { generation });
         } else if (jobType === 'deck-plan') {
             if (!Array.isArray(generated.candidate.scopeIssues)) throw new Error('Missing chapter scope report.');
-            if (generated.candidate.scopeIssues.length) throw new Error(`Unresolved chapter scope: ${generated.candidate.scopeIssues.join('; ')}`);
+            reviewIssues = generated.candidate.scopeIssues;
             const candidate = validateChapterCurriculumCandidate(generated.candidate, payload.deckId);
             after = freshCandidateCatalog(before, candidate, jobType, { deckId: payload.deckId, generation });
         } else {
@@ -127,6 +128,13 @@ export async function runFreshGenerationJob(queued, { registryRoot, credential, 
                 chapters: item.chapters.map(item => item.id !== chapter.id ? item : { ...item, card_count: rendered.cardCount }),
                 chapter_content_generation: generation, generation_runs: [...(item.generation_runs || []), generation]
             }) };
+        }
+        if (reviewIssues.length) {
+            await beforePublish();
+            const result = rejectedCurriculumResult(after, reviewIssues, generation);
+            abandonRegistryDraft(root, draft);
+            draft = null;
+            return result;
         }
         writeFreshCatalog(root, after, before, queued.id, registry.outputPath);
         if (generated.draftDirectory) cpSync(generated.draftDirectory,

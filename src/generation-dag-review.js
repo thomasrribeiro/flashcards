@@ -16,8 +16,25 @@ export function generationModelSummary(job) {
 
 export function canReviewGenerationDag(request) {
     return ['global-dag', 'subject-dag', 'deck-dag'].includes(generationJobCategory(request).id)
-        && ['needs-review', 'published', 'cancelled'].includes(request?.status)
-        && Boolean(request?.resultUrl);
+        && (hasRetainedGenerationDag(request)
+            || (['needs-review', 'published', 'cancelled'].includes(request?.status) && Boolean(request?.resultUrl)));
+}
+
+export function hasRetainedGenerationDag(request) {
+    return request?.status === 'failed' && request.result?.preview?.available === true
+        && request.result.preview.readOnly === true;
+}
+
+export function canApplyGenerationDag(request) {
+    return request?.status === 'needs-review' && !request.result?.preview?.readOnly;
+}
+
+export async function loadRetainedGenerationDag(request, apiRequest) {
+    if (!hasRetainedGenerationDag(request)) throw new Error('No completed draft is available.');
+    const { preview } = await apiRequest(`/api/generation-requests/${request.id}/preview`);
+    if (preview?.readOnly !== true || !Array.isArray(preview.catalog?.subjects)
+        || !Array.isArray(preview.catalog?.decks)) throw new Error('Invalid draft preview.');
+    return { catalog: preview.catalog, issues: preview.issues || [], commit: '', pull: null };
 }
 
 function scopeNodes(catalog, request) {

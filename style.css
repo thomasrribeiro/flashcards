@@ -4198,6 +4198,9 @@ body.standalone-phone .mobile-sidebar-close {
     font-size: clamp(11px, 3vw, 14px);
 }
 .curriculum-preview-actions .generation-activity-error { grid-column: 1 / -1; }
+.curriculum-preview-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+.curriculum-preview-issues { font-size: 0.85rem; overflow-wrap: anywhere; }
+.curriculum-preview-issues ul { max-height: 16rem; overflow-y: auto; padding-left: 1.4em; }
 .curriculum-preview-banner button[aria-pressed="true"] { background: var(--black); color: var(--white); }
 .curriculum-preview-diff { display: grid; gap: 8px; }
 .curriculum-diff-counts { display: flex; align-items: center; gap: 8px; font-size: 0.66rem; }

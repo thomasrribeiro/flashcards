@@ -1,7 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { canReviewGenerationDag, compareGenerationDag, generationJobCategory, generationModelSummary } from './generation-dag-review.js';
+import { canReviewGenerationDag, canApplyGenerationDag, loadRetainedGenerationDag, compareGenerationDag, generationJobCategory, generationModelSummary } from './generation-dag-review.js';
 
 describe('generation curriculum review', () => {
+    it('reviews completed rejected graphs without allowing Apply or requiring a PR', async () => {
+        for (const jobType of ['curriculum-design', 'deck-plan']) {
+            const request = { id: 52, jobType, status: 'failed', result: { preview: { available: true, readOnly: true } } };
+            expect(canReviewGenerationDag(request)).toBe(true);
+            expect(canApplyGenerationDag(request)).toBe(false);
+            expect(canApplyGenerationDag({ ...request, status: 'needs-review' })).toBe(false);
+            const catalog = { subjects: [], decks: [] };
+            const loaded = await loadRetainedGenerationDag(request, async endpoint => {
+                expect(endpoint).toBe('/api/generation-requests/52/preview');
+                return { preview: { readOnly: true, catalog, issues: ['Missing route.'] } };
+            });
+            expect(loaded).toEqual({ catalog, issues: ['Missing route.'], commit: '', pull: null });
+            expect(canReviewGenerationDag({ ...request, status: 'running' })).toBe(false);
+            expect(canReviewGenerationDag({ ...request, result: {} })).toBe(false);
+            await expect(loadRetainedGenerationDag(request, async () => ({ preview: {} }))).rejects.toThrow('Invalid draft');
+        }
+        expect(canApplyGenerationDag({ status: 'needs-review' })).toBe(true);
+    });
     it('compares the whole deck graph and reports downstream content without altering it', () => {
         const a = { id: 'math/a', subject: 'math', description: 'Old scope', prerequisites: [], chapters: [{ card_count: 12 }] };
         const b = { id: 'physics/b', subject: 'physics', prerequisites: ['math/a'], chapters: [{ card_count: 7 }] };
