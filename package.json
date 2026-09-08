@@ -22,6 +22,7 @@
     "src/deck-generation-contract.js",
     "src/subject-generation-contract.js",
     "src/fresh-generation.js",
+    "src/curriculum-diagnostics.js",
     "src/fresh-generation-contract.js",
     "src/generation-dag-review.js",
     "templates/",

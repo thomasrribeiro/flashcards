@@ -92,6 +92,14 @@ theory; a frontier deferral does not account for a missing established foundatio
 An inclusion in a neighboring subject counts only when its exact outcomes teach
 the needed capability at the intended depth.
 
+Make boundary corrections capability-preserving within this design. Before a
+split or simplification, identify each competence in the affected scopes,
+outcomes and practice. Afterward, assign every competence to an exact resulting
+deck/outcome pair and preserve its coverage depth. Check both the accessible
+entry and the independent advanced continuation. A shorter contract is not a
+successful split when some of its work has no destination. This check concerns
+your current design, not any curriculum outside this job.
+
 ## Deck contract
 
 Each deck has a lowercase kebab-case subject/deck ID, owning subject, clear title,
@@ -228,6 +236,16 @@ Check educational completeness against the independent field inventory, learner
 readiness against full prerequisite closures, and scope against assessable
 outcomes. Structural validity alone cannot pass these checks.
 
+Keep the evidence for those checks distinct. For a readiness defect, identify
+the consumer outcome or practice, the capability it needs, and whether that
+capability is taught locally or in its ancestor closure. For an entry barrier,
+trace the path that imposes the extra preparation and identify why the promised
+performance does not need it. Inspect high-reuse sources first, then their
+consumers; correcting a source can affect many subjects. An annotation requesting
+only part of a source does not, by itself, demonstrate an inappropriate bundle.
+Neither does an edge from a higher-level source or an alternative path to it.
+Those are reasons to inspect the actual contracts, not automatic defects.
+
 Finalize an index of deck IDs and their local outcome IDs. Resolve every
 prerequisite annotation and coverage target against that index as a pair.
 Propagate renames and ownership changes to every reference. A similarly named
@@ -242,6 +260,10 @@ verification is unavailable, fabricate verification, or conceal defects to pass.
 For an unnecessary-prerequisite issue, identify the consumer's actual need and
 the substantial unrelated branch or extra entry requirement imposed on it.
 Check its practice as well as its outcomes before calling preparation unnecessary.
+Do not report a hypothetical future consumer as a current blocking defect. A
+missing independent learning route can still be a real coverage defect; identify
+the intended competence and depth that are absent, rather than inventing a
+consumer. Keep a concrete unresolved finding even if structural checks pass.
 
 practiceNotes contains nonblocking execution conditions such as supervision,
 facilities, ethics approval or professional authorization. These conditions are
@@ -250,3 +272,6 @@ missing knowledge is still a curriculum defect, not a practice condition.
 
 This job has one generation call and no later repair pass. The host retains the
 proposal for external review; unresolved issues are not sent back as context.
+The host can compute structural checks and prerequisite traces after generation.
+You have no execution tools in this run; do not claim to have run those checks.
+Their success would establish structural consistency, not educational completeness.

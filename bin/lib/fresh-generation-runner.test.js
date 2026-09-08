@@ -74,6 +74,11 @@ describe('queued restricted runner', () => {
             requestId: 1, attempt: 1, responseId: 'response-test', background: true
         });
         expect(statSync(path.join(retained(), 'attempt-1-response.json')).mode & 0o777).toBe(0o600);
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1-diagnostics.json')))).toMatchObject({
+            structuralValid: true, declaredScopeIssues: candidate.scopeIssues, educationalReviewRequired: true,
+            summary: { deckCount: 1 }
+        });
+        expect(statSync(path.join(retained(), 'attempt-1-diagnostics.json')).mode & 0o777).toBe(0o600);
         expect(readdirSync(retained()).some(name => name.startsWith('attempt-2'))).toBe(false);
         expect(state.published).toEqual([]);
     });
@@ -194,6 +199,7 @@ describe('queued restricted runner', () => {
             expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(candidate);
             expect(readFileSync(path.join(retained(), 'attempt-1-validation.json'), 'utf8'))
                 .toMatch(unresolved ? /Missing advanced coverage/ : /coverage map/);
+            expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1-diagnostics.json'))).structuralValid).toBe(unresolved);
             expect(statSync(path.join(retained(), 'attempt-1.json')).mode & 0o777).toBe(0o600);
             expect(state.published).toEqual([]);
             expect(state.abandoned).toBe(true);

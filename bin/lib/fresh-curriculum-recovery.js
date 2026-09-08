@@ -3,6 +3,7 @@ import path from 'node:path';
 import { validateGlobalCurriculumCandidate } from '../../src/fresh-generation.js';
 import { freshGenerationInstructions } from './fresh-generation-instructions.js';
 import { requestFreshGeneration } from './fresh-generation-provider.js';
+import { inspectCurriculumCandidate } from '../../src/curriculum-diagnostics.js';
 
 // Retain completed outputs outside the disposable publication worktree. Never
 // persist credentials, old catalogs, or arbitrary request/transport objects.
@@ -33,6 +34,10 @@ export async function generateRecoverableCurriculum(options, { draftsRoot, reque
             issues.push(error.message);
         }
         save('attempt-1-validation.json', { issues });
+        // Evidence for external review, not feedback into this model run. Keep
+        // structural failures separate from self-reported educational defects.
+        save('attempt-1-diagnostics.json', inspectCurriculumCandidate(generated.candidate,
+            options.subjects, { mandatoryDecks: options.mandatoryDecks }));
         // Only structurally valid graphs can enter the viewer. Scope failures
         // still prevent publication, but no longer discard a completed graph.
         if (!candidate) throw new Error('Curriculum needs revision. Review the draft and update the instructions before a fresh job.');

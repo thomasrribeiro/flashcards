@@ -51,6 +51,29 @@ Inspect both gains and regressions; extra decks or longer descriptions alone
 are not improvements. State limits of review rather than claiming exhaustive
 subject-matter certification.
 
+## Deterministic inspection
+
+For a fresh JSON candidate or retained attempt wrapper, run:
+
+```bash
+flashcards curriculum check-candidate <candidate.json> --subjects <subject-names...>
+```
+
+Repeat `--deck <subject/deck>` to limit detailed output to chosen entry paths.
+The runner also saves `attempt-1-diagnostics.json` beside each completed draft.
+These are read-only inspections: they reuse the candidate validator, separate
+structural errors from model-declared scope issues, and expose full cross-subject
+ancestor closures, indirect consumer counts, exact required outcome IDs, other
+source outcomes, alternative paths and level differences. No data is sent back
+to the generator. The command exits unsuccessfully for structural errors or
+declared scope issues; exit success is not educational acceptance.
+
+Use these traces to test a concrete claim against the full source and consumer
+contracts. Do not automatically remove a redundant edge (its outcome annotation
+may matter), reject a higher-level source, or split every partially used source.
+Coverage mappings prove traceability only; neither counts nor a one-deck-per-row
+pattern can prove that the independently established field inventory is complete.
+
 ## Iterate when authorized
 
 Fix the general failure mechanism in the canonical instructions. Avoid adding

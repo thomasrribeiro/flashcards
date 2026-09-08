@@ -4,7 +4,8 @@ import { Command, Option } from 'commander';
 import { runFreshGenerationJob } from './lib/fresh-generation-runner.js';
 import { withGenerationTerminationSignal } from './lib/background-generation.js';
 import { FRESH_GENERATION_VERSION } from '../src/fresh-generation.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { inspectCurriculumCandidate } from '../src/curriculum-diagnostics.js';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { addChapter, createDeck, ensureSubject } from './lib/scaffold.js';
@@ -326,6 +327,22 @@ program
     });
 
 const curriculum = program.command('curriculum').description('Manage the collection-wide cross-subject prerequisite graph');
+
+curriculum
+    .command('check-candidate <file>')
+    .description('Inspect a generated JSON candidate without changing it or calling a model')
+    .requiredOption('--subjects <names...>', 'Expected subject names, independently of the candidate')
+    .option('--deck <id>', 'Limit detailed prerequisite traces to this deck (repeatable)', collect, [])
+    .action((file, options) => {
+        try {
+            const value = JSON.parse(readFileSync(resolvePath(file), 'utf8'));
+            const report = inspectCurriculumCandidate(value.candidate ?? value, options.subjects, { deckIds: options.deck });
+            console.log(JSON.stringify(report, null, 2));
+            if (!report.structuralValid || report.declaredScopeIssues.length) process.exitCode = 1;
+        } catch (error) {
+            handleError(error);
+        }
+    });
 
 curriculum
     .command('validate [notes-root]')
