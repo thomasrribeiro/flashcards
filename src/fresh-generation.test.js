@@ -126,6 +126,14 @@ describe('restricted provider request', () => {
         expect(fetchImpl).not.toHaveBeenCalled();
     });
 
+    it('rejects legacy repair context before any provider request', async () => {
+        const fetchImpl = vi.fn();
+        await expect(requestFreshGeneration({ ...options(), fetchImpl,
+            repair: { draft: { secret: 'OLD_DRAFT' }, issues: ['previous feedback'] }
+        })).rejects.toThrow('Repair context is not supported');
+        expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
     const streamResponse = text => new Response(new ReadableStream({
         start(controller) {
             // Split even multi-byte characters and SSE frame separators.

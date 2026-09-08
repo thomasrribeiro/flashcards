@@ -1,23 +1,12 @@
 import { createHash } from 'node:crypto';
 import { Agent } from 'undici';
 import { buildFreshGenerationContext, FRESH_GENERATION_VERSION } from '../../src/fresh-generation.js';
-import { freshGenerationSchema } from './fresh-generation-schema.js';
 import { requestBackgroundGeneration } from './background-generation.js';
 
 const hash = value => `sha256:${createHash('sha256').update(value).digest('hex')}`;
 // Whole-field plans span multiple subjects and need more time than a single
 // deck/chapter. Keep a finite per-attempt bound without lowering model effort.
 const generationTimeoutMs = jobType => (jobType === 'curriculum-design' ? 45 : 20) * 60 * 1000;
-
-// Project even invalid drafts before repair: no chapters, publication metadata,
-// credentials, paths, or extra fields can become model context.
-function projectDraft(value, schema) {
-    if (schema.type === 'object') return Object.fromEntries(Object.entries(schema.properties)
-        .filter(([key]) => value && Object.hasOwn(value, key))
-        .map(([key, child]) => [key, projectDraft(value[key], child)]));
-    if (schema.type === 'array') return Array.isArray(value) ? value.map(item => projectDraft(item, schema.items)) : null;
-    return typeof value === schema.type ? value : null;
-}
 
 function transportError(error, timeoutMs) {
     // Never expose arbitrary provider messages, URLs, request bodies or keys.
@@ -80,14 +69,10 @@ export async function requestFreshGeneration({
     if (!schema || schema.type !== 'object' || schema.additionalProperties !== false) {
         throw new Error('A strict output schema is required.');
     }
-    const context = buildFreshGenerationContext({ jobType, subjects, mandatoryDecks, catalog, deckId, chapterId });
     if (repair !== undefined) {
-        if (jobType !== 'curriculum-design' || !repair?.draft || !Array.isArray(repair.issues)
-            || !repair.issues.length || repair.issues.some(issue => typeof issue !== 'string' || !issue.trim())) {
-            throw new Error('Invalid curriculum repair input.');
-        }
-        context.repair = { draft: projectDraft(repair.draft, freshGenerationSchema('curriculum-design')), issues: [...repair.issues] };
+        throw new Error('Repair context is not supported. Update the instructions and start a fresh job.');
     }
+    const context = buildFreshGenerationContext({ jobType, subjects, mandatoryDecks, catalog, deckId, chapterId });
     const input = JSON.stringify(context);
     // AbortSignal alone does not override the HTTP client's shorter header /
     // body timeouts. Scope the transport to this job; never change global fetch.

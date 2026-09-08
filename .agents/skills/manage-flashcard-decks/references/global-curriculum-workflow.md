@@ -245,8 +245,12 @@ Use an empty array when none are relevant. These conditions do not prevent
 proposing an educational curriculum, but must not be represented as satisfied.
 Missing knowledge or computational skills needed for practice are curriculum
 defects, not practice disclaimers. Never move a defect to practiceNotes simply
-to pass validation. The host retains drafts and permits one repair pass before
-rejecting unresolved defects. Intentional scope exclusions remain visible in
+to pass validation. This job has one generation attempt: finish the field,
+entry-route, and outcome-contract audits within this response rather than
+deferring corrections to a later repair call. Correct resolvable defects before
+returning; report genuinely unresolved defects honestly. The host retains the
+draft for external review but never returns it to you as repair context.
+Intentional scope exclusions remain visible in
 coverage for human review. Never fabricate verification to pass this gate.
 
 A result is a proposal for human review.

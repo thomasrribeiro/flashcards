@@ -326,8 +326,10 @@ confirmed, the response may still run. Response IDs and completed drafts remain
 under `~/.flashcards/generation-drafts/`; restarting the runner does not
 automatically resume an interrupted request. `store: false` is preserved, but
 [background mode temporarily retains response data for polling](https://developers.openai.com/api/docs/guides/background).
-The existing single repair pass may use only that job's own draft and validation
-issues, never earlier curricula. Deck and chapter jobs retain their foreground
+Each global job makes exactly one generation call. Invalid drafts are retained
+for external review, never fed back to the model. Iterations follow review →
+update canonical instructions → push/deploy → fresh generation; generated
+curricula are not manually patched. Deck and chapter jobs retain their foreground
 transport and 20-minute deadline.
 
 API keys entered in Settings are validated against the provider and encrypted
@@ -365,9 +367,9 @@ checkout cannot contaminate a production job. Before claiming work, the runner
 pins its workflow checkout to the most recent successful GitHub Pages
 deployment; the request provenance guard still verifies the exact commit.
 Each curriculum request is authored in a disposable Git worktree, so a failed
-draft cannot leave files that block the next request. Subject drafts receive
-one bounded repair pass when deterministic subject, roadmap, or global-curriculum
-validation rejects an otherwise completed agent run.
+draft cannot leave files that block the next request. Legacy subject-design
+drafts retain their bounded repair pass; restricted global `curriculum-design`
+jobs never repair or regenerate within the same request.
 Output is written to `~/.flashcards/runner/stdout.log` and `stderr.log`;
 uninstalling the service leaves those diagnostic logs and checkouts in place.
 

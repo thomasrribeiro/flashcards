@@ -15,10 +15,10 @@ For isolated fresh global `curriculum-design` requests, the model receives only
 the strict output schema, subject names, and optional mandatory deck names.
 That workflow supersedes the
 legacy subject-design context loading below; never supply old curricula to it.
-If this job's fresh candidate fails validation, the host may make one bounded
-repair call using that candidate and its defects, with
-[references/global-curriculum-repair.md](references/global-curriculum-repair.md).
-This does not grant access to the published curriculum or previous jobs.
+Each job makes one generation call. The host retains invalid drafts for external
+review but never sends a draft or validation issues back to the model. Iteration
+must follow review → update canonical instructions → push/deploy → fresh job.
+Do not edit generated curricula to make an instruction experiment pass.
 
 For an external review or an explicitly authorized generate/review iteration,
 use [references/curriculum-evaluation-workflow.md](references/curriculum-evaluation-workflow.md).

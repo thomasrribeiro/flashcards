@@ -8,8 +8,9 @@ experiment unless acceptance itself was authorized.
 ## Record the experiment
 
 Record the request ID, workflow commit, subjects and mandatory-deck inputs,
-model/reasoning, candidate commit, and published baseline commit. Include any
-repair attempts. Compare the complete specifications, not just deck IDs or
+model/reasoning, candidate commit, and published baseline commit. Record the
+single generation attempt (and distinguish historical repaired jobs). Compare
+the complete specifications, not just deck IDs or
 counts. Renames and changes of ownership are not automatically lost coverage.
 Check remote job state before submission; never duplicate a pending job or
 blindly repeat an ambiguously acknowledged paid request.
@@ -60,8 +61,13 @@ and push/deploy only when authorized. Pin the next job to the deployed commit.
 
 Run one job at a time. Inspect its result before requesting another. Use the
 same requested subjects and no mandatory additions unless the user requested
-them. Each fresh run starts from the input allowlist, not previous proposals;
-the existing one-pass repair may use only that job's own draft and defects.
+them. Every iteration follows review → update canonical instructions →
+push/deploy → fresh generation. Each job makes one model call using only the
+input allowlist. Never provide a draft, validation defects, reviewer feedback,
+or previous proposal as extra context, and never edit generated outputs to pass
+the review. Express supported improvements in the versioned instructions;
+do not launch another quality iteration without an instruction revision.
+Read-only polling reconnects retrieve the same response, not a new generation.
 
 Stop when structural checks pass and the broad review finds no unresolved
 major coverage, readiness, or teaching-contract defects; report minor caveats
