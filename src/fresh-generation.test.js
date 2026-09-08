@@ -102,11 +102,11 @@ describe('restricted provider request', () => {
         apiKey: 'test-key', schema: { type: 'object', properties: {}, required: [], additionalProperties: false }
     });
     const completed = { id: 'response-1', status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: '{}' }] }] };
-    it('has no tools, previous responses, storage or old content; pins the requested model without a model whitelist', async () => {
+    it('has no tools, previous responses, persistent storage or old content; pins the requested model without a model whitelist', async () => {
         const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(completed)));
         const result = await requestFreshGeneration({ ...options(), fetchImpl });
         const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
-        expect(body).toMatchObject({ model: 'future-model-id', reasoning: { effort: 'high' }, tools: [], tool_choice: 'none', store: false, stream: true, truncation: 'disabled' });
+        expect(body).toMatchObject({ model: 'future-model-id', reasoning: { effort: 'high' }, tools: [], tool_choice: 'none', store: false, background: true, stream: false, truncation: 'disabled' });
         expect(JSON.parse(body.input)).toEqual({ subjects: ['math'] });
         expect(JSON.stringify(body)).not.toMatch(/OLD_|test-key|previous_response_id|conversation/);
         expect(result.provenance.inputHash).toMatch(/^sha256:[a-f0-9]{64}$/);
@@ -138,7 +138,7 @@ describe('restricted provider request', () => {
         const response = { ...completed, output: [{ type: 'message', content: [{ type: 'output_text', text: '{"title":"géométrie"}' }] }] };
         const fetchImpl = vi.fn(async () => streamResponse(': keepalive\r\n\r\ndata: {"type":"response.output_text.delta","delta":"partial"}\r\n\r\n'
             + `event: response.completed\r\ndata: ${JSON.stringify({ type: 'response.completed', response })}\r\n\r\n`));
-        const result = await requestFreshGeneration({ ...options(), fetchImpl });
+        const result = await requestFreshGeneration({ ...options(), jobType: 'deck-plan', deckId: 'physics/mechanics', fetchImpl });
         expect(result.candidate).toEqual({ title: 'géométrie' });
         expect(result.provenance.responseId).toBe('response-1');
         expect(fetchImpl).toHaveBeenCalledTimes(1);
@@ -147,13 +147,13 @@ describe('restricted provider request', () => {
 
     it.each(['response.failed', 'response.incomplete', 'error'])('rejects streamed %s without leaking provider content or retrying', async type => {
         const fetchImpl = vi.fn(async () => streamResponse(`data: ${JSON.stringify({ type, message: 'test-key secret' })}\n\n`));
-        await expect(requestFreshGeneration({ ...options(), fetchImpl })).rejects.toThrow('Generation did not complete. No candidate was accepted.');
+        await expect(requestFreshGeneration({ ...options(), jobType: 'deck-plan', deckId: 'physics/mechanics', fetchImpl })).rejects.toThrow('Generation did not complete. No candidate was accepted.');
         expect(fetchImpl).toHaveBeenCalledTimes(1);
     });
 
     it.each(['data: {"type":"response.created"}\n\n', 'data: [DONE]\n\n', 'data: invalid secret\n\n'])('rejects truncated or malformed streams', async text => {
         const fetchImpl = vi.fn(async () => streamResponse(text));
-        await expect(requestFreshGeneration({ ...options(), fetchImpl })).rejects.toThrow(/Generation stream ended|invalid response/);
+        await expect(requestFreshGeneration({ ...options(), jobType: 'deck-plan', deckId: 'physics/mechanics', fetchImpl })).rejects.toThrow(/Generation stream ended|invalid response/);
         expect(fetchImpl).toHaveBeenCalledTimes(1);
     });
 
@@ -173,7 +173,8 @@ describe('restricted provider request', () => {
                 fetchImpl: async () => Response.json(completed) });
             const milliseconds = minutes * 60_000;
             expect(transport.Agent).toHaveBeenLastCalledWith({ headersTimeout: milliseconds, bodyTimeout: milliseconds });
-            expect(timeout).toHaveBeenLastCalledWith(milliseconds);
+            expect(timeout).toHaveBeenCalledWith(milliseconds);
+            if (jobType === 'curriculum-design') expect(timeout).toHaveBeenLastCalledWith(30_000);
         } finally { timeout.mockRestore(); }
     });
 
@@ -182,7 +183,7 @@ describe('restricted provider request', () => {
     ])('reports the %s deadline without retrying', async (jobType, minutes) => {
         const fetchImpl = vi.fn(async () => { throw new DOMException('secret provider data', 'TimeoutError'); });
         await expect(requestFreshGeneration({ ...options(), jobType, deckId: 'physics/mechanics', chapterId: '01_basics', fetchImpl }))
-            .rejects.toThrow(`Generation timed out after ${minutes} minutes.`);
+            .rejects.toThrow(jobType === 'curriculum-design' ? 'Generation submission timed out. Not retried automatically.' : `Generation timed out after ${minutes} minutes.`);
         expect(fetchImpl).toHaveBeenCalledTimes(1);
         expect(fetchImpl.mock.calls[0][1].dispatcher.destroyed).toBe(true);
     });

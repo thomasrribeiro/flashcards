@@ -84,6 +84,10 @@ describe('queued restricted runner', () => {
         expect(state.published[0].catalog.decks[0].outcomes).toHaveLength(2);
         expect(JSON.parse(readFileSync(path.join(state.root, 'generation-archive/request-1/attempts/attempt-1.json'))).candidate).toEqual(first);
         expect(readFileSync(path.join(retained(), 'attempt-2.json'), 'utf8')).not.toContain('test-only');
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1-response.json')))).toMatchObject({
+            requestId: 1, attempt: 1, responseId: 'response-test', background: true
+        });
+        expect(statSync(path.join(retained(), 'attempt-1-response.json')).mode & 0o777).toBe(0o600);
     });
     it('preserves practice disclaimers without charging for a repair', async () => {
         const job = setup(); const candidate = globalCandidate();

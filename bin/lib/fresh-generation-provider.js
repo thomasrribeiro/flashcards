@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { Agent } from 'undici';
 import { buildFreshGenerationContext, FRESH_GENERATION_VERSION } from '../../src/fresh-generation.js';
 import { freshGenerationSchema } from './fresh-generation-schema.js';
+import { requestBackgroundGeneration } from './background-generation.js';
 
 const hash = value => `sha256:${createHash('sha256').update(value).digest('hex')}`;
 // Whole-field plans span multiple subjects and need more time than a single
@@ -70,7 +71,7 @@ async function readGenerationResponse(response) {
 export async function requestFreshGeneration({
     jobType, subjects, mandatoryDecks, catalog, deckId, chapterId,
     instructions, schema, modelId, reasoningEffort, providerId = 'openai',
-    apiKey, signal, fetchImpl = fetch, repair
+    apiKey, signal, fetchImpl = fetch, repair, onResponseCreated
 }) {
     if (providerId !== 'openai') throw new Error('This provider does not yet support restricted generation.');
     if (!apiKey) throw new Error('A connected provider credential is required.');
@@ -92,30 +93,30 @@ export async function requestFreshGeneration({
     // body timeouts. Scope the transport to this job; never change global fetch.
     const timeoutMs = generationTimeoutMs(jobType);
     const dispatcher = new Agent({ headersTimeout: timeoutMs, bodyTimeout: timeoutMs });
+    const jobSignal = AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]);
+    const body = {
+        model: modelId,
+        reasoning: { effort: reasoningEffort }, instructions, input,
+        tools: [], tool_choice: 'none', store: false, stream: true,
+        truncation: 'disabled',
+        text: { format: { type: 'json_schema', name: 'generation_candidate', strict: true, schema } }
+    };
     let result;
     try {
-        const response = await fetchImpl('https://api.openai.com/v1/responses', {
-            method: 'POST',
-            dispatcher,
-            signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
-            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: modelId,
-                reasoning: { effort: reasoningEffort },
-                instructions,
-                input,
-                tools: [],
-                tool_choice: 'none',
-                store: false,
-                stream: true,
-                truncation: 'disabled',
-                text: { format: { type: 'json_schema', name: 'generation_candidate', strict: true, schema } }
-            })
-        });
-        // Do not echo provider error bodies: they can contain request data or
-        // credentials. Never silently retry a paid or uncertain generation.
-        if (!response.ok) throw new Error(`Generation provider returned HTTP ${response.status}.`);
-        result = await readGenerationResponse(response);
+        if (jobType === 'curriculum-design') {
+            result = await requestBackgroundGeneration({ body, apiKey, signal: jobSignal,
+                dispatcher, fetchImpl, onCreated: onResponseCreated });
+        } else {
+            const response = await fetchImpl('https://api.openai.com/v1/responses', {
+                method: 'POST', dispatcher, signal: jobSignal,
+                headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            // Do not echo provider error bodies: they can contain request data
+            // or credentials. Never retry a paid or uncertain generation.
+            if (!response.ok) throw new Error(`Generation provider returned HTTP ${response.status}.`);
+            result = await readGenerationResponse(response);
+        }
     } catch (error) {
         if (error instanceof TypeError || ['AbortError', 'TimeoutError'].includes(error?.name) || error?.cause?.code || error?.code) {
             throw transportError(error, timeoutMs);

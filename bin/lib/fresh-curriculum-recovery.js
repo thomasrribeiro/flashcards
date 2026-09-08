@@ -21,7 +21,10 @@ export async function generateRecoverableCurriculum(options, { draftsRoot, reque
             // completed response. There is no automatic replay after transport failure.
             save(`attempt-${attempt + 1}-started.json`, { requestId, attempt: attempt + 1, startedAt: new Date().toISOString() });
             const generated = await requestFreshGeneration({ ...options,
-                instructions: freshGenerationInstructions('curriculum-design', { repair: Boolean(repair) }), repair });
+                instructions: freshGenerationInstructions('curriculum-design', { repair: Boolean(repair) }), repair,
+                onResponseCreated: responseId => save(`attempt-${attempt + 1}-response.json`, {
+                    requestId, attempt: attempt + 1, responseId, background: true, recordedAt: new Date().toISOString()
+                }) });
             save(`attempt-${attempt + 1}.json`, { candidate: generated.candidate, provenance: generated.provenance });
             attempts.push(generated.provenance);
             const issues = [];

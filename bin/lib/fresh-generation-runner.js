@@ -48,7 +48,7 @@ export function renderFreshChapter(candidate, chapter, deck, generation) {
     return { markdown, cardCount: cards.length };
 }
 
-export async function runFreshGenerationJob(queued, { registryRoot, credential, beforePublish = async () => {},
+export async function runFreshGenerationJob(queued, { registryRoot, credential, signal, beforePublish = async () => {},
     draftsRoot = path.join(os.homedir(), '.flashcards', 'generation-drafts') }) {
     const payload = validateFreshProvenance(queued.payload);
     assertRepositoryCommit(FLASHCARDS_ROOT, payload.workflowCommit);
@@ -73,7 +73,7 @@ export async function runFreshGenerationJob(queued, { registryRoot, credential, 
         const requestOptions = { jobType, subjects: payload.subjects, mandatoryDecks: payload.mandatoryDecks,
             ...(jobType === 'curriculum-design' ? {} : { catalog: before, deckId: payload.deckId, chapterId: payload.chapterId }),
             instructions, schema: freshGenerationSchema(jobType), modelId: queued.model_id, reasoningEffort: payload.reasoningEffort,
-            providerId: queued.provider_id, apiKey: credential?.apiKey };
+            providerId: queued.provider_id, apiKey: credential?.apiKey, signal };
         const generated = jobType === 'curriculum-design'
             ? await generateRecoverableCurriculum(requestOptions, {
                 draftsRoot, requestId: queued.id, beforeAttempt: beforePublish

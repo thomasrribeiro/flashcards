@@ -2,6 +2,7 @@
 
 import { Command, Option } from 'commander';
 import { runFreshGenerationJob } from './lib/fresh-generation-runner.js';
+import { withGenerationTerminationSignal } from './lib/background-generation.js';
 import { FRESH_GENERATION_VERSION } from '../src/fresh-generation.js';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -954,14 +955,16 @@ addAgentOptions(requests
             });
             const payload = queued.payload || {};
             if (payload.workflowVersion === FRESH_GENERATION_VERSION || jobType === 'curriculum-design') {
-                const result = await runFreshGenerationJob(queued, { registryRoot: resolvePath(options.registryRoot || '.'), credential,
+                const result = await withGenerationTerminationSignal(signal => runFreshGenerationJob(queued, {
+                    registryRoot: resolvePath(options.registryRoot || '.'), credential, signal,
                     beforePublish: async () => {
+                        signal.throwIfAborted();
                         const current = trustedRunner
                             ? (await getClaimedGenerationRequest(queued.id, { workerUrl: options.workerUrl, runnerToken: options.runnerToken })).request
                             : (await listGenerationRequests({ workerUrl: options.workerUrl })).requests.find(item => item.id === queued.id);
                         if (!current || current.status !== 'running') throw new Error('Job is no longer running.');
                     }
-                });
+                }));
                 const update = trustedRunner ? updateClaimedGenerationRequest : updateGenerationRequest;
                 await update(queued.id, result, { workerUrl: options.workerUrl, runnerToken: options.runnerToken });
                 console.log(`Request ${queued.id} is ready for review: ${result.resultUrl}`);

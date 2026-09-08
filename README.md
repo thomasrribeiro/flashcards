@@ -314,6 +314,22 @@ and reasoning effort for each queued job. Anthropic, OpenAI, and Google Gemini
 connections load the models available to that user's API account; local Codex
 and custom runners may still use their configured defaults.
 
+Fresh global curriculum jobs use the restricted `curriculum-design` workflow:
+the model receives only the canonical instructions, subject names, optional
+mandatory deck names, and output schema. OpenAI generation runs in background
+mode; the runner saves its response ID privately and reconnects by polling that
+same response. It never automatically resubmits an uncertain creation. A valid
+response ID cannot be recovered if the initial acknowledgement was lost.
+Each attempt has a 45-minute deadline; repeated retrieval failures are bounded,
+and interruption requests remote cancellation. If cancellation cannot be
+confirmed, the response may still run. Response IDs and completed drafts remain
+under `~/.flashcards/generation-drafts/`; restarting the runner does not
+automatically resume an interrupted request. `store: false` is preserved, but
+[background mode temporarily retains response data for polling](https://developers.openai.com/api/docs/guides/background).
+The existing single repair pass may use only that job's own draft and validation
+issues, never earlier curricula. Deck and chapter jobs retain their foreground
+transport and 20-minute deadline.
+
 API keys entered in Settings are validated against the provider and encrypted
 server-side with user- and provider-bound authenticated encryption. The browser,
 queued job, run manifest, logs, and Git repository never receive the stored key.
