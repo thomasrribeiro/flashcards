@@ -307,6 +307,7 @@ export async function loadPullRequestChapter(request, {
 }
 
 export function generationRequestName(request, registryRepository = '') {
+    if (request.payload?.evaluationOnly) return ['~', 'evaluation', ...(request.payload.subjects || [])].join(' / ');
     const repository = registryRepository || (
         ['curriculum-design', 'subject-design', 'deck-plan'].includes(request.jobType)
             ? request.targetRepository : ''

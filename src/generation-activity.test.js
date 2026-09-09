@@ -109,6 +109,8 @@ describe('generation activity', () => {
         expect(generationRequestName({ jobType: 'deck-build', deckId: 'mathematics/linear-algebra' }, repository))
             .toBe(`${root} / mathematics / linear-algebra`);
         expect(generationRequestName({ jobType: 'curriculum-design' })).toBe('~ / curricula');
+        expect(generationRequestName({ jobType: 'curriculum-design', payload: { evaluationOnly: true, subjects: ['linear-algebra'] } }, repository))
+            .toBe('~ / evaluation / linear-algebra');
     });
 
     it('opens deck-plan previews directly on the generated chapter DAG', () => {

@@ -127,6 +127,16 @@ skill. Their criteria are reviewer-only, not extra generator input. Passing
 synthetic tests is not evidence of model quality; paid probes require a recorded
 budget, and full-scale promotion requires their independent review.
 
+Registry-free probes use `curriculumProbeJob` and the authenticated job queue
+with `evaluationOnly: true`. Their payload contains only subject names and
+the pinned workflow/model/reasoning configuration, with no registry target or
+baseline. The trusted runner uses the same instruction file, strict schema,
+single-call retention and compiler as production, but branches before any
+registry access or publication. The evaluation flag is never model context.
+Successful probes expose a read-only preview against an empty evaluation
+catalog. Acceptance is blocked using the stored request payload, not merely
+the preview's metadata. They cannot change the collection or published DAG.
+
 Accepted scope/practice/level specifications are projected into later chapter
 and card requests. Their changes invalidate affected and downstream plans;
 archived content and review history remain untouched. Global generation still

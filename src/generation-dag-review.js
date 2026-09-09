@@ -21,12 +21,13 @@ export function canReviewGenerationDag(request) {
 }
 
 export function hasRetainedGenerationDag(request) {
-    return request?.status === 'failed' && request.result?.preview?.available === true
+    return (request?.status === 'failed' || (request?.status === 'needs-review' && request.payload?.evaluationOnly === true))
+        && request.result?.preview?.available === true
         && request.result.preview.readOnly === true;
 }
 
 export function canApplyGenerationDag(request) {
-    return request?.status === 'needs-review' && !request.result?.preview?.readOnly;
+    return request?.status === 'needs-review' && !request.payload?.evaluationOnly && !request.result?.preview?.readOnly;
 }
 
 export async function loadRetainedGenerationDag(request, apiRequest) {

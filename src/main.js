@@ -5454,7 +5454,8 @@ async function enterCurriculumPreview(request, close, trigger) {
         const publishedIndex = curriculumPreview?.publishedIndex || curriculumIndex || await loadCurriculumIndex();
         curriculumPreview = {
             publishedIndex, generatedIndex: catalog, request, commit, pull, issues,
-            showing: 'generated', diff: compareGenerationDag(publishedIndex, catalog, request)
+            showing: 'generated', diff: compareGenerationDag(request.payload?.evaluationOnly
+                ? { subjects: [], decks: [] } : publishedIndex, catalog, request)
         };
         curriculumIndex = catalog;
         curriculumNavigationHistory = [];
@@ -5752,7 +5753,7 @@ function curriculumPreviewBanner() {
     const { pull, commit } = curriculumPreview;
     const recorded = request.result?.provenance;
     for (const value of [
-        pull ? `PR #${pull.number} · ${commit.slice(0, 12)}` : `Draft · Request ${request.id}`,
+        pull ? `PR #${pull.number} · ${commit.slice(0, 12)}` : `${request.payload?.evaluationOnly ? 'Evaluation' : 'Draft'} · Request ${request.id}`,
         generationRequestName(request, pull ? `${pull.owner}/${pull.repository}` : request.targetRepository),
         recorded?.resolvedModelId || recorded?.modelId || request.modelId || 'Model not recorded',
         `${recorded?.reasoningEffort || request.payload?.reasoningEffort || 'Unspecified'} reasoning`
@@ -5764,6 +5765,7 @@ function curriculumPreviewBanner() {
     const actions = document.createElement('div');
     actions.className = 'curriculum-preview-actions';
     for (const [value, label] of [['published', 'Current'], ['generated', 'Proposed']]) {
+        if (request.payload?.evaluationOnly && value === 'published') continue;
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = label;

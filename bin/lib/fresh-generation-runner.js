@@ -10,7 +10,7 @@ import { freshGenerationSchema } from './fresh-generation-schema.js';
 import { freshGenerationInstructions } from './fresh-generation-instructions.js';
 import { globalCurriculumTarget } from '../../src/global-curriculum-input.js';
 import { freshCandidateCatalog, writeFreshCatalog, rejectedCurriculumResult } from './fresh-generation-output.js';
-import { validateFreshProvenance } from '../../src/fresh-generation-contract.js';
+import { validateFreshProvenance, validateCurriculumProbeJob } from '../../src/fresh-generation-contract.js';
 import { canonicalSubjectNames, validateGlobalCurriculumCandidate, validateChapterCurriculumCandidate } from '../../src/fresh-generation.js';
 import { parseDeck } from '../../src/parser.js';
 import { annotateCardIds } from '../../src/card-id-annotator.js';
@@ -50,6 +50,25 @@ export function renderFreshChapter(candidate, chapter, deck, generation) {
 
 export async function runFreshGenerationJob(queued, { registryRoot, credential, signal, beforePublish = async () => {},
     draftsRoot = path.join(os.homedir(), '.flashcards', 'generation-drafts') }) {
+    // This branch must precede every registry/Git operation. Probes use the
+    // normal owner-scoped queue credential but cannot publish or apply content.
+    if (queued.payload?.evaluationOnly !== undefined) {
+        const payload = validateCurriculumProbeJob(queued);
+        assertRepositoryCommit(FLASHCARDS_ROOT, payload.workflowCommit);
+        const generated = await generateRecoverableCurriculum({ jobType: 'curriculum-design',
+            subjects: payload.subjects, schema: freshGenerationSchema('curriculum-design'),
+            modelId: queued.model_id, reasoningEffort: payload.reasoningEffort, providerId: queued.provider_id,
+            apiKey: credential?.apiKey, signal }, { draftsRoot, requestId: queued.id, beforeAttempt: beforePublish });
+        const provenance = { ...generated.provenance, workflow_commit: payload.workflowCommit,
+            request_id: queued.id, evaluationOnly: true };
+        const catalog = freshCandidateCatalog({ registry: { id: 'evaluation', name: 'Evaluation' }, subjects: [], decks: [] },
+            generated.candidate, 'curriculum-design', { generation: provenance });
+        await beforePublish();
+        return { status: generated.issues.length ? 'failed' : 'needs-review',
+            ...(generated.issues.length ? { error: 'Probe needs revision. Draft available for review.' } : {}),
+            result: { evaluationOnly: true, provenance,
+                preview: { available: true, readOnly: true, issues: generated.issues, catalog } } };
+    }
     const payload = validateFreshProvenance(queued.payload);
     assertRepositoryCommit(FLASHCARDS_ROOT, payload.workflowCommit);
     let draft = beginRegistryDraft(registryRoot, queued.id, { baseCommit: payload.registryBaseCommit, baseRef: payload.registryRef });

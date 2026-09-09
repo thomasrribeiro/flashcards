@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { canReviewGenerationDag, canApplyGenerationDag, loadRetainedGenerationDag, compareGenerationDag, generationJobCategory, generationModelSummary } from './generation-dag-review.js';
 
 describe('generation curriculum review', () => {
+    it('allows viewing a successful evaluation but never applying it, even without preview metadata', () => {
+        const request = { jobType: 'curriculum-design', status: 'needs-review', payload: { evaluationOnly: true },
+            result: { preview: { available: true, readOnly: true } } };
+        expect(canReviewGenerationDag(request)).toBe(true);
+        expect(canApplyGenerationDag(request)).toBe(false);
+        expect(canApplyGenerationDag({ ...request, result: {} })).toBe(false);
+    });
     it('reviews completed rejected graphs without allowing Apply or requiring a PR', async () => {
         for (const jobType of ['curriculum-design', 'deck-plan']) {
             const request = { id: 52, jobType, status: 'failed', result: { preview: { available: true, readOnly: true } } };

@@ -19,6 +19,8 @@ const retained = () => path.join(state.root, 'retained', readdirSync(path.join(s
 import { freshGenerationInstructions } from './fresh-generation-instructions.js';
 import { FLASHCARDS_ROOT } from './paths.js';
 import { compileGlobalCurriculumCandidate } from '../../src/global-curriculum-compiler.js';
+import { curriculumProbeJob } from '../../src/fresh-generation-contract.js';
+import { beginRegistryDraft } from './github-publisher.js';
 
 afterEach(() => vi.unstubAllGlobals());
 const outcomes = [{ id: 'basics', description: 'Explain arithmetic.' }];
@@ -54,6 +56,33 @@ function globalCandidate() {
             outcome_ids: ['basics'], rationale: 'Entry arithmetic capability.' }] };
 }
 describe('queued restricted runner', () => {
+    it.each([false, true])('runs a registry-free, read-only probe with scope failure=%s and no publication', async hasIssues => {
+        setup(); beginRegistryDraft.mockClear();
+        const candidate = globalCandidate();
+        if (hasIssues) candidate.scopeIssues = ['Missing a necessary bridge.'];
+        const fetchImpl = respond(candidate);
+        const input = curriculumProbeJob(['math'], { providerId: 'openai', modelId: 'future-model', reasoningEffort: 'high' }, 'b'.repeat(40));
+        const job = { id: 61, job_type: input.jobType, provider_id: input.providerId, model_id: input.modelId, payload: input.payload };
+        const result = await runFreshGenerationJob(job, { registryRoot: '/not-a-registry', credential: { apiKey: 'test-only' } });
+        expect(result.status).toBe(hasIssues ? 'failed' : 'needs-review');
+        expect(result.result).toMatchObject({ evaluationOnly: true, preview: { available: true, readOnly: true, issues: candidate.scopeIssues } });
+        expect(result.result.proposals).toBeUndefined();
+        expect(result.result.preview.catalog.decks[0].chapters).toEqual([]);
+        expect(beginRegistryDraft).not.toHaveBeenCalled();
+        expect(state.published).toEqual([]);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+        expect(JSON.parse(body.input)).toEqual({ subjects: ['math'] });
+        expect(body.instructions).toBe(freshGenerationInstructions('curriculum-design'));
+        expect(body.tools).toEqual([]);
+        expect(JSON.stringify(body)).not.toMatch(/evaluationOnly|OLD_|registryBaseCommit/);
+    });
+    it('rejects a probe with production context before acquiring a draft or making a call', async () => {
+        const job = setup(); job.payload.evaluationOnly = true;
+        const fetchImpl = respond({}); beginRegistryDraft.mockClear();
+        await expect(runFreshGenerationJob(job, { credential: { apiKey: 'test-only' } })).rejects.toThrow(/registry-free/);
+        expect(fetchImpl).not.toHaveBeenCalled(); expect(beginRegistryDraft).not.toHaveBeenCalled();
+    });
     it('rejects legacy model output in new jobs while retaining it without another call', async () => {
         const job = setup();
         const legacy = compileGlobalCurriculumCandidate(globalCandidate(), ['math']);
