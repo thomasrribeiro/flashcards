@@ -23,6 +23,7 @@
     "src/subject-generation-contract.js",
     "src/fresh-generation.js",
     "src/curriculum-diagnostics.js",
+    "src/global-curriculum-compiler.js",
     "src/fresh-generation-contract.js",
     "src/generation-dag-review.js",
     "templates/",
@@ -42,6 +43,7 @@
     "runner:status": "node scripts/manage-generation-runner.js status",
     "runner:uninstall": "node scripts/manage-generation-runner.js uninstall",
     "test": "vitest run",
+    "test:curriculum": "vitest run src/global-curriculum-compiler.test.js src/global-curriculum-coverage.test.js src/curriculum-diagnostics.test.js src/fresh-generation.test.js src/fresh-generation-integration.test.js src/global-curriculum-input.test.js bin/lib/fresh-generation-runner.test.js",
     "test:e2e": "playwright test"
   },
   "dependencies": {

@@ -17,9 +17,10 @@ blindly repeat an ambiguously acknowledged paid request.
 
 ## Evaluate independently
 
-Read the global generation contract. Establish a field-and-depth review map
-independently of the candidate's titles, using authoritative curricula and
-domain sources when needed. The published curriculum is comparison evidence,
+Read the global generation contract. Before opening a new candidate, freeze a
+field-and-depth review map and its source basis for the subject set, and record
+its version alongside the instruction/schema hashes. Use authoritative curricula
+and domain sources when needed. The published curriculum is comparison evidence,
 not an unquestionable gold standard. Do not grade only topics mentioned in
 earlier feedback. Keep new, previously unflagged branches and entry paths in
 each review so instruction changes are tested for generalization.
@@ -51,6 +52,66 @@ Inspect both gains and regressions; extra decks or longer descriptions alone
 are not improvements. State limits of review rather than claiming exhaustive
 subject-matter certification.
 
+## Fixed acceptance rubric
+
+Classify findings before making a verdict:
+
+- **Structural blocker:** unresolved/ambiguous IDs, cycles, invalid contract
+  fields or violation of the requested subject/mandatory-deck input. Code
+  establishes these failures. Never guess, remove or repair a reference.
+- **Educational blocker:** a demonstrated missing major branch in the frozen
+  scope map, an unsupported substantive learning promise, a missing prerequisite
+  bridge, or substantial unrelated preparation imposed on a promised entry
+  capability. Cite the capability/depth and source basis, or the exact consumer
+  outcome/practice and complete prerequisite trace. A missing old deck name,
+  keyword or lower count is not evidence.
+- **Warning:** a plausible concern about depth, ownership or preparation whose
+  evidence is incomplete. Record what would resolve it; do not promote it to a
+  blocker merely because another organization is possible.
+- **Optional:** an additional specialty, stylistic preference, alternative
+  coherent grouping or redundant-but-meaningful explicit annotation. These do
+  not prevent acceptance. Nor do external-practice conditions alone.
+
+Judge graduate foundations and representative advanced continuations against
+the agreed destination, not every specialty offered by every source. A source
+mentioning a topic does not prove that it is a required major branch. Consolidated
+decks pass when their capabilities and usable entry paths survive. Different
+outcome IDs and partly used source decks are not reasons to demand more decks.
+
+Report structural validity, breadth/depth, readiness, teaching contract and
+learning usefulness separately, with evidence and uncertainty. Do not invent a
+weighted quality score or optimize deck/edge totals. A verdict requires review
+of every dimension: accept when no demonstrated blockers remain; accept with
+warnings for nonblocking concerns; otherwise needs revision. Empty scopeIssues
+is not independent acceptance. Model-declared issues must be reviewed too; do
+not silently alter them or bypass the production publication gate.
+
+Keep the rubric and scope map fixed across a comparison batch. Newly discovered
+substantial risks still deserve disclosure, but mark them as new criteria and
+reassess both candidates before attributing a regression or improvement. Do not
+silently move the goalposts or feed the map/review findings to the generator.
+
+## Preflight and bounded experiments
+
+Use [curriculum-evaluation-cases.md](curriculum-evaluation-cases.md) to calibrate
+the reviewer and define small fresh-generation probes before another full run.
+The offline suite tests compiler/runner invariants, not model quality. Probe
+review criteria are external and never appended to the generation instructions.
+
+Before spending, record the proposed instruction change and predicted effect,
+fixed cases, rubric version, model/reasoning, and run budget. Change one mechanism
+at a time when feasible. A coordinated schema/instruction migration is one
+explicit experiment, not evidence of which individual change caused its effect.
+Preserve raw/compiled artifacts and their hashes, all failures and all attempts.
+One result per version is exploratory evidence, not proof of reduced error rates.
+Repeated identical-input trials would need explicit approval to relax the user's
+instruction-update-between-iterations rule; never charge for them implicitly.
+
+Full-run promotion requires passing structural checks and the fixed probe review
+without demonstrated blockers. Do not claim reliability from synthetic fixtures
+or promote a prompt merely because it improved the most recently flagged topic.
+Keep paired gains/regressions visible and held-out fields separate from tuning.
+
 ## Deterministic inspection
 
 For a fresh JSON candidate or retained attempt wrapper, run:
@@ -61,7 +122,9 @@ flashcards curriculum check-candidate <candidate.json> --subjects <subject-names
 
 Repeat `--deck <subject/deck>` to limit detailed output to chosen entry paths.
 The runner also saves `attempt-1-diagnostics.json` beside each completed draft.
-These are read-only inspections: they reuse the candidate validator, separate
+These are read-only inspections: format-2 output is first compiled from its
+single outcome registry; historical candidates use their original representation.
+They reuse the candidate validator, separate
 structural errors from model-declared scope issues, and expose full cross-subject
 ancestor closures, indirect consumer counts, exact required outcome IDs, other
 source outcomes, alternative paths and level differences. No data is sent back

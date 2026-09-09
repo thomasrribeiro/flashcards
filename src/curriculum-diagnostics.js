@@ -1,17 +1,20 @@
 import { CURRICULUM_LEVELS, validateGlobalCurriculumCandidate } from './fresh-generation.js';
+import { compileGlobalCurriculumCandidate, GLOBAL_CURRICULUM_FORMAT } from './global-curriculum-compiler.js';
 
 /**
  * Read-only, provider-independent inspection of ONE supplied candidate.
  * No files, network, old curriculum, model calls, or candidate mutations.
  * Signals help a reviewer find paths to inspect; they are not quality gates.
  */
-export function inspectCurriculumCandidate(raw, subjects, { mandatoryDecks = [], deckIds = [] } = {}) {
+export function inspectCurriculumCandidate(raw, subjects, { mandatoryDecks = [], deckIds = [], requireModelFormat = false } = {}) {
     let candidate;
     try {
         if (!raw || !Array.isArray(raw.practiceNotes)) throw new Error('Missing practice notes report.');
-        candidate = validateGlobalCurriculumCandidate(raw, subjects, { requireCoverage: true, mandatoryDecks });
+        candidate = requireModelFormat || raw.schema_version === GLOBAL_CURRICULUM_FORMAT
+            ? compileGlobalCurriculumCandidate(raw, subjects, { mandatoryDecks })
+            : validateGlobalCurriculumCandidate(raw, subjects, { requireCoverage: true, mandatoryDecks });
     } catch (error) {
-        return { structuralValid: false, structuralErrors: [error.message], educationalReviewRequired: true };
+        return { structuralValid: false, structuralErrors: error.structuralErrors || [error.message], educationalReviewRequired: true };
     }
     const byId = new Map(candidate.decks.map(deck => [deck.id, deck]));
     for (const id of deckIds) if (!byId.has(id)) throw new Error(`Cannot inspect unknown deck: ${id}.`);

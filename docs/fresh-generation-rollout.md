@@ -5,8 +5,9 @@
 Preserve breadcrumbs, subject overview, subject-filtered deck views, local
 chapter views, and Prereqs & unlocks. The canonical prerequisite model is one
 global deck DAG plus one internal chapter DAG per deck. Do not add a full-graph
-screen. Cross-deck prerequisites identify required learning outcomes, not
-external chapters or blanket completion of entire decks.
+screen. Cross-deck prerequisites are deck-level requirements annotated with
+the outcomes that justify them. An annotation does not exempt a learner from
+the source deck or its ancestor closure. Chapter graphs remain local.
 
 Adding a subject and regenerating the curriculum must use the same global
 workflow with the full subject list. It is an order-independent input contract,
@@ -15,6 +16,10 @@ All three job types disclose and pin model and reasoning before launch.
 
 ## Implemented workflow
 
+- `src/global-curriculum-compiler.js`: model format 2 uses globally unique
+  outcome IDs as the sole dependency/coverage references. Deterministic lookup
+  derives owning subjects, deck edges, annotations and coverage targets. It
+  rejects ambiguous/unknown IDs and mixed formats rather than repairing them.
 - `src/fresh-generation.js`: allowlisted, canonical context projections;
   global/local candidate validators; exact subject coverage; cycle, unresolved
   outcome and cross-deck chapter checks; stale-base guard.
@@ -52,8 +57,10 @@ New global runs use `references/global-curriculum-workflow.md` verbatim, with
 no appended instructions or chapter/card-authoring bundle. The queued
 `workflowCommit` and recorded instruction/schema hashes pin the exact contract;
 the transport envelope remains `fresh-generation-v1`. The host stamps
-`curriculum_schema_version: 1` after validation; the model neither sees nor
-generates a version tag. Historical unversioned catalogs and the short-lived
+`curriculum_schema_version: 1` after validation. The new model-facing format
+uses numeric `schema_version: 2`; this is a serialization contract, not an
+educational scope tag. It is not exposed as a UI label. Historical unversioned
+catalogs and the short-lived
 `curriculum_version: whole-field-v1` marker remain readable. New runs require
 the coverage contract regardless of metadata.
 
@@ -67,11 +74,18 @@ Deduplication and uncertain-submission recovery distinguish required-deck lists,
 but not addition metadata. Old single-`newSubject` requests remain compatible.
 
 The structured candidate requires a domain-and-level coverage map targeting
-individual deck outcomes, deck learning levels, included/excluded scope,
-authentic practice, and `scopeIssues`. Deterministic checks reject unmapped
+globally unique outcome IDs, deck learning levels, included/excluded scope,
+authentic practice, and `scopeIssues`. The model emits each deck's
+`required_outcome_ids` and each coverage row's `outcome_ids`, with no redundant
+deck/outcome pairs, prerequisite lists or deck subject field. Compilation derives
+those fields for the existing catalog/viewers. It never adds learning content,
+guesses an intended reference, drops an edge, consults an old catalog or edits
+the raw response. Invalid or ambiguous references fail closed.
+
+Deterministic checks reject unmapped
 outcomes, missing targets, mismatched target levels, contradictory dispositions,
 duplicate rows, and empty rationales. Unresolved scope issues stop publication
-after one bounded repair pass; intentional exclusions persist in the catalog's
+without another generation call; intentional exclusions persist in the catalog's
 coverage rows for review. These checks cannot prove semantic completeness.
 The existing compact diff does not yet display the complete coverage map.
 
@@ -85,22 +99,33 @@ omit practice notes, but new global responses must include the array.
 Before validation, each completed global response is saved with its provenance
 under `~/.flashcards/generation-drafts/request-<id>-<unique>/` on the runner,
 outside disposable Git worktrees. Files are private to the runner user and
-contain no credentials or old catalog. Initial and repair attempts, validation
-reports, and start markers are retained even on cancellation or failure. A
-successful proposal also archives them under `generation-archive/request-<id>/attempts`.
-Retention is local on failure, not a failed-draft web preview or automatic resume;
-the error identifies the directory for inspection. Interrupted streams without
+contain no credentials or old catalog. The single raw candidate, validation
+report, diagnostics and start marker are retained even on cancellation or failure.
+A successful proposal also archives them under `generation-archive/request-<id>/attempts`.
+For valid structure, `attempt-1-compiled.json` records the derived candidate and
+compiler version plus hashes of both the raw and compiled JSON. New jobs accept
+only format 2; existing archived proposals remain readable without migration.
+Structurally valid scope failures expose a read-only web preview and diff;
+structural failures remain local and identify the retained directory. Neither
+case automatically resumes or repairs a job. Interrupted streams without
 a completed JSON candidate cannot supply a recoverable draft. Earlier discarded
 jobs cannot be recovered retroactively by this change.
 
-Only a completed response with validation defects triggers one additional paid
-call, disclosed at launch. The same model/reasoning and strict schema are used.
-Repair receives only subject names, mandatory names, schema-projected fields
-from this job's fresh candidate, and its defects. It never receives published
-content, conversation history, or tools. Both calls' hashes and response IDs
-are recorded. Cancellation is checked before each call and publication. A
-failed repair blocks publication; transport/refusal/incomplete-response failures
-are not retried. `global-curriculum-repair.md` owns the repair instructions.
+Every global job makes one generation call. Validation, external reviews and
+previous candidates never become model feedback. The permitted iteration is
+external review → update canonical instructions → test/push/deploy → fresh job.
+Read-only polling retrieves the same response; it is not another generation.
+Cancellation is checked before the call and publication. Transport/refusal/
+incomplete-response failures are not automatically retried.
+
+The external evaluation workflow uses a frozen scope map and separates
+structural/educational blockers from warnings and optional refinements. Neither
+counts nor the published curriculum define success. The fixed offline regression
+suite runs with `npm run test:curriculum`; reviewer calibration and proposed
+small paid probes are in `references/curriculum-evaluation-cases.md` within the
+skill. Their criteria are reviewer-only, not extra generator input. Passing
+synthetic tests is not evidence of model quality; paid probes require a recorded
+budget, and full-scale promotion requires their independent review.
 
 Accepted scope/practice/level specifications are projected into later chapter
 and card requests. Their changes invalidate affected and downstream plans;
@@ -133,8 +158,7 @@ are separate, still-used workflows rather than dead generation code.
    transaction. A concurrent registry change can leave accepted cards awaiting
    metadata reconciliation; never roll them back or overwrite newer work.
 5. Other providers need equally restricted adapters. No provider/model/reasoning
-   substitution or uncertain transport retry is allowed. The only automatic
-   follow-up is the disclosed single global-curriculum repair described above.
+   substitution, draft revision or uncertain transport retry is allowed.
 
 Existing queued legacy jobs keep their recorded workflow contract; they are
 not relabeled fresh. No live generation, content migration or provider billing

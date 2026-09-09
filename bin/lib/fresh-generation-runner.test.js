@@ -18,6 +18,7 @@ const runFreshGenerationJob = (job, options) => runJob(job, { ...options, drafts
 const retained = () => path.join(state.root, 'retained', readdirSync(path.join(state.root, 'retained'))[0]);
 import { freshGenerationInstructions } from './fresh-generation-instructions.js';
 import { FLASHCARDS_ROOT } from './paths.js';
+import { compileGlobalCurriculumCandidate } from '../../src/global-curriculum-compiler.js';
 
 afterEach(() => vi.unstubAllGlobals());
 const outcomes = [{ id: 'basics', description: 'Explain arithmetic.' }];
@@ -44,15 +45,27 @@ function respond(candidate) {
     return fetchImpl;
 }
 function globalCandidate() {
-    const source = JSON.parse(readFileSync(path.join(state.root, 'fresh-curriculum.json')));
-    return { subjects: ['math'], scopeIssues: [], practiceNotes: [],
-        decks: [{ ...source.decks[0], title: 'New arithmetic', level: 'foundational',
+    return { schema_version: 2, subjects: ['math'], scopeIssues: [], practiceNotes: [],
+        decks: [{ id: 'math/arithmetic', title: 'New arithmetic', description: 'Counting and operations.',
+            outcomes, required_outcome_ids: [], level: 'foundational',
             scope: { includes: ['Counting and operations.'], excludes: ['Algebra.'] },
             practice: ['Solve varied arithmetic problems.'] }],
         coverage: [{ subject: 'math', domain: 'Arithmetic', level: 'foundational', disposition: 'included',
-            targets: [{ deck_id: 'math/arithmetic', outcome_ids: ['basics'] }], rationale: 'Entry arithmetic capability.' }] };
+            outcome_ids: ['basics'], rationale: 'Entry arithmetic capability.' }] };
 }
 describe('queued restricted runner', () => {
+    it('rejects legacy model output in new jobs while retaining it without another call', async () => {
+        const job = setup();
+        const legacy = compileGlobalCurriculumCandidate(globalCandidate(), ['math']);
+        const fetchImpl = respond(legacy);
+        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
+            .rejects.toThrow(/needs revision/);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(state.published).toEqual([]);
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(legacy);
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1-diagnostics.json'))).structuralValid).toBe(false);
+        expect(readdirSync(retained())).not.toContain('attempt-1-compiled.json');
+    });
     it('retains a failed draft without making a repair call or publishing it', async () => {
         const job = setup(); const candidate = globalCandidate();
         candidate.scopeIssues = ['Missing advanced arithmetic outcome.'];
@@ -107,7 +120,7 @@ describe('queued restricted runner', () => {
     });
     it('retains but does not expose a cyclic graph to the DAG viewer', async () => {
         const job = setup(); const candidate = globalCandidate();
-        candidate.decks[0].prerequisites = ['math/arithmetic'];
+        candidate.decks[0].required_outcome_ids = ['basics'];
         const fetchImpl = respond(candidate);
         await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } })).rejects.toThrow(/needs revision/);
         expect(fetchImpl).toHaveBeenCalledTimes(1);
@@ -132,8 +145,10 @@ describe('queued restricted runner', () => {
         candidate.subjects = [...job.payload.subjects];
         for (const subject of job.payload.newSubjects) {
             const id = `${subject}/foundations`;
-            candidate.decks.push({ ...candidate.decks[0], subject, id, title: 'Foundations' });
-            candidate.coverage.push({ ...candidate.coverage[0], subject, domain: 'Foundations', targets: [{ deck_id: id, outcome_ids: ['basics'] }] });
+            const outcomeId = `${subject}-basics`;
+            candidate.decks.push({ ...candidate.decks[0], id, title: 'Foundations',
+                outcomes: [{ id: outcomeId, description: 'Explain the foundations.' }] });
+            candidate.coverage.push({ ...candidate.coverage[0], subject, domain: 'Foundations', outcome_ids: [outcomeId] });
         }
         const fetchImpl = respond(candidate);
         await runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
@@ -174,15 +189,23 @@ describe('queued restricted runner', () => {
         const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
         expect(body.instructions).toBe(readFileSync(path.join(FLASHCARDS_ROOT,
             '.agents/skills/manage-flashcard-decks/references/global-curriculum-workflow.md'), 'utf8'));
-        expect(body.text.format.schema.required).toEqual(['subjects', 'coverage', 'decks', 'scopeIssues', 'practiceNotes']);
+        expect(body.text.format.schema.required).toEqual(['schema_version', 'subjects', 'decks', 'coverage', 'scopeIssues', 'practiceNotes']);
         expect(JSON.stringify(fetchImpl.mock.calls)).not.toContain('OLD_CHAPTER_SECRET');
         expect(result.status).toBe('needs-review');
         expect(result.result.provenance.attempts).toHaveLength(1);
         expect(fetchImpl).toHaveBeenCalledTimes(1);
         expect(result.result.proposals).toHaveLength(1);
         expect(state.published[0].catalog.decks[0].chapters).toEqual([]);
-        expect(state.published[0].catalog.coverage).toEqual(candidate.coverage);
+        const compiled = compileGlobalCurriculumCandidate(candidate, ['math']);
+        expect(state.published[0].catalog.coverage).toEqual(compiled.coverage);
         expect(state.published[0].catalog.curriculum_schema_version).toBe(1);
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(candidate);
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1-compiled.json')))).toEqual({
+            candidate: compiled, compilation: result.result.provenance.compilation
+        });
+        expect(result.result.provenance.compilation).toMatchObject({ compilerVersion: 1,
+            rawCandidateHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+            compiledCandidateHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/) });
         expect(readFileSync(path.join(state.root, 'generation-archive/request-1/previous-curriculum.json'), 'utf8')).toContain('OLD_CARD_SECRET');
     });
     it('retains the single draft and fails closed on invalid or incomplete output', async () => {
@@ -198,7 +221,7 @@ describe('queued restricted runner', () => {
             expect(fetchImpl).toHaveBeenCalledTimes(1);
             expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(candidate);
             expect(readFileSync(path.join(retained(), 'attempt-1-validation.json'), 'utf8'))
-                .toMatch(unresolved ? /Missing advanced coverage/ : /coverage map/);
+                .toMatch(unresolved ? /Missing advanced coverage/ : /coverage/);
             expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1-diagnostics.json'))).structuralValid).toBe(unresolved);
             expect(statSync(path.join(retained(), 'attempt-1.json')).mode & 0o777).toBe(0o600);
             expect(state.published).toEqual([]);

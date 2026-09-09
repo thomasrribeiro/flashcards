@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { validateGlobalCurriculumCandidate } from '../../src/fresh-generation.js';
+import { createHash } from 'node:crypto';
+import { compileGlobalCurriculumCandidate, GLOBAL_CURRICULUM_COMPILER } from '../../src/global-curriculum-compiler.js';
 import { freshGenerationInstructions } from './fresh-generation-instructions.js';
 import { requestFreshGeneration } from './fresh-generation-provider.js';
 import { inspectCurriculumCandidate } from '../../src/curriculum-diagnostics.js';
@@ -26,22 +27,26 @@ export async function generateRecoverableCurriculum(options, { draftsRoot, reque
         const issues = [];
         let candidate;
         try {
-            if (!Array.isArray(generated.candidate.practiceNotes)) throw new Error('Missing practice notes report.');
-            candidate = validateGlobalCurriculumCandidate(generated.candidate, options.subjects,
-                { requireCoverage: true, mandatoryDecks: options.mandatoryDecks });
+            candidate = compileGlobalCurriculumCandidate(generated.candidate, options.subjects,
+                { mandatoryDecks: options.mandatoryDecks });
             issues.push(...candidate.scopeIssues);
         } catch (error) {
-            issues.push(error.message);
+            issues.push(...(error.structuralErrors || [error.message]));
         }
         save('attempt-1-validation.json', { issues });
         // Evidence for external review, not feedback into this model run. Keep
         // structural failures separate from self-reported educational defects.
         save('attempt-1-diagnostics.json', inspectCurriculumCandidate(generated.candidate,
-            options.subjects, { mandatoryDecks: options.mandatoryDecks }));
+            options.subjects, { mandatoryDecks: options.mandatoryDecks, requireModelFormat: true }));
         // Only structurally valid graphs can enter the viewer. Scope failures
         // still prevent publication, but no longer discard a completed graph.
         if (!candidate) throw new Error('Curriculum needs revision. Review the draft and update the instructions before a fresh job.');
-        return { candidate, issues, provenance: { ...generated.provenance, attempts: [generated.provenance] }, draftDirectory: directory };
+        const hash = value => `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
+        const compilation = { compilerVersion: GLOBAL_CURRICULUM_COMPILER,
+            rawCandidateHash: hash(generated.candidate), compiledCandidateHash: hash(candidate) };
+        save('attempt-1-compiled.json', { candidate, compilation });
+        return { candidate, issues, provenance: { ...generated.provenance, compilation,
+            attempts: [generated.provenance] }, draftDirectory: directory };
     } catch (error) {
         // The detailed issues remain in validation artifacts, not a wall of UI text.
         throw new Error(`${error.message} Drafts: ${directory}`, { cause: error });
