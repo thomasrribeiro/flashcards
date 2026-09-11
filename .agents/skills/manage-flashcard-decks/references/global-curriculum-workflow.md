@@ -265,10 +265,14 @@ capabilities, coherent deck boundaries and necessary preparation are decisions
 for this generation, not a list of requested follow-up work. Make reasonable
 curricular choices within the stated destination without asking for permission.
 
-This job permits one generation call and one candidate only. Do not revise a
-generated draft, run a self-audit/revision loop, or request a repair call. Report
-honest unresolved issues in scopeIssues; do not hide defects or defer required
-coverage to claim success. Do not emit planning notes or reasoning.
+Before emitting the final candidate, reconcile the planned capabilities,
+coverage inventory, and prerequisite contracts. Resolve gaps and boundary
+problems within this planning process where possible. Preserve required
+capabilities when splitting or simplifying decks. Internal planning and
+consistency checking are permitted; the restriction is one generation call,
+one final candidate, and no subsequent repair call. Report genuinely unresolved
+defects in scopeIssues; do not hide defects or defer required coverage to claim
+success. Do not emit planning notes or reasoning.
 
 Check educational completeness against the independent field inventory, learner
 readiness against full prerequisite closures, and scope against assessable
