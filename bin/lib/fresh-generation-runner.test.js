@@ -56,6 +56,20 @@ function globalCandidate() {
             outcome_ids: ['basics'], rationale: 'Entry arithmetic capability.' }] };
 }
 describe('queued restricted runner', () => {
+    it('retains an empty completed response for online failure review without publication or retry', async () => {
+        const job = setup();
+        const candidate = { ...globalCandidate(), decks: [], coverage: [] };
+        const fetchImpl = respond(candidate);
+        const failure = await runFreshGenerationJob(job, { credential: { apiKey: 'test-only' }, registryRoot: state.root }).catch(error => error);
+        expect(failure.reviewResult.preview).toMatchObject({ kind: 'invalid-output', readOnly: true,
+            issues: ['The candidate has no decks.'], outputTruncated: false });
+        expect(JSON.parse(failure.reviewResult.preview.output)).toEqual(candidate);
+        expect(failure.reviewResult.preview.catalog).toBeUndefined();
+        expect(failure.reviewResult.proposals).toBeUndefined();
+        expect(state.published).toEqual([]);
+        expect(state.abandoned).toBe(true);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
     it.each([false, true])('runs a registry-free, read-only probe with scope failure=%s and no publication', async hasIssues => {
         setup(); beginRegistryDraft.mockClear();
         const candidate = globalCandidate();

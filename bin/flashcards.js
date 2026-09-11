@@ -1324,7 +1324,8 @@ addAgentOptions(requests
                 const update = trustedRunner ? updateClaimedGenerationRequest : updateGenerationRequest;
                 await update(queued.id, {
                     status: 'failed',
-                    error: error.message
+                    error: error.reviewResult ? 'Generation failed validation. Review the returned output.' : error.message,
+                    ...(error.reviewResult ? { result: error.reviewResult } : {})
                 }, {
                     workerUrl: options.workerUrl,
                     runnerToken: options.runnerToken

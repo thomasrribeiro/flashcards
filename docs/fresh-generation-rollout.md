@@ -111,6 +111,15 @@ case automatically resumes or repairs a job. Interrupted streams without
 a completed JSON candidate cannot supply a recoverable draft. Earlier discarded
 jobs cannot be recovered retroactively by this change.
 
+Completed JSON that fails structural validation now retains a separate
+`invalid-output` review: validation errors and inert returned JSON, not a DAG
+or a publishable proposal. Activity polling omits the output body; the
+owner-authenticated preview endpoint loads it on demand. Large online outputs
+are explicitly marked truncated; the complete local artifact stays untouched.
+Transport failures without completed JSON still have no output to review.
+Existing retained artifacts can be attached to failed requests without rerunning
+generation. Neither status nor acceptance eligibility is upgraded by doing so.
+
 Every global job makes one generation call. Validation, external reviews and
 previous candidates never become model feedback. The permitted iteration is
 external review → update canonical instructions → test/push/deploy → fresh job.

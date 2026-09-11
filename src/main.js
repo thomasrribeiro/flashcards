@@ -3,6 +3,8 @@
  */
 
 import { freshGenerationJob } from './fresh-generation-contract.js';
+import { hasRetainedGenerationFailure, loadRetainedGenerationFailure } from './generation-dag-review.js';
+import { renderGenerationFailureReview } from './generation-failure-review.js';
 import { globalCurriculumFields } from './global-curriculum-form.js';
 import { buildFreshGenerationContext, FRESH_GENERATION_VERSION } from './fresh-generation.js';
 import {
@@ -5656,6 +5658,32 @@ function appendGenerationRequestRow(list, request, close) {
         preview.textContent = 'Review';
         preview.onclick = () => enterCurriculumPreview(request, close, preview);
         actions.appendChild(preview);
+    }
+    if (hasRetainedGenerationFailure(request)) {
+        const review = document.createElement('button');
+        review.type = 'button';
+        review.textContent = 'Review';
+        review.setAttribute('aria-expanded', 'false');
+        let content;
+        review.onclick = async () => {
+            review.disabled = true;
+            try {
+                if (!content) {
+                    const preview = await loadRetainedGenerationFailure(request, endpoint => githubAuth.apiRequest(endpoint));
+                    content = renderGenerationFailureReview(document, preview);
+                    content.id = `generation-failure-${request.id}`;
+                    content.hidden = true;
+                    item.append(content);
+                    review.setAttribute('aria-controls', content.id);
+                }
+                content.hidden = !content.hidden;
+                review.setAttribute('aria-expanded', String(!content.hidden));
+                previewError.textContent = '';
+            } catch (error) {
+                previewError.textContent = error.message;
+            } finally { review.disabled = false; }
+        };
+        actions.append(review);
     }
     if (request.jobType === 'chapter-expand'
         && request.status === 'needs-review'

@@ -1,7 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { canReviewGenerationDag, canApplyGenerationDag, loadRetainedGenerationDag, compareGenerationDag, generationJobCategory, generationModelSummary } from './generation-dag-review.js';
+import { hasRetainedGenerationFailure, loadRetainedGenerationFailure } from './generation-dag-review.js';
+import { retainedGenerationFailure } from '../bin/lib/retained-generation-failure.js';
 
 describe('generation curriculum review', () => {
+    it('loads failed JSON separately from a graph and never enables Apply', async () => {
+        const result = retainedGenerationFailure({ candidate: { decks: [] }, provenance: {} }, ['No decks.']);
+        const request = { id: 63, jobType: 'curriculum-design', status: 'failed', result };
+        expect(hasRetainedGenerationFailure(request)).toBe(true);
+        expect(canReviewGenerationDag(request)).toBe(false);
+        expect(canApplyGenerationDag(request)).toBe(false);
+        expect(canApplyGenerationDag({ ...request, status: 'needs-review' })).toBe(false);
+        expect(await loadRetainedGenerationFailure(request, async endpoint => {
+            expect(endpoint).toBe('/api/generation-requests/63/preview'); return result;
+        })).toEqual(result.preview);
+        await expect(loadRetainedGenerationFailure(request, async () => ({ preview: { ...result.preview, output: undefined } }))).rejects.toThrow();
+        expect(hasRetainedGenerationFailure({ ...request, status: 'running' })).toBe(false);
+    });
+    it('bounds large returned output without altering the retained candidate', () => {
+        const candidate = { text: 'é'.repeat(500_000) };
+        const result = retainedGenerationFailure({ candidate, provenance: {} }, ['Invalid.']);
+        expect(result.preview.outputTruncated).toBe(true);
+        expect(new TextEncoder().encode(JSON.stringify(result)).length).toBeLessThan(1_000_000);
+        expect(candidate.text.length).toBe(500_000);
+    });
     it('allows viewing a successful evaluation but never applying it, even without preview metadata', () => {
         const request = { jobType: 'curriculum-design', status: 'needs-review', payload: { evaluationOnly: true },
             result: { preview: { available: true, readOnly: true } } };

@@ -5,6 +5,7 @@ import { compileGlobalCurriculumCandidate, GLOBAL_CURRICULUM_COMPILER } from '..
 import { freshGenerationInstructions } from './fresh-generation-instructions.js';
 import { requestFreshGeneration } from './fresh-generation-provider.js';
 import { inspectCurriculumCandidate } from '../../src/curriculum-diagnostics.js';
+import { retainedGenerationFailure } from './retained-generation-failure.js';
 
 // Retain completed outputs outside the disposable publication worktree. Never
 // persist credentials, old catalogs, or arbitrary request/transport objects.
@@ -40,7 +41,11 @@ export async function generateRecoverableCurriculum(options, { draftsRoot, reque
             options.subjects, { mandatoryDecks: options.mandatoryDecks, requireModelFormat: true }));
         // Only structurally valid graphs can enter the viewer. Scope failures
         // still prevent publication, but no longer discard a completed graph.
-        if (!candidate) throw new Error('Curriculum needs revision. Review the draft and update the instructions before a fresh job.');
+        if (!candidate) {
+            const failure = new Error('Curriculum needs revision. Review the returned output.');
+            failure.reviewResult = retainedGenerationFailure(generated, issues);
+            throw failure;
+        }
         const hash = value => `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
         const compilation = { compilerVersion: GLOBAL_CURRICULUM_COMPILER,
             rawCandidateHash: hash(generated.candidate), compiledCandidateHash: hash(candidate) };
@@ -49,6 +54,8 @@ export async function generateRecoverableCurriculum(options, { draftsRoot, reque
             attempts: [generated.provenance] }, draftDirectory: directory };
     } catch (error) {
         // The detailed issues remain in validation artifacts, not a wall of UI text.
-        throw new Error(`${error.message} Drafts: ${directory}`, { cause: error });
+        const failure = new Error(`${error.message} Drafts: ${directory}`, { cause: error });
+        if (error.reviewResult) failure.reviewResult = error.reviewResult;
+        throw failure;
     }
 }

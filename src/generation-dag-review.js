@@ -22,8 +22,24 @@ export function canReviewGenerationDag(request) {
 
 export function hasRetainedGenerationDag(request) {
     return (request?.status === 'failed' || (request?.status === 'needs-review' && request.payload?.evaluationOnly === true))
+        && request.result?.preview?.kind !== 'invalid-output'
         && request.result?.preview?.available === true
         && request.result.preview.readOnly === true;
+}
+
+export function hasRetainedGenerationFailure(request) {
+    return request?.status === 'failed' && request.result?.preview?.kind === 'invalid-output'
+        && request.result.preview.available === true && request.result.preview.readOnly === true;
+}
+
+export async function loadRetainedGenerationFailure(request, apiRequest) {
+    if (!hasRetainedGenerationFailure(request)) throw new Error('No failed output is available.');
+    const { preview } = await apiRequest(`/api/generation-requests/${request.id}/preview`);
+    if (preview?.kind !== 'invalid-output' || preview.readOnly !== true || typeof preview.output !== 'string'
+        || !Array.isArray(preview.issues) || preview.issues.some(issue => typeof issue !== 'string')) {
+        throw new Error('Invalid failure review.');
+    }
+    return preview;
 }
 
 export function canApplyGenerationDag(request) {

@@ -1415,6 +1415,40 @@ test('tracks generation activity and previews an unmerged subject PR in the curr
     await expect(page.getByRole('button', { name: 'Options', exact: true })).toBeVisible();
 });
 
+test('agent activity stays within mobile bounds when reviewing failed returned JSON', async ({ page }) => {
+    const output = JSON.stringify({ decks: [], text: '<img src=x onerror="window.injected=true">' + 'x'.repeat(2000) }, null, 2);
+    const preview = { available: true, readOnly: true, kind: 'invalid-output', output,
+        outputTruncated: false, issues: ['The candidate has no decks.'] };
+    const job = { id: 63, job_type: 'curriculum-design', status: 'failed', model_id: 'gpt-6-astra',
+        payload_json: '{"reasoningEffort":"high"}', result_json: JSON.stringify({ preview: { ...preview, output: undefined } }) };
+    await installGenerationAccount(page, { requests: [job] });
+    let loads = 0;
+    await page.route('**/api/generation-requests/63/preview', route => {
+        loads++; return route.fulfill({ json: { preview } });
+    });
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const modal = page.getByRole('dialog', { name: 'Settings', exact: true });
+    await modal.getByRole('tab', { name: /Agents/ }).click();
+    const review = modal.getByRole('button', { name: 'Review', exact: true });
+    expect(loads).toBe(0);
+    await review.click();
+    const content = modal.locator('.generation-failure-review');
+    await expect(content).toContainText('The candidate has no decks.');
+    await content.locator('summary').click();
+    await expect(content.locator('pre')).toHaveText(output);
+    await expect(content.locator('img')).toHaveCount(0);
+    await expect(modal.getByRole('button', { name: 'Apply', exact: true })).toHaveCount(0);
+    for (const width of [390, 320]) {
+        await page.setViewportSize({ width, height: 844 });
+        expect(await content.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    }
+    await review.click();
+    await expect(content).toBeHidden();
+    await review.click();
+    expect(loads).toBe(1);
+    expect(await page.evaluate(() => window.injected)).toBeUndefined();
+});
+
 test('previews a fresh global curriculum rejected draft without enabling Apply', async ({ page }, testInfo) => {
     const generated = structuredClone(bundledCurriculum);
     generated.decks.push({ id: 'mathematics/draft-deck', deck: 'draft-deck', subject: 'mathematics', prerequisites: [], chapters: [] });
