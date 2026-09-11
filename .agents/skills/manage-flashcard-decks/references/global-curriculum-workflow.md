@@ -94,10 +94,15 @@ decks you happened to finish.
 Reconcile in both directions. Starting from each inventory domain and depth,
 locate outcomes that teach its distinctive competence and trace their entry path.
 Starting from each deck outcome, locate its inventory entry. The second check
-alone can pass an incomplete curriculum. Inspect each branch's entry, established
-theory and practice, and advanced continuation separately; use stages appropriate
-to the branch, not a fixed number of decks or levels. A domain with no matching
-contract is missing coverage even if all existing outcomes have mappings.
+alone can pass an incomplete curriculum. For each major branch, separately
+identify its accessible entry capabilities, established working methods, and
+advanced continuation. An advanced treatment does not establish introductory
+coverage. Foundational umbrella decks count only for capabilities explicitly
+stated in their scope and outcomes. Use stages appropriate to the branch, not a
+fixed number of decks or levels. Before serialization, reconcile this independent
+inventory with the proposed contracts; retain any unmatched required capability
+in coverage and report it as a concrete scope issue, even if all existing outcomes
+have mappings.
 
 When narrowing a deck or extracting reusable preparation, locate the remaining
 substantive capabilities in other contracts and reconnect their preparation.
@@ -144,8 +149,10 @@ not make them one capability: if a learner could demonstrate one while failing
 the others, specify the independently meaningful assessments separately. Keep
 related outcomes in the same coherent deck when their preparation permits it;
 more outcome IDs do not automatically require more decks. Outcomes also need
-a clear place in scope. Let their number follow the material, not a repeated
-small template across decks.
+a clear place in scope. Do not compress contracts into a repeated small number
+of outcomes. Separate capabilities when their preparation or assessment differs
+substantially, especially when downstream consumers need to reference them
+independently. Let their number follow the material.
 
 practice identifies concrete extended problems, proofs, programming, experiments
 or projects suited to the outcomes. Specify the working method and its required
@@ -155,6 +162,13 @@ provided tool, implementation of an algorithm and derivation of its guarantees.
 Establish the knowledge needed for the chosen performance locally or through
 prerequisites. Local teaching needs explicit scope and outcomes, not a promise
 that unspecified tools will be introduced or an execution disclaimer.
+
+Where professional, ethical, societal, or interpretive judgment is part of a
+field's established competence, specify what learners must be able to analyze
+or decide and how that reasoning is assessed. Consent, authorization, supervision,
+and safety conditions in practiceNotes do not supply that competence. Integrate
+these outcomes into appropriate decks or give them a coherent independent
+contract, and reconcile them with the field inventory and coverage.
 
 ## Global prerequisite contract
 
@@ -193,12 +207,17 @@ for avoidable barriers created by grouping. Split the source and reconnect
 consumers when appropriate; retain the advanced continuation. Do not hide a
 barrier by deleting necessary preparation or changing a level label.
 
-Account for notation, formalism, representations, mathematical maturity and
-practical methods needed by each outcome. Each must be established in an
-ancestor with the needed outcomes accounted for, or explicitly taught locally
-before use. List order and level labels establish no knowledge. Avoid redundant
-edges without losing necessary outcome requirements merely because another
-path reaches the source.
+For every outcome and practice task, identify the mathematical operations,
+representations, domain concepts, and practical methods the learner must use.
+Each must be explicitly established by a named outcome in the prerequisite
+ancestry or explicitly taught within the consumer's scope and outcomes. A
+prerequisite title, level label, supplied formula, or general statement that
+tools are introduced locally is insufficient. When preparation is missing, add
+a bounded local bridge or the necessary prerequisite; split the advanced
+continuation when adding that prerequisite would unnecessarily restrict the
+introductory route. Preserve the required capability in either case. Avoid
+redundant edges without losing necessary outcome requirements merely because
+another path reaches the source.
 
 ## Coverage contract
 
