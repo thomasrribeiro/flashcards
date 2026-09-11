@@ -8,6 +8,27 @@ const hash = value => `sha256:${createHash('sha256').update(value).digest('hex')
 // deck/chapter. Keep a finite per-attempt bound without lowering model effort.
 const generationTimeoutMs = jobType => (jobType === 'curriculum-design' ? 45 : 20) * 60 * 1000;
 
+// Explicit allowlist: never retain provider error messages, request bodies,
+// reasoning text or arbitrary response metadata in diagnostics.
+function responseDiagnostics(result) {
+    const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+    const usage = result.usage;
+    return {
+        responseId: typeof result.id === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(result.id) ? result.id : null,
+        status: ['completed', 'failed', 'incomplete', 'cancelled'].includes(result.status) ? result.status : 'unknown',
+        incompleteReason: ['max_output_tokens', 'content_filter'].includes(result.incomplete_details?.reason)
+            ? result.incomplete_details.reason : null,
+        maxOutputTokens: count(result.max_output_tokens),
+        usage: usage ? {
+            inputTokens: count(usage.input_tokens),
+            cachedInputTokens: count(usage.input_tokens_details?.cached_tokens),
+            outputTokens: count(usage.output_tokens),
+            reasoningTokens: count(usage.output_tokens_details?.reasoning_tokens),
+            totalTokens: count(usage.total_tokens)
+        } : null
+    };
+}
+
 function transportError(error, timeoutMs) {
     // Never expose arbitrary provider messages, URLs, request bodies or keys.
     const code = error?.cause?.code || error?.code;
@@ -31,8 +52,8 @@ async function readGenerationResponse(response) {
             .map(line => line.slice(5).trimStart()).join('\n');
         if (!data || data === '[DONE]') return;
         const event = JSON.parse(data);
-        if (event.type === 'response.completed') completed = event.response;
-        if (['response.failed', 'response.incomplete', 'error'].includes(event.type)) {
+        if (['response.completed', 'response.failed', 'response.incomplete'].includes(event.type)) completed = event.response;
+        if (event.type === 'error' || (['response.failed', 'response.incomplete'].includes(event.type) && !completed)) {
             throw new Error('Generation did not complete. No candidate was accepted.');
         }
     };
@@ -60,7 +81,7 @@ async function readGenerationResponse(response) {
 export async function requestFreshGeneration({
     jobType, subjects, mandatoryDecks, catalog, deckId, chapterId,
     instructions, schema, modelId, reasoningEffort, providerId = 'openai',
-    apiKey, signal, fetchImpl = fetch, repair, onResponseCreated
+    apiKey, signal, fetchImpl = fetch, repair, onResponseCreated, onResponseDiagnostics
 }) {
     if (providerId !== 'openai') throw new Error('This provider does not yet support restricted generation.');
     if (!apiKey) throw new Error('A connected provider credential is required.');
@@ -111,7 +132,9 @@ export async function requestFreshGeneration({
     } finally {
         await dispatcher.destroy();
     }
-    if (result.status !== 'completed') throw new Error('Generation did not complete. No candidate was accepted.');
+    const diagnostics = responseDiagnostics(result);
+    await onResponseDiagnostics?.(diagnostics);
+    if (result.status !== 'completed') throw new Error(`Generation did not complete${diagnostics.incompleteReason ? ` (${diagnostics.incompleteReason})` : ''}. No candidate was accepted.`);
     if ((result.output || []).some(item => !['message', 'reasoning'].includes(item.type))) {
         throw new Error('Unexpected tool output from restricted generation.');
     }
@@ -128,7 +151,7 @@ export async function requestFreshGeneration({
             providerId, modelId, reasoningEffort,
             resolvedModelId: result.model || modelId,
             inputHash: hash(input), instructionsHash: hash(instructions), schemaHash: hash(JSON.stringify(schema)),
-            responseId: result.id || null
+            responseId: result.id || null, diagnostics
         }
     };
 }

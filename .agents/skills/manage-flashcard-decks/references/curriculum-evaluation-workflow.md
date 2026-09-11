@@ -102,7 +102,8 @@ Before spending, record the proposed instruction change and predicted effect,
 fixed cases, rubric version, model/reasoning, and run budget. Change one mechanism
 at a time when feasible. A coordinated schema/instruction migration is one
 explicit experiment, not evidence of which individual change caused its effect.
-Preserve raw/compiled artifacts and their hashes, all failures and all attempts.
+Preserve raw/validated artifacts and their hashes, provider diagnostics, all
+failures and all attempts (including historical compilation artifacts).
 One result per version is exploratory evidence, not proof of reduced error rates.
 Repeated identical-input trials would need explicit approval to relax the user's
 instruction-update-between-iterations rule; never charge for them implicitly.
@@ -122,8 +123,9 @@ flashcards curriculum check-candidate <candidate.json> --subjects <subject-names
 
 Repeat `--deck <subject/deck>` to limit detailed output to chosen entry paths.
 The runner also saves `attempt-1-diagnostics.json` beside each completed draft.
-These are read-only inspections: format-2 output is first compiled from its
-single outcome registry; historical candidates use their original representation.
+These are read-only inspections: current output uses explicit deck/outcome
+references; historical format-2 output is compiled from its single outcome
+registry without changing the saved artifact.
 They reuse the candidate validator, separate
 structural errors from model-declared scope issues, and expose full cross-subject
 ancestor closures, indirect consumer counts, exact required outcome IDs, other

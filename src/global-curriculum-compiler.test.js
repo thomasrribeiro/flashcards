@@ -127,14 +127,14 @@ describe('single-source curriculum compilation', () => {
         expect(diagnostics.decks[0].requirements[0].otherSourceOutcomeIds).toEqual(['linear-systems']);
         expect(diagnostics).not.toHaveProperty('qualityPassed');
     });
-    it('does not ask the generator to emit redundant relationships', () => {
+    it('keeps the restored generation schema separate from the historical format-2 reader', () => {
         const schema = freshGenerationSchema('curriculum-design');
-        expect(schema.properties.schema_version.enum).toEqual([2]);
-        expect(schema.properties.decks.items.properties).toHaveProperty('required_outcome_ids');
-        expect(schema.properties.decks.items.properties).not.toHaveProperty('subject');
-        expect(schema.properties.decks.items.properties).not.toHaveProperty('prerequisites');
-        expect(schema.properties.decks.items.properties).not.toHaveProperty('required_outcomes');
-        expect(schema.properties.coverage.items.properties).toHaveProperty('outcome_ids');
-        expect(schema.properties.coverage.items.properties).not.toHaveProperty('targets');
+        expect(schema.properties).not.toHaveProperty('schema_version');
+        expect(schema.properties.decks.items.properties).not.toHaveProperty('required_outcome_ids');
+        expect(schema.properties.decks.items.properties).toHaveProperty('subject');
+        expect(schema.properties.decks.items.properties).toHaveProperty('prerequisites');
+        expect(schema.properties.decks.items.properties).toHaveProperty('required_outcomes');
+        expect(schema.properties.coverage.items.properties).not.toHaveProperty('outcome_ids');
+        expect(schema.properties.coverage.items.properties).toHaveProperty('targets');
     });
 });

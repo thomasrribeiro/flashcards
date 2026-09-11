@@ -16,10 +16,8 @@ All three job types disclose and pin model and reasoning before launch.
 
 ## Implemented workflow
 
-- `src/global-curriculum-compiler.js`: model format 2 uses globally unique
-  outcome IDs as the sole dependency/coverage references. Deterministic lookup
-  derives owning subjects, deck edges, annotations and coverage targets. It
-  rejects ambiguous/unknown IDs and mixed formats rather than repairing them.
+- `src/global-curriculum-compiler.js`: read-only support for historical format-2
+  outputs. Current generation uses explicit deck/outcome references instead.
 - `src/fresh-generation.js`: allowlisted, canonical context projections;
   global/local candidate validators; exact subject coverage; cycle, unresolved
   outcome and cross-deck chapter checks; stale-base guard.
@@ -57,9 +55,12 @@ New global runs use `references/global-curriculum-workflow.md` verbatim, with
 no appended instructions or chapter/card-authoring bundle. The queued
 `workflowCommit` and recorded instruction/schema hashes pin the exact contract;
 the transport envelope remains `fresh-generation-v1`. The host stamps
-`curriculum_schema_version: 1` after validation. The new model-facing format
-uses numeric `schema_version: 2`; this is a serialization contract, not an
-educational scope tag. It is not exposed as a UI label. Historical unversioned
+`curriculum_schema_version: 1` after validation. The model-facing schema is
+restored byte-for-byte from request #58 (workflow `8eed586`). The instruction
+file also returns to that baseline, except its final-audit revision permission
+is replaced with the user's single-candidate, no-self-revision rule. This is
+a rollback experiment, not proof of educational quality or reliability.
+Historical format-2 outputs, unversioned
 catalogs and the short-lived
 `curriculum_version: whole-field-v1` marker remain readable. New runs require
 the coverage contract regardless of metadata.
@@ -74,13 +75,12 @@ Deduplication and uncertain-submission recovery distinguish required-deck lists,
 but not addition metadata. Old single-`newSubject` requests remain compatible.
 
 The structured candidate requires a domain-and-level coverage map targeting
-globally unique outcome IDs, deck learning levels, included/excluded scope,
-authentic practice, and `scopeIssues`. The model emits each deck's
-`required_outcome_ids` and each coverage row's `outcome_ids`, with no redundant
-deck/outcome pairs, prerequisite lists or deck subject field. Compilation derives
-those fields for the existing catalog/viewers. It never adds learning content,
-guesses an intended reference, drops an edge, consults an old catalog or edits
-the raw response. Invalid or ambiguous references fail closed.
+deck IDs and their local outcome IDs, deck learning levels, included/excluded
+scope, authentic practice, and `scopeIssues`. Each deck declares its subject,
+prerequisites and `required_outcomes`; coverage rows declare `targets`. Validation
+checks these references without guessing, adding content, consulting an old
+catalog or modifying the retained raw response. The experimental format-2
+compiler is not used by new jobs; it remains available for archived inspections.
 
 Deterministic checks reject unmapped
 outcomes, missing targets, mismatched target levels, contradictory dispositions,
@@ -102,14 +102,24 @@ outside disposable Git worktrees. Files are private to the runner user and
 contain no credentials or old catalog. The single raw candidate, validation
 report, diagnostics and start marker are retained even on cancellation or failure.
 A successful proposal also archives them under `generation-archive/request-<id>/attempts`.
-For valid structure, `attempt-1-compiled.json` records the derived candidate and
-compiler version plus hashes of both the raw and compiled JSON. New jobs accept
-only format 2; existing archived proposals remain readable without migration.
+For valid structure, `attempt-1-validated.json` records the normalized candidate,
+contract version and hashes of both raw and validated JSON. Existing archived
+proposals and format-2 compilation artifacts remain readable without migration.
 Structurally valid scope failures expose a read-only web preview and diff;
-structural failures remain local and identify the retained directory. Neither
+structural failures expose the returned JSON instead of an invented graph. Neither
 case automatically resumes or repairs a job. Interrupted streams without
 a completed JSON candidate cannot supply a recoverable draft. Earlier discarded
 jobs cannot be recovered retroactively by this change.
+
+`attempt-1-provider.json` records allowlisted completion status, incomplete reason,
+returned output-token limit and usage (input, cached input, output, reasoning and
+total tokens) before candidate parsing or validation. Missing values stay null.
+The same diagnostics accompany parsed-candidate provenance. Arbitrary provider
+error messages, reasoning text and request metadata are never retained. A
+completed empty candidate is not automatically diagnosed as token exhaustion;
+the model's prose is not provider evidence. Transport failures may have no
+terminal response or usage to record. This change does not alter token limits,
+model choice, transport, or the number of generation calls.
 
 Completed JSON that fails structural validation now retains a separate
 `invalid-output` review: validation errors and inert returned JSON, not a DAG
@@ -140,7 +150,7 @@ Registry-free probes use `curriculumProbeJob` and the authenticated job queue
 with `evaluationOnly: true`. Their payload contains only subject names and
 the pinned workflow/model/reasoning configuration, with no registry target or
 baseline. The trusted runner uses the same instruction file, strict schema,
-single-call retention and compiler as production, but branches before any
+single-call retention and validator as production, but branches before any
 registry access or publication. The evaluation flag is never model context.
 Successful probes expose a read-only preview against an empty evaluation
 catalog. Acceptance is blocked using the stored request payload, not merely

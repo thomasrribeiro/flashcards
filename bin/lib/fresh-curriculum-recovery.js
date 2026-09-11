@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { compileGlobalCurriculumCandidate, GLOBAL_CURRICULUM_COMPILER } from '../../src/global-curriculum-compiler.js';
+import { validateGlobalCurriculumCandidate } from '../../src/fresh-generation.js';
 import { freshGenerationInstructions } from './fresh-generation-instructions.js';
 import { requestFreshGeneration } from './fresh-generation-provider.js';
 import { inspectCurriculumCandidate } from '../../src/curriculum-diagnostics.js';
@@ -23,13 +23,18 @@ export async function generateRecoverableCurriculum(options, { draftsRoot, reque
             instructions: freshGenerationInstructions('curriculum-design'),
             onResponseCreated: responseId => save('attempt-1-response.json', {
                 requestId, attempt: 1, responseId, background: true, recordedAt: new Date().toISOString()
-            }) });
+            }),
+            onResponseDiagnostics: diagnostics => save('attempt-1-provider.json', diagnostics) });
         save('attempt-1.json', { candidate: generated.candidate, provenance: generated.provenance });
         const issues = [];
         let candidate;
         try {
-            candidate = compileGlobalCurriculumCandidate(generated.candidate, options.subjects,
-                { mandatoryDecks: options.mandatoryDecks });
+            // New jobs use the request-58 contract. Format-2 compilation remains
+            // available for read-only inspection of historical outputs only.
+            if (generated.candidate?.schema_version !== undefined) throw new Error('Unexpected model output format.');
+            if (!Array.isArray(generated.candidate?.practiceNotes)) throw new Error('Missing practice notes report.');
+            candidate = validateGlobalCurriculumCandidate(generated.candidate, options.subjects,
+                { requireCoverage: true, mandatoryDecks: options.mandatoryDecks });
             issues.push(...candidate.scopeIssues);
         } catch (error) {
             issues.push(...(error.structuralErrors || [error.message]));
@@ -37,8 +42,9 @@ export async function generateRecoverableCurriculum(options, { draftsRoot, reque
         save('attempt-1-validation.json', { issues });
         // Evidence for external review, not feedback into this model run. Keep
         // structural failures separate from self-reported educational defects.
-        save('attempt-1-diagnostics.json', inspectCurriculumCandidate(generated.candidate,
-            options.subjects, { mandatoryDecks: options.mandatoryDecks, requireModelFormat: true }));
+        save('attempt-1-diagnostics.json', candidate
+            ? inspectCurriculumCandidate(candidate, options.subjects, { mandatoryDecks: options.mandatoryDecks })
+            : { structuralValid: false, structuralErrors: issues, educationalReviewRequired: true });
         // Only structurally valid graphs can enter the viewer. Scope failures
         // still prevent publication, but no longer discard a completed graph.
         if (!candidate) {
@@ -47,10 +53,10 @@ export async function generateRecoverableCurriculum(options, { draftsRoot, reque
             throw failure;
         }
         const hash = value => `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
-        const compilation = { compilerVersion: GLOBAL_CURRICULUM_COMPILER,
-            rawCandidateHash: hash(generated.candidate), compiledCandidateHash: hash(candidate) };
-        save('attempt-1-compiled.json', { candidate, compilation });
-        return { candidate, issues, provenance: { ...generated.provenance, compilation,
+        const validation = { contractVersion: 1,
+            rawCandidateHash: hash(generated.candidate), validatedCandidateHash: hash(candidate) };
+        save('attempt-1-validated.json', { candidate, validation });
+        return { candidate, issues, provenance: { ...generated.provenance, validation,
             attempts: [generated.provenance] }, draftDirectory: directory };
     } catch (error) {
         // The detailed issues remain in validation artifacts, not a wall of UI text.

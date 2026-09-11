@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,6 +19,10 @@ const before = { schema_version: 3, subjects: [{ id: 'math' }, { id: 'physics' }
 const generation = { run_id: 'request-1', operation: 'chapter-curriculum', provider_id: 'openai', model_id: 'future-model', reasoning_effort: 'high', generated_at: '2026-09-06', artifacts: ['curriculum'] };
 
 describe('fresh generation integration', () => {
+    it('restores the exact request-58 global output schema', () => {
+        const digest = createHash('sha256').update(JSON.stringify(freshGenerationSchema('curriculum-design'))).digest('hex');
+        expect(digest).toBe('687574d6027d7f8d65e740b983a18e0d3d809e0e816deba50ebad0fd614d0f47');
+    });
     it('uses the same canonical input for adding a subject and regenerating its resulting list', () => {
         const registry = { id: 'test', repository: 'test/curricula', resolved_commit: 'a'.repeat(40), catalog_hash: `sha256:${'b'.repeat(64)}` };
         const preferences = { providerId: 'openai', modelId: 'new-model', reasoningEffort: 'high' };

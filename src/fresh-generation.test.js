@@ -159,6 +159,18 @@ describe('restricted provider request', () => {
         expect(fetchImpl).toHaveBeenCalledTimes(1);
     });
 
+    it('records streamed incomplete-response usage before rejecting the candidate', async () => {
+        const response = { ...completed, status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' },
+            usage: { output_tokens: 900, output_tokens_details: { reasoning_tokens: 800 } } };
+        const fetchImpl = vi.fn(async () => streamResponse(`data: ${JSON.stringify({ type: 'response.incomplete', response })}\n\n`));
+        const onResponseDiagnostics = vi.fn();
+        await expect(requestFreshGeneration({ ...options(), jobType: 'deck-plan', deckId: 'physics/mechanics', fetchImpl, onResponseDiagnostics }))
+            .rejects.toThrow('max_output_tokens');
+        expect(onResponseDiagnostics).toHaveBeenCalledWith(expect.objectContaining({ status: 'incomplete', incompleteReason: 'max_output_tokens',
+            usage: { inputTokens: null, cachedInputTokens: null, outputTokens: 900, reasoningTokens: 800, totalTokens: null } }));
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
     it.each(['data: {"type":"response.created"}\n\n', 'data: [DONE]\n\n', 'data: invalid secret\n\n'])('rejects truncated or malformed streams', async text => {
         const fetchImpl = vi.fn(async () => streamResponse(text));
         await expect(requestFreshGeneration({ ...options(), jobType: 'deck-plan', deckId: 'physics/mechanics', fetchImpl })).rejects.toThrow(/Generation stream ended|invalid response/);
