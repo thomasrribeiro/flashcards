@@ -281,14 +281,27 @@ capabilities, coherent deck boundaries and necessary preparation are decisions
 for this generation, not a list of requested follow-up work. Make reasonable
 curricular choices within the stated destination without asking for permission.
 
-Before emitting the final candidate, reconcile the planned capabilities,
-coverage inventory, and prerequisite contracts. Resolve gaps and boundary
-problems within this planning process where possible. Preserve required
-capabilities when splitting or simplifying decks. Internal planning and
-consistency checking are permitted; the restriction is one generation call,
-one final candidate, and no subsequent repair call. Report genuinely unresolved
-defects in scopeIssues; do not hide defects or defer required coverage to claim
-success. Do not emit planning notes or reasoning.
+Treat checking as part of construction, not a report-only audit. Keep an
+internal queue of concrete design defects. A missing required teaching contract,
+an entry route trapped behind advanced theory, or a stale reference is normally
+work to finish now: add the contract, separate the routes or reconnect the
+reference, then recheck the affected coverage and ancestors. Do not stop at
+explaining how an ordinary fix could be made. Reserve enough planning for this
+resolution before beginning the final serialization; later JSON fields cannot
+retroactively repair earlier emitted contracts.
+
+Distinguish an actual uncertainty or conflict from an unfinished design decision.
+Choose a reasonable bounded contract when the subject names and educational
+destination give enough information. Complete the required inventory and its
+entry paths before adding further optional specialties. There is no need to
+invent an exhaustive frontier curriculum. If a substantive defect genuinely
+cannot be resolved within the design, report it honestly in scopeIssues and,
+for missing coverage, its deferred row. Never clear the queue by dropping a
+required capability, weakening its depth, or concealing the finding.
+
+Internal planning and consistency checking are permitted; the restriction is
+one generation call, one final candidate, and no subsequent repair call. Do not
+emit the internal queue, planning notes or reasoning.
 
 Check educational completeness against the independent field inventory, learner
 readiness against full prerequisite closures, and scope against assessable
