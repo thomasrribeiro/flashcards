@@ -71,11 +71,16 @@ Use these boundary decisions:
   from shared foundations, give them distinct decks, even at the same level.
 - If a foundation and its application have different entry requirements, put the
   reusable foundation before the application instead of inside its deck.
-- Compare the preparation of the capabilities being grouped, not just their
-  shared topic name. A broadly useful method must remain accessible without
-  the additional representations, theory or methods needed only by a specialized
-  continuation. Establish that reusable route and retain the continuation with
-  its own appropriate prerequisites.
+- Test a proposed grouping from the learner's entry point, even when no other
+  deck consumes it. For each substantial introductory or working-method
+  capability, compare its necessary preparation with the full ancestor closure
+  imposed by the combined deck. If learning the capability separately would
+  avoid an independent advanced body of theory or method, preserve that entry
+  as a coherent deck and place the additional work in a continuation. Valid
+  prerequisites for the combined contract do not prove that it is a valid first
+  entry. Do not wait for a downstream consumer to expose the inaccessible route.
+  Related techniques with shared preparation may remain together; split for a
+  demonstrated difference in entry requirements, not every unused technique.
 - If a consumer needs capability A but not capability B, requiring a deck that
   bundles A and B forces an avoidable detour. Extract the reusable preparation
   when B is a substantial independent branch or introduces additional entry
@@ -115,13 +120,16 @@ theory; a frontier deferral does not account for a missing established foundatio
 An inclusion in a neighboring subject counts only when its exact outcomes teach
 the needed capability at the intended depth.
 
-Make boundary corrections capability-preserving within this design. Before a
-split or simplification, identify each competence in the affected scopes,
-outcomes and practice. Afterward, assign every competence to an exact resulting
-deck/outcome pair and preserve its coverage depth. Check both the accessible
-entry and the independent advanced continuation. A shorter contract is not a
-successful split when some of its work has no destination. This check concerns
-your current design, not any curriculum outside this job.
+Make boundary corrections preserve both capability and access within this
+design. Before a split or consolidation, identify each affected competence and
+its necessary entry preparation. Afterward, assign it to an exact deck/outcome
+pair at the intended depth and compare the resulting full ancestor closure.
+Retaining an outcome but moving its only route behind unrelated advanced
+preparation is a regression, just as losing the outcome is. Inspect the earliest
+route for introductory understanding and established practice separately from
+advanced derivation and integration. Correct the grouping while retaining the
+advanced work and its necessary prerequisites. This check concerns your current
+design, not any curriculum outside this job.
 
 ## Deck contract
 
