@@ -304,10 +304,28 @@ only part of a source does not, by itself, demonstrate an inappropriate bundle.
 Neither does an edge from a higher-level source or an alternative path to it.
 Those are reasons to inspect the actual contracts, not automatic defects.
 
-Finalize an index of deck IDs and their local outcome IDs. Resolve every
-prerequisite annotation and coverage target against that index as a pair.
-Propagate renames and ownership changes to every reference. A similarly named
-outcome in a different deck is not a valid reference. Ensure the graph is acyclic.
+Finalize in this order within the single generation:
+
+1. Finish the teaching contracts and the independent capability inventory.
+   Revisit any gap found during checking while the design is still editable.
+   For each narrowed scope or new exclusion, locate the removed capability's
+   destination and intended depth. An entry route is not repaired completely
+   by deleting its advanced continuation. If required work remains unresolved,
+   retain both its deferred coverage row and concrete scope issue.
+2. Freeze an ownership index of exact deck IDs and their local outcome IDs.
+   Build each required_outcomes entry by copying a valid pair from that index
+   and checking the source description against the consumer's actual need.
+   Never attach an outcome to a neighboring owner or carry a stale reference
+   from an earlier grouping. Then derive prerequisites as exactly the distinct
+   deck_id values in required_outcomes: no extra source in either array. For
+   an entry deck both arrays are empty. Preserve every necessary capability
+   when reconciling these arrays; do not remove a valid need to match a list.
+3. Resolve every included coverage target against the same frozen index and
+   check its level and substantive capability. Check that every outcome and
+   every inventoried domain/depth is accounted for, including unresolved gaps.
+   Check cycles and the final ancestor paths. If a check changes a contract,
+   update the ownership index and all affected references before serialization.
+
 Do not emit a known broken reference with prose telling the reviewer to fix it.
 
 scopeIssues contains genuinely unresolved curriculum defects or uncertainty that
