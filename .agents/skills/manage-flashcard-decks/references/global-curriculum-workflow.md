@@ -91,18 +91,21 @@ intended depth. Add newly discovered branches to it, including branches without
 any consumer elsewhere in the graph. Do not reconstruct the inventory from the
 decks you happened to finish.
 
-Reconcile in both directions. Starting from each inventory domain and depth,
-locate outcomes that teach its distinctive competence and trace their entry path.
-Starting from each deck outcome, locate its inventory entry. The second check
-alone can pass an incomplete curriculum. For each major branch, separately
-identify its accessible entry capabilities, established working methods, and
-advanced continuation. An advanced treatment does not establish introductory
-coverage. Foundational umbrella decks count only for capabilities explicitly
-stated in their scope and outcomes. Use stages appropriate to the branch, not a
-fixed number of decks or levels. Before serialization, reconcile this independent
-inventory with the proposed contracts; retain any unmatched required capability
-in coverage and report it as a concrete scope issue, even if all existing outcomes
-have mappings.
+Reconcile in both directions using a capability ledger for this design. Each
+inventory domain and depth needs a distinctive performance, an exact teaching
+deck/outcome destination, and an entry path. Test the destination by asking
+whether a learner could pass its stated assessment while still unable to perform
+the inventory capability. If so, the mapping is insufficient: add the missing
+teaching contract rather than count related tools, architectures or applications
+as coverage. Check accessible entry, established working methods and advanced
+continuations separately, using stages appropriate to the branch.
+
+Then map every deck outcome back to that ledger. Keep branches discovered during
+planning even when no completed deck claims them. Before serialization, every
+ledger entry must become an included coverage row with sufficient targets or an
+explicit exclusion/deferred row. Every unresolved missing-coverage scope issue
+must also have its intended-depth deferred row; neither list may silently lose
+the capability. Resolve required gaps during planning wherever possible.
 
 When narrowing a deck or extracting reusable preparation, locate the remaining
 substantive capabilities in other contracts and reconnect their preparation.
@@ -207,17 +210,22 @@ for avoidable barriers created by grouping. Split the source and reconnect
 consumers when appropriate; retain the advanced continuation. Do not hide a
 barrier by deleting necessary preparation or changing a level label.
 
-For every outcome and practice task, identify the mathematical operations,
-representations, domain concepts, and practical methods the learner must use.
-Each must be explicitly established by a named outcome in the prerequisite
-ancestry or explicitly taught within the consumer's scope and outcomes. A
-prerequisite title, level label, supplied formula, or general statement that
-tools are introduced locally is insufficient. When preparation is missing, add
-a bounded local bridge or the necessary prerequisite; split the advanced
-continuation when adding that prerequisite would unnecessarily restrict the
-introductory route. Preserve the required capability in either case. Avoid
-redundant edges without losing necessary outcome requirements merely because
-another path reaches the source.
+For every outcome and practice task, trace a representative solution at the
+promised depth before selecting prerequisites. Identify its actual operations,
+representations, domain concepts and practical methods, including those hidden
+inside named canonical problems. For each, locate the exact source outcome that
+teaches it within the consumer's ancestor closure, or an explicit local teaching
+outcome. Check the source description, not just its title or ID. Related knowledge
+is not interchangeable preparation; a method taught only downstream cannot
+support its first use upstream.
+
+When a trace has no teaching source, establish a bounded local bridge or add the
+necessary prerequisite. If this would restrict an introductory route, split the
+advanced performance into a continuation while preserving both capabilities and
+their coverage. A supplied formula or unspecified local tool does not close the
+trace. After changing edges or boundaries, recheck affected consumers against
+the final ancestor closures. Avoid redundant edges without losing necessary
+outcome requirements merely because another path reaches the source.
 
 ## Coverage contract
 
