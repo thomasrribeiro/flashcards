@@ -85,7 +85,9 @@ Correct the grouping, not by deleting necessary edges or silently reducing scope
 
 Each deck contains:
 
-- id: lowercase kebab-case subject/deck ID, with subject as its owning subject.
+- id: exactly subject/deck, with one literal slash separating two lowercase
+  kebab-case parts; subject is its owning subject. A single hyphenated string
+  without the slash is invalid.
 - title and description: clear name and concise intended competence.
 - level: foundational, undergraduate-core, undergraduate-advanced, graduate, or
   research-specialization, chosen from actual preparation and performance.
@@ -223,3 +225,14 @@ consumers, exact references, coverage mappings and scopeIssues after revisions.
 Do not clear an issue until the underlying problem is resolved. Retain honest
 unresolved defects. The host validates the final candidate and retains failures;
 external review still decides whether its educational design is acceptable.
+
+Perform the final readiness audit after completing every coverage addition and
+regrouping. Newly added or rewritten contracts are unreviewed until this last
+check; fixing the original draft does not validate the material you add. For
+each such contract, take its earliest working method separately and compare its
+necessary preparation with the complete source decks and ancestor closure that
+a learner must finish. If another method in the new group imposes independent
+advanced preparation, provide an accessible working destination and a connected
+continuation. Then check the continuation's own operations and proof methods
+against explicit source outcomes or local teaching. Preserve both parts and
+repeat the affected reference and coverage checks before returning the result.

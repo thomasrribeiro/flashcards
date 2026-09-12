@@ -9,7 +9,7 @@ cases constrain evaluation, not the generated syllabus or deck count.
 
 Run `npm run test:curriculum` before a generation experiment. It checks the
 single-source compiler, historical format compatibility, full ancestor traces,
-publication gates, input isolation, raw artifact retention and one-call behavior
+publication gates, input isolation, raw artifact retention and the two-call bound
 with synthetic data and mocked networking. Passing does not establish model
 reliability or educational completeness.
 
@@ -51,11 +51,12 @@ record it before calling a provider. Preserve the requested model/reasoning.
 
 For each authorized probe the generator receives only those subject names, the
 canonical global instructions and the strict schema; mandatoryDecks is empty.
+Its one revision receives only that same job's draft and deterministic checks.
 The reviewer freezes the source-backed scope map before seeing its output.
 Record the contract commit, rubric/scope-map version, raw/compiled hashes,
 structural findings and the five review dimensions. If any probe has a
 demonstrated blocker, review externally and update instructions before another
-fresh generation; do not repair or provide the failed candidate as input.
+fresh job; never carry the failed candidate or external findings into another job.
 
 Keep the same probe sets across compared instruction versions. They are small
 task samples, not independent repeats estimating a failure rate. Do not claim
