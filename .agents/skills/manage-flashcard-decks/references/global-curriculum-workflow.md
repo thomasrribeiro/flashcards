@@ -42,12 +42,22 @@ a rigorous advanced course must not become the only entry.
 
 ## Capability inventory and deck boundaries
 
-Establish the field inventory before choosing deck titles. For each subject,
-identify its major branches and their entry and advanced capabilities using
-complementary perspectives: established teaching areas, graduate foundations,
-objects and scales, research communities, methods and applications. Use only
-perspectives relevant to that subject. Check less prominent branches and failures
-or pathological mechanisms as carefully as prominent theories and normal behavior.
+Establish the field inventory before choosing deck titles. Build it from two
+independent views: the subject's established teaching/research branches, and the
+capabilities learners need to work with its objects and evidence. Compare the
+views and include material capabilities found by either. Do not let a familiar
+list of course titles define the limits of the field.
+
+In the capability view, inspect the representations beginners must construct
+and reason with, not only formulas they calculate. Distinguish quantitative,
+spatial, symbolic, graphical and algorithmic competence where relevant. Then
+inspect both forward and inverse work: predicting behavior from a model, and
+inferring hidden structure or mechanisms from observations. Identify the field's
+distinctive measurement, reconstruction, estimation and validation methods at
+its relevant objects and scales. Generic mathematical tools or a description
+of the objects does not supply these domain methods. Include experimental and
+applied routes even when no other deck consumes them. Use perspectives relevant
+to each subject; these are crosschecks, not a fixed syllabus or deck quota.
 
 Inventory the operational methods of each branch as well as its concepts and
 theorems: what learners must be able to measure, estimate, construct, compute,
