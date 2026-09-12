@@ -19,9 +19,9 @@ const before = { schema_version: 3, subjects: [{ id: 'math' }, { id: 'physics' }
 const generation = { run_id: 'request-1', operation: 'chapter-curriculum', provider_id: 'openai', model_id: 'future-model', reasoning_effort: 'high', generated_at: '2026-09-06', artifacts: ['curriculum'] };
 
 describe('fresh generation integration', () => {
-    it('restores the exact request-58 global output schema', () => {
+    it('pins the contracts-first global output schema', () => {
         const digest = createHash('sha256').update(JSON.stringify(freshGenerationSchema('curriculum-design'))).digest('hex');
-        expect(digest).toBe('687574d6027d7f8d65e740b983a18e0d3d809e0e816deba50ebad0fd614d0f47');
+        expect(digest).toBe('74a249ba0f3668eab2eb706fae55d69bdd191f41cfa19d9b005b403edd6b16ae');
     });
     it('uses the same canonical input for adding a subject and regenerating its resulting list', () => {
         const registry = { id: 'test', repository: 'test/curricula', resolved_commit: 'a'.repeat(40), catalog_hash: `sha256:${'b'.repeat(64)}` };

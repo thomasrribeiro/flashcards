@@ -349,6 +349,15 @@ Finalize in this order within the single generation:
    Check cycles and the final ancestor paths. If a check changes a contract,
    update the ownership index and all affected references before serialization.
 
+Serialize decks in prerequisite-first order across subjects, not in subject
+blocks. A consumer's source contracts must already be present, so copy their
+actual local outcome IDs when writing its required_outcomes, then write the
+matching prerequisites. Serialize coverage after all decks, using those same
+completed contracts. This output order does not replace the independent
+inventory: plan that inventory first and reconcile it before emission. Finish
+ordinary corrections while planning; do not serialize a known defect and then
+explain it in scopeIssues when its exact resolution is already known.
+
 Do not emit a known broken reference with prose telling the reviewer to fix it.
 
 scopeIssues contains genuinely unresolved curriculum defects or uncertainty that
