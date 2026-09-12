@@ -155,10 +155,21 @@ An exclusion from one deck must be taught elsewhere or explicitly accounted for
 in the global coverage disposition.
 
 Each outcome has a unique local kebab-case ID naming its capability, not just
-an action verb such as analyze or derive, and an observable description including
-relevant conditions and depth. It must identify a capability that can
-be assessed: explain, calculate, distinguish, derive, prove, interpret, design,
-or apply. Neither a chapter heading nor an individual flashcard is the unit.
+an action verb such as analyze or derive. Its observable description states the
+performance, relevant representations and conditions, and intended depth.
+Expand textbook shorthand enough to expose its preparation: identify the
+spatial dimensionality, coordinate or state representation, kind of inference,
+and whether learners calculate, derive or implement the method when these
+change what they must know. A familiar problem name does not establish the
+operations needed to solve it. Neither a chapter heading nor a single
+flashcard is the unit.
+
+Determine this preparation for each outcome before taking the union for a deck.
+If one outcome adds an independent advanced prerequisite, compare the earliest
+route to the other outcomes with and without that addition. Establish the
+accessible route first and require it from the advanced continuation when the
+extra preparation is unnecessary for that entry. Merely relabeling the combined
+deck advanced does not resolve the lost route.
 
 Give distinct outcome IDs to independently assessable capabilities, especially
 when a later deck may need only one of them. Combining components is appropriate
