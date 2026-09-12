@@ -261,7 +261,7 @@ describe('queued restricted runner', () => {
         const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
         expect(body.instructions).toBe(readFileSync(path.join(FLASHCARDS_ROOT,
             '.agents/skills/manage-flashcard-decks/references/global-curriculum-workflow.md'), 'utf8'));
-        expect(body.text.format.schema.required).toEqual(['subjects', 'coverage', 'decks', 'scopeIssues', 'practiceNotes']);
+        expect(body.text.format.schema.required).toEqual(['subjects', 'decks', 'coverage', 'scopeIssues', 'practiceNotes']);
         expect(JSON.stringify(fetchImpl.mock.calls)).not.toContain('OLD_CHAPTER_SECRET');
         expect(result.status).toBe('needs-review');
         expect(result.result.provenance.attempts).toHaveLength(1);
