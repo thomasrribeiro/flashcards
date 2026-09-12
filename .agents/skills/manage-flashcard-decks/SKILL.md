@@ -15,8 +15,10 @@ For isolated fresh global `curriculum-design` requests, the model receives only
 the strict output schema, subject names, and optional mandatory deck names.
 That workflow supersedes the
 legacy subject-design context loading below; never supply old curricula to it.
-Each job makes one generation call. The host retains invalid drafts for external
-review but never sends a draft or validation issues back to the model. Iteration
+Each job makes an initial generation call and at most one same-job revision,
+using only its own draft and deterministic validation alongside the original
+allowlisted input. No skills, previous jobs or external review findings enter
+either call. The host retains both attempts, including failures. Iteration
 must follow review → update canonical instructions → push/deploy → fresh job.
 Do not edit generated curricula to make an instruction experiment pass.
 

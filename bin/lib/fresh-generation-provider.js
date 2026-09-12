@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Agent } from 'undici';
-import { buildFreshGenerationContext, FRESH_GENERATION_VERSION } from '../../src/fresh-generation.js';
+import { buildFreshGenerationContext, FRESH_GENERATION_VERSION, validateGlobalCurriculumCandidate } from '../../src/fresh-generation.js';
 import { requestBackgroundGeneration } from './background-generation.js';
 
 const hash = value => `sha256:${createHash('sha256').update(value).digest('hex')}`;
@@ -78,11 +78,48 @@ async function readGenerationResponse(response) {
  * and publication. Do not add shell, browsing, file, MCP or conversation tools
  * here: that would invalidate the guarantee that old content is inaccessible.
  */
-export async function requestFreshGeneration({
+// Only a completed first response in this process can authorize one revision.
+// Snapshot its bytes so caller mutations cannot substitute another job's draft.
+const revisionSources = new WeakMap();
+export async function requestCurriculumRevision(generated, callbacks = {}) {
+    const source = revisionSources.get(generated);
+    if (!source) throw new Error('A revision requires an unused same-job first response.');
+    revisionSources.delete(generated); // Consume before the paid request, including failures.
+    const draft = JSON.parse(source.draft);
+    const structuralErrors = [];
+    try {
+        if (draft?.schema_version !== undefined) throw new Error('Unexpected model output format.');
+        if (!Array.isArray(draft?.practiceNotes)) throw new Error('Missing practice notes report.');
+        validateGlobalCurriculumCandidate(draft, source.options.subjects,
+            { requireCoverage: true, mandatoryDecks: source.options.mandatoryDecks });
+    } catch (error) { structuralErrors.push(...(error.structuralErrors || [error.message])); }
+    return requestGeneration({ ...source.options,
+        onResponseCreated: callbacks.onResponseCreated,
+        onResponseDiagnostics: callbacks.onResponseDiagnostics }, {
+        draft, validation: { structuralValid: structuralErrors.length === 0, structuralErrors }
+    });
+}
+
+export async function requestFreshGeneration(options) {
+    const generated = await requestGeneration(options);
+    if (options.jobType === 'curriculum-design') {
+        const { subjects, mandatoryDecks } = buildFreshGenerationContext(options);
+        revisionSources.set(generated, { draft: JSON.stringify(generated.candidate), options: {
+            jobType: options.jobType, subjects, mandatoryDecks,
+            instructions: options.instructions, schema: structuredClone(options.schema),
+            modelId: options.modelId, reasoningEffort: options.reasoningEffort,
+            providerId: options.providerId, apiKey: options.apiKey, signal: options.signal,
+            fetchImpl: options.fetchImpl
+        } });
+    }
+    return generated;
+}
+
+async function requestGeneration({
     jobType, subjects, mandatoryDecks, catalog, deckId, chapterId,
     instructions, schema, modelId, reasoningEffort, providerId = 'openai',
     apiKey, signal, fetchImpl = fetch, repair, onResponseCreated, onResponseDiagnostics
-}) {
+}, sameJobRevision) {
     if (providerId !== 'openai') throw new Error('This provider does not yet support restricted generation.');
     if (!apiKey) throw new Error('A connected provider credential is required.');
     if (!modelId || !reasoningEffort) throw new Error('Pin a model and reasoning level before generation.');
@@ -94,7 +131,7 @@ export async function requestFreshGeneration({
         throw new Error('Repair context is not supported. Update the instructions and start a fresh job.');
     }
     const context = buildFreshGenerationContext({ jobType, subjects, mandatoryDecks, catalog, deckId, chapterId });
-    const input = JSON.stringify(context);
+    const input = JSON.stringify({ ...context, ...(sameJobRevision ? { sameJobRevision } : {}) });
     // AbortSignal alone does not override the HTTP client's shorter header /
     // body timeouts. Scope the transport to this job; never change global fetch.
     const timeoutMs = generationTimeoutMs(jobType);
@@ -151,7 +188,8 @@ export async function requestFreshGeneration({
             providerId, modelId, reasoningEffort,
             resolvedModelId: result.model || modelId,
             inputHash: hash(input), instructionsHash: hash(instructions), schemaHash: hash(JSON.stringify(schema)),
-            responseId: result.id || null, diagnostics
+            responseId: result.id || null, diagnostics,
+            ...(sameJobRevision ? { stage: 'revision', sourceCandidateHash: hash(JSON.stringify(sameJobRevision.draft)) } : {})
         }
     };
 }

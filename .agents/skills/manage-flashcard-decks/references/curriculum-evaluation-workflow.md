@@ -9,7 +9,7 @@ experiment unless acceptance itself was authorized.
 
 Record the request ID, workflow commit, subjects and mandatory-deck inputs,
 model/reasoning, candidate commit, and published baseline commit. Record the
-single generation attempt (and distinguish historical repaired jobs). Compare
+initial and revision attempts (and distinguish historical one-call jobs). Compare
 the complete specifications, not just deck IDs or
 counts. Renames and changes of ownership are not automatically lost coverage.
 Check remote job state before submission; never duplicate a pending job or
@@ -122,15 +122,16 @@ flashcards curriculum check-candidate <candidate.json> --subjects <subject-names
 ```
 
 Repeat `--deck <subject/deck>` to limit detailed output to chosen entry paths.
-The runner also saves `attempt-1-diagnostics.json` beside each completed draft.
+The runner also saves `attempt-N-diagnostics.json` beside each completed draft.
 These are read-only inspections: current output uses explicit deck/outcome
 references; historical format-2 output is compiled from its single outcome
 registry without changing the saved artifact.
 They reuse the candidate validator, separate
 structural errors from model-declared scope issues, and expose full cross-subject
 ancestor closures, indirect consumer counts, exact required outcome IDs, other
-source outcomes, alternative paths and level differences. No data is sent back
-to the generator. The command exits unsuccessfully for structural errors or
+source outcomes, alternative paths and level differences. Detailed external
+review traces are not sent to the generator; the bounded revision receives only
+its own draft and deterministic structural errors. The command exits unsuccessfully for structural errors or
 declared scope issues; exit success is not educational acceptance.
 
 Use these traces to test a concrete claim against the full source and consumer
@@ -150,9 +151,11 @@ and push/deploy only when authorized. Pin the next job to the deployed commit.
 Run one job at a time. Inspect its result before requesting another. Use the
 same requested subjects and no mandatory additions unless the user requested
 them. Every iteration follows review → update canonical instructions →
-push/deploy → fresh generation. Each job makes one model call using only the
-input allowlist. Never provide a draft, validation defects, reviewer feedback,
-or previous proposal as extra context, and never edit generated outputs to pass
+push/deploy → fresh generation. Each job makes an initial call using only the
+input allowlist, followed by at most one revision using that same job's draft
+and deterministic validation. Never supply skills, external reviewer feedback
+or another job's proposal. Preserve both attempts and compare the revision
+against its draft as well as earlier experiments. Never edit outputs to pass
 the review. Express supported improvements in the versioned instructions;
 do not launch another quality iteration without an instruction revision.
 Read-only polling reconnects retrieve the same response, not a new generation.

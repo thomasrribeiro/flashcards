@@ -5,7 +5,7 @@ import {
     canonicalSubjectNames, validateGlobalCurriculumCandidate,
     validateChapterCurriculumCandidate
 } from './fresh-generation.js';
-import { requestFreshGeneration } from '../bin/lib/fresh-generation-provider.js';
+import { requestFreshGeneration, requestCurriculumRevision } from '../bin/lib/fresh-generation-provider.js';
 
 vi.mock('undici', async importOriginal => {
     const actual = await importOriginal();
@@ -132,6 +132,36 @@ describe('restricted provider request', () => {
             repair: { draft: { secret: 'OLD_DRAFT' }, issues: ['previous feedback'] }
         })).rejects.toThrow('Repair context is not supported');
         expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it('allows exactly one revision of the immutable same-job draft with computed diagnostics', async () => {
+        const fetchImpl = vi.fn(async () => Response.json(completed));
+        const original = options();
+        const first = await requestFreshGeneration({ ...original, fetchImpl });
+        first.candidate.injected = 'FOREIGN_DRAFT';
+        original.schema.properties.injected = { type: 'string' };
+        const second = await requestCurriculumRevision(first, { feedback: 'EXTERNAL_REVIEW' });
+        const bodies = fetchImpl.mock.calls.map(call => JSON.parse(call[1].body));
+        expect(JSON.parse(bodies[1].input)).toEqual({ subjects: ['math'], sameJobRevision: {
+            draft: {}, validation: { structuralValid: false, structuralErrors: ['Missing practice notes report.'] }
+        } });
+        expect(bodies[1].instructions).toBe(bodies[0].instructions);
+        expect(bodies[1].text.format.schema).toEqual(bodies[0].text.format.schema);
+        expect(bodies[1]).toMatchObject({ model: bodies[0].model, reasoning: bodies[0].reasoning, tools: [], tool_choice: 'none' });
+        expect(JSON.stringify(bodies)).not.toMatch(/FOREIGN_DRAFT|EXTERNAL_REVIEW|OLD_|previous_response_id|conversation/);
+        expect(second.provenance).toMatchObject({ stage: 'revision', sourceCandidateHash: expect.stringMatching(/^sha256:/) });
+        expect(second.provenance.inputHash).not.toBe(first.provenance.inputHash);
+        await expect(requestCurriculumRevision(first)).rejects.toThrow(/unused same-job/);
+        await expect(requestCurriculumRevision(second)).rejects.toThrow(/unused same-job/);
+        await expect(requestCurriculumRevision({ ...first })).rejects.toThrow(/unused same-job/);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+    it('consumes the revision permission even when the second request fails', async () => {
+        const fetchImpl = vi.fn().mockResolvedValueOnce(Response.json(completed)).mockRejectedValue(new TypeError('network'));
+        const first = await requestFreshGeneration({ ...options(), fetchImpl });
+        await expect(requestCurriculumRevision(first)).rejects.toThrow(/Not retried/);
+        await expect(requestCurriculumRevision(first)).rejects.toThrow(/unused same-job/);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
 
     const streamResponse = text => new Response(new ReadableStream({

@@ -70,7 +70,7 @@ describe('queued restricted runner', () => {
         expect(failure.reviewResult.provenance.diagnostics).toEqual(diagnostics);
         expect(JSON.stringify(diagnostics)).not.toContain('DO_NOT_RETAIN');
         expect(statSync(path.join(retained(), 'attempt-1-provider.json')).mode & 0o777).toBe(0o600);
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
     it.each(['incomplete', 'failed', 'completed'])('retains terminal diagnostics before rejecting %s without usable JSON', async status => {
         const job = setup();
@@ -83,7 +83,7 @@ describe('queued restricted runner', () => {
         expect(fetchImpl).toHaveBeenCalledTimes(1);
         expect(readdirSync(retained())).not.toContain('attempt-1.json');
     });
-    it('retains an empty completed response for online failure review without publication or retry', async () => {
+    it('retains an empty completed response for online failure review without publication after one revision', async () => {
         const job = setup();
         const candidate = { ...globalCandidate(), decks: [], coverage: [] };
         const fetchImpl = respond(candidate);
@@ -95,7 +95,7 @@ describe('queued restricted runner', () => {
         expect(failure.reviewResult.proposals).toBeUndefined();
         expect(state.published).toEqual([]);
         expect(state.abandoned).toBe(true);
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
     it.each([false, true])('runs a registry-free, read-only probe with scope failure=%s and no publication', async hasIssues => {
         setup(); beginRegistryDraft.mockClear();
@@ -111,7 +111,7 @@ describe('queued restricted runner', () => {
         expect(result.result.preview.catalog.decks[0].chapters).toEqual([]);
         expect(beginRegistryDraft).not.toHaveBeenCalled();
         expect(state.published).toEqual([]);
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
         const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
         expect(JSON.parse(body.input)).toEqual({ subjects: ['math'] });
         expect(body.instructions).toBe(freshGenerationInstructions('curriculum-design'));
@@ -124,19 +124,19 @@ describe('queued restricted runner', () => {
         await expect(runFreshGenerationJob(job, { credential: { apiKey: 'test-only' } })).rejects.toThrow(/registry-free/);
         expect(fetchImpl).not.toHaveBeenCalled(); expect(beginRegistryDraft).not.toHaveBeenCalled();
     });
-    it('rejects experimental format-2 output in restored-contract jobs without another call', async () => {
+    it('rejects experimental format-2 output in restored-contract jobs after one revision', async () => {
         const job = setup();
         const legacy = { ...globalCandidate(), schema_version: 2 };
         const fetchImpl = respond(legacy);
         await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
             .rejects.toThrow(/needs revision/);
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
         expect(state.published).toEqual([]);
         expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(legacy);
         expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1-diagnostics.json'))).structuralValid).toBe(false);
         expect(readdirSync(retained())).not.toContain('attempt-1-validated.json');
     });
-    it('retains a failed draft without making a repair call or publishing it', async () => {
+    it('retains a failed draft after one revision without publishing it', async () => {
         const job = setup(); const candidate = globalCandidate();
         candidate.scopeIssues = ['Missing advanced arithmetic outcome.'];
         const fetchImpl = respond(candidate);
@@ -148,7 +148,7 @@ describe('queued restricted runner', () => {
         expect(result.result.proposals).toBeUndefined();
         expect(result.error).not.toContain('Drafts:');
         expect(state.abandoned).toBe(true);
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
         const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
         expect(JSON.parse(body.input)).toEqual({ subjects: ['math'] });
         expect(body.instructions).toBe(freshGenerationInstructions('curriculum-design'));
@@ -162,15 +162,15 @@ describe('queued restricted runner', () => {
             summary: { deckCount: 1 }
         });
         expect(statSync(path.join(retained(), 'attempt-1-diagnostics.json')).mode & 0o777).toBe(0o600);
-        expect(readdirSync(retained()).some(name => name.startsWith('attempt-2'))).toBe(false);
+        expect(readdirSync(retained()).some(name => name.startsWith('attempt-2'))).toBe(true);
         expect(state.published).toEqual([]);
     });
-    it('preserves practice disclaimers without charging for a repair', async () => {
+    it('preserves practice disclaimers through the same-job revision', async () => {
         const job = setup(); const candidate = globalCandidate();
         candidate.practiceNotes = ['Laboratory practice requires supervision and institutional approval.'];
         const fetchImpl = respond(candidate);
         await runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
         expect(state.published[0].catalog.practiceNotes).toEqual(candidate.practiceNotes);
     });
     it('does not treat a blocking defect as harmless because it mentions laboratory approval', async () => {
@@ -181,7 +181,7 @@ describe('queued restricted runner', () => {
         const result = await runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
         expect(result.status).toBe('failed');
         expect(result.result.preview.issues).toEqual(candidate.scopeIssues);
-        expect(fetchImpl).toHaveBeenCalledTimes(1); expect(state.published).toEqual([]);
+        expect(fetchImpl).toHaveBeenCalledTimes(2); expect(state.published).toEqual([]);
     });
     it('does not retry an initial transport failure', async () => {
         const job = setup(); const fetchImpl = respond({}); fetchImpl.mockRejectedValue(new TypeError('network'));
@@ -194,7 +194,7 @@ describe('queued restricted runner', () => {
         candidate.decks[0].required_outcomes = [{ deck_id: 'math/arithmetic', outcome_ids: ['basics'] }];
         const fetchImpl = respond(candidate);
         await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } })).rejects.toThrow(/needs revision/);
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
         expect(state.published).toEqual([]);
         expect(state.abandoned).toBe(true);
         expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(candidate);
@@ -228,12 +228,12 @@ describe('queued restricted runner', () => {
         expect(input).toEqual({ subjects: ['chemistry', 'math', 'physics'], mandatoryDecks: [{ subject: 'math', decks: ['arithmetic'] }] });
         expect(state.published[0].catalog.subjects.map(subject => subject.id)).toEqual(input.subjects);
     });
-    it('blocks a result missing a mandatory deck without another generation', async () => {
+    it('blocks a result missing a mandatory deck after the bounded revision', async () => {
         const job = setup(); job.payload.mandatoryDecks = [{ subject: 'math', decks: ['measure-theoretic-probability'] }];
         const fetchImpl = respond(globalCandidate());
         await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } }))
             .rejects.toThrow(/needs revision/);
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
         expect(readFileSync(path.join(retained(), 'attempt-1-validation.json'), 'utf8')).toContain('Missing required decks');
         expect(state.published).toEqual([]);
     });
@@ -264,8 +264,8 @@ describe('queued restricted runner', () => {
         expect(body.text.format.schema.required).toEqual(['subjects', 'decks', 'coverage', 'scopeIssues', 'practiceNotes']);
         expect(JSON.stringify(fetchImpl.mock.calls)).not.toContain('OLD_CHAPTER_SECRET');
         expect(result.status).toBe('needs-review');
-        expect(result.result.provenance.attempts).toHaveLength(1);
-        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(result.result.provenance.attempts).toHaveLength(2);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
         expect(result.result.proposals).toHaveLength(1);
         expect(state.published[0].catalog.decks[0].chapters).toEqual([]);
         const compiled = validateGlobalCurriculumCandidate(candidate, ['math'], { requireCoverage: true });
@@ -280,7 +280,7 @@ describe('queued restricted runner', () => {
             validatedCandidateHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/) });
         expect(readFileSync(path.join(state.root, 'generation-archive/request-1/previous-curriculum.json'), 'utf8')).toContain('OLD_CARD_SECRET');
     });
-    it('retains the single draft and fails closed on invalid or incomplete output', async () => {
+    it('retains both drafts and fails closed on invalid or incomplete output', async () => {
         for (const unresolved of [false, true]) {
             const job = setup();
             const candidate = globalCandidate();
@@ -290,7 +290,7 @@ describe('queued restricted runner', () => {
             const run = runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
             if (unresolved) expect((await run).status).toBe('failed');
             else await expect(run).rejects.toThrow(/needs revision/);
-            expect(fetchImpl).toHaveBeenCalledTimes(1);
+            expect(fetchImpl).toHaveBeenCalledTimes(2);
             expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(candidate);
             expect(readFileSync(path.join(retained(), 'attempt-1-validation.json'), 'utf8'))
                 .toMatch(unresolved ? /Missing advanced coverage/ : /coverage/);
@@ -299,6 +299,39 @@ describe('queued restricted runner', () => {
             expect(state.published).toEqual([]);
             expect(state.abandoned).toBe(true);
         }
+    });
+    it('revises an invalid first draft, retaining both attempts and publishing only the valid final proposal', async () => {
+        const job = setup();
+        const first = globalCandidate(); first.decks[0].prerequisites = ['math/missing'];
+        const final = globalCandidate(); final.decks[0].title = 'Revised arithmetic';
+        const fetchImpl = respond(final);
+        fetchImpl.mockResolvedValueOnce(Response.json({ id: 'first-response', status: 'completed',
+            output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(first) }] }] }));
+        const result = await runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } });
+        expect(result.status).toBe('needs-review');
+        expect(result.result.provenance.attempts).toHaveLength(2);
+        expect(state.published[0].catalog.decks[0].title).toBe('Revised arithmetic');
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(first);
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-2.json'))).candidate).toEqual(final);
+        const bodies = fetchImpl.mock.calls.map(call => JSON.parse(call[1].body));
+        expect(JSON.parse(bodies[1].input).sameJobRevision).toMatchObject({ draft: first,
+            validation: { structuralValid: false, structuralErrors: [expect.any(String)] } });
+        expect(JSON.stringify(bodies)).not.toMatch(/OLD_CHAPTER_SECRET|OLD_CARD_SECRET|registryBaseCommit/);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+    it('does not fall back to the first draft when revision transport fails', async () => {
+        const job = setup(); const candidate = globalCandidate();
+        const fetchImpl = respond(candidate);
+        // Complete the first request, then fail the revision.
+        fetchImpl.mockReset().mockResolvedValueOnce(Response.json({ id: 'first-response', status: 'completed',
+            output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(candidate) }] }] }))
+            .mockRejectedValue(new TypeError('network'));
+        await expect(runFreshGenerationJob(job, { registryRoot: state.root, credential: { apiKey: 'test-only' } })).rejects.toThrow(/Not retried/);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        expect(state.published).toEqual([]);
+        expect(JSON.parse(readFileSync(path.join(retained(), 'attempt-1.json'))).candidate).toEqual(candidate);
+        expect(readdirSync(retained())).toContain('attempt-2-started.json');
+        expect(readdirSync(retained())).not.toContain('attempt-2.json');
     });
     it('isolates global instructions while preserving chapter/card instruction bundles', () => {
         expect(() => freshGenerationInstructions('curriculum-design', { repair: true })).toThrow(/not supported/);
