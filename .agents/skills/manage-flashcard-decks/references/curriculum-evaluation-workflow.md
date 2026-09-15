@@ -167,3 +167,26 @@ iterations do not improve those defects, pause and report the plateau rather
 than spending indefinitely. Respect any user-specified cost or run limit and
 report all paid attempts. A successful single-subject-set experiment does not
 prove reliability for arbitrary subjects.
+
+## External acceptance record
+
+Use `flashcards curriculum review-candidate <candidate.json> --subjects <names...>
+--benchmark <benchmark.json> --template` to create a pending review. Keep the
+benchmark outside generator context. Its versioned `criteria` have unique `id`,
+`subject`, `topic` and boolean `required` fields, with an explicit `subjects` list.
+Freeze it before opening the candidate. Do not turn every optional specialty or
+partial-depth concern into a required blocker.
+
+Fill every criterion and all four review dimensions with `pass`, `warning`,
+`blocker` or `optional`, a concrete `reason`, and `evidence` containing exact
+`deckId`/`outcomeIds` pairs. Required criteria cannot be waived as optional.
+Passing and warning judgments require teaching evidence; an absent-domain blocker
+can have no references. Inspect all contracts and full prerequisite traces before
+judging readiness. A reference alone does not prove semantic adequacy.
+
+Run the command again with `--review <review.json>`. Missing, stale, incomplete or
+invalid-reference reviews fail; demonstrated blockers also fail. Candidate and
+benchmark hashes prevent reusing a review after either changes. Report its verdict
+alongside structural validation. This is a read-only external acceptance gate,
+not an automatic semantic grader or a merge action. It does not alter the runner's
+draft publication behavior and must never be passed into either model call.

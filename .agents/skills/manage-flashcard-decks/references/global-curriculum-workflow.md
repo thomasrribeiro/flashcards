@@ -179,8 +179,20 @@ For included rows, targets identify exact teaching deck_id/outcome_ids pairs.
 The target deck level must match the row level; ownership may be in another
 supplied subject. A domain may span decks and a deck may serve several domains.
 Every outcome needs an included mapping, but that alone does not prove completeness.
-Rationale states the achieved competence and material boundary, not a generic
-claim that the curriculum is complete.
+Make the acceptance-task ledger observable through these existing coverage rows.
+In each included rationale state a concrete unfamiliar task the learner can now
+perform, what observable result would count as success, and the material boundary.
+The listed target outcomes must teach the operations needed to complete that task;
+do not merely name a field or assert completeness. Keep separate rows for distinct
+entry and advanced tasks even when their eventual ownership is shared.
+
+Before closing the inventory, inspect the boundaries between neighboring subjects
+and between scientific methods and professional applications. A shared domain can
+be missed when each neighboring field assumes the other owns it. Assign an explicit
+teaching owner and task for every such material domain, or report the unresolved gap.
+For each first working task, trace the complete preparation imposed by its owner.
+If an advanced sibling task adds unrelated preparation, split their teaching routes
+before serializing. A lower-depth coverage row cannot bypass a deck's prerequisites.
 
 For deferred or out-of-scope rows, targets is empty and rationale specifies the
 omission. Frontier specialties and separate professional qualifications can be

@@ -6,6 +6,7 @@ import { withGenerationTerminationSignal } from './lib/background-generation.js'
 import { FRESH_GENERATION_VERSION } from '../src/fresh-generation.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { inspectCurriculumCandidate } from '../src/curriculum-diagnostics.js';
+import { createAcceptanceReview, assessCurriculumAcceptance } from './lib/curriculum-acceptance.js';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { addChapter, createDeck, ensureSubject } from './lib/scaffold.js';
@@ -342,6 +343,30 @@ curriculum
         } catch (error) {
             handleError(error);
         }
+    });
+
+curriculum
+    .command('review-candidate <file>')
+    .description('Check an independent educational review against a pinned candidate and benchmark')
+    .requiredOption('--subjects <names...>', 'Expected subject names')
+    .requiredOption('--benchmark <file>', 'External frozen coverage benchmark JSON; never sent to generation')
+    .option('--review <file>', 'Completed external review JSON')
+    .option('--template', 'Print a pending review template; does not accept the candidate')
+    .action((file, options) => {
+        try {
+            if (options.template && options.review) throw new Error('Choose --template or --review, not both.');
+            const read = file => JSON.parse(readFileSync(resolvePath(file), 'utf8'));
+            const value = read(file), candidate = value.candidate ?? value;
+            const benchmark = read(options.benchmark);
+            if (options.template) {
+                console.log(JSON.stringify(createAcceptanceReview(candidate, options.subjects, benchmark), null, 2));
+                return;
+            }
+            const report = assessCurriculumAcceptance(candidate, options.subjects, benchmark,
+                options.review ? read(options.review) : null);
+            console.log(JSON.stringify(report, null, 2));
+            if (!report.accepted) process.exitCode = 1;
+        } catch (error) { handleError(error); }
     });
 
 curriculum
