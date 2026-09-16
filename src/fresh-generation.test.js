@@ -33,12 +33,45 @@ describe('fresh generation context boundary', () => {
         expect(() => canonicalSubjectNames(['math', 'math'])).toThrow(/duplicates/);
         expect(() => canonicalSubjectNames(['Math'])).toThrow(/kebab/);
     });
-    it('deck planning sees ancestor specifications, never chapter plans or old content', () => {
+    it('deck planning exposes the full DAG and ancestor chapters but no old target plan or content', () => {
         const catalog = fixture(), snapshot = structuredClone(catalog);
         const context = buildFreshGenerationContext({ jobType: 'deck-plan', deckId: 'physics/mechanics', catalog });
         expect(context.prerequisites.map(deck => deck.id)).toEqual(['math/arithmetic']);
-        expect(JSON.stringify(context)).not.toMatch(/OLD_|chapters|biology|repository|generation_runs/);
+        expect(context.prerequisites[0].chapters[0]).toEqual({ id: '01_basics', title: 'Basics', outcomes: [outcome()], prerequisites: [] });
+        expect(context.curriculum.decks.map(deck => deck.id)).toEqual(['biology/cells', 'math/arithmetic', 'physics/mechanics']);
+        expect(context.target).not.toHaveProperty('chapters');
+        expect(context.curriculum.decks.every(deck => !Object.hasOwn(deck, 'chapters'))).toBe(true);
+        expect(JSON.stringify(context)).not.toMatch(/OLD_|cards|repository|generation_runs/);
         expect(catalog).toEqual(snapshot);
+    });
+    it('never reads target or unrelated chapter plans, even with the complete DAG visible', () => {
+        const catalog = fixture();
+        for (const index of [1, 2]) Object.defineProperty(catalog.decks[index], 'chapters', {
+            get() { throw new Error('Forbidden chapter plan accessed'); }
+        });
+        expect(() => buildFreshGenerationContext({ jobType: 'deck-plan', deckId: 'physics/mechanics', catalog })).not.toThrow();
+    });
+    it('includes transitive ancestor plans and direct downstream outcome requirements', () => {
+        const catalog = fixture();
+        catalog.decks[2].prerequisites = ['physics/mechanics'];
+        catalog.decks[2].required_outcomes = [{ deck_id: 'physics/mechanics', outcome_ids: ['basics'] }];
+        catalog.decks[0].chapters.push({ id: '02_next', title: 'Next', outcomes: [outcome('next')], prerequisites: ['chapter:01_basics'], markdown: 'OLD_BODY' });
+        const build = deckId => buildFreshGenerationContext({ jobType: 'deck-plan', deckId, catalog });
+        expect(build('biology/cells').prerequisites.map(deck => deck.id)).toEqual(['math/arithmetic', 'physics/mechanics']);
+        expect(build('biology/cells').prerequisites[0].chapters[1].prerequisites).toEqual(['chapter:01_basics']);
+        expect(build('physics/mechanics').downstreamRequirements).toEqual([{ deck_id: 'biology/cells', outcome_ids: ['basics'] }]);
+        expect(JSON.stringify(build('biology/cells'))).not.toContain('OLD_BODY');
+    });
+    it('preserves prerequisite outcome contracts when chapter details are unavailable', () => {
+        const catalog = fixture();
+        delete catalog.decks[0].chapters;
+        const context = buildFreshGenerationContext({ jobType: 'deck-plan', deckId: 'physics/mechanics', catalog });
+        expect(context.prerequisites[0]).toMatchObject({ outcomes: [outcome()], chapters: [] });
+    });
+    it('rejects broken prerequisite chapter graphs rather than silently hiding them', () => {
+        const catalog = fixture();
+        catalog.decks[0].chapters[0].prerequisites = ['chapter:99_missing'];
+        expect(() => buildFreshGenerationContext({ jobType: 'deck-plan', deckId: 'physics/mechanics', catalog })).toThrow(/Missing prerequisite/);
     });
     it('flashcards see only specifications, including the accepted internal chapter graph', () => {
         const context = buildFreshGenerationContext({ jobType: 'chapter-expand', deckId: 'physics/mechanics', chapterId: '01_basics', catalog: fixture() });
@@ -111,6 +144,16 @@ describe('restricted provider request', () => {
         expect(JSON.stringify(body)).not.toMatch(/OLD_|test-key|previous_response_id|conversation/);
         expect(result.provenance.inputHash).toMatch(/^sha256:[a-f0-9]{64}$/);
         expect(JSON.stringify(result)).not.toContain('test-key');
+    });
+    it('sends the expanded planning snapshot without tools, previous responses or card content', async () => {
+        const fetchImpl = vi.fn().mockResolvedValue(Response.json(completed));
+        await requestFreshGeneration({ ...options(), jobType: 'deck-plan', deckId: 'math/arithmetic', fetchImpl });
+        const body = JSON.parse(fetchImpl.mock.calls[0][1].body), context = JSON.parse(body.input);
+        expect(context.curriculum.decks).toHaveLength(3);
+        expect(context.prerequisites).toEqual([]);
+        expect(context.downstreamRequirements).toEqual([{ deck_id: 'physics/mechanics', outcome_ids: ['basics'] }]);
+        expect(body).toMatchObject({ tools: [], tool_choice: 'none', store: false, truncation: 'disabled' });
+        expect(JSON.stringify(body)).not.toMatch(/OLD_|previous_response_id|conversation|chapters|test-key/);
     });
     it.each([
         { ...completed, status: 'incomplete' },

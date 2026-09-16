@@ -149,13 +149,29 @@ export function buildFreshGenerationContext({ jobType, subjects, mandatoryDecks,
     unique((catalog?.decks || []).map(deck => deck.id), 'Deck IDs');
     const rawTarget = rawDecks.get(deckId);
     requireValue(rawTarget, `Deck not found: ${deckId}.`);
-    // Only the target and its ancestors are projected. Unrelated material and
-    // old plans/cards, repository URLs, run history, paths and status stay out.
+    // Start with the target and its ancestor contracts. Deck planning adds
+    // the sanitized global map and ancestor chapter plans below.
     const selected = dependencyOrder(rawDecks, [deckId]).map(deckSpecification);
     validateDeckEdges(selected);
     const target = selected.find(deck => deck.id === deckId);
     const context = { target, prerequisites: selected.filter(deck => deck.id !== deckId) };
-    if (jobType === 'deck-plan') return context;
+    if (jobType === 'deck-plan') {
+        // The global map exposes deck contracts only. Never read target or
+        // non-ancestor chapter plans, cards, history, or publication metadata.
+        const curriculum = [...rawDecks.values()].map(deckSpecification)
+            .sort((a, b) => a.id.localeCompare(b.id));
+        validateDeckEdges(curriculum);
+        const prerequisites = context.prerequisites.map(deck => {
+            const chapters = rawDecks.get(deck.id).chapters;
+            requireValue(chapters === undefined || Array.isArray(chapters), `${deck.id} has an invalid chapter plan.`);
+            return { ...deck, chapters: chapters?.length
+                ? validateChapterCurriculumCandidate({ deckId: deck.id, chapters }, deck.id).chapters : [] };
+        });
+        const downstreamRequirements = curriculum.flatMap(deck => deck.required_outcomes
+            .filter(edge => edge.deck_id === deckId)
+            .map(edge => ({ deck_id: deck.id, outcome_ids: [...edge.outcome_ids] })));
+        return { target, curriculum: { decks: curriculum }, prerequisites, downstreamRequirements };
+    }
     const chapters = (rawTarget.chapters || []).map(chapter => chapterSpecification(chapter, deckId));
     unique(chapters.map(chapter => chapter.id), 'Chapter IDs');
     const byId = new Map(chapters.map(chapter => [chapter.id, chapter]));

@@ -27,6 +27,12 @@ use [references/curriculum-evaluation-workflow.md](references/curriculum-evaluat
 That reviewer may compare proposals with published plans; its comparison data
 must never enter the isolated curriculum-generation request.
 
+Fresh deck chapter planning receives the full deck-level DAG, the target
+contract, sanitized chapter plans from prerequisite ancestors, and direct
+downstream outcome requirements. It never receives existing target chapters
+or any cards. Visible decks are not automatically assumed mastered; missing
+prerequisite chapter detail does not erase accepted prerequisite outcomes.
+
 For other explicitly versioned `fresh-generation-v1` jobs, use
 [references/deck-plan-workflow.md](references/deck-plan-workflow.md) for a deck's
 chapter graph, or [references/chapter-expand-workflow.md](references/chapter-expand-workflow.md)

@@ -90,13 +90,15 @@ describe('whole-field curriculum contract', () => {
     it('persists coverage and passes only accepted scope to later generation, never old content', () => {
         const candidate = fixture();
         const before = structuredClone(candidate);
-        before.decks.forEach(deck => { deck.chapters = [{ cards: ['OLD_CONTENT'] }]; deck.generation_runs = ['OLD_HISTORY']; });
+        before.decks.forEach(deck => { deck.chapters = [{ id: '01_entry', title: 'Entry', outcomes: [{ id: 'entry', description: 'Explain the entry concepts.' }], prerequisites: [], cards: ['OLD_CONTENT'] }]; deck.generation_runs = ['OLD_HISTORY']; });
         const after = freshCandidateCatalog(before, candidate, 'curriculum-design', { generation: { run_id: 'test' } });
         expect(after.coverage).toEqual(candidate.coverage);
         const context = buildFreshGenerationContext({ jobType: 'deck-plan', catalog: after, deckId: 'physics/models' });
         expect(context.target.scope).toEqual(candidate.decks[1].scope);
         expect(context.prerequisites[0].practice).toEqual(candidate.decks[0].practice);
-        expect(JSON.stringify(context)).not.toMatch(/OLD_|chapters|generation_runs|coverage/);
+        expect(context.prerequisites[0].chapters[0].id).toBe('01_entry');
+        expect(context.target).not.toHaveProperty('chapters');
+        expect(JSON.stringify(context)).not.toMatch(/OLD_|generation_runs|coverage/);
         // Persist the same metadata across write/read, without invalid fake chapters.
         after.decks.forEach(deck => { deck.chapters = []; });
         const root = mkdtempSync(path.join(os.tmpdir(), 'coverage-catalog-'));
