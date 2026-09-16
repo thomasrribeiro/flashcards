@@ -243,7 +243,8 @@ export function parseSolutionSteps(solution) {
         const plainMatch = line.match(/^([A-Za-z]+):\s*(.*)$/);
         const plainStandaloneMatch = line.match(/^(IDENTIFY|PLAN|EXECUTE|EVALUATE)[ \t]*$/i);
         const plainLabel = plainMatch?.[1]?.toUpperCase();
-        const match = boldMatch
+        const dashedMatch = line.match(/^\*\*(IDENTIFY|PLAN|EXECUTE|EVALUATE)\*\*[ \t]+[—–-][ \t]+(.*)$/i);
+        const match = (dashedMatch ? [dashedMatch[0], dashedMatch[1].toUpperCase(), dashedMatch[2]] : null) || boldMatch
             || (boldStandaloneMatch
                 ? [boldStandaloneMatch[0], boldStandaloneMatch[1].toUpperCase(), '']
                 : null)

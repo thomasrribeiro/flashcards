@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { marked } from 'marked';
+import { cardMarkupErrors } from './card-markup-policy.js';
 import { parseSolutionSteps } from './markdown.js';
 
 describe('responsive prose wrapping', () => {
@@ -18,6 +19,14 @@ describe('responsive prose wrapping', () => {
 });
 
 describe('parseSolutionSteps', () => {
+    it.each(['—', '–', '-'])('segments dash-delimited IPEE headings (%s) consistently with validation', separator => {
+        const labels = ['IDENTIFY', 'PLAN', 'EXECUTE', 'EVALUATE'];
+        const solution = labels.map(label => `**${label}** ${separator} ${label} content.`).join('\n');
+        expect(parseSolutionSteps(solution)).toEqual(labels.map(label => ({ label, content: `${label} content.` })));
+        expect(cardMarkupErrors({ type: 'problem', content: { problem: 'Solve.', solution } }, { generated: true })).toEqual([]);
+        const incomplete = solution.split('\n').slice(1).join('\n');
+        expect(cardMarkupErrors({ type: 'problem', content: { problem: 'Solve.', solution: incomplete } }, { generated: true }).some(error => error.rule === 'P1')).toBe(true);
+    });
     it('parses headings with the colon outside the bold text', () => {
         expect(parseSolutionSteps(
             '**IDENTIFY**: Find the target.\n\n**PLAN**: Choose a method.'
