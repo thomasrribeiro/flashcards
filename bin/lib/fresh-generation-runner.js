@@ -27,6 +27,13 @@ function command(command, args, cwd) {
     return result.stdout.trim();
 }
 
+export function retainChapterDraft(generated, draftsRoot, requestId) {
+    mkdirSync(draftsRoot, { recursive: true });
+    const directory = mkdtempSync(path.join(draftsRoot, `request-${requestId}-`));
+    writeFileSync(path.join(directory, 'attempt-1.json'), JSON.stringify(generated, null, 2), { mode: 0o600 });
+    return directory;
+}
+
 export function renderFreshChapter(candidate, chapter, deck, generation) {
     if (candidate.chapterId !== chapter.id || !candidate.markdown?.trim()) throw new Error('Invalid chapter candidate.');
     if (candidate.scopeIssues?.length) throw new Error(`Unresolved scope: ${candidate.scopeIssues.join('; ')}`);
@@ -97,6 +104,7 @@ export async function runFreshGenerationJob(queued, { registryRoot, credential, 
             ? await generateRecoverableCurriculum(requestOptions, {
                 draftsRoot, requestId: queued.id, beforeAttempt: beforePublish
             }) : await requestFreshGeneration(requestOptions);
+        if (jobType === 'chapter-expand') generated.draftDirectory = retainChapterDraft(generated, draftsRoot, queued.id);
         const generation = { ...generated.provenance, run_id: `request-${queued.id}`, request_id: queued.id,
             operation: jobType === 'deck-plan' ? 'chapter-curriculum' : jobType === 'chapter-expand' ? 'chapter-content' : 'global-curriculum',
             artifacts: [jobType === 'chapter-expand' ? `flashcards/${payload.chapterId}.md` : 'curriculum'],
@@ -137,9 +145,9 @@ export async function runFreshGenerationJob(queued, { registryRoot, credential, 
                 catalogHash: payload.catalogHash, chapterId: chapter.id, artifacts: [`flashcards/${chapter.id}.md`] });
             const auditPath = path.join(deckPath, '.flashcards', 'audits', `fresh-${queued.id}.json`);
             mkdirSync(path.dirname(auditPath), { recursive: true });
-            writeFileSync(auditPath, JSON.stringify({ generation, coldStartAudit: generated.candidate.coldStartAudit, figurePlan: generated.candidate.figurePlan, verification: 'Requires human review; no external verification performed.' }, null, 2));
+            writeFileSync(auditPath, JSON.stringify({ generation, coldStartAudit: generated.candidate.coldStartAudit, figurePlan: generated.candidate.figurePlan, reviewRequirements: generated.candidate.reviewRequirements || [], verification: 'Requires human review; no external verification performed.' }, null, 2));
             await beforePublish();
-            const proposal = publishDeckDraft(deckPath, deckDraft, { title: `Generate ${payload.deckId} ${chapter.id}`, body: `Fresh request ${queued.id}. No old cards were supplied. Review content and identity changes before accepting.`, returnProposal: true });
+            const proposal = publishDeckDraft(deckPath, deckDraft, { title: `Generate ${payload.deckId} ${chapter.id}`, body: `Fresh request ${queued.id}. No old cards were supplied. Review content and identity changes before accepting.\n\nPending acceptance checks:\n${(generated.candidate.reviewRequirements || []).map(item => `- ${item}`).join('\n') || '- Independent content and presentation review.'}`, returnProposal: true });
             deckDraft = null;
             proposals.push(proposal);
             after = { ...before, decks: before.decks.map(item => item.id !== deck.id ? item : {

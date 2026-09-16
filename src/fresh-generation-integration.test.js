@@ -6,7 +6,7 @@ import path from 'node:path';
 import { freshGenerationJob } from './fresh-generation-contract.js';
 import { freshCandidateCatalog, readFreshCatalog, writeFreshCatalog } from '../bin/lib/fresh-generation-output.js';
 import { freshGenerationSchema } from '../bin/lib/fresh-generation-schema.js';
-import { renderFreshChapter } from '../bin/lib/fresh-generation-runner.js';
+import { renderFreshChapter, retainChapterDraft } from '../bin/lib/fresh-generation-runner.js';
 import { buildRegistry } from '../bin/lib/registry.js';
 import { chapterGraph } from './curriculum.js';
 import { parseDeck } from './parser.js';
@@ -62,7 +62,7 @@ describe('fresh generation integration', () => {
         expect(result.decks.every(deck => deck.chapters.length === 1)).toBe(true);
     });
     it('gives new cards new identities without importing legacy aliases', () => {
-        const candidate = { chapterId: '01_basics', markdown: 'Q: What is one plus one?\n\nA: Two.\n', scopeIssues: [], coldStartAudit: 'Counting is introduced.', figurePlan: 'No visual retrieval target.' };
+        const candidate = { chapterId: '01_basics', markdown: 'Q: What is one plus one?\n\nA: Two.\n', scopeIssues: [], coldStartAudit: 'Counting is introduced.', figurePlan: 'No visual retrieval target.', reviewRequirements: ['Render at phone width.', 'Record independent source verification.', 'Obtain pilot approval.'] };
         const result = renderFreshChapter(candidate, before.decks[0].chapters[0], before.decks[0], generation);
         expect(result.cardCount).toBe(1);
         expect(result.markdown).not.toContain('card-alias');
@@ -70,6 +70,13 @@ describe('fresh generation integration', () => {
         expect(result.markdown).toContain('authoring_model = "future-model"');
         expect(() => renderFreshChapter({ ...candidate, markdown: '<!-- card-id: old -->\n' + candidate.markdown }, before.decks[0].chapters[0], before.decks[0], generation)).toThrow(/identity/);
         expect(() => renderFreshChapter({ ...candidate, scopeIssues: ['Missing outcome'] }, before.decks[0].chapters[0], before.decks[0], generation)).toThrow(/scope/);
+    });
+    it('retains a rejected chapter candidate before rendering for later inspection', () => {
+        const generated = { candidate: { chapterId: '01_basics', markdown: 'Q: A question?\n\nA: An answer.\n', scopeIssues: ['Missing prerequisite'] }, provenance: { responseId: 'response-test' } };
+        const root = mkdtempSync(path.join(os.tmpdir(), 'retained-chapter-'));
+        const directory = retainChapterDraft(generated, root, 83);
+        expect(() => renderFreshChapter(generated.candidate, before.decks[0].chapters[0], before.decks[0], generation)).toThrow(/scope/);
+        expect(JSON.parse(readFileSync(path.join(directory, 'attempt-1.json'), 'utf8'))).toEqual(generated);
     });
     it('all schema objects are strict and no job imposes a count quota', () => {
         for (const type of ['curriculum-design', 'deck-plan', 'chapter-expand']) {
