@@ -102,3 +102,11 @@ no fixed quota is imposed. A statement that the subject is numerical is not a
 reason to omit its spatial representations. Keep titles, descriptions and alt
 text informative about givens without stating the answer or intended inference.
 Phone-width legibility and accessibility still require host/reviewer inspection.
+
+Before returning the candidate, repair defects found by your own audit whenever
+that repair is possible within the approved scope: move the teaching bridge,
+replace unnecessary early jargon with established language, or correct the
+example. Repeat the first-use check after the repair, including solution feedback
+and figure metadata. Do not leave a readily repairable sequencing defect in the
+draft together with instructions for a human to fix it. Keep genuine unresolved
+scope or correctness blockers in scopeIssues; this is not permission to hide them.
