@@ -21,6 +21,10 @@ export function freshGenerationSchema(jobType) {
     });
     if (jobType === 'deck-plan') return object({ deckId: string, chapters: list(object({ id: string, title: string, outcomes, prerequisites: list(string) })), scopeIssues: list(string) });
     if (jobType === 'chapter-expand') return object({ chapterId: string, markdown: string,
+        entryAssumptions: list(string),
+        conceptLedger: list(object({ concept: string, explanationCard: { type: 'integer' }, explanation: string,
+            retrievalCard: { type: 'integer' }, applicationCards: list({ type: 'integer' }) })),
+        figures: list(object({ id: string, title: string, description: string, tikz: string })),
         coldStartAudit: string, figurePlan: string, scopeIssues: list(string), reviewRequirements: list(string) });
     throw new Error('Unsupported generation job.');
 }

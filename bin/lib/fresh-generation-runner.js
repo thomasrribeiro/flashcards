@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, cpSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, cpSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -19,6 +19,7 @@ import { appendGenerationProvenance } from './generation-provenance.js';
 import { createDeck } from './scaffold.js';
 import { beginDeckDraft, publishDeckDraft, abandonDeckDraft } from './deck-github-publisher.js';
 import { beginRegistryDraft, publishRegistryDraft, abandonRegistryDraft, assertRepositoryCommit, registryCatalogHash } from './github-publisher.js';
+import { validateChapterAssets, validateConceptLedger, compileChapterFigures } from './fresh-chapter-assets.js';
 import { resolveRegistry } from './registry.js';
 
 function command(command, args, cwd) {
@@ -38,18 +39,23 @@ export function renderFreshChapter(candidate, chapter, deck, generation) {
     if (candidate.chapterId !== chapter.id || !candidate.markdown?.trim()) throw new Error('Invalid chapter candidate.');
     if (candidate.scopeIssues?.length) throw new Error(`Unresolved scope: ${candidate.scopeIssues.join('; ')}`);
     if (!candidate.coldStartAudit?.trim() || !candidate.figurePlan?.trim()) throw new Error('Missing chapter audit.');
-    // Model output cannot choose old identities or inject frontmatter. Figures
-    // needing files must be authored/reviewed separately, never broken links.
-    if (/<!--\s*card-(?:id|alias)|^\+\+\+\s*$|!\[|<\/?(?:img|svg|script|iframe)\b/im.test(candidate.markdown)) throw new Error('Candidate needs an identity or asset review.');
+    // Model output cannot choose old identities or inject frontmatter. Figure references must resolve to declared assets.
+    if (/<!--\s*card-(?:id|alias)|^\+\+\+\s*$|<\/?(?:img|svg|script|iframe)\b/im.test(candidate.markdown)) throw new Error('Candidate needs an identity or asset review.');
+    validateChapterAssets(candidate, chapter.id);
     const file = `${chapter.id}.md`;
     const source = annotateCardIds(candidate.markdown, file, () => randomUUID()).markdown
         .replace(/^<!-- card-alias: [^\n]+ -->\n/gm, '');
-    const fields = { order: Number.parseInt(chapter.id), subject: deck.subject, tags: [], prerequisites: chapter.prerequisites,
+    const fields = { order: Number.parseInt(chapter.id), subject: deck.subject, tags: [deck.subject], prerequisites: chapter.prerequisites,
         provides: chapter.outcomes.map(outcome => outcome.id), authoring_provider: generation.provider_id,
         authoring_model: generation.model_id, authoring_reasoning_effort: generation.reasoning_effort, authoring_run_id: generation.run_id };
     const markdown = `+++\n${Object.entries(fields).map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join('\n')}\n+++\n\n# ${chapter.title}\n\n${source}`;
     const cards = parseDeck(markdown, file).cards;
     if (!cards.length || cards.some(card => !card.stableId)) throw new Error('No valid identified cards were generated.');
+    validateConceptLedger(candidate, cards.length);
+    for (const figure of candidate.figures || []) {
+        const reference = `../figures/${chapter.id}/${figure.id}.svg`;
+        if (!cards.some(card => JSON.stringify(card.content).includes(reference))) throw new Error('Figure is outside scheduled card content.');
+    }
     const failures = cards.flatMap(card => cardMarkupErrors(card, { generated: true }));
     if (failures.length) throw new Error(`Invalid generated markup: ${failures.map(item => item.msg).join('; ')}`);
     return { markdown, cardCount: cards.length };
@@ -126,9 +132,13 @@ export async function runFreshGenerationJob(queued, { registryRoot, credential, 
             const deck = before.decks.find(deck => deck.id === payload.deckId);
             const chapter = deck.chapters.find(chapter => chapter.id === payload.chapterId);
             const rendered = renderFreshChapter(generated.candidate, chapter, deck, generation);
+            const assets = compileChapterFigures(generated.candidate, chapter.id);
+            generation.artifacts.push(...assets.map(asset => asset.path));
             const temp = mkdtempSync(path.join(os.tmpdir(), 'flashcards-fresh-content-'));
             const repositoryUrl = deck.repository?.url || `https://github.com/${registry.deckOwner}/${deck.subject}-${deck.deck}`;
-            if (deck.repository?.configured) {
+            // An earlier unaccepted draft may already have initialized the repo.
+            const existingRepository = spawnSync('gh', ['repo', 'view', repositoryUrl, '--json', 'nameWithOwner'], { encoding: 'utf8' });
+            if (deck.repository?.configured || existingRepository.status === 0) {
                 deckPath = path.join(temp, 'deck');
                 command('gh', ['repo', 'clone', repositoryUrl, deckPath], temp);
             } else {
@@ -138,14 +148,23 @@ export async function runFreshGenerationJob(queued, { registryRoot, credential, 
             const target = path.join(deckPath, 'flashcards', `${chapter.id}.md`);
             mkdirSync(path.dirname(target), { recursive: true });
             writeFileSync(target, rendered.markdown);
+            for (const asset of assets) {
+                const assetPath = path.join(deckPath, asset.path);
+                mkdirSync(path.dirname(assetPath), { recursive: true });
+                // Shared author styles in established decks must not be overwritten.
+                if (asset.path === 'figures/tikz-style.tex' && existsSync(assetPath) && readFileSync(assetPath, 'utf8') !== asset.content) {
+                    throw new Error('Existing shared figure style needs an explicit compatibility review.');
+                }
+                writeFileSync(assetPath, asset.content);
+            }
             appendGenerationProvenance(deckPath, { runId: generation.run_id, requestId: queued.id,
                 operation: 'chapter-content', providerId: generation.provider_id, modelId: generation.model_id,
                 reasoningEffort: generation.reasoning_effort, workflowVersion: payload.workflowVersion,
                 workflowCommit: payload.workflowCommit, registryBaseCommit: payload.registryBaseCommit,
-                catalogHash: payload.catalogHash, chapterId: chapter.id, artifacts: [`flashcards/${chapter.id}.md`] });
+                catalogHash: payload.catalogHash, chapterId: chapter.id, artifacts: generation.artifacts });
             const auditPath = path.join(deckPath, '.flashcards', 'audits', `fresh-${queued.id}.json`);
             mkdirSync(path.dirname(auditPath), { recursive: true });
-            writeFileSync(auditPath, JSON.stringify({ generation, coldStartAudit: generated.candidate.coldStartAudit, figurePlan: generated.candidate.figurePlan, reviewRequirements: generated.candidate.reviewRequirements || [], verification: 'Requires human review; no external verification performed.' }, null, 2));
+            writeFileSync(auditPath, JSON.stringify({ generation, entryAssumptions: generated.candidate.entryAssumptions, conceptLedger: generated.candidate.conceptLedger, coldStartAudit: generated.candidate.coldStartAudit, figurePlan: generated.candidate.figurePlan, reviewRequirements: generated.candidate.reviewRequirements || [], verification: 'Requires human review; no external verification performed.' }, null, 2));
             await beforePublish();
             const proposal = publishDeckDraft(deckPath, deckDraft, { title: `Generate ${payload.deckId} ${chapter.id}`, body: `Fresh request ${queued.id}. No old cards were supplied. Review content and identity changes before accepting.\n\nPending acceptance checks:\n${(generated.candidate.reviewRequirements || []).map(item => `- ${item}`).join('\n') || '- Independent content and presentation review.'}`, returnProposal: true });
             deckDraft = null;

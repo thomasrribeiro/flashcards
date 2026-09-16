@@ -62,7 +62,7 @@ describe('fresh generation integration', () => {
         expect(result.decks.every(deck => deck.chapters.length === 1)).toBe(true);
     });
     it('gives new cards new identities without importing legacy aliases', () => {
-        const candidate = { chapterId: '01_basics', markdown: 'Q: What is one plus one?\n\nA: Two.\n', scopeIssues: [], coldStartAudit: 'Counting is introduced.', figurePlan: 'No visual retrieval target.', reviewRequirements: ['Render at phone width.', 'Record independent source verification.', 'Obtain pilot approval.'] };
+        const candidate = { entryAssumptions: [], figures: [], conceptLedger: [{ concept: 'addition', explanationCard: 1, explanation: 'One plus one combines two ones.', retrievalCard: 1, applicationCards: [] }], chapterId: '01_basics', markdown: 'Q: What is one plus one?\n\nA: Two.\n', scopeIssues: [], coldStartAudit: 'Counting is introduced.', figurePlan: 'No visual retrieval target.', reviewRequirements: ['Render at phone width.', 'Record independent source verification.', 'Obtain pilot approval.'] };
         const result = renderFreshChapter(candidate, before.decks[0].chapters[0], before.decks[0], generation);
         expect(result.cardCount).toBe(1);
         expect(result.markdown).not.toContain('card-alias');
