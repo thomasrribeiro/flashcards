@@ -29,42 +29,13 @@ let currentCardContext = null;
 
 export function resolveMarkdownImageSource(href, context = null) {
     if (href.startsWith('http')) return href;
-    if (context) {
-        // For local decks: collection/deck-name/figures/...
-        // For GitHub repos: owner/repo/figures/...
-        const deckName = context.deckName;
-        const filePath = context.source?.file || '';
-
-        if (deckName.startsWith('local/')) {
-            // Local deck: collection/deck-name/relative-path
-            const localDeckName = deckName.replace('local/', '');
-
-            // Resolve relative path from the file's location
-            // filePath is like "flashcards/file.md", so we need to resolve from that directory
-            const fileDir = filePath.substring(0, filePath.lastIndexOf('/'));
-
-            // Build full path: collection/deck-name/file-directory/relative-href
-            const fullPath = `collection/${localDeckName}/${fileDir}/${href}`;
-
-            // Normalize path (resolve ../ and ./)
-            return normalizePath(fullPath);
-        } else {
-            // GitHub repo: use raw.githubusercontent.com URL
-            // deckName is like "owner/repo", filePath is like "flashcards/file.md"
-            const [owner, repo] = deckName.split('/');
-            const fileDir = filePath.substring(0, filePath.lastIndexOf('/'));
-
-            // Build full path and normalize (resolve ../)
-            const fullPath = `${fileDir}/${href}`;
-            const normalizedPath = normalizePath(fullPath);
-
-            // Review previews pin assets to the exact pull-request commit;
-            // installed decks continue to resolve from the current default branch.
-            const ref = context.source?.ref || 'HEAD';
-            return `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(ref)}/${normalizedPath}`;
-        }
+    if (context?.deckName?.startsWith('local/')) {
+        const file = context.source?.file || '';
+        const directory = file.substring(0, file.lastIndexOf('/'));
+        const path = normalizePath(`collection/${context.deckName.slice(6)}/${directory}/${href}`);
+        return `${import.meta.env.BASE_URL}${path}`;
     }
-    return `topics/${href}`;
+    return href;
 }
 
 // Custom image renderer to handle relative paths

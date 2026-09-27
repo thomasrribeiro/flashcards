@@ -1,28 +1,15 @@
 import { defineConfig, devices } from '@playwright/test';
-
 export default defineConfig({
     testDir: './tests/e2e',
     timeout: 30_000,
-    expect: { timeout: 10_000 },
-    fullyParallel: false,
-    reporter: 'line',
-    use: {
-        baseURL: 'http://127.0.0.1:3000',
-        trace: 'retain-on-failure'
-    },
+    use: { baseURL: 'http://127.0.0.1:3107', trace: 'retain-on-failure' },
     projects: [
-        { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
-        { name: 'mobile-chromium', use: { ...devices['iPhone 13'], browserName: 'chromium' } },
-        {
-            name: 'mobile-webkit',
-            grep: /global curriculum launch|mobile layered scrolling|mobile subject layers|mobile neighborhood|previews a fresh global curriculum|subject overview emphasizes|agent activity stays within|curriculum Options contains|Study deck picker aligns|mobile settings opens|recovers lost submission|opens latest curriculum flashcards|groups connection and settings/,
-            use: { ...devices['iPhone 13'], browserName: 'webkit' }
-        }
+        { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
+        { name: 'mobile', use: { ...devices['iPhone 13'], browserName: 'chromium' } }
     ],
     webServer: {
-        command: 'npm run dev:no-watch -- --host 127.0.0.1',
-        url: 'http://127.0.0.1:3000',
-        reuseExistingServer: true,
-        timeout: 20_000
+        command: 'npm run dev -- --host 127.0.0.1 --port 3107 --strictPort',
+        url: 'http://127.0.0.1:3107',
+        reuseExistingServer: false
     }
 });

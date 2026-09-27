@@ -1,26 +1,3 @@
-import { loadCurriculumRegistries } from './curriculum-registry.js';
-
-const CURRICULUM_PATH = 'data/curriculum.json';
-const CURRICULUM_FALLBACK_VERSION = import.meta.env.VITE_APP_COMMIT || 'development';
-let curriculumPromise = null;
-
-export function curriculumFallbackUrl(baseUrl = import.meta.env.BASE_URL) {
-    return `${baseUrl}${CURRICULUM_PATH}?v=${encodeURIComponent(CURRICULUM_FALLBACK_VERSION)}`;
-}
-
-export async function loadCurriculumIndex(baseUrl = import.meta.env.BASE_URL) {
-    if (!curriculumPromise) {
-        curriculumPromise = loadCurriculumRegistries({ fallbackUrl: curriculumFallbackUrl(baseUrl) })
-            .then(result => result.index);
-    }
-    return curriculumPromise;
-}
-
-export function reloadCurriculumIndex(baseUrl = import.meta.env.BASE_URL) {
-    curriculumPromise = null;
-    return loadCurriculumIndex(baseUrl);
-}
-
 export function curriculumMaps(index) {
     const decks = new Map((index?.decks || []).map(deck => [deck.id, deck]));
     const chapters = new Map();

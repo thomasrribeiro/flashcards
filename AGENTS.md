@@ -1,60 +1,20 @@
-# Flashcards repository instructions
+# Flashcards frontend instructions
 
-This repository contains the browser application, deterministic deck CLI,
-card parser and identity model, validation scripts, authoring standards, and
-the repo-scoped `$manage-flashcard-decks` skill.
+This branch is a standalone frontend. Preserve the visual design and keep UI copy short.
 
-## UI wording
+## Boundaries
 
-Prioritize concise UI copy. Keep labels, hints, and validation messages short;
-avoid redundant explanations and multi-sentence warnings.
+- Keep view behavior in focused modules and storage behind `src/local-store.js`.
+- `src/parser.js` defines accepted card syntax.
+- `src/hasher.js` and `src/review-identity.js` define stable identity and legacy migration utilities.
+- `src/curriculum.js` projects and lays out an existing graph; it does not generate curricula.
+- Do not reintroduce provider credentials, AI prompts or generation orchestration into the browser.
+- The backend proposal in `docs/backend-plan.md` is not an implemented contract.
 
-## Required checks
+## Safety
 
-For application or CLI changes, run:
+Preserve unrelated user changes and existing card IDs and aliases. Do not modify the separate worker repository, production data, authentication configuration, remotes or deployment secrets without explicit authorization. Local preview data uses a separate storage namespace; do not migrate or erase prior account data implicitly.
 
-```bash
-npm test
-npm run build
-git diff --check
-```
+## Checks
 
-For skill changes, also run:
-
-```bash
-python3 /Users/thomasribeiro/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
-  .agents/skills/manage-flashcard-decks
-```
-
-For deck changes, use `flashcards deck validate <deck-path>` and inspect every
-changed figure. Do not treat lints as automatically equivalent in severity;
-interpret them using `templates/guides/CARD_STANDARD.md`.
-
-## Architecture boundaries
-
-- `src/parser.js` defines the accepted Markdown card syntax.
-- `src/hasher.js` and `src/review-identity.js` define persistent identity and
-  legacy schedule migration.
-- `scripts/validate-notes.js` is the deterministic collection validator.
-- `bin/flashcards.js` exposes deterministic deck operations plus isolated,
-  provenance-recorded Codex subject/build/audit handoffs.
-- `.agents/skills/manage-flashcard-decks/` owns the reusable agent workflow.
-- `templates/guides/` owns universal and subject-specific authoring guidance.
-
-Do not put provider credentials, model-pinned generation logic, or large
-pedagogical prompts in the CLI. Do not duplicate universal standards in every
-deck scaffold. Add deterministic behavior to code and judgment-heavy behavior
-to the skill or applicable guide.
-
-## Review-history safety
-
-Every new card block requires a stable `card-id`. Preserve it when the retrieval
-target is unchanged. Assign a new ID for materially new retrieval. Preserve
-aliases and never bulk-regenerate IDs. Before revising a studied legacy deck,
-run `flashcards deck stabilize <deck-path>`.
-
-## Repository and deployment safety
-
-Preserve unrelated user changes. Do not modify the separate flashcards-worker
-repository, production data, authentication configuration, GitHub remotes, or
-deployment secrets unless the user explicitly places them in scope.
+For application changes, run `npm test`, `npm run build` and `git diff --check`. For view changes, also run `npm run test:e2e` and inspect desktop and mobile rendering. Preserve bundled card content unless deck edits are explicitly requested.
