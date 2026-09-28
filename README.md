@@ -14,10 +14,10 @@ Use the bundled example decks or import Markdown. Star decks for daily Learn/Rev
 ## Boundaries
 
 - `src/main.js`: application entry point and composition.
-- `src/cards/`: card parsing, Markdown/math rendering, serialization and stable identity utilities.
+- `src/cards/`: card parsing, Markdown/math rendering, stable identity and deck loading.
 - `src/curriculum/`: graph projections, prerequisites and layout.
 - `src/study/`: browser-side spaced-repetition scheduling.
-- `src/storage/`: local persistence and bundled collection loading; the boundary for a future service.
+- `src/storage/`: local review/import persistence; the boundary for a future service.
 - `src/ui/`: collection, study and curriculum views, plus shared DOM helpers.
 - Unit tests live beside the code they test; browser tests live in `tests/e2e/`.
 - `style.css`: shared presentation.
@@ -29,9 +29,7 @@ Vite serves `public/` files directly and copies them unchanged into the build ou
 - `collection/index.json`: the manifest listing the bundled example files.
 - `collection/example/flashcards/`: 12 Markdown example decks, loaded by the local collection loader.
 - `data/curriculum.json`: the retained curriculum catalog used by the read-only graph. It describes subjects, decks, chapters and prerequisites; it does not contain all their flashcards or generate anything.
-- `icons/`: app/home-screen icons used by the web manifest and HTML, plus the retained `gavel.png` and `refresh.png` action icons, currently unused.
-- `images/honeycombs.png`: a retained image asset, currently unused.
-- `screenshots/gui.png`: a retained UI screenshot, currently unused.
+- `icons/`: app/home-screen icons used by the web manifest and HTML.
 - `manifest.webmanifest`: app name, launch URL, display mode, colors and icon references for browser installation. No service worker is currently registered.
 
 Imported decks and review progress live in browser storage, not in `public/`.

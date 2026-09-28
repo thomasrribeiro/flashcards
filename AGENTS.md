@@ -6,7 +6,8 @@ This branch is a standalone frontend. Preserve the visual design and keep UI cop
 
 - Keep view behavior in focused modules and storage behind `src/storage/local-store.js`.
 - `src/cards/parser.js` defines accepted card syntax.
-- `src/cards/hasher.js` and `src/cards/review-identity.js` define stable identity and legacy migration utilities.
+- `src/cards/hasher.js` defines stable identity; preserve the hashes and aliases of existing cards.
+- `src/cards/deck-loader.js` parses imported decks and loads bundled examples.
 - `src/curriculum/curriculum.js` projects and lays out an existing graph; it does not generate curricula.
 - Do not reintroduce provider credentials, AI prompts or generation orchestration into the browser.
 

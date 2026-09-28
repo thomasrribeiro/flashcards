@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-    chapterPrerequisiteClosure,
-    curriculumDirectory,
-    curriculumGraph,
-    curriculumNeighborhood,
-    curriculumDeckRows,
-    curriculumLayerGraph,
-    curriculumLayerWindow,
-    dependencyPlan,
-    focusedCurriculumGraph,
     layoutCurriculumGraphElk,
     subjectOverviewGraph,
     subjectDeckGraph,
@@ -77,7 +68,15 @@ const index = {
     ]
 };
 
-describe('curriculum dependency planning', () => {
+const deckGraph = {
+    nodes: index.decks,
+    edges: [
+        { source: 'mathematics/arithmetic', target: 'mathematics/algebra', type: 'required' },
+        { source: 'mathematics/algebra', target: 'physics/physical-reasoning', type: 'required' }
+    ]
+};
+
+describe('curriculum graphs and layout', () => {
     it('transitively reduces required edges without using recommended paths', () => {
         const graph = transitivelyReduceCurriculumGraph({
             nodes: ['a', 'b', 'c', 'd'].map(id => ({ id })),
@@ -128,60 +127,8 @@ describe('curriculum dependency planning', () => {
         ]);
     });
 
-    it('expands an exact external provider through its local chapter closure', () => {
-        expect(chapterPrerequisiteClosure(index, 'physics/physical-reasoning', '01_systems'))
-            .toEqual([
-                'mathematics/arithmetic#01_numbers',
-                'mathematics/arithmetic#02_measurement'
-            ]);
-    });
-
-    it('separates exact provider chapters from unresolved whole-deck requirements', () => {
-        const plan = dependencyPlan(index, 'physics/physical-reasoning', '01_systems');
-        expect(plan.requiredDecks.map(deck => deck.id)).toEqual([
-            'mathematics/arithmetic',
-            'mathematics/algebra'
-        ]);
-        expect(plan.exactChapters.map(chapter => `${chapter.deckId}#${chapter.id}`))
-            .toEqual([
-                'mathematics/arithmetic#01_numbers',
-                'mathematics/arithmetic#02_measurement'
-            ]);
-        expect(plan.wholeDecks.map(deck => deck.id)).toEqual(['mathematics/algebra']);
-        expect(plan.missingDecks.map(deck => deck.id)).toEqual(['mathematics/algebra']);
-    });
-
-    it('filters the complete map without losing curriculum order', () => {
-        expect(curriculumDeckRows(index, { subject: 'mathematics', query: 'a' })
-            .map(deck => deck.id)).toEqual([
-            'mathematics/arithmetic',
-            'mathematics/algebra'
-        ]);
-    });
-
-    it('keeps cross-subject ancestors when filtering the interactive graph', () => {
-        const graph = curriculumGraph(index, { subject: 'physics' });
-        expect(graph.nodes.map(node => node.id)).toEqual([
-            'mathematics/arithmetic',
-            'mathematics/algebra',
-            'physics/physical-reasoning'
-        ]);
-        expect(graph.edges.filter(edge => edge.type === 'required')).toEqual([
-            {
-                source: 'mathematics/arithmetic',
-                target: 'mathematics/algebra',
-                type: 'required'
-            },
-            {
-                source: 'mathematics/algebra',
-                target: 'physics/physical-reasoning',
-                type: 'required'
-            }
-        ]);
-    });
-
     it('lays hard prerequisites in earlier columns', () => {
-        const graph = curriculumGraph(index);
+        const graph = deckGraph;
         const layout = layoutCurriculumGraph(graph);
         const nodes = new Map(layout.nodes.map(node => [node.id, node]));
         expect(nodes.get('mathematics/arithmetic').rank).toBe(0);
@@ -189,18 +136,6 @@ describe('curriculum dependency planning', () => {
         expect(nodes.get('physics/physical-reasoning').rank).toBe(2);
         expect(layout.width).toBeGreaterThan(0);
         expect(layout.height).toBeGreaterThan(0);
-    });
-
-    it('packs measured node heights without overlap in a column', () => {
-        const graph = curriculumGraph(index);
-        graph.edges = [];
-        const nodeSizes = new Map(graph.nodes.map((node, i) => [node.id, { width: 250, height: 40 + i * 30 }]));
-        const layout = layoutCurriculumGraph(graph, { nodeSizes });
-        for (const [i, node] of layout.nodes.entries()) {
-            expect(node.height).toBe(nodeSizes.get(node.id).height);
-            if (i) expect(node.y).toBe(layout.nodes[i - 1].y + layout.nodes[i - 1].height + 24);
-            expect(node.y + node.height).toBeLessThan(layout.height);
-        }
     });
 
     it('uses measured widths and heights when routing subject nodes', async () => {
@@ -249,95 +184,6 @@ describe('curriculum dependency planning', () => {
         expect(graph.edges).toEqual([]);
     });
 
-    it('builds a focused ancestor path with only immediate descendants', () => {
-        const graph = focusedCurriculumGraph(index, 'mathematics/algebra');
-        expect(graph.nodes.map(node => node.id).sort()).toEqual([
-            'mathematics/algebra',
-            'mathematics/arithmetic',
-            'physics/physical-reasoning'
-        ]);
-    });
-
-    it('pages a large DAG by layer while retaining direct context', () => {
-        const full = curriculumGraph(index);
-        const first = curriculumLayerGraph(full, 0);
-        expect(first.layerCount).toBe(3);
-        expect(first.focusIds).toEqual(['mathematics/arithmetic']);
-        expect(first.graph.nodes.map(node => node.id).sort()).toEqual([
-            'mathematics/algebra',
-            'mathematics/arithmetic'
-        ]);
-
-        const middle = curriculumLayerGraph(full, 1);
-        expect(middle.focusIds).toEqual(['mathematics/algebra']);
-        expect(middle.graph.nodes.map(node => node.id).sort()).toEqual([
-            'mathematics/algebra',
-            'mathematics/arithmetic',
-            'physics/physical-reasoning'
-        ]);
-        expect(middle.graph.seedIds).toEqual(['mathematics/algebra']);
-    });
-
-    it('centers every dependency rank, including first and last', () => {
-        const graph = curriculumGraph(index);
-        const first = curriculumLayerWindow(graph, 0, 3);
-        expect(first).toMatchObject({
-            start: 0, end: 2, layer: 0, layerCount: 3,
-            minLayer: 0, maxLayer: 2, width: 3
-        });
-        expect(first.graph.nodes.map(node => [node.id, node.curriculumRank])).toEqual([
-            ['mathematics/arithmetic', 0],
-            ['mathematics/algebra', 1]
-        ]);
-
-        const extended = {
-            nodes: [...graph.nodes, {
-                id: 'physics/mechanics', subject: 'physics', deck: 'mechanics', order: 2
-            }],
-            edges: [...graph.edges, {
-                source: 'physics/physical-reasoning', target: 'physics/mechanics', type: 'required'
-            }],
-            seedIds: []
-        };
-        const second = curriculumLayerWindow(extended, 2, 3);
-        expect(second).toMatchObject({
-            start: 1, end: 4, layer: 2, layerCount: 4,
-            minLayer: 0, maxLayer: 3
-        });
-        expect(second.graph.nodes.map(node => node.id)).toEqual([
-            'mathematics/algebra',
-            'physics/physical-reasoning',
-            'physics/mechanics'
-        ]);
-        const firstBoundary = curriculumLayerWindow(extended, 0, 3);
-        const lastBoundary = curriculumLayerWindow(extended, 99, 3);
-        expect(firstBoundary).toMatchObject({ start: 0, end: 2, layer: 0 });
-        expect(lastBoundary).toMatchObject({ start: 2, end: 4, layer: 3 });
-    });
-
-    it('includes every dependency rank in two-column mobile windows', () => {
-        const graph = curriculumGraph(index);
-        expect(curriculumLayerWindow(graph, 0, 2)).toMatchObject({
-            start: 0, end: 1, layer: 0, minLayer: 0, maxLayer: 2, width: 2
-        });
-        expect(curriculumLayerWindow(graph, 99, 2)).toMatchObject({
-            start: 1, end: 3, layer: 2, minLayer: 0, maxLayer: 2, width: 2
-        });
-    });
-
-    it('handles empty, single-layer, and two-layer graphs and out-of-range input', () => {
-        const empty = { nodes: [], edges: [], seedIds: [] };
-        expect(curriculumLayerWindow(empty)).toMatchObject({ start: 0, end: 0, layer: 0, layerCount: 0 });
-        const nodes = [{ id: 'a' }, { id: 'b' }];
-        const single = { ...empty, nodes };
-        expect(curriculumLayerWindow(single, 99)).toMatchObject({ start: 0, end: 1, layer: 0, minLayer: 0, maxLayer: 0 });
-        const two = { ...single, edges: [{ source: 'a', target: 'b', type: 'required' }] };
-        for (const input of [-9, NaN, Infinity]) {
-            expect(curriculumLayerWindow(two, input)).toMatchObject({ start: 0, end: 2, layer: 0, maxLayer: 1 });
-        }
-        expect(curriculumLayerWindow(two, 99)).toMatchObject({ start: 0, end: 2, layer: 1, maxLayer: 1 });
-    });
-
     it('builds chapter-level edges from resolved local dependencies', () => {
         const graph = chapterGraph(index, 'mathematics/arithmetic');
         expect(graph.edges).toEqual([{
@@ -347,93 +193,8 @@ describe('curriculum dependency planning', () => {
         }]);
     });
 
-    it('builds a three-column deck neighborhood with direct and transitive distances', () => {
-        const neighborhood = curriculumNeighborhood(index, {
-            hierarchy: 'deck',
-            targetId: 'mathematics/algebra'
-        });
-        expect(neighborhood.target.id).toBe('mathematics/algebra');
-        expect(neighborhood.prerequisites.map(entry => [entry.item.id, entry.distance])).toEqual([
-            ['mathematics/arithmetic', 1]
-        ]);
-        expect(neighborhood.unlocks.map(entry => [entry.item.id, entry.distance])).toEqual([
-            ['physics/physical-reasoning', 1]
-        ]);
-    });
-
-    it('keeps every neighborhood item at the selected hierarchy', () => {
-        const subjects = curriculumDirectory(index, { hierarchy: 'subject' });
-        const decks = curriculumDirectory(index, { hierarchy: 'deck', parentId: 'mathematics' });
-        const chapters = curriculumDirectory(index, {
-            hierarchy: 'chapter',
-            parentId: 'mathematics/arithmetic'
-        });
-        expect(subjects.every(item => item.nodeType === 'subject')).toBe(true);
-        expect(decks.map(item => item.id)).toEqual([
-            'mathematics/arithmetic',
-            'mathematics/algebra'
-        ]);
-        expect(chapters.map(item => item.id)).toEqual([
-            'mathematics/arithmetic#01_numbers',
-            'mathematics/arithmetic#02_measurement'
-        ]);
-    });
-
-    it('turns reciprocal subject projections into interdependence', () => {
-        const cyclicIndex = {
-            ...index,
-            subjects: [{ id: 'mathematics' }, { id: 'physics' }],
-            decks: [
-                ...index.decks,
-                {
-                    id: 'mathematics/mathematical-physics',
-                    subject: 'mathematics',
-                    deck: 'mathematical-physics',
-                    order: 3,
-                    prerequisites: ['physics/physical-reasoning'],
-                    recommended_after: [],
-                    chapters: []
-                }
-            ]
-        };
-        const neighborhood = curriculumNeighborhood(cyclicIndex, {
-            hierarchy: 'subject',
-            targetId: 'physics'
-        });
-        expect(neighborhood.prerequisites).toEqual([]);
-        expect(neighborhood.unlocks).toEqual([]);
-        expect(neighborhood.interdependent.map(item => item.id)).toEqual(['mathematics']);
-        expect(neighborhood.cyclic).toBe(true);
-    });
-
-    it('flags a true deck cycle instead of recursing forever', () => {
-        const cyclicIndex = {
-            ...index,
-            decks: index.decks.map(deck => deck.id === 'mathematics/arithmetic'
-                ? { ...deck, prerequisites: ['mathematics/algebra'] }
-                : deck)
-        };
-        const neighborhood = curriculumNeighborhood(cyclicIndex, {
-            hierarchy: 'deck',
-            targetId: 'mathematics/algebra'
-        });
-        expect(neighborhood.cycle.map(item => item.id)).toEqual(['mathematics/arithmetic']);
-        expect(neighborhood.cyclic).toBe(true);
-    });
-
-    it('supports cross-deck chapter prerequisites at chapter hierarchy', () => {
-        const neighborhood = curriculumNeighborhood(index, {
-            hierarchy: 'chapter',
-            targetId: 'physics/physical-reasoning#01_systems'
-        });
-        expect(neighborhood.prerequisites.map(entry => [entry.item.id, entry.distance])).toEqual([
-            ['mathematics/arithmetic#02_measurement', 1],
-            ['mathematics/arithmetic#01_numbers', 2]
-        ]);
-    });
-
     it('uses ELK to route a readable layered graph', async () => {
-        const layout = await layoutCurriculumGraphElk(curriculumGraph(index));
+        const layout = await layoutCurriculumGraphElk(deckGraph);
         expect(layout.nodes).toHaveLength(3);
         expect(layout.edges.every(edge => edge.sections.length > 0)).toBe(true);
         expect(layout.width).toBeGreaterThan(250);

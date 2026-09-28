@@ -1,6 +1,7 @@
 import 'katex/dist/katex.min.css';
 import { $, element, message } from './ui/dom.js';
-import { createLocalStore, loadExamples, readDeck } from './storage/local-store.js';
+import { createLocalStore } from './storage/local-store.js';
+import { loadExamples, readDeck } from './cards/deck-loader.js';
 import { createLibrary } from './ui/library-view.js';
 import { createStudy } from './ui/study-view.js';
 import { createCurriculum } from './ui/curriculum-view.js';

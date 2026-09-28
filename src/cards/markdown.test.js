@@ -18,7 +18,7 @@ describe('responsive prose wrapping', () => {
 });
 
 describe('parseSolutionSteps', () => {
-    it.each(['—', '–', '-'])('segments dash-delimited IPEE headings (%s) ', separator => {
+    it.each(['—', '–', '-'])('segments dash-delimited IPEE headings (%s)', separator => {
         const labels = ['IDENTIFY', 'PLAN', 'EXECUTE', 'EVALUATE'];
         const solution = labels.map(label => `**${label}** ${separator} ${label} content.`).join('\n');
         expect(parseSolutionSteps(solution)).toEqual(labels.map(label => ({ label, content: `${label} content.` })));

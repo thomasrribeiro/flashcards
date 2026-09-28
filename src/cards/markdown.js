@@ -27,7 +27,7 @@ const renderer = new marked.Renderer();
 // Store current card context for image resolution
 let currentCardContext = null;
 
-export function resolveMarkdownImageSource(href, context = null) {
+function resolveMarkdownImageSource(href, context = null) {
     if (href.startsWith('http')) return href;
     if (context?.deckName?.startsWith('local/')) {
         const file = context.source?.file || '';
@@ -84,7 +84,7 @@ marked.setOptions({
  * - Must end with non-whitespace followed by $
  * - This prevents matching currency like "$100 bills"
  */
-export function renderMath(text) {
+function renderMath(text) {
     // Standard TeX display delimiters (\[...\])
     text = text.replace(/\\\[([\s\S]+?)\\\]/g, (match, math) => {
         try {
@@ -163,16 +163,9 @@ export function setCardContext(card) {
 }
 
 /**
- * Clear the current card context
- */
-export function clearCardContext() {
-    currentCardContext = null;
-}
-
-/**
  * Render markdown to HTML with math support
  */
-export function markdownToHtml(markdown) {
+function markdownToHtml(markdown) {
     // First render LaTeX
     const withMath = renderMath(markdown);
 
@@ -184,7 +177,7 @@ export function markdownToHtml(markdown) {
 /**
  * Render inline markdown (for cloze deletions)
  */
-export function markdownToHtmlInline(markdown) {
+function markdownToHtmlInline(markdown) {
     const withMath = renderMath(markdown);
     const html = marked.parseInline(withMath);
     return DOMPurify.sanitize(html, PURIFY_CONFIG);

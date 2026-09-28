@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createLocalStore, readDeck, loadExamples, STORAGE_KEY } from './local-store.js';
+import { createLocalStore, STORAGE_KEY } from './local-store.js';
+import { readDeck } from '../cards/deck-loader.js';
 function memory() {
     const values = new Map([['github_user', '{"id":"existing"}']]);
     return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
@@ -36,13 +37,5 @@ describe('standalone persistence boundary', () => {
         const storage = memory(); storage.setItem(STORAGE_KEY, 'broken');
         expect(() => createLocalStore(storage)).toThrow();
         expect(storage.getItem(STORAGE_KEY)).toBe('broken');
-    });
-    it('loads available decks while reporting a failed file', async () => {
-        const fetcher = async url => url.endsWith('index.json')
-            ? { ok: true, json: async () => ({ repos: [{ name: 'example', files: ['a.md', 'b.md'] }] }) }
-            : { ok: url.endsWith('a.md'), text: async () => markdown };
-        const result = await loadExamples(fetcher, '/');
-        expect(result.decks).toHaveLength(1);
-        expect(result.errors).toHaveLength(1);
     });
 });

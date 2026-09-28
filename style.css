@@ -8,7 +8,6 @@
     --white: #ffffff;
     --black: #1a1a1a;
     --gold: #F5C842;
-    --complete: #27864f;
     --light-gray: #f8f8f8;
     --muted: #666666;
     --subtle-border: #eeeeee;
@@ -20,7 +19,6 @@
     --white: #111416;
     --black: #f1efe8;
     --gold: #F5C842;
-    --complete: #55c982;
     --light-gray: #202527;
     --muted: #a7adaf;
     --subtle-border: #343a3d;
@@ -320,16 +318,6 @@ a[href] {
     min-width: 0;
 }
 
-.section-title {
-    font-size: 16px;
-    margin-bottom: 30px;
-    margin-top: 10px;
-    color: var(--black);
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    font-weight: 700;
-}
-
 .projects-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, 320px);
@@ -622,10 +610,6 @@ kbd {
     .projects-grid {
         grid-template-columns: repeat(auto-fit, 320px);
     }
-
-    .section-title {
-        margin-top: 0;
-    }
 }
 
 @media (max-width: 480px) {
@@ -710,10 +694,6 @@ kbd {
     font-size: 0.76rem;
 }
 
-#session-learn-more {
-    background: var(--gold);
-}
-
 .session-complete-actions {
     display: flex;
     align-items: flex-start;
@@ -773,18 +753,10 @@ kbd {
     color: var(--black);
 }
 
-.session-habit-line {
-    margin-top: 8px;
-    font-size: 0.9rem;
-    opacity: 0.8;
-}
-
 .dashboard {
     padding: 4px 0 24px;
 }
-:root[data-theme="dark"] body,
-:root[data-theme="dark"] .card-front,
-:root[data-theme="dark"] .card-back {
+:root[data-theme="dark"] body {
     background: var(--white);
     color: var(--black);
 }
@@ -950,16 +922,6 @@ kbd {
     padding: 0;
 }
 .col-star.active { color: var(--gold); opacity: 1; }
-.col-star.complete {
-    color: var(--complete);
-    font-size: 16px;
-    font-weight: 700;
-    opacity: 1;
-}
-:root[data-theme="dark"] img[alt="Review"],
-:root[data-theme="dark"] img[alt="gavel"] {
-    filter: invert(1);
-}
 .col-empty { padding: 12px; font-size: 0.8rem; opacity: 0.5; }
 
 @media (max-width: 760px) {

@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => ({
     root: '.',
     build: {
         outDir: 'dist',
-        rollupOptions: {
+        rolldownOptions: {
             input: {
                 main: 'index.html',
                 app: 'app.html'

@@ -241,7 +241,7 @@ function parseClozeCards(text, deckName, filePath, startLine, endLine) {
 /**
  * Parser class matching hashcards parser.rs
  */
-export class Parser {
+class Parser {
     constructor(deckName, filePath) {
         this.deckName = deckName;
         this.filePath = filePath;
