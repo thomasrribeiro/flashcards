@@ -38,7 +38,7 @@ No account login, server sync, push delivery, GitHub writes, AI generation, CLI,
 
 The historical bundled catalog and example cards are retained as display data, not as a future backend schema. Git history still contains the old implementation. This is a source reset, not a history rewrite.
 
-The separate worker repository, deployed service, original working tree and deployment/authentication configuration are unchanged. The existing Pages workflow remains historical deployment configuration; no deployment was performed. A backend migration and deployment review are required before replacing the live app.
+The Pages workflow builds the static frontend without backend environment variables. Automatic deployment still targets `master`; changes on `dev` do not deploy automatically. The separate worker repository, deployed service and stored GitHub secrets are unchanged. A backend migration and deployment review are required before replacing the live app.
 
 ## Checks
 
@@ -52,4 +52,4 @@ git diff --check
 
 The former deck-authoring skill was removed with the generation workflow, so its validator has no remaining SKILL.md to validate.
 
-The browser tests exercise study, persistence, graph navigation, import, themes and mobile layout, and reject requests to backend/GitHub endpoints. `app.html` redirects old entry-point links to the new collection page.
+The browser tests exercise study, persistence, graph navigation, import, themes and mobile layout, and reject requests to backend/GitHub endpoints. `index.html` is the only app entry point; the legacy `app.html` redirect has been removed.
