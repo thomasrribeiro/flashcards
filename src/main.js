@@ -1,9 +1,9 @@
 import 'katex/dist/katex.min.css';
-import { $, element, message } from './dom.js';
-import { createLocalStore, loadExamples, readDeck } from './local-store.js';
-import { createLibrary } from './library-view.js';
-import { createStudy } from './study-view.js';
-import { createCurriculum } from './curriculum-view.js';
+import { $, element, message } from './ui/dom.js';
+import { createLocalStore, loadExamples, readDeck } from './storage/local-store.js';
+import { createLibrary } from './ui/library-view.js';
+import { createStudy } from './ui/study-view.js';
+import { createCurriculum } from './ui/curriculum-view.js';
 
 function setupShell() {
     const theme = $('theme-toggle');

@@ -1,5 +1,5 @@
 import { element, button } from './dom.js';
-import { subjectOverviewGraph, subjectDeckGraph, chapterGraph, layoutCurriculumGraph, layoutCurriculumGraphElk } from './curriculum.js';
+import { subjectOverviewGraph, subjectDeckGraph, chapterGraph, layoutCurriculumGraph, layoutCurriculumGraphElk } from '../curriculum/curriculum.js';
 
 // This view only lays out an existing catalog; it never plans or generates one.
 export function createCurriculum(root) {

@@ -1,6 +1,6 @@
-import { parseDeck } from './parser.js';
-import { identifyCard } from './hasher.js';
-import { createCard, isDue, rehydrateFsrsCard, reviewCard } from './fsrs-client.js';
+import { parseDeck } from '../cards/parser.js';
+import { identifyCard } from '../cards/hasher.js';
+import { createCard, isDue, rehydrateFsrsCard, reviewCard } from '../study/fsrs-client.js';
 
 // Deliberately isolated from the previous app's account and review storage.
 export const STORAGE_KEY = 'flashcards.frontend.v1';

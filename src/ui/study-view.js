@@ -1,5 +1,5 @@
 import { $, message } from './dom.js';
-import { renderCardFront, renderCardBack, setCardContext, parseSolutionSteps, renderSolutionStep } from './markdown.js';
+import { renderCardFront, renderCardBack, setCardContext, parseSolutionSteps, renderSolutionStep } from '../cards/markdown.js';
 
 export function createStudy({ store, onExit }) {
     let cards = [], index = 0, revealed = false, active = false;

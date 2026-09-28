@@ -4,12 +4,11 @@ This branch is a standalone frontend. Preserve the visual design and keep UI cop
 
 ## Boundaries
 
-- Keep view behavior in focused modules and storage behind `src/local-store.js`.
-- `src/parser.js` defines accepted card syntax.
-- `src/hasher.js` and `src/review-identity.js` define stable identity and legacy migration utilities.
-- `src/curriculum.js` projects and lays out an existing graph; it does not generate curricula.
+- Keep view behavior in focused modules and storage behind `src/storage/local-store.js`.
+- `src/cards/parser.js` defines accepted card syntax.
+- `src/cards/hasher.js` and `src/cards/review-identity.js` define stable identity and legacy migration utilities.
+- `src/curriculum/curriculum.js` projects and lays out an existing graph; it does not generate curricula.
 - Do not reintroduce provider credentials, AI prompts or generation orchestration into the browser.
-- The backend proposal in `docs/backend-plan.md` is not an implemented contract.
 
 ## Safety
 
