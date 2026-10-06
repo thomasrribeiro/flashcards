@@ -92,6 +92,10 @@
             <main class="main-content">
                 <div class="main-utility-row">
                     <button id="mobile-sidebar-open" class="mobile-sidebar-open" type="button" aria-controls="info-sidebar" aria-expanded="false">About</button>
+                    <span id="connection-status" class="connection-status" role="status" aria-live="polite">
+                        <span class="connection-status-dot" aria-hidden="true"></span>
+                        <span class="connection-status-label">Online</span>
+                    </span>
                     <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Switch to dark mode">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.2A8.5 8.5 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
                     </button>
@@ -99,21 +103,16 @@
                 <!-- <h2 class="section-title">Collection</h2> -->
 
                 <div class="auth-header">
-                    <button class="btn-github-login" id="btn-github-login">
-                        Login with GitHub
-                    </button>
-                    <div class="user-info hidden" id="user-info">
-                        <div class="user-info-row hidden" id="user-info-row-main">
-                            <span id="user-name"></span>
-                            <button class="btn-logout" id="btn-logout">Logout</button>
+                    <div class="user-info" id="user-info">
+                        <div class="user-info-row account-controls" id="user-info-row-main">
+                            <span id="user-name">Guest</span>
+                            <div class="account-actions">
+                                <button class="btn-github-login" id="btn-github-login" type="button">Sign in with GitHub</button>
+                                <button class="btn-logout hidden" id="btn-logout" type="button">Sign out</button>
+                                <button id="study-settings-btn" class="study-settings-btn" type="button" aria-expanded="false" aria-controls="study-settings-modal">Settings</button>
+                            </div>
                         </div>
-                        <div class="user-info-row user-info-controls">
-                            <span id="connection-status" class="connection-status" role="status" aria-live="polite">
-                                <span class="connection-status-dot" aria-hidden="true"></span>
-                                <span class="connection-status-label">Checking…</span>
-                            </span>
-                            <button id="study-settings-btn" class="study-settings-btn" type="button" aria-expanded="false" aria-controls="study-settings-modal">Settings</button>
-                        </div>
+                        <p id="account-status" class="account-status">Progress stays in this browser.</p>
                     </div>
                 </div>
 
@@ -170,11 +169,10 @@
                         </div>
                         <div class="study-settings-tabs" role="tablist" aria-label="Settings sections">
                             <button id="study-settings-tab-study" type="button" role="tab" aria-selected="true" aria-controls="study-settings-pane-study" data-settings-tab="study">Study</button>
-                            <button id="study-settings-tab-generation" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-generation" data-settings-tab="generation" tabindex="-1">AI generation</button>
                             <button id="study-settings-tab-curriculum" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-curriculum" data-settings-tab="curriculum" tabindex="-1">Curriculum</button>
-                            <button id="study-settings-tab-agents" type="button" role="tab" aria-selected="false" aria-controls="study-settings-pane-agents" data-settings-tab="agents" data-generation-activity tabindex="-1">Agents</button>
                         </div>
                         <div class="modal-body study-settings-body">
+                            <p id="settings-account-hint" class="study-settings-help">Sign in to sync progress and enable reminders.</p>
                             <section id="study-settings-pane-study" class="study-settings-pane" role="tabpanel" aria-labelledby="study-settings-tab-study" data-settings-pane="study">
                                 <div class="study-setting-field">
                                     <label for="daily-new-target">Daily new-card target</label>
@@ -195,58 +193,23 @@
                                         <option value="20">20</option>
                                     </select>
                                 </div>
-                                <div class="study-setting-field">
+                                <div class="study-setting-field hidden" data-account-only>
                                     <label for="daily-reminder-enabled">Reminder on this device</label>
                                     <select id="daily-reminder-enabled">
                                         <option value="false">Off</option>
                                         <option value="true">On</option>
                                     </select>
                                 </div>
-                                <div class="study-setting-field">
+                                <div class="study-setting-field hidden" data-account-only>
                                     <label for="daily-reminder-time">Reminder time</label>
                                     <input id="daily-reminder-time" type="time" step="900" value="18:00" />
                                 </div>
-                            </section>
-                            <section id="study-settings-pane-generation" class="study-settings-pane is-single-column" role="tabpanel" aria-labelledby="study-settings-tab-generation" data-settings-pane="generation" hidden>
-                                <h4 class="study-settings-subheading">Provider connections</h4>
-                                <div id="ai-provider-list" class="ai-provider-list" aria-live="polite">
-                                    <p class="study-settings-help">AI generation is being rebuilt.</p>
-                                </div>
-                                <div id="ai-provider-connect-panel" class="ai-provider-connect-panel hidden">
-                                    <label id="ai-provider-key-label" for="ai-provider-key">API key</label>
-                                    <input id="ai-provider-key" type="password" maxlength="1024" autocomplete="new-password" spellcheck="false" />
-                                    <button id="ai-provider-connect-save" type="button">Connect</button>
-                                    <button id="ai-provider-connect-cancel" type="button">Cancel</button>
-                                    <p id="ai-provider-connect-status" class="study-settings-help"></p>
-                                </div>
-                                <p class="study-settings-help">Consumer subscriptions do not normally include API usage; provider API billing applies.</p>
-                                <h4 class="study-settings-subheading">Generation defaults</h4>
-                                <div class="study-setting-field">
-                                    <label for="generation-provider">Provider</label>
-                                    <select id="generation-provider" disabled>
-                                        <option value="">Connect a provider above</option>
-                                    </select>
-                                </div>
-                                <div class="study-setting-field">
-                                    <label for="generation-model">Model</label>
-                                    <select id="generation-model" disabled>
-                                        <option value="">Connect a provider above</option>
-                                    </select>
-                                </div>
-                                <div class="study-setting-field">
-                                    <label for="generation-reasoning">Reasoning effort</label>
-                                    <select id="generation-reasoning" disabled>
-                                        <option value="">Choose a model first</option>
-                                    </select>
-                                </div>
-                                <p id="generation-model-status" class="study-settings-help">AI generation is unavailable while the backend is rebuilt.</p>
                             </section>
                             <section id="study-settings-pane-curriculum" class="study-settings-pane is-single-column" role="tabpanel" aria-labelledby="study-settings-tab-curriculum" data-settings-pane="curriculum" hidden>
                                 <p class="study-settings-help">Enabled public GitHub registries supply the subjects, decks, dependencies, and published chapter plans shown in Curriculum.</p>
                                 <div id="curriculum-settings-sources" class="curriculum-settings-sources"></div>
                                 <button id="curriculum-settings-add-source" class="curriculum-settings-add-source" type="button">Add source</button>
                             </section>
-                            <section id="study-settings-pane-agents" class="study-settings-pane is-single-column generation-activity-settings" role="tabpanel" aria-labelledby="study-settings-tab-agents" data-settings-pane="agents" data-generation-activity-list hidden></section>
                         </div>
                         <div class="modal-footer">
                             <button id="study-settings-cancel" class="btn-cancel" type="button">Cancel</button>

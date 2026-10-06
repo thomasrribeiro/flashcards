@@ -2,7 +2,7 @@
 
 A browser flashcard app with GitHub decks, spaced repetition, progress tracking, and an interactive curriculum graph.
 
-The interface and non-AI features are restored from `archive/pre-refactor-main` (`d534e9d`). The AI generation backend is being rebuilt: generation controls remain visible but disabled. Provider connections, AI job submission and polling, generation previews/publication, CLI runners, and authoring prompts are not included.
+The interface and non-AI features are restored from `archive/pre-refactor-main` (`d534e9d`). The AI generation backend is being rebuilt: curriculum generation controls remain visible but disabled; inactive AI settings and agent activity tabs are removed. Provider connections, AI job submission and polling, generation previews/publication, CLI runners, and authoring prompts are not included.
 
 ## Development
 
@@ -13,7 +13,7 @@ npm ci
 npm run dev
 ```
 
-Public GitHub repositories and curriculum registries can be browsed without signing in. Login, account progress sync, and reminders use the existing worker. To run those integrations locally, provide the existing deployment's values in an ignored `.env.local`:
+Guests start with the bundled example collection and save progress in this browser. Public GitHub repositories and curriculum registries can also be browsed without signing in. Reminder controls are available only when signed in. The Online/Offline indicator beside the theme toggle reports browser connectivity, not authentication or confirmed sync. Login, account progress sync, and reminders use the existing worker. To run those integrations locally, provide the existing deployment's values in an ignored `.env.local`:
 
 ```dotenv
 VITE_WORKER_URL=

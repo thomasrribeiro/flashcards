@@ -134,29 +134,27 @@ class GitHubAuth {
     }
 
     updateUI(isLoggedIn) {
-        const loginBtn = document.getElementById('btn-github-login');
-        const userInfo = document.getElementById('user-info');
-        const userInfoRow = document.getElementById('user-info-row-main');
+        const signedIn = Boolean(isLoggedIn && this.user);
+        document.getElementById('btn-github-login')?.classList.toggle('hidden', signedIn);
+        document.getElementById('btn-logout')?.classList.toggle('hidden', !signedIn);
         const userName = document.getElementById('user-name');
-
-        if (isLoggedIn && this.user) {
-            if (loginBtn) loginBtn.classList.add('hidden');
-            if (userInfo) userInfo.classList.remove('hidden');
-            if (userInfoRow) userInfoRow.classList.remove('hidden');
-            if (userName) {
-                // Show only first name
-                const fullName = this.user.name || this.user.username;
-                const firstName = fullName.split(' ')[0];
-                userName.textContent = firstName;
-            }
-        } else {
-            if (loginBtn) loginBtn.classList.remove('hidden');
-            // Connection and application settings remain available before
-            // authentication; signing in adds the identity/logout row to the
-            // same account block rather than relocating those controls.
-            if (userInfo) userInfo.classList.remove('hidden');
-            if (userInfoRow) userInfoRow.classList.add('hidden');
+        const username = this.user?.username || this.user?.login || this.user?.name;
+        if (userName) {
+            userName.textContent = signedIn ? `@${username}` : 'Guest';
+            userName.title = signedIn ? `Signed in to GitHub as ${username}` : 'Not signed in';
         }
+        const status = document.getElementById('account-status');
+        if (status) status.textContent = signedIn
+            ? 'Progress syncs with your account.'
+            : 'Progress stays in this browser.';
+        const hint = document.getElementById('settings-account-hint');
+        if (hint) hint.textContent = signedIn
+            ? 'Study settings sync with your account.'
+            : 'Sign in to sync progress and enable reminders.';
+        document.querySelectorAll('[data-account-only]').forEach(field => {
+            field.classList.toggle('hidden', !signedIn);
+            field.querySelectorAll('input, select').forEach(control => { control.disabled = !signedIn; });
+        });
     }
 
     isAuthenticated() {

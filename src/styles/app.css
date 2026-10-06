@@ -199,16 +199,33 @@ a[href] {
     flex: 1;
 }
 
-.user-info-controls {
-    justify-content: space-between;
-    gap: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--subtle-border);
+.account-controls {
+    gap: 16px;
 }
 
-.user-info-row.hidden + .user-info-controls {
-    padding-top: 0;
-    border-top: 0;
+.account-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.user-info .account-status {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.user-info .btn-github-login {
+    height: 28px;
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+@media (max-width: 480px) {
+    .user-info { min-width: 0; width: 100%; }
+    .account-controls { flex-wrap: wrap; gap: 8px; }
+    .account-actions { flex-wrap: wrap; }
 }
 
 .user-info span {
@@ -1574,7 +1591,7 @@ kbd {
 
 .study-settings-tabs {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     flex-shrink: 0;
     border-bottom: 1px solid var(--black);
     background: var(--white);
@@ -4251,7 +4268,6 @@ body.standalone-phone .mobile-sidebar-close {
     .study-settings-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .study-settings-tabs button { overflow-wrap: normal; }
     .study-settings-tabs button:nth-child(2n) { border-right: 0; }
-    .study-settings-tabs button:nth-child(-n + 2) { border-bottom: 1px solid var(--black); }
 }
 
 .curriculum-summary {

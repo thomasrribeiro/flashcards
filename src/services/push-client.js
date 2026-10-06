@@ -67,7 +67,8 @@ export async function getPushState() {
     if (!pushSupported()) return 'unsupported';
     if (!isStandalone()) return 'needs-install';
     if (Notification.permission === 'denied') return 'denied';
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return 'default';
     const sub = await reg.pushManager.getSubscription();
     if (sub) return 'subscribed';
     return 'default';
@@ -137,7 +138,8 @@ export async function updateAppBadge(count) {
  */
 export async function unsubscribeFromPush() {
     if (!pushSupported()) return false;
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return true;
     const sub = await reg.pushManager.getSubscription();
     if (!sub) return true;
     const endpoint = sub.endpoint;

@@ -155,7 +155,7 @@ function updateConnectionStatus() {
         status.classList.toggle('offline', !online);
         status.querySelector('.connection-status-label').textContent = online ? 'Online' : 'Offline';
         status.title = online
-            ? 'Connected — study progress can sync'
+            ? 'Browser reports an internet connection; account sync is separate'
             : 'Offline — studying is paused until the connection returns';
     }
 
@@ -213,12 +213,7 @@ async function init() {
         const pausedSessionPromise = getStudySession();
 
         if (!isAuthenticated) {
-            // Seed the example deck on first unlogged visit so new users see
-            // something immediately. A separate flag ensures we don't re-add
-            // it if the user explicitly removes it later.
-            seedExampleRepoOnFirstVisit();
-
-            // Re-fetch any GitHub repos the user added while logged out
+            await loadLocalCollectionRepos();
             await loadUnloggedGitHubRepos();
         } else {
             // Load user's repos from D1
@@ -464,29 +459,6 @@ async function loadUserRepos() {
     // repository has been fully loaded for review.
 }
 
-const EXAMPLE_REPO_ID = 'thomasrribeiro-flashcards/example';
-const EXAMPLE_SEEDED_KEY = 'flashcards_example_seeded';
-
-/**
- * On the very first unlogged visit, add the example deck to the user's
- * list so they see content immediately. The seeded flag is set unconditionally
- * so removing the deck afterwards is respected (no re-seeding on next load).
- */
-function seedExampleRepoOnFirstVisit() {
-    try {
-        if (localStorage.getItem(EXAMPLE_SEEDED_KEY)) return;
-        const raw = localStorage.getItem('flashcards_unlogged_repos');
-        const list = raw ? JSON.parse(raw) : [];
-        if (!list.includes(EXAMPLE_REPO_ID)) {
-            list.push(EXAMPLE_REPO_ID);
-            localStorage.setItem('flashcards_unlogged_repos', JSON.stringify(list));
-        }
-        localStorage.setItem(EXAMPLE_SEEDED_KEY, '1');
-    } catch (error) {
-        console.error('[Main] Failed to seed example repo:', error);
-    }
-}
-
 /**
  * Re-fetch GitHub repos the user added while logged out.
  * Repo IDs are persisted in localStorage; cards/metadata are not.
@@ -495,7 +467,9 @@ async function loadUnloggedGitHubRepos() {
     const { getUnloggedRepoList } = await import('./storage/local-store.js');
     const { loadRepositoryMetadata } = await import('./services/repo-manager.js');
 
-    const ids = getUnloggedRepoList();
+    // The old auto-seeded remote example is replaced by the bundled collection.
+    // Leave saved membership and review data untouched.
+    const ids = getUnloggedRepoList().filter(id => id !== 'thomasrribeiro-flashcards/example');
     if (ids.length === 0) return;
 
     console.log(`[Main] Re-fetching ${ids.length} unlogged repos:`, ids);
@@ -4872,11 +4846,6 @@ function curriculumOverlay(title) {
     return { overlay, content: overlay.querySelector('.curriculum-builder-content'), close };
 }
 
-function renderGenerationActivitySettings() {
-    const content = document.getElementById('study-settings-pane-agents');
-    if (!content) return;
-    content.innerHTML = '<p class="generation-activity-summary">AI generation is being rebuilt.</p><button type="button" class="generation-activity-refresh" disabled>Refresh</button><div class="generation-activity-list"><p>No generation requests.</p></div>';
-}
 
 function openCurriculumSources() {
     const { content, close } = curriculumOverlay('Curriculum sources');
@@ -5487,7 +5456,7 @@ async function loadLocalRepo(repoInfo) {
                 cardCount: allCards.length,
                 fileCount: repoInfo.files.length,
                 createdAt: new Date().toISOString(),
-                ...(firstMetadata?.subject && { subject: firstMetadata.subject }),
+                subject: firstMetadata?.subject || 'examples',
                 ...(firstMetadata?.topic && { topic: firstMetadata.topic })
             });
 
@@ -6218,15 +6187,9 @@ function discardPausedPrimaryStudySession() {
     clearStudySession();
 }
 
-function closeStudySettings({ generationPreferences = null } = {}) {
-    const modal = document.getElementById('study-settings-modal');
-    const wasOpen = modal && !modal.classList.contains('hidden');
-    modal?.classList.add('hidden');
+function closeStudySettings() {
+    document.getElementById('study-settings-modal')?.classList.add('hidden');
     document.getElementById('study-settings-btn')?.setAttribute('aria-expanded', 'false');
-
-    if (wasOpen) modal.dispatchEvent(new CustomEvent('settings-closed', {
-        detail: { generationPreferences }
-    }));
 }
 
 function activateStudySettingsTab(name, { focus = false } = {}) {
@@ -6242,7 +6205,6 @@ function activateStudySettingsTab(name, { focus = false } = {}) {
     for (const pane of panes) pane.hidden = pane.dataset.settingsPane !== active.dataset.settingsTab;
     const panel = document.getElementById('study-settings-panel');
     if (panel) panel.dataset.activeSettingsTab = active.dataset.settingsTab;
-    if (active.dataset.settingsTab === 'agents') renderGenerationActivitySettings();
     if (focus) active.focus();
 }
 
@@ -6261,7 +6223,7 @@ function reflectCustomTargetField() {
     custom.required = select.value === 'custom';
 }
 
-async function openStudySettings({ tab = 'study', focusRequestId = null } = {}) {
+async function openStudySettings({ tab = 'study' } = {}) {
     const modal = document.getElementById('study-settings-modal');
     const button = document.getElementById('study-settings-btn');
     const target = document.getElementById('daily-new-target');
@@ -6269,17 +6231,12 @@ async function openStudySettings({ tab = 'study', focusRequestId = null } = {}) 
     const batch = document.getElementById('new-session-size');
     const reminderEnabled = document.getElementById('daily-reminder-enabled');
     const reminderTime = document.getElementById('daily-reminder-time');
-    const generationProvider = document.getElementById('generation-provider');
-    const generationModel = document.getElementById('generation-model');
-    const generationReasoning = document.getElementById('generation-reasoning');
-    if (!modal || !button || !target || !custom || !batch || !reminderEnabled || !reminderTime
-        || !generationProvider || !generationModel || !generationReasoning) return;
+    if (!modal || !button || !target || !custom || !batch || !reminderEnabled || !reminderTime) return;
 
     if (!modal.classList.contains('hidden')) {
         if (tab === 'study') closeStudySettings();
         else {
             activateStudySettingsTab(tab);
-            renderGenerationActivitySettings({ focusRequestId });
         }
         return;
     }
@@ -6302,11 +6259,11 @@ async function openStudySettings({ tab = 'study', focusRequestId = null } = {}) 
     modal.classList.remove('hidden');
     button.setAttribute('aria-expanded', 'true');
     activateStudySettingsTab(tab);
-    if (tab === 'agents') renderGenerationActivitySettings({ focusRequestId });
     // Focusing a select during the opening tap summons its native iOS picker.
     document.getElementById('study-settings-close')?.focus({ preventScroll: true });
 
 
+    if (!githubAuth.isAuthenticated()) return;
     const reminder = await getReminderPreferences();
     if (modal.classList.contains('hidden')) return;
     reminderEnabled.value = String(reminder.enabled);
@@ -6320,11 +6277,7 @@ async function saveStudySettingsFromForm(event) {
     const batchSelect = document.getElementById('new-session-size');
     const reminderEnabled = document.getElementById('daily-reminder-enabled');
     const reminderTime = document.getElementById('daily-reminder-time');
-    const generationProvider = document.getElementById('generation-provider');
-    const generationModel = document.getElementById('generation-model');
-    const generationReasoning = document.getElementById('generation-reasoning');
-    if (!targetSelect || !custom || !batchSelect || !reminderEnabled || !reminderTime
-        || !generationProvider || !generationModel || !generationReasoning) return;
+    if (!targetSelect || !custom || !batchSelect || !reminderEnabled || !reminderTime) return;
 
     let newPerDay;
     if (targetSelect.value === 'unlimited') newPerDay = -1;
@@ -6356,19 +6309,21 @@ async function saveStudySettingsFromForm(event) {
             await renderCurriculumView();
         }
     }
-    if (wantsReminder && !isStandalone()) {
-        openPwaInstallGuide();
-    } else if (wantsReminder) {
-        const enabled = await subscribeToPush({
-            reminderTime: reminderTime.value,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        });
-        if (!enabled) {
-            alert('The reminder could not be enabled. Make sure you are signed in and allow notifications when prompted.');
+    if (githubAuth.isAuthenticated()) {
+        if (wantsReminder && !isStandalone()) {
+            openPwaInstallGuide();
+        } else if (wantsReminder) {
+            const enabled = await subscribeToPush({
+                reminderTime: reminderTime.value,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            });
+            if (!enabled) {
+                alert('The reminder could not be enabled. Make sure you are signed in and allow notifications when prompted.');
+            }
+        } else {
+            await unsubscribeFromPush();
+            updateAppBadge(0);
         }
-    } else {
-        await unsubscribeFromPush();
-        updateAppBadge(0);
     }
 
     habitSettings = { ...(habitSettings || {}), newPerDay, newBatchSize };
