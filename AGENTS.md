@@ -17,4 +17,4 @@ Preserve unrelated user changes and existing card IDs and aliases. Do not modify
 
 ## Checks
 
-For application changes, run `npm test`, `npm run build` and `git diff --check`. For view changes, also run `npm run test:e2e` and inspect desktop and mobile rendering. Preserve bundled card content unless deck edits are explicitly requested.
+For application changes, run `npm test`, `npm run build` and `git diff --check`. For view changes, inspect desktop and mobile rendering and exercise the affected interactions. The root `tests/` directory is intentionally excluded; unit tests live beside source files. Preserve bundled card content unless deck edits are explicitly requested.

@@ -11,8 +11,6 @@
     --light-gray: #f8f8f8;
     --muted: #666666;
     --subtle-border: #eeeeee;
-    --heatmap-empty: #eeeeee;
-    --project-card-height: 200px;
 }
 
 :root[data-theme="dark"] {
@@ -22,7 +20,6 @@
     --light-gray: #202527;
     --muted: #a7adaf;
     --subtle-border: #343a3d;
-    --heatmap-empty: #292f32;
 }
 
 body {
@@ -90,8 +87,7 @@ textarea {
 }
 
 .theme-toggle:hover,
-.study-settings-btn:hover,
-.study-settings-btn[aria-expanded="true"] {
+.study-settings-btn:hover {
     background: var(--light-gray);
 }
 button,

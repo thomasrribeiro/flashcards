@@ -29,9 +29,10 @@ export function createLibrary({ store, onStudy, onChange, onError }) {
         })));
         if (!subjects.length) subjectPane.append(element('p', 'col-empty', 'No matches'));
         const deckPane = pane('Decks');
+        const stars = new Set(store.state.stars);
         inSubject.forEach(deck => {
             const line = element('div', 'col-row');
-            const starred = store.state.stars.includes(deck.id);
+            const starred = stars.has(deck.id);
             const star = button(starred ? '★' : '☆', () => {
                 try { store.toggleStar(deck.id); onChange(); } catch (error) { onError(error); }
             }, `col-star${starred ? ' active' : ''}`);

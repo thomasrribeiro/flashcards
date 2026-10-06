@@ -1,14 +1,3 @@
-function curriculumMaps(index) {
-    const decks = new Map((index?.decks || []).map(deck => [deck.id, deck]));
-    const chapters = new Map();
-    for (const deck of decks.values()) {
-        for (const chapter of deck.chapters || []) {
-            chapters.set(`${deck.id}#${chapter.id}`, { ...chapter, deckId: deck.id });
-        }
-    }
-    return { decks, chapters };
-}
-
 function stronglyConnectedComponents(nodeIds, edges) {
     const outgoing = new Map(nodeIds.map(id => [id, []]));
     for (const edge of edges) outgoing.get(edge.source)?.push(edge.target);
@@ -195,8 +184,7 @@ function requiredGraphRanks(graph) {
 }
 
 export function chapterGraph(index, deckId) {
-    const { decks } = curriculumMaps(index);
-    const deck = decks.get(deckId);
+    const deck = new Map((index?.decks || []).map(deck => [deck.id, deck])).get(deckId);
     if (!deck) return { nodes: [], edges: [], seedIds: [] };
     const nodes = (deck.chapters || []).map(chapter => ({
         ...chapter,
