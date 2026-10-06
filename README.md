@@ -1,6 +1,6 @@
 # Flashcards
 
-A standalone browser frontend for local flashcard study and a read-only curriculum graph. AI generation and account sync are not implemented on `dev`.
+A standalone browser frontend for local flashcard study and a read-only curriculum graph. AI generation and account sync are not implemented in this frontend.
 
 Requires Node 20.19+ or 22.12+.
 
@@ -71,9 +71,9 @@ Vite serves `public/` directly and copies it unchanged into `dist/`. For example
 
 ## Deployment
 
-`.github/workflows/deploy.yml` installs dependencies with `npm ci`, builds the static site, uploads `dist/`, and publishes it to GitHub Pages. Pushes to `master` trigger it automatically; `workflow_dispatch` also allows a manual run. A manual run can publish the selected branch, so the latest successful deployment record determines what is live.
+`.github/workflows/deploy.yml` installs dependencies with `npm ci`, builds the static site, uploads `dist/`, and publishes it to GitHub Pages. Pushes to `main` trigger it automatically; `workflow_dispatch` also allows a manual run. A manual run can publish the selected branch, so the latest successful deployment record determines what is live.
 
-`dev` is the frontend refactor branch and does not deploy on push. The public site at https://thomasrribeiro.com/flashcards/ uses the most recently published Pages artifact. The separate worker repository and stored deployment secrets are outside this frontend's runtime.
+`main` is the default branch and deploys on push. `dev` remains available for development and does not deploy on push. The previous production code is preserved on `archive/pre-refactor-main`. The public site at https://thomasrribeiro.com/flashcards/ uses the most recently published Pages artifact. The separate worker repository and stored deployment secrets are outside this frontend's runtime.
 
 ## Verification
 
