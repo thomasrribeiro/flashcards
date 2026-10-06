@@ -16,7 +16,6 @@ Import Markdown or use the bundled examples. Star decks for daily Learn/Review, 
 | File | Purpose |
 | --- | --- |
 | `.gitignore` | Excludes dependencies, build output, local environment files and `/tests/` from Git. |
-| `AGENTS.md` | Repository instructions for coding agents; not part of the website. |
 | `LICENSE` | Apache-2.0 licensing terms. |
 | `README.md` | Setup, architecture and file reference. |
 | `index.html` | HTML entry point and application shell. |
