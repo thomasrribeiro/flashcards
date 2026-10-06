@@ -20,7 +20,7 @@ function normalizeText(s) {
  * Create a BLAKE3 hash from card content
  * Returns hex string representation
  */
-function hashCard(card) {
+export function hashCard(card) {
     const hasher = blake3.create({});
 
     if (card.type === 'basic') {
@@ -56,7 +56,7 @@ function hashCard(card) {
  * instead keyed by that ID within their repository namespace, allowing
  * presentation-only content changes to retain their review history.
  */
-function hashCardIdentity(card, namespace = '') {
+export function hashCardIdentity(card, namespace = '') {
     if (!card.stableId) return hashCard(card);
 
     const hasher = blake3.create({});
@@ -69,7 +69,8 @@ function hashCardIdentity(card, namespace = '') {
 
 /**
  * Add both persistent identity and current content version information.
- * Legacy aliases remain part of the identity metadata for future migrations.
+ * legacyHashes are aliases from the pre-stable-ID era and are used once to
+ * migrate an existing FSRS record without resetting it.
  */
 export function identifyCard(card, namespace = '') {
     const contentHash = hashCard(card);
@@ -83,10 +84,59 @@ export function identifyCard(card, namespace = '') {
 }
 
 /**
+ * Get family hash for cloze cards
+ * All cloze cards from same text share a family hash
+ * Returns null for basic cards
+ */
+export function familyHash(card) {
+    if (card.type !== 'cloze') {
+        return null;
+    }
+
+    const hasher = blake3.create({});
+    hasher.update(encoder.encode('Cloze'));
+    hasher.update(encoder.encode(normalizeText(card.content.text)));
+
+    const hash = hasher.digest();
+    return bytesToHex(hash);
+}
+
+/**
  * Convert bytes to hex string
  */
 function bytesToHex(bytes) {
     return Array.from(bytes)
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
+}
+
+/**
+ * Add hash and familyHash to card object
+ */
+export function addHashToCard(card) {
+    return {
+        ...card,
+        hash: hashCard(card),
+        familyHash: familyHash(card)
+    };
+}
+
+/**
+ * Process array of cards, adding hashes and deduplicating
+ */
+export function processCards(cards) {
+    const cardsWithHashes = cards.map(addHashToCard);
+
+    // Sort by hash for determinism
+    cardsWithHashes.sort((a, b) => a.hash.localeCompare(b.hash));
+
+    // Deduplicate by hash
+    const seen = new Set();
+    return cardsWithHashes.filter(card => {
+        if (seen.has(card.hash)) {
+            return false;
+        }
+        seen.add(card.hash);
+        return true;
+    });
 }

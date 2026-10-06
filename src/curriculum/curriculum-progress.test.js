@@ -1,0 +1,101 @@
+import { describe, expect, it } from 'vitest';
+import {
+    curriculumChapterProgressStates,
+    curriculumDeckProgressStates,
+    curriculumSubjectProgressStates
+} from './curriculum-progress.js';
+
+const deck = {
+    id: 'owner/arithmetic',
+    subject: 'Mathematics',
+    curriculumId: 'mathematics/number-sense-and-arithmetic',
+    files: [{ path: 'flashcards/01.md', sha: 'current-sha' }]
+};
+const progress = [{
+    repo: deck.id,
+    filepath: 'flashcards/01.md',
+    sourceSha: 'current-sha',
+    totalCards: 10,
+    reviewedCards: 10
+}];
+
+describe('curriculumSubjectProgressStates', () => {
+    const decks = [
+        { id: 'math/a', subject: 'math' },
+        { id: 'math/b', subject: 'math' }
+    ];
+    it('is gray until any deck is available, then yellow', () => {
+        expect(curriculumSubjectProgressStates(decks).get('math')).toBe('unavailable');
+        expect(curriculumSubjectProgressStates([
+            decks[0], { ...decks[1], repository: { configured: true } }
+        ]).get('math')).toBe('learning');
+    });
+    it('is green only when all decks are complete', () => {
+        const states = new Map([['math/a', 'complete']]);
+        expect(curriculumSubjectProgressStates(decks, states).get('math')).toBe('learning');
+        states.set('math/b', 'complete');
+        expect(curriculumSubjectProgressStates(decks, states).get('math')).toBe('complete');
+        states.set('math/b', 'learning');
+        expect(curriculumSubjectProgressStates(decks, states).get('math')).toBe('learning');
+    });
+});
+
+describe('curriculumDeckProgressStates', () => {
+    it('marks generated unfinished content as learning', () => {
+        const states = curriculumDeckProgressStates([deck], [], [], [{ ...progress[0], reviewedCards: 9 }]);
+        expect(states.get(deck.curriculumId)).toBe('learning');
+    });
+
+    it('marks a fully reviewed deck as complete', () => {
+        const states = curriculumDeckProgressStates([deck], [], [], progress);
+        expect(states.get(deck.curriculumId)).toBe('complete');
+    });
+
+    it('keeps curriculum completion green when spaced review becomes due', () => {
+        const reviews = [{
+            cardHash: 'card-1',
+            repo: deck.id,
+            fsrsCard: { due: '2026-08-12T12:00:00.000Z' }
+        }];
+        const states = curriculumDeckProgressStates(
+            [deck], [], reviews, progress, new Date('2026-08-13T12:00:00.000Z')
+        );
+        expect(states.get(deck.curriculumId)).toBe('complete');
+    });
+
+    it('does not count progress from an outdated chapter revision', () => {
+        const states = curriculumDeckProgressStates([deck], [], [], [{ ...progress[0], sourceSha: 'old-sha' }]);
+        expect(states.get(deck.curriculumId)).toBe('learning');
+    });
+});
+
+describe('curriculumChapterProgressStates', () => {
+    const curriculumDeck = {
+        id: deck.curriculumId,
+        chapters: [
+            { id: '01_foundations', file: 'flashcards/01.md', card_count: 10 },
+            { id: '02_next', file: 'flashcards/02.md', card_count: 0 }
+        ]
+    };
+
+    it('uses grey, yellow, and green for absent, in-progress, and completed cards', () => {
+        const absentAndLearning = curriculumChapterProgressStates([curriculumDeck], [deck], [], []);
+        expect(absentAndLearning.get(`${deck.curriculumId}#01_foundations`)).toBe('learning');
+        expect(absentAndLearning.get(`${deck.curriculumId}#02_next`)).toBe('unavailable');
+
+        const complete = curriculumChapterProgressStates([curriculumDeck], [deck], [], progress);
+        expect(complete.get(`${deck.curriculumId}#01_foundations`)).toBe('complete');
+    });
+
+    it('keeps a fully reviewed chapter green when one of its cards is due', () => {
+        const reviews = [{
+            repo: deck.id,
+            filepath: 'flashcards/01.md',
+            fsrsCard: { due: '2026-08-12T12:00:00.000Z' }
+        }];
+        const states = curriculumChapterProgressStates(
+            [curriculumDeck], [deck], reviews, progress, new Date('2026-08-13T12:00:00.000Z')
+        );
+        expect(states.get(`${deck.curriculumId}#01_foundations`)).toBe('complete');
+    });
+});

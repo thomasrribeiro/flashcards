@@ -1,7 +1,7 @@
 {
   "name": "flashcards",
   "version": "4.0.0",
-  "description": "Standalone Flashcards frontend",
+  "description": "Flashcards frontend with GitHub decks and spaced repetition",
   "license": "Apache-2.0",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
