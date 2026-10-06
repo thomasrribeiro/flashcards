@@ -63,7 +63,7 @@ Vite serves `public/` directly and copies it into `dist/`. Everything here is pu
 
 `.github/workflows/deploy.yml` runs on pushes to `main` or manual dispatch. It installs dependencies with `npm ci`, supplies the existing GitHub/worker/push configuration to the build, builds `dist/`, and publishes that artifact to GitHub Pages.
 
-`dev` does not deploy on push. `archive/pre-refactor-main` preserves the former production source. A manual workflow run can publish its selected branch, so the latest successful Pages deployment record determines what is live at https://thomasrribeiro.com/flashcards/.
+`main` is the active development and deployment branch. `archive/pre-refactor-main` preserves the former production source. A manual workflow run can publish its selected branch, so the latest successful Pages deployment record determines what is live at https://thomasrribeiro.com/flashcards/.
 
 ## Verification
 
